@@ -321,7 +321,8 @@ export default function InfographicGenerator() {
 
         } catch (err) {
             console.error(err);
-            setErrorMsg("圖片生成失敗，請確認您有 Imagen API 使用權限。");
+            // Show the actual error message from the API if available
+            setErrorMsg(`圖片生成失敗: ${err.message || "請確認您有 Imagen API 使用權限"}`);
         } finally {
             setIsGenerating(false);
         }
