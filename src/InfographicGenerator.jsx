@@ -11,7 +11,10 @@ import {
     Palette,
     FileText,
     AlertCircle,
-    X
+    X,
+    Tag,
+    Bookmark,
+    Plus
 } from 'lucide-react';
 
 // Firebase Imports
@@ -76,13 +79,22 @@ const appId = getAppId();
 export default function InfographicGenerator() {
     // --- State Management ---
     const [user, setUser] = useState(null);
-    const [activeTab, setActiveTab] = useState('create'); // 'create' or 'history'
+    const [activeTab, setActiveTab] = useState('create'); // 'create', 'history', 'styles'
 
     // Input States
     const [referenceImage, setReferenceImage] = useState(null); // The file object
     const [referencePreview, setReferencePreview] = useState(null); // Base64 for preview
-    const [analyzedStyle, setAnalyzedStyle] = useState(''); // The AI extracted style prompt
+
+    const [analyzedStyle, setAnalyzedStyle] = useState(''); // The AI extracted style prompt (English)
+    const [analysisResultData, setAnalysisResultData] = useState(null); // Full JSON result (Chinese desc, tags)
+
     const [userScript, setUserScript] = useState(''); // The user's content text
+
+    // Style Saving States
+    const [savedStyles, setSavedStyles] = useState([]);
+    const [newStyleName, setNewStyleName] = useState('');
+    const [newStyleTags, setNewStyleTags] = useState('');
+    const [isSavingStyle, setIsSavingStyle] = useState(false);
 
     // Process States
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -119,31 +131,33 @@ export default function InfographicGenerator() {
         return () => unsubscribe();
     }, []);
 
-    // Fetch History
+    // Fetch History & Styles
     useEffect(() => {
-        if (!user) return;
+        if (!user || !appId) return;
 
-        // Ensure we have a valid App ID and User ID path
-        if (!appId) return;
-
-        const q = query(
+        // Fetch History
+        const qHistory = query(
             collection(db, 'artifacts', appId, 'users', user.uid, 'infographics'),
             orderBy('createdAt', 'desc')
         );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const items = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setHistoryItems(items);
-        }, (error) => {
-            console.error("Error fetching history:", error);
-            // Don't show critical error for history fetch in case firestore rules depend on specific setups
+        const unsubHistory = onSnapshot(qHistory, (snapshot) => {
+            setHistoryItems(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
         });
 
-        return () => unsubscribe();
-    }, [user]);
+        // Fetch Saved Styles
+        const qStyles = query(
+            collection(db, 'artifacts', appId, 'users', user.uid, 'styles'),
+            orderBy('createdAt', 'desc')
+        );
+        const unsubStyles = onSnapshot(qStyles, (snapshot) => {
+            setSavedStyles(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        return () => {
+            unsubHistory();
+            unsubStyles();
+        };
+    }, [user, appId]);
 
     // --- Helper Functions ---
 
@@ -196,6 +210,7 @@ export default function InfographicGenerator() {
             setReferenceImage(file);
             setReferencePreview(reader.result);
             setAnalyzedStyle(''); // Reset style when new image uploaded
+            setAnalysisResultData(null);
             setErrorMsg('');
         };
         reader.readAsDataURL(file);
@@ -203,12 +218,15 @@ export default function InfographicGenerator() {
 
     // New function to clear reference
     const handleClearReference = (e) => {
-        e.preventDefault();
-        e.stopPropagation(); // Stop click from triggering file input
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         setReferenceImage(null);
         setReferencePreview(null);
         setAnalyzedStyle('');
-        // We intentionally keep userScript so user doesn't lose their text if they just want to change style
+        setAnalysisResultData(null);
+        // We intentionally keep userScript so user doesn't lose their text
     };
 
     // 2. Analyze Style (Using Gemini Multimodal)
@@ -229,10 +247,13 @@ export default function InfographicGenerator() {
         try {
             const base64Data = referencePreview.split(',')[1];
 
-            // Updated Prompt: Ask for JSON with both style and content
-            const promptText = `請擔任專業視覺分析師。請分析這張圖片並回傳一個 JSON 物件，包含以下兩個欄位：
-      1. "style_prompt": (英文) 詳細描述圖片的視覺風格、藝術流派、配色方案、光影與材質、構圖特徵。這將用於生成類似風格圖片的提示詞。
-      2. "image_content": (繁體中文) 詳細描述圖片中的具體內容、發生的劇情、人物動作、場景細節。這將作為預設的劇情腳本。`;
+            // Updated Prompt: Ask for JSON with both style (English & Chinese) and content
+            // Note: We ask for Traditional Chinese explicitly
+            const promptText = `請擔任專業視覺分析師。請分析這張圖片並回傳一個 JSON 物件，包含以下欄位：
+      1. "style_prompt": (英文) 詳細描述圖片的視覺風格、藝術流派、配色方案、光影與材質、構圖特徵。這將用於生成類似風格圖片的 Image Gen Prommpt。
+      2. "style_description_zh": (繁體中文) 以優美的文字，詳細描述此風格的視覺特徵、帶給人的感受、適合的使用場景。這將呈現給使用者看作為風格介紹。
+      3. "image_content": (繁體中文) 詳細描述圖片中的具體內容、發生的劇情、人物動作、場景細節。這將作為預設的劇情腳本。
+      4. "suggested_tags": (Array of Strings) 針對此風格建議的 3-5 個繁體中文標籤 (Tags)。`;
 
             // Using configured model
             const modelName = GEMINI_MODEL_ANALYSIS;
@@ -265,7 +286,13 @@ export default function InfographicGenerator() {
             const analysisResult = JSON.parse(responseText);
 
             setAnalyzedStyle(analysisResult.style_prompt);
-            setUserScript(analysisResult.image_content); // Auto-fill the content area
+            setAnalysisResultData(analysisResult);
+            setUserScript(analysisResult.image_content);
+
+            // Auto-fill tags if suggested
+            if (analysisResult.suggested_tags && Array.isArray(analysisResult.suggested_tags)) {
+                setNewStyleTags(analysisResult.suggested_tags.join(', '));
+            }
 
         } catch (err) {
             console.error(err);
@@ -273,6 +300,55 @@ export default function InfographicGenerator() {
         } finally {
             setIsAnalyzing(false);
         }
+    };
+
+    // --- Style Management Functions ---
+    const saveCurrentStyle = async () => {
+        if (!user || !analyzedStyle) return;
+        if (!newStyleName.trim()) {
+            setErrorMsg("請輸入風格名稱");
+            return;
+        }
+
+        setIsSavingStyle(true);
+        try {
+            await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'styles'), {
+                name: newStyleName,
+                tags: newStyleTags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
+                prompt: analyzedStyle,
+                description: analysisResultData?.style_description_zh || '',
+                previewUrl: referencePreview || '',
+                createdAt: serverTimestamp()
+            });
+            setNewStyleName('');
+            setNewStyleTags('');
+            alert('風格已儲存！');
+        } catch (err) {
+            console.error("Save style failed:", err);
+            setErrorMsg("儲存風格失敗");
+        } finally {
+            setIsSavingStyle(false);
+        }
+    };
+
+    const deleteSavedStyle = async (id, e) => {
+        e.stopPropagation();
+        if (!user || !confirm('確定要刪除此風格收藏嗎？')) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'styles', id));
+        } catch (err) {
+            console.error("Delete style failed:", err);
+        }
+    };
+
+    const applySavedStyle = (styleData) => {
+        setAnalyzedStyle(styleData.prompt);
+        setAnalysisResultData({
+            style_prompt: styleData.prompt,
+            style_description_zh: styleData.description,
+            suggested_tags: styleData.tags
+        });
+        setActiveTab('create');
     };
 
     // 3. Generate Image (Using Imagen)
@@ -393,10 +469,16 @@ export default function InfographicGenerator() {
                         <Wand2 className="w-4 h-4" /> 製作區
                     </button>
                     <button
+                        onClick={() => setActiveTab('styles')}
+                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'styles' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Bookmark className="w-4 h-4" /> 風格庫
+                    </button>
+                    <button
                         onClick={() => setActiveTab('history')}
                         className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        <History className="w-4 h-4" /> 工作紀錄
+                        <History className="w-4 h-4" /> 紀錄
                     </button>
                 </div>
 
@@ -462,16 +544,61 @@ export default function InfographicGenerator() {
                                 </button>
 
                                 {analyzedStyle && (
-                                    <div className="bg-green-50 border border-green-100 rounded-lg p-3 text-xs text-green-800 animate-in fade-in slide-in-from-top-2 relative">
-                                        <span className="font-bold block mb-1">✓ 風格已提取</span>
-                                        <p className="line-clamp-2 opacity-80">{analyzedStyle}</p>
-                                        <button
-                                            onClick={() => setAnalyzedStyle('')}
-                                            className="absolute top-2 right-2 text-green-600 hover:text-green-800"
-                                            title="清除風格"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                                    <div className="bg-white border border-indigo-100 rounded-xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 relative">
+                                        <div className="flex items-start justify-between">
+                                            <h3 className="font-bold text-indigo-900 text-sm flex items-center gap-2">
+                                                <Wand2 className="w-4 h-4" />
+                                                {analysisResultData?.style_name || '風格分析結果'}
+                                            </h3>
+                                            <button
+                                                onClick={() => setAnalyzedStyle('')}
+                                                className="text-slate-400 hover:text-slate-600"
+                                                title="清除風格"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+
+                                        <div className="text-xs leading-relaxed text-slate-600 bg-indigo-50/50 p-3 rounded-lg border border-indigo-50">
+                                            {analysisResultData?.style_description_zh || analyzedStyle}
+                                        </div>
+
+                                        {analysisResultData?.suggested_tags && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {analysisResultData.suggested_tags.map((tag, i) => (
+                                                    <span key={i} className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1">
+                                                        <Tag className="w-2.5 h-2.5" /> {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <div className="pt-2 border-t border-slate-100 space-y-2">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={newStyleName}
+                                                    onChange={(e) => setNewStyleName(e.target.value)}
+                                                    placeholder="為此風格命名..."
+                                                    className="flex-1 text-xs border border-slate-200 rounded px-2 py-1.5 focus:border-indigo-500 outline-none"
+                                                />
+                                                <button
+                                                    onClick={saveCurrentStyle}
+                                                    disabled={isSavingStyle}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                                                >
+                                                    {isSavingStyle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                                    收藏
+                                                </button>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={newStyleTags}
+                                                onChange={(e) => setNewStyleTags(e.target.value)}
+                                                placeholder="標籤 (以逗號分隔)..."
+                                                className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:border-indigo-500 outline-none"
+                                            />
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -502,6 +629,45 @@ export default function InfographicGenerator() {
                                 </button>
                             </div>
                         </>
+                    ) : activeTab === 'styles' ? (
+                        // Style Library Tab
+                        <div className="space-y-4">
+                            {savedStyles.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400 text-sm flex flex-col items-center gap-2">
+                                    <Bookmark className="w-8 h-8 opacity-50" />
+                                    尚未收藏任何風格
+                                </div>
+                            ) : (
+                                savedStyles.map((style) => (
+                                    <div key={style.id} className="bg-white border border-slate-200 rounded-xl p-3 hover:shadow-md transition-all group relative cursor-pointer" onClick={() => applySavedStyle(style)}>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h4 className="font-bold text-slate-700 text-sm">{style.name}</h4>
+                                            <button
+                                                onClick={(e) => deleteSavedStyle(style.id, e)}
+                                                className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
+                                            {style.description || "無描述"}
+                                        </p>
+                                        {style.tags && style.tags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                {style.tags.map((tag, i) => (
+                                                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full">
+                                                        #{tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="text-[10px] text-indigo-500 font-medium flex items-center gap-1 mt-2">
+                                            點擊套用此風格 <Plus className="w-3 h-3" />
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     ) : (
                         // History Tab
                         <div className="space-y-4">
