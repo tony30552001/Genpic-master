@@ -17,7 +17,8 @@ import {
     Plus,
     Monitor,
     Square,
-    Smartphone
+    Smartphone,
+    Search
 } from 'lucide-react';
 
 // Firebase Imports
@@ -111,6 +112,7 @@ export default function InfographicGenerator() {
     const [generatedImage, setGeneratedImage] = useState(null);
     const [historyItems, setHistoryItems] = useState([]);
     const [errorMsg, setErrorMsg] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
 
     // API Key (Use config or empty string)
     const apiKey = GEMINI_API_KEY || "";
@@ -676,9 +678,9 @@ export default function InfographicGenerator() {
                             <div className="h-px bg-slate-200 my-2"></div>
 
                             {/* Step 2: Content Input */}
+                            {/* Step 2: Content Input */}
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 text-slate-800 font-semibold">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">2</div>
                                     <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">2</div>
                                     輸入內容劇情與規格
                                 </div>
@@ -723,13 +725,31 @@ export default function InfographicGenerator() {
                     ) : activeTab === 'styles' ? (
                         // Style Library Tab
                         <div className="space-y-4">
-                            {savedStyles.length === 0 ? (
+                            {/* Search Bar */}
+                            <div className="relative">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                    type="text"
+                                    placeholder="搜尋風格名稱或標籤..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                                />
+                            </div>
+
+                            {savedStyles.filter(s => {
+                                const q = searchQuery.toLowerCase();
+                                return !q || s.name.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q));
+                            }).length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 text-sm flex flex-col items-center gap-2">
                                     <Bookmark className="w-8 h-8 opacity-50" />
-                                    尚未收藏任何風格
+                                    {searchQuery ? '找不到符合的風格' : '尚未收藏任何風格'}
                                 </div>
                             ) : (
-                                savedStyles.map((style) => (
+                                savedStyles.filter(s => {
+                                    const q = searchQuery.toLowerCase();
+                                    return !q || s.name.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q));
+                                }).map((style) => (
                                     <div key={style.id} className="bg-white border border-slate-200 rounded-xl p-3 hover:shadow-md transition-all group relative cursor-pointer" onClick={() => applySavedStyle(style)}>
                                         <div className="flex justify-between items-start mb-2">
                                             <h4 className="font-bold text-slate-700 text-sm">{style.name}</h4>
@@ -762,12 +782,32 @@ export default function InfographicGenerator() {
                     ) : (
                         // History Tab
                         <div className="space-y-4">
-                            {historyItems.length === 0 ? (
+                            {/* Search Bar */}
+                            <div className="relative">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                    type="text"
+                                    placeholder="搜尋內容或日期 (YYYY-MM-DD)..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                                />
+                            </div>
+
+                            {historyItems.filter(item => {
+                                const q = searchQuery.toLowerCase();
+                                const dateStr = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : '';
+                                return !q || item.userScript.toLowerCase().includes(q) || dateStr.includes(q);
+                            }).length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 text-sm">
-                                    尚無生成紀錄
+                                    {searchQuery ? '找不到符合的紀錄' : '尚無生成紀錄'}
                                 </div>
                             ) : (
-                                historyItems.map((item) => (
+                                historyItems.filter(item => {
+                                    const q = searchQuery.toLowerCase();
+                                    const dateStr = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : '';
+                                    return !q || item.userScript.toLowerCase().includes(q) || dateStr.includes(q);
+                                }).map((item) => (
                                     <div key={item.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
                                         <div className="aspect-video w-full bg-slate-100 relative cursor-pointer" onClick={() => loadFromHistory(item)}>
                                             <img src={item.imageUrl} alt="Generated" className="w-full h-full object-cover" />
