@@ -14,7 +14,10 @@ import {
     X,
     Tag,
     Bookmark,
-    Plus
+    Plus,
+    Monitor,
+    Square,
+    Smartphone
 } from 'lucide-react';
 
 // Firebase Imports
@@ -93,6 +96,8 @@ export default function InfographicGenerator() {
     const [analysisResultData, setAnalysisResultData] = useState(null); // Full JSON result (Chinese desc, tags)
 
     const [userScript, setUserScript] = useState(''); // The user's content text
+    const [aspectRatio, setAspectRatio] = useState('16:9'); // 16:9, 4:3, 1:1, 9:16
+    const [resolutionLevel, setResolutionLevel] = useState('standard'); // standard (faster), high (slower)
 
     // Style Saving States
     const [savedStyles, setSavedStyles] = useState([]);
@@ -413,7 +418,8 @@ export default function InfographicGenerator() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     instances: [{ prompt: finalPrompt }],
-                    parameters: { sampleCount: 1, aspectRatio: "16:9" }
+                    instances: [{ prompt: finalPrompt }],
+                    parameters: { sampleCount: 1, aspectRatio: aspectRatio }
                 })
             });
 
@@ -673,7 +679,28 @@ export default function InfographicGenerator() {
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 text-slate-800 font-semibold">
                                     <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">2</div>
-                                    輸入內容劇情
+                                    <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">2</div>
+                                    輸入內容劇情與規格
+                                </div>
+
+                                {/* Settings Row: Aspect Ratio */}
+                                <div className="flex gap-2 mb-2 p-1 bg-slate-50 rounded-lg border border-slate-200">
+                                    {[
+                                        { id: '16:9', label: '16:9 簡報', icon: Monitor },
+                                        { id: '4:3', label: '4:3 傳統', icon: Layout },
+                                        { id: '1:1', label: '1:1 社群', icon: Square },
+                                        { id: '9:16', label: '9:16 手機', icon: Smartphone }
+                                    ].map((ratio) => (
+                                        <button
+                                            key={ratio.id}
+                                            onClick={() => setAspectRatio(ratio.id)}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-md transition-all ${aspectRatio === ratio.id ? 'bg-white text-indigo-600 font-bold shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+                                            title={ratio.label}
+                                        >
+                                            <ratio.icon className="w-3.5 h-3.5" />
+                                            <span className="hidden xl:inline">{ratio.id}</span>
+                                        </button>
+                                    ))}
                                 </div>
 
                                 <textarea
