@@ -680,7 +680,7 @@ export default function InfographicGenerator() {
                                     value={userScript}
                                     onChange={(e) => setUserScript(e.target.value)}
                                     placeholder="例如：一位穿著西裝的員工正在向團隊展示數據圖表，背景是現代化的辦公室，氣氛積極向上..."
-                                    className="w-full h-32 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none bg-white transition-all"
+                                    className="w-full h-64 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-y bg-white transition-all"
                                 />
 
                                 <button
