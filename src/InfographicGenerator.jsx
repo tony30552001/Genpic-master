@@ -23,8 +23,12 @@ import {
     getAuth,
     signInAnonymously,
     onAuthStateChanged,
-    signInWithCustomToken
+    signInWithCustomToken,
+    OAuthProvider,
+    signInWithPopup,
+    signOut
 } from 'firebase/auth';
+import { LogIn, LogOut, User as UserIcon } from 'lucide-react';
 import {
     getFirestore,
     collection,
@@ -106,28 +110,51 @@ export default function InfographicGenerator() {
     // API Key (Use config or empty string)
     const apiKey = GEMINI_API_KEY || "";
 
+    // --- Auth Functions ---
+    const handleMicrosoftLogin = async () => {
+        const provider = new OAuthProvider('microsoft.com');
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (error) {
+            console.error("Microsoft Login Error:", error);
+            setErrorMsg(`登入失敗: ${error.message}`);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            // Auto login as anonymous for browsing usage
+            await signInAnonymously(auth);
+        } catch (error) {
+            console.error("Logout Error:", error);
+        }
+    };
+
     // --- Auth & Data Loading ---
     useEffect(() => {
-        const initAuth = async () => {
-            try {
-                let token = null;
-                if (typeof window !== 'undefined' && window.__initial_auth_token) token = window.__initial_auth_token;
-                else {
-                    try { if (typeof __initial_auth_token !== 'undefined') token = __initial_auth_token; } catch (e) { }
-                }
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            setUser(currentUser);
 
-                if (token) {
-                    await signInWithCustomToken(auth, token);
-                } else {
-                    await signInAnonymously(auth);
+            // Only auto-sign-in anonymously if absolutely no user session exists
+            if (!currentUser) {
+                try {
+                    let token = null;
+                    if (typeof window !== 'undefined' && window.__initial_auth_token) token = window.__initial_auth_token;
+
+                    if (token) {
+                        await signInWithCustomToken(auth, token);
+                    } else {
+                        // Fallback to anonymous:
+                        // Check if we just logged out deliberately? 
+                        // For now, simpler to just keep app usable.
+                        await signInAnonymously(auth);
+                    }
+                } catch (err) {
+                    console.error("Anon Auth failed:", err);
                 }
-            } catch (err) {
-                console.error("Auth failed:", err);
-                setErrorMsg("系統登入失敗，請重新整理頁面，或檢查 Firebase 設定。");
             }
-        };
-        initAuth();
-        const unsubscribe = onAuthStateChanged(auth, setUser);
+        });
         return () => unsubscribe();
     }, []);
 
@@ -451,13 +478,38 @@ export default function InfographicGenerator() {
 
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-                    <h1 className="text-xl font-bold flex items-center gap-2">
-                        <Layout className="w-6 h-6" />
-                        企業風格圖產生器
-                    </h1>
-                    <p className="text-xs text-indigo-100 mt-1 opacity-80">
-                        Powered by Gemini Analysis & Imagen Generation
-                    </p>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Layout className="w-6 h-6" />
+                                企業風格圖產生器
+                            </h1>
+                            <p className="text-xs text-indigo-100 mt-1 opacity-80">
+                                Powered by Gemini & Imagen
+                            </p>
+                        </div>
+                        {/* Auth Status/Button */}
+                        <div className="ml-2">
+                            {user && !user.isAnonymous ? (
+                                <div className="flex flex-col items-end">
+                                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold border border-white/30 mb-1" title={user.displayName || user.email}>
+                                        {user.photoURL ? <img src={user.photoURL} className="w-full h-full rounded-full" /> : (user.displayName?.[0] || 'U')}
+                                    </div>
+                                    <button onClick={handleLogout} className="text-[10px] flex items-center gap-1 opacity-80 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-full">
+                                        <LogOut className="w-3 h-3" /> 登出
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={handleMicrosoftLogin}
+                                    className="bg-white text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors shadow-sm"
+                                    title="使用公司帳號登入以同步紀錄"
+                                >
+                                    <LogIn className="w-3.5 h-3.5" /> 登入
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Tabs */}
