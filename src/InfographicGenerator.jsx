@@ -113,6 +113,7 @@ export default function InfographicGenerator() {
     const [historyItems, setHistoryItems] = useState([]);
     const [errorMsg, setErrorMsg] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    const [isInputFocused, setIsInputFocused] = useState(false); // For mobile UI optimization
 
     // API Key (Use config or empty string)
     const apiKey = GEMINI_API_KEY || "";
@@ -491,7 +492,7 @@ export default function InfographicGenerator() {
         <div className="flex flex-col md:flex-row h-[100dvh] md:h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
 
             {/* Left Sidebar - Controls */}
-            <div className="w-full md:w-1/3 md:min-w-[350px] bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col h-[60%] md:h-full shadow-lg z-10 order-1 relative">
+            <div className={`w-full md:w-1/3 md:min-w-[350px] bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shadow-lg z-10 order-1 relative transition-all duration-300 ${isInputFocused ? 'h-full' : 'h-[60%] md:h-full'}`}>
 
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
@@ -708,6 +709,8 @@ export default function InfographicGenerator() {
                                 <textarea
                                     value={userScript}
                                     onChange={(e) => setUserScript(e.target.value)}
+                                    onFocus={() => setIsInputFocused(true)}
+                                    onBlur={() => setTimeout(() => setIsInputFocused(false), 100)} // Delay to allow button clicks
                                     placeholder="例如：一位穿著西裝的員工正在向團隊展示數據圖表，背景是現代化的辦公室，氣氛積極向上..."
                                     className="w-full h-32 md:h-64 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-y bg-white transition-all"
                                 />
@@ -846,7 +849,7 @@ export default function InfographicGenerator() {
             </div>
 
             {/* Right Main Panel - Preview */}
-            <div className="w-full md:flex-1 h-[40%] md:h-full bg-slate-100 p-4 md:p-8 flex flex-col items-center justify-center relative overflow-hidden order-2 shadow-inner">
+            <div className={`w-full md:flex-1 bg-slate-100 p-4 md:p-8 flex-col items-center justify-center relative overflow-hidden order-2 shadow-inner transition-all duration-300 ${isInputFocused ? 'hidden md:flex' : 'flex h-[40%] md:h-full'}`}>
 
                 {/* Decorative Grid Background */}
                 <div className="absolute inset-0 opacity-[0.03]"
