@@ -113,6 +113,15 @@ export default function InfographicGenerator() {
     // --- Auth Functions ---
     const handleMicrosoftLogin = async () => {
         const provider = new OAuthProvider('microsoft.com');
+
+        // 如果有設定 Tenant ID，則強制限制為該組織登入
+        const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID;
+        if (tenantId) {
+            provider.setCustomParameters({
+                tenant: tenantId
+            });
+        }
+
         try {
             await signInWithPopup(auth, provider);
         } catch (error) {
