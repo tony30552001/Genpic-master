@@ -488,10 +488,10 @@ export default function InfographicGenerator() {
     // --- Render Components ---
 
     return (
-        <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
+        <div className="flex flex-col md:flex-row h-[100dvh] md:h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
 
             {/* Left Sidebar - Controls */}
-            <div className="w-1/3 min-w-[350px] bg-white border-r border-slate-200 flex flex-col h-full shadow-lg z-10">
+            <div className="w-full md:w-1/3 md:min-w-[350px] bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col h-[60%] md:h-full shadow-lg z-10 order-1 relative">
 
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
@@ -533,22 +533,22 @@ export default function InfographicGenerator() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-slate-200">
+                <div className="flex border-b border-slate-200 shrink-0">
                     <button
                         onClick={() => setActiveTab('create')}
-                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'create' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 py-2 md:py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'create' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         <Wand2 className="w-4 h-4" /> 製作區
                     </button>
                     <button
                         onClick={() => setActiveTab('styles')}
-                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'styles' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 py-2 md:py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'styles' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         <Bookmark className="w-4 h-4" /> 風格庫
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
-                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 py-2 md:py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         <History className="w-4 h-4" /> 紀錄
                     </button>
@@ -709,7 +709,7 @@ export default function InfographicGenerator() {
                                     value={userScript}
                                     onChange={(e) => setUserScript(e.target.value)}
                                     placeholder="例如：一位穿著西裝的員工正在向團隊展示數據圖表，背景是現代化的辦公室，氣氛積極向上..."
-                                    className="w-full h-64 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-y bg-white transition-all"
+                                    className="w-full h-32 md:h-64 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-y bg-white transition-all"
                                 />
 
                                 <button
@@ -846,7 +846,7 @@ export default function InfographicGenerator() {
             </div>
 
             {/* Right Main Panel - Preview */}
-            <div className="flex-1 bg-slate-100 p-8 flex flex-col items-center justify-center relative overflow-hidden">
+            <div className="w-full md:flex-1 h-[40%] md:h-full bg-slate-100 p-4 md:p-8 flex flex-col items-center justify-center relative overflow-hidden order-2 shadow-inner">
 
                 {/* Decorative Grid Background */}
                 <div className="absolute inset-0 opacity-[0.03]"
