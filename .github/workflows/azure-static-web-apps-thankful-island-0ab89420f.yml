@@ -49,6 +49,14 @@ jobs:
           cd api
           npm ci
       
+      # 驗證 API node_modules
+      - name: Verify API Dependencies
+        run: |
+          cd api
+          ls -la node_modules/@azure/storage-blob 2>/dev/null || echo "ERROR: @azure/storage-blob not found!"
+          ls -la node_modules/pg 2>/dev/null || echo "ERROR: pg not found!"
+          ls -la node_modules/@google/genai 2>/dev/null || echo "ERROR: @google/genai not found!"
+      
       # 列出 API 目錄結構（除錯用）
       - name: Debug - List API Structure
         run: |
@@ -56,6 +64,8 @@ jobs:
           find api -name "*.json" -o -name "*.js" | head -30
           echo "=== host.json ==="
           cat api/host.json
+          echo "=== node_modules exists ==="
+          ls -la api/node_modules | head -10
 
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
