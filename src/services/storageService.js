@@ -43,3 +43,36 @@ export const uploadBlob = async ({ blobUrl, sasToken, file, contentType }) => {
 
   return blobUrl;
 };
+
+/**
+ * 上傳檔案到 Blob Storage
+ * 完整流程：取得 SAS Token → 上傳檔案
+ * @param {File} file - 要上傳的檔案
+ * @param {string} container - Blob 容器名稱 (預設: uploads)
+ * @returns {Promise<{url: string, blobName: string}>}
+ */
+export const uploadFileToBlob = async (file, container = "uploads") => {
+  // 步驟 1: 請求 SAS Token
+  const sasResult = await requestBlobSas({
+    fileName: file.name,
+    contentType: file.type,
+    container,
+  });
+
+  if (!sasResult?.blobUrl || !sasResult?.sasToken) {
+    throw new Error("無法取得上傳授權");
+  }
+
+  // 步驟 2: 上傳檔案
+  await uploadBlob({
+    blobUrl: sasResult.blobUrl,
+    sasToken: sasResult.sasToken,
+    file,
+    contentType: file.type,
+  });
+
+  return {
+    url: sasResult.blobUrl,
+    blobName: sasResult.blobName,
+  };
+};

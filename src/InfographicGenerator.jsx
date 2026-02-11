@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, History, Bookmark, Wand2 } from 'lucide-react';
+import { AlertCircle, History, Bookmark, Wand2, FileText } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
 import useStyles from './hooks/useStyles';
 import useHistory from './hooks/useHistory';
 import useImageGeneration from './hooks/useImageGeneration';
+import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import { requestBlobSas, uploadBlob } from './services/storageService';
 
 import AppHeader from './components/layout/AppHeader';
@@ -13,6 +14,8 @@ import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
 import StyleLibrary from './components/styles/StyleLibrary';
 import HistoryPanel from './components/history/HistoryPanel';
+import DocumentUploader from './components/create/DocumentUploader';
+import DocumentScenes from './components/create/DocumentScenes';
 
 export default function InfographicGenerator({ initialTab = 'create' }) {
     // --- State Management ---
@@ -27,6 +30,11 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const [uploadProgress, setUploadProgress] = useState(0);
 
     const [userScript, setUserScript] = useState(''); // The user's content text
+
+    // 文件分析相關狀態
+    const [showDocumentAnalysis, setShowDocumentAnalysis] = useState(false);
+
+    // 風格設定相關
     const [aspectRatio, setAspectRatio] = useState('16:9'); // 16:9, 4:3, 1:1, 9:16
     const [imageSize, setImageSize] = useState('1K'); // 1K, 2K, 4K
     const [resolutionLevel, setResolutionLevel] = useState('standard'); // standard (faster), high (slower)
@@ -54,12 +62,27 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         searchStyles
     } = useStyles({ user });
     const { historyItems, saveHistoryItem, deleteHistoryItem } = useHistory({ user });
+    
+    // 文件分析 hook
+    const {
+        isAnalyzing: isAnalyzingDocument,
+        analysisPhase: documentAnalysisPhase,
+        documentResult,
+        analyzeDocument,
+        clearDocument,
+        updateScene,
+        removeScene,
+        scenes,
+        totalScenes,
+    } = useDocumentAnalysis();
+    
     const {
         analyzedStyle,
         analysisResultData,
         generatedImage,
         isAnalyzing,
         isGenerating,
+        analysisPhase, // 新增：分析階段狀態
         analyzeStyle,
         generateImage,
         clearStyle,
@@ -317,6 +340,71 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         document.body.removeChild(link);
     };
 
+    // 4. Document Analysis Handlers
+    const handleAnalyzeDocument = async (file) => {
+        try {
+            setErrorMsg('');
+            const result = await analyzeDocument(file);
+            // 將第一個場景的內容填入 userScript
+            if (result.scenes && result.scenes.length > 0) {
+                setUserScript(result.scenes[0].scene_description || '');
+            }
+            return result;
+        } catch (err) {
+            console.error("Document Analysis Failed:", err);
+            setErrorMsg(err.message || "文件分析失敗，請稍後重試。");
+            throw err;
+        }
+    };
+
+    const handleGenerateScene = async (sceneIndex) => {
+        const scene = scenes[sceneIndex];
+        if (!scene) return;
+
+        try {
+            setErrorMsg('');
+            const finalPrompt = `Create an image with the following style: ${
+                analyzedStyle || "High quality, professional corporate style"
+            }. ${scene.visual_prompt || scene.scene_description}. Ensure the composition is suitable for an infographic or presentation slide.`;
+
+            const result = await generateImage({
+                userScript: scene.scene_description,
+                analyzedStyle,
+                aspectRatio,
+                imageSize,
+            });
+
+            await saveHistoryItem({
+                imageUrl: result.imageUrl,
+                userScript: scene.scene_description,
+                stylePrompt: analyzedStyle,
+                fullPrompt: finalPrompt,
+                sceneNumber: scene.scene_number,
+            });
+            
+            setGeneratedImage(result.imageUrl);
+            setErrorMsg('');
+        } catch (err) {
+            console.error("Scene Generation Failed:", err);
+            setErrorMsg(`場景 ${sceneIndex + 1} 生成失敗: ${err.message}`);
+        }
+    };
+
+    const handleGenerateAllScenes = async () => {
+        if (!scenes || scenes.length === 0) return;
+
+        try {
+            setErrorMsg('');
+            // 這裡可以實作批次佇列機制，目前依序生成
+            for (let i = 0; i < scenes.length; i++) {
+                await handleGenerateScene(i);
+            }
+        } catch (err) {
+            console.error("Batch Generation Failed:", err);
+            setErrorMsg(`批次生成失敗: ${err.message}`);
+        }
+    };
+
     // --- Render Components ---
 
     return (
@@ -379,6 +467,60 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
                     {activeTab === 'create' ? (
                         <>
+                            {/* 文件分析區塊 */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                        <FileText className="w-4 h-4" />
+                                        文件分析
+                                    </h3>
+                                    {documentResult && (
+                                        <button
+                                            onClick={() => {
+                                                clearDocument();
+                                                setShowDocumentAnalysis(false);
+                                            }}
+                                            className="text-xs text-red-500 hover:text-red-700"
+                                        >
+                                            清除分析
+                                        </button>
+                                    )}
+                                    {!documentResult && (
+                                        <button
+                                            onClick={() => setShowDocumentAnalysis(!showDocumentAnalysis)}
+                                            className="text-xs text-indigo-600 hover:text-indigo-800"
+                                        >
+                                            {showDocumentAnalysis ? "收起" : "展開"}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {(showDocumentAnalysis || documentResult) && (
+                                    <>
+                                        {!documentResult ? (
+                                            <DocumentUploader
+                                                onAnalyze={handleAnalyzeDocument}
+                                                isAnalyzing={isAnalyzingDocument}
+                                                analysisPhase={documentAnalysisPhase}
+                                                disabled={isAnalyzingDocument}
+                                            />
+                                        ) : (
+                                            <DocumentScenes
+                                                documentResult={documentResult}
+                                                onUpdateScene={updateScene}
+                                                onRemoveScene={removeScene}
+                                                onGenerateScene={handleGenerateScene}
+                                                onGenerateAll={handleGenerateAllScenes}
+                                                onClear={clearDocument}
+                                                isGenerating={isGenerating}
+                                            />
+                                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            {!documentResult && <div className="h-px bg-slate-200 my-2"></div>}
+
                             <StyleAnalyzer
                                 referencePreview={referencePreview}
                                 isUploading={isUploading}
@@ -389,6 +531,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                 newStyleName={newStyleName}
                                 newStyleTags={newStyleTags}
                                 isSavingStyle={isSavingStyle}
+                                analysisPhase={analysisPhase}
                                 onImageUpload={handleImageUpload}
                                 onClearReference={handleClearReference}
                                 onAnalyze={analyzeImageStyle}
