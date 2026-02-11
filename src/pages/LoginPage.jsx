@@ -1,13 +1,14 @@
 import React from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { LogIn, Mail, ShieldCheck } from "lucide-react";
+import { LogIn, Mail, ShieldCheck, AlertCircle } from "lucide-react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
-    const { user, handleMicrosoftLogin, handleGoogleLoginSuccess, isAuthenticated, isLoading } = useAuth();
+    const { user, handleMicrosoftLogin, handleGoogleLoginSuccess, isAuthenticated, isLoading, authExpired } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -41,6 +42,16 @@ export default function LoginPage() {
                     <CardDescription className="text-slate-500 font-medium">請選擇您的登入方式</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
+                    {/* 登入過期提示 */}
+                    {authExpired && (
+                        <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-800">
+                            <AlertCircle className="h-4 w-4 text-amber-600" />
+                            <AlertDescription>
+                                您的登入已過期，請重新登入以繼續使用
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
                     {/* Microsoft Login */}
                     <Button
                         variant="outline"

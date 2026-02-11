@@ -1,6 +1,13 @@
 import { acquireAccessToken } from "./authService";
 import { AUTH_BYPASS } from "../config";
 
+// Google Token 過期時的通知回呼 (由 AuthContext 設定)
+let onAuthExpiredCallback = null;
+
+export const setAuthExpiredHandler = (callback) => {
+  onAuthExpiredCallback = callback;
+};
+
 const buildHeaders = async (options) => {
   const headers = {
     "Content-Type": "application/json",
@@ -49,6 +56,17 @@ const requestWithRetry = async (url, baseOptions, options) => {
   });
 
   if (response.status === 401 && !options._retried) {
+    // 檢查是否為 Google 使用者 (Google Token 無法刷新)
+    const googleUser = localStorage.getItem('google_user');
+    if (googleUser) {
+      // Google Token 過期，觸發重新登入
+      if (onAuthExpiredCallback) {
+        onAuthExpiredCallback();
+      }
+      throw new Error("登入已過期，請重新登入");
+    }
+
+    // Microsoft 使用者可以嘗試重新取得 Token
     const retryOptions = { ...options, _retried: true };
     const retryResponse = await fetch(url, {
       ...baseOptions,
