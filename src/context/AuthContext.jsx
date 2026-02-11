@@ -3,6 +3,7 @@ import { useMsal, useIsAuthenticated } from '@azure/msal-react';
 import { googleLogout } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { loginWithMicrosoft, logout as microsoftLogout } from '../services/authService';
+import { setAuthExpiredHandler } from '../services/apiClient';
 import { AUTH_BYPASS } from '../config';
 
 const AuthContext = createContext(null);
@@ -12,19 +13,42 @@ export const AuthProvider = ({ children }) => {
     const isMsalAuthenticated = useIsAuthenticated();
     const [googleUser, setGoogleUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [authExpired, setAuthExpired] = useState(false);
 
     // 初始化 Google 登入狀態 (從 localStorage)
     useEffect(() => {
         const savedUser = localStorage.getItem('google_user');
         if (savedUser) {
             try {
-                setGoogleUser(JSON.parse(savedUser));
+                const user = JSON.parse(savedUser);
+                // 檢查 Token 是否已過期
+                if (isTokenExpired(user.idToken)) {
+                    // Token 已過期，清除登入狀態
+                    googleLogout();
+                    localStorage.removeItem('google_user');
+                    setAuthExpired(true);
+                } else {
+                    setGoogleUser(user);
+                }
             } catch (e) {
                 localStorage.removeItem('google_user');
             }
         }
         setIsLoading(false);
     }, []);
+
+    // 設定 Token 過期處理回呼
+    useEffect(() => {
+        setAuthExpiredHandler(() => {
+            // 清除 Google 登入狀態
+            if (googleUser) {
+                googleLogout();
+                setGoogleUser(null);
+                localStorage.removeItem('google_user');
+            }
+            setAuthExpired(true);
+        });
+    }, [googleUser]);
 
     // MSAL 自動設定活躍帳號
     useEffect(() => {
@@ -33,6 +57,17 @@ export const AuthProvider = ({ children }) => {
             instance.setActiveAccount(accounts[0]);
         }
     }, [accounts, instance]);
+
+    // 檢查 Token 是否過期的輔助函數
+    const isTokenExpired = (token) => {
+        try {
+            const decoded = jwtDecode(token);
+            const currentTime = Date.now() / 1000;
+            return decoded.exp < currentTime;
+        } catch (e) {
+            return true;
+        }
+    };
 
     const handleGoogleLoginSuccess = useCallback((credentialResponse) => {
         const decoded = jwtDecode(credentialResponse.credential);
@@ -46,6 +81,7 @@ export const AuthProvider = ({ children }) => {
         };
         setGoogleUser(user);
         localStorage.setItem('google_user', JSON.stringify(user));
+        setAuthExpired(false); // 清除過期標記
     }, []);
 
     const handleLogout = useCallback(async () => {
@@ -56,6 +92,7 @@ export const AuthProvider = ({ children }) => {
         } else {
             await microsoftLogout();
         }
+        setAuthExpired(false);
     }, [googleUser]);
 
     const user = React.useMemo(() => {
@@ -88,6 +125,7 @@ export const AuthProvider = ({ children }) => {
     const value = {
         user,
         isLoading,
+        authExpired,  // 新增：讓呼叫端知道認證已過期
         handleMicrosoftLogin: loginWithMicrosoft,
         handleGoogleLoginSuccess,
         handleLogout,

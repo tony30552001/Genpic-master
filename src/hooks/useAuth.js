@@ -7,7 +7,8 @@ export default function useAuth() {
     handleGoogleLoginSuccess,
     handleLogout,
     isAuthenticated,
-    isLoading
+    isLoading,
+    authExpired
   } = useAuthContext();
 
   return {
@@ -16,6 +17,7 @@ export default function useAuth() {
     handleGoogleLoginSuccess,
     handleLogout,
     isAuthenticated,
-    isLoading
+    isLoading,
+    authExpired
   };
 }
