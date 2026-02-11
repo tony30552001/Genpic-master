@@ -11,7 +11,7 @@ export default function ImagePreview({
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 flex flex-col min-h-[500px]">
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <ImageIcon className="w-5 h-5 text-indigo-500" />
+          <ImageIcon className="w-5 h-5 text-blue-500" />
           <span className="font-semibold text-slate-700">生成預覽</span>
         </div>
         {generatedImage && (
@@ -36,9 +36,9 @@ export default function ImagePreview({
             {isGenerating ? (
               <div className="flex flex-col items-center gap-4">
                 <div className="relative">
-                  <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
+                  <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Wand2 className="w-6 h-6 text-indigo-500 animate-pulse" />
+                    <Wand2 className="w-6 h-6 text-blue-500 animate-pulse" />
                   </div>
                 </div>
                 <p className="text-lg font-medium text-slate-600">正在繪製您的構想...</p>

@@ -4,99 +4,101 @@
 
 /* ════════════════════════════════════════════
    shadcn/ui + GenPic Master — CSS Variables
+   Theme: Blue (Official shadcn/ui)
    ════════════════════════════════════════════ */
 
 @layer base {
   :root {
-    /* ── shadcn/ui Core Tokens (Light) ── */
+    /* ── shadcn/ui Core Tokens (Blue Light) ── */
     --background: 0 0% 100%;
-    --foreground: 215 25% 13%;             /* slate-900 #0F172A */
+    --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 13%;
+    --card-foreground: 222.2 84% 4.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 13%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 243 76% 59%;               /* indigo-600 #4F46E5 */
-    --primary-foreground: 0 0% 100%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 214 32% 91%;             /* slate-200 #E2E8F0 */
-    --secondary-foreground: 215 25% 13%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 210 40% 96%;                 /* slate-100 #F1F5F9 */
-    --muted-foreground: 215 16% 47%;      /* slate-500 #64748B */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96%;
-    --accent-foreground: 215 25% 13%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 0 72% 51%;             /* red-600 #DC2626 */
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 214 32% 91%;                /* slate-200 */
-    --input: 214 32% 82%;                 /* slate-300 */
-    --ring: 243 76% 59%;                  /* same as primary */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
 
-    --radius: 0.5rem;                     /* 8px — global border radius base */
+    --radius: 0.5rem;
 
-    /* ── GenPic Brand Tokens ── */
-    --brand-primary: 243 76% 59%;         /* #4F46E5 */
-    --brand-primary-hover: 243 75% 51%;   /* #4338CA */
-    --brand-primary-light: 229 100% 94%;  /* #E0E7FF */
-    --brand-secondary: 271 81% 56%;       /* #9333EA */
-    --brand-accent: 330 81% 60%;          /* #EC4899 */
+    /* ── GenPic Brand Tokens (Blue-aligned) ── */
+    --brand-primary: 221.2 83.2% 53.3%;        /* Match primary */
+    --brand-primary-hover: 221.2 83.2% 43.3%;  /* Darker blue */
+    --brand-primary-light: 210 40% 96.1%;      /* Light blue/slate */
+    --brand-secondary: 199 89% 48%;            /* Sky Blue */
+    --brand-accent: 189 94% 43%;               /* Cyan */
 
     /* ── Semantic Tokens ── */
     --success: 142 71% 45%;               /* #16A34A */
     --success-foreground: 138 76% 97%;    /* #F0FDF4 */
-    --warning: 48 96% 53%;                /* #EAB308 → text use #CA8A04 */
-    --warning-foreground: 55 92% 95%;     /* #FEFCE8 */
-    --info: 217 91% 60%;                  /* #2563EB */
-    --info-foreground: 214 100% 97%;      /* #EFF6FF */
+    --warning: 48 96% 53%;                
+    --warning-foreground: 55 92% 95%;     
+    --info: 217 91% 60%;                  
+    --info-foreground: 214 100% 97%;      
 
-    /* ── Chart Colors (shadcn convention) ── */
-    --chart-1: 243 76% 59%;
-    --chart-2: 271 81% 56%;
-    --chart-3: 330 81% 60%;
-    --chart-4: 142 71% 45%;
-    --chart-5: 217 91% 60%;
+    /* ── Chart Colors (Blue theme compatible) ── */
+    --chart-1: 221.2 83.2% 53.3%;
+    --chart-2: 212 95% 68%;
+    --chart-3: 216 92% 60%;
+    --chart-4: 210 98% 78%;
+    --chart-5: 212 97% 87%;
   }
 
   .dark {
-    --background: 222 47% 7%;             /* ~#0B1120 */
-    --foreground: 210 40% 98%;            /* slate-50 */
+    /* ── shadcn/ui Core Tokens (Blue Dark) ── */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 222 47% 9%;
+    --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 9%;
+    --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 243 76% 66%;               /* lighter indigo for dark bg */
-    --primary-foreground: 222 47% 7%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 215 25% 20%;
+    --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 215 25% 15%;
-    --muted-foreground: 215 16% 56%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 215 25% 15%;
+    --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 63% 55%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 215 25% 20%;
-    --input: 215 25% 25%;
-    --ring: 243 76% 66%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217.2 91.2% 59.8%;
 
-    /* Brand — slightly lighter for dark mode */
-    --brand-primary: 243 76% 66%;
-    --brand-primary-hover: 243 75% 58%;
-    --brand-primary-light: 243 50% 20%;
-    --brand-secondary: 271 81% 64%;
-    --brand-accent: 330 81% 68%;
+    /* Brand Tokens Dark */
+    --brand-primary: 217.2 91.2% 59.8%;
+    --brand-primary-hover: 217.2 91.2% 49.8%;
+    --brand-primary-light: 217.2 32.6% 17.5%;
+    --brand-secondary: 199 89% 48%;
+    --brand-accent: 189 94% 43%;
 
     --success: 142 71% 50%;
     --success-foreground: 142 40% 12%;
@@ -105,11 +107,11 @@
     --info: 217 91% 65%;
     --info-foreground: 217 40% 12%;
 
-    --chart-1: 243 76% 66%;
-    --chart-2: 271 81% 64%;
-    --chart-3: 330 81% 68%;
-    --chart-4: 142 71% 50%;
-    --chart-5: 217 91% 65%;
+    --chart-1: 221.2 83.2% 53.3%;
+    --chart-2: 212 95% 68%;
+    --chart-3: 216 92% 60%;
+    --chart-4: 210 98% 78%;
+    --chart-5: 212 97% 87%;
   }
 }
 

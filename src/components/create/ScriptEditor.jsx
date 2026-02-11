@@ -1,5 +1,7 @@
 import React from "react";
 import { Layout, Monitor, Square, Smartphone, Wand2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 const ASPECT_RATIOS = [
   { id: "16:9", label: "16:9 簡報", icon: Monitor },
@@ -25,78 +27,89 @@ export default function ScriptEditor({
   onImageSizeChange,
   isGenerating,
   onGenerate,
+  hideGenerate = false,
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 text-slate-800 font-semibold">
-        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">
-          2
-        </div>
-        輸入內容劇情與規格
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="script-input" className="text-sm font-semibold">
+          劇情描述
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          描述你想生成的畫面內容，包含人物、場景、動作和氛圍。越詳細越好。
+        </p>
       </div>
 
-      <div className="flex gap-2 mb-2 p-1 bg-slate-50 rounded-lg border border-slate-200">
-        {ASPECT_RATIOS.map((ratio) => (
-          <button
-            key={ratio.id}
-            onClick={() => onAspectRatioChange(ratio.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-md transition-all ${
-              aspectRatio === ratio.id
-                ? "bg-white text-indigo-600 font-bold shadow-sm border border-slate-200"
-                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-            }`}
-            title={ratio.label}
-          >
-            <ratio.icon className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">{ratio.id}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <span className="font-medium text-slate-700">解析度</span>
-        <div className="flex gap-2">
-          {IMAGE_SIZES.map((size) => (
-            <button
-              key={size.id}
-              onClick={() => onImageSizeChange(size.id)}
-              className={`px-2.5 py-1 rounded-md border text-xs transition-all ${
-                imageSize === size.id
-                  ? "bg-white text-indigo-600 font-semibold border-slate-200 shadow-sm"
-                  : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-100"
-              }`}
-              title={size.label}
-            >
-              {size.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <textarea
+      <Textarea
+        id="script-input"
         value={userScript}
         onChange={(e) => onUserScriptChange(e.target.value)}
         onFocus={onFocus}
         onBlur={onBlur}
-        placeholder="例如：一位穿著西裝的員工正在向團隊展示數據圖表，背景是現代化的辦公室，氣氛積極向上..."
-        className="w-full h-32 md:h-64 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-y bg-white transition-all"
+        placeholder="例如：一位穿著西裝的員工正在向團隊展示數據圖表，背景是現代化的辦公室，會議桌上擺著筆電和咖啡，氣氛積極向上..."
+        className="min-h-[200px] md:min-h-[320px] resize-y text-sm"
       />
 
-      <button
-        onClick={onGenerate}
-        disabled={!userScript || isGenerating}
-        className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 transform active:scale-[0.98]"
-      >
-        {isGenerating ? (
-          <span className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5 animate-spin" /> AI 生成中...
-          </span>
-        ) : (
-          <span className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5" /> 開始生成圖片
-          </span>
-        )}
-      </button>
+      <div className="text-xs text-muted-foreground text-right">
+        {userScript.length} 字
+      </div>
+
+      {/* Legacy: 獨立使用時仍顯示比例/解析度/生成按鈕 */}
+      {!hideGenerate && (
+        <>
+          <div className="flex gap-2 mb-2 p-1 bg-muted rounded-lg border border-border">
+            {ASPECT_RATIOS.map((ratio) => (
+              <button
+                key={ratio.id}
+                onClick={() => onAspectRatioChange(ratio.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-md transition-all ${aspectRatio === ratio.id
+                    ? "bg-background text-primary font-bold shadow-sm border border-border"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  }`}
+                title={ratio.label}
+              >
+                <ratio.icon className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">{ratio.id}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">解析度</span>
+            <div className="flex gap-2">
+              {IMAGE_SIZES.map((size) => (
+                <button
+                  key={size.id}
+                  onClick={() => onImageSizeChange(size.id)}
+                  className={`px-2.5 py-1 rounded-md border text-xs transition-all ${imageSize === size.id
+                      ? "bg-background text-primary font-semibold border-border shadow-sm"
+                      : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted"
+                    }`}
+                  title={size.label}
+                >
+                  {size.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={onGenerate}
+            disabled={!userScript || isGenerating}
+            className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 transform active:scale-[0.98]"
+          >
+            {isGenerating ? (
+              <span className="flex items-center gap-2">
+                <Wand2 className="w-5 h-5 animate-spin" /> AI 生成中...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Wand2 className="w-5 h-5" /> 開始生成圖片
+              </span>
+            )}
+          </button>
+        </>
+      )}
     </div>
   );
 }

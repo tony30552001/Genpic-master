@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
  * @param {boolean} props.isAnalyzing - 是否正在分析
  * @param {string} props.analysisPhase - 當前分析階段
  */
-export default function DocumentUploader({ 
-  onAnalyze, 
-  isAnalyzing, 
+export default function DocumentUploader({
+  onAnalyze,
+  isAnalyzing,
   analysisPhase,
-  disabled = false 
+  disabled = false
 }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -44,7 +44,7 @@ export default function DocumentUploader({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFile(e.dataTransfer.files[0]);
     }
@@ -85,7 +85,7 @@ export default function DocumentUploader({
 
   const handleAnalyze = async () => {
     if (!selectedFile) return;
-    
+
     try {
       await onAnalyze(selectedFile);
     } catch (err) {
@@ -125,13 +125,12 @@ export default function DocumentUploader({
     <div className="space-y-4">
       {/* 上傳區域 */}
       <div
-        className={`relative border-2 border-dashed rounded-lg p-6 transition-colors ${
-          dragActive
-            ? "border-indigo-500 bg-indigo-50"
+        className={`relative border-2 border-dashed rounded-lg p-6 transition-colors ${dragActive
+            ? "border-blue-500 bg-blue-50"
             : selectedFile
-            ? "border-green-500 bg-green-50"
-            : "border-gray-300 hover:border-gray-400"
-        } ${disabled || isAnalyzing ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              ? "border-green-500 bg-green-50"
+              : "border-slate-300 hover:border-slate-400"
+          } ${disabled || isAnalyzing ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
@@ -150,15 +149,15 @@ export default function DocumentUploader({
         <div className="flex flex-col items-center justify-center space-y-3">
           {isAnalyzing ? (
             <>
-              <Loader2 className="h-12 w-12 text-indigo-500 animate-spin" />
-              <p className="text-sm font-medium text-indigo-600">{analysisPhase || "分析中..."}</p>
+              <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+              <p className="text-sm font-medium text-blue-600">{analysisPhase || "分析中..."}</p>
             </>
           ) : selectedFile ? (
             <div className="flex items-center space-x-4">
               {getFileIcon(selectedFile.name)}
               <div className="text-left">
-                <p className="font-medium text-gray-900">{selectedFile.name}</p>
-                <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                <p className="font-medium text-slate-900">{selectedFile.name}</p>
+                <p className="text-sm text-slate-500">{formatFileSize(selectedFile.size)}</p>
               </div>
               <Button
                 variant="ghost"
@@ -174,15 +173,15 @@ export default function DocumentUploader({
             </div>
           ) : (
             <>
-              <Upload className="h-12 w-12 text-gray-400" />
+              <Upload className="h-12 w-12 text-slate-400" />
               <div className="text-center">
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-slate-700">
                   點擊或拖曳檔案至此處
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   支援 PDF、Word、PowerPoint、文字檔案與圖片
                 </p>
-                <p className="text-xs text-gray-400">最大 50MB</p>
+                <p className="text-xs text-slate-400">最大 50MB</p>
               </div>
             </>
           )}
@@ -195,7 +194,7 @@ export default function DocumentUploader({
           {supportedFormats.map((format) => (
             <span
               key={format.ext}
-              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
+              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600"
             >
               {format.label}
             </span>

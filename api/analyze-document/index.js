@@ -1,3 +1,5 @@
+const { StorageSharedKeyCredential } = require("@azure/storage-blob");
+
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { getModel } = require("../_shared/gemini");
@@ -34,10 +36,49 @@ const DOCUMENT_ANALYSIS_PROMPT = `請擔任專業的文件分析師與視覺導�
 - 如果是文章/報告，每個重要段落對應一個場景`;
 
 /**
- * 從 URL 獲取文件內容
- * 支援從 Azure Blob Storage 等來源獲取
+ * 從 Azure Blob Storage 直接下載文件（使用 SDK，不受公共存取設定影響）
+ * @param {string} documentUrl - Blob URL，格式: https://<account>.blob.core.windows.net/<container>/<blobName>
+ * @returns {{ base64: string, contentType: string }}
  */
 const fetchDocumentAsBase64 = async (documentUrl) => {
+  const account = process.env.AZURE_STORAGE_ACCOUNT;
+  const key = process.env.AZURE_STORAGE_KEY;
+
+  // 如果是本帳號的 Blob URL，用 SDK 直接下載（繞過公共存取限制）
+  const blobHost = `${account}.blob.core.windows.net`;
+  if (account && key && documentUrl.includes(blobHost)) {
+    const url = new URL(documentUrl);
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    if (pathParts.length >= 2) {
+      const containerName = pathParts[0];
+      const blobName = decodeURIComponent(pathParts.slice(1).join("/"));
+
+      const { BlobServiceClient } = require("@azure/storage-blob");
+      const sharedKey = new StorageSharedKeyCredential(account, key);
+      const blobServiceClient = new BlobServiceClient(
+        `https://${account}.blob.core.windows.net`,
+        sharedKey
+      );
+
+      const blobClient = blobServiceClient
+        .getContainerClient(containerName)
+        .getBlobClient(blobName);
+
+      const downloadResponse = await blobClient.download(0);
+      const contentType =
+        downloadResponse.contentType || "application/pdf";
+
+      // 讀取 stream 為 buffer
+      const chunks = [];
+      for await (const chunk of downloadResponse.readableStreamBody) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      return { base64: buffer.toString("base64"), contentType };
+    }
+  }
+
+  // 非 Blob URL 時用一般 HTTP fetch
   const response = await fetch(documentUrl);
   if (!response.ok) {
     throw new Error(`Document fetch failed: ${response.status}`);
@@ -80,12 +121,12 @@ const isSupportedFormat = (mimeType, fileName) => {
     "image/png",
     "image/jpeg",
   ];
-  
+
   // 如果直接有 MIME type，先檢查
   if (mimeType && supportedMimeTypes.includes(mimeType)) {
     return true;
   }
-  
+
   // 依副檔名檢查
   const supportedExtensions = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg"];
   const ext = fileName?.toLowerCase().split(".").pop();
@@ -98,7 +139,7 @@ const isSupportedFormat = (mimeType, fileName) => {
 const parseGeminiResponse = (result) => {
   // 嘗試多種路徑找到文字內容
   let responseText = "";
-  
+
   if (result?.text) {
     responseText = result.text;
   } else if (result?.response?.text) {

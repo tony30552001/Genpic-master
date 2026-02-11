@@ -39,7 +39,7 @@ export default function HistoryCard({ item, style, onLoad, onDelete }) {
           <div className="flex gap-2">
             <button
               onClick={() => onLoad(item)}
-              className="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-md transition-colors"
+              className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-md transition-colors"
               title="Reuse Style"
             >
               <FileText className="w-3.5 h-3.5" />

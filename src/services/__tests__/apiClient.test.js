@@ -4,6 +4,10 @@ vi.mock("../authService", () => ({
   acquireAccessToken: vi.fn(() => Promise.resolve("token")),
 }));
 
+vi.mock("../../config", () => ({
+  AUTH_BYPASS: false,
+}));
+
 import { apiGet, apiPost, apiDelete } from "../apiClient";
 
 describe("apiClient", () => {

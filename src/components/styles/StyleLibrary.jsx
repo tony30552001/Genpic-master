@@ -28,7 +28,7 @@ export default function StyleLibrary({
           placeholder="搜尋風格名稱或標籤..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full pl-9 pr-9 py-2 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+          className="w-full pl-9 pr-9 py-2 text-sm border border-slate-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
         />
         {isSearching && (
           <Loader2 className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 animate-spin" />
