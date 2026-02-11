@@ -14,17 +14,17 @@ export const getActiveAccount = () => {
 };
 
 export const loginWithMicrosoft = async () => {
-  const result = await msalInstance.loginPopup(loginRequest);
-  if (result?.account) {
-    msalInstance.setActiveAccount(result.account);
-  }
-  return result?.account || null;
+  // 改用 Redirect 模式以避免 Popup 被攔截或 Opener 丟失的問題
+  await msalInstance.loginRedirect(loginRequest);
+  // Redirect 模式下，登入成功後的處理會由 handleRedirectPromise 在頁面重新載入後完成
+  // 因此這裡不需要回傳 result
 };
 
 export const logout = async () => {
   const account = getActiveAccount();
   if (!account) return;
-  await msalInstance.logoutPopup({ account });
+  // 改用 Redirect 模式登出
+  await msalInstance.logoutRedirect({ account });
 };
 
 export const acquireAccessToken = async () => {
