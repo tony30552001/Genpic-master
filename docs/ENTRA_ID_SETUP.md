@@ -47,7 +47,7 @@
 VITE_MSAL_CLIENT_ID=您的_Application_Client_ID
 VITE_MSAL_TENANT_ID=您的_Directory_Tenant_ID
 VITE_MSAL_REDIRECT_URI=http://localhost:5173
-VITE_MSAL_SCOPES=User.Read
+VITE_MSAL_SCOPES=您的_Application_Client_ID
 
 # API Gateway
 VITE_API_BASE_URL=http://localhost:7071/api

@@ -93,3 +93,17 @@
     -   請確保變數名稱與程式碼中 `process.env.VARIABLE_NAME` 完全一致。
 -   **資料庫連線失敗**：
     -   請確認您的 Azure Database for PostgreSQL (或您使用的資料庫服務) 的防火牆設定，需允許 **Azure 服務和資源存取此伺服器** (Allow Azure services and resources to access this server)。因為 SWA Function 也是 Azure 服務的一部分。
+-   **圖片上傳失敗 (CORS Error)**：
+    -   錯誤訊息：`Access to XMLHttpRequest at '...' from origin '...' has been blocked by CORS policy`。
+    -   原因：Azure Blob Storage 預設不允許跨網域存取。
+    -   解決方法：
+        1.  前往 Azure Portal 的 Storage Account (`genpicstorage001`)。
+        2.  在左側選單找到 **Settings** -> **Resource sharing (CORS)**。
+        3.  切換到 **Blob service** 分頁。
+        4.  新增一條規則：
+            -   **Allowed origins**: 輸入您的 Static Web App 網域 (例如 `https://thankful-island-xxx.azurestaticapps.net`)，或暫時使用 `*`。
+            -   **Allowed methods**: 把 `GET`, `PUT`, `POST`, `OPTIONS`, `HEAD` 全部勾選 (或是至少勾選 `PUT` 與 `GET`)。
+            -   **Allowed headers**: `*`
+            -   **Exposed headers**: `*`
+            -   **Max age**: `86400`
+        5.  點擊 **Save**。等待幾分鐘後重試。
