@@ -8,6 +8,7 @@ export default function useImageGeneration() {
   const [generatedImage, setGeneratedImage] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [analysisPhase, setAnalysisPhase] = useState(""); // 新增：分析階段描述
 
   const runStyleAnalysis = useCallback(async ({ referencePreview, imageUrl }) => {
     if (!referencePreview && !imageUrl) {
@@ -15,14 +16,19 @@ export default function useImageGeneration() {
     }
 
     setIsAnalyzing(true);
+    setAnalysisPhase("上傳圖片並準備分析...");
+    
     try {
+      setAnalysisPhase("AI 正在解析風格特徵（約需 5-10 秒）...");
       const result = await analyzeStyle({
         referencePreview,
         imageUrl,
       });
 
+      setAnalysisPhase("儲存分析結果...");
       setAnalyzedStyle(result.style_prompt || "");
       setAnalysisResultData(result);
+      setAnalysisPhase("");
       return result;
     } finally {
       setIsAnalyzing(false);
@@ -41,14 +47,14 @@ export default function useImageGeneration() {
           stylePrompt || "High quality, professional corporate style"
         }. The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.`;
 
-        const imageUrl = await generateImage({
+        const result = await generateImage({
           prompt: finalPrompt,
           aspectRatio,
           imageSize,
         });
 
-        setGeneratedImage(imageUrl);
-        return { imageUrl, finalPrompt };
+        setGeneratedImage(result.imageUrl);
+        return { imageUrl: result.imageUrl, finalPrompt };
       } finally {
         setIsGenerating(false);
       }
@@ -67,6 +73,7 @@ export default function useImageGeneration() {
     generatedImage,
     isAnalyzing,
     isGenerating,
+    analysisPhase, // 回傳分析階段狀態
     analyzeStyle: runStyleAnalysis,
     generateImage: runGeneration,
     clearStyle,

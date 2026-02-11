@@ -11,6 +11,7 @@ export default function StyleAnalyzer({
   newStyleName,
   newStyleTags,
   isSavingStyle,
+  analysisPhase, // 新增：接收分析階段狀態
   onImageUpload,
   onClearReference,
   onAnalyze,
@@ -103,6 +104,24 @@ export default function StyleAnalyzer({
             ? "正在全方位分析..."
             : "解析風格與內容"}
       </button>
+
+      {isAnalyzing && analysisPhase && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-indigo-900">
+                {analysisPhase}
+              </p>
+              <div className="mt-2 h-1.5 w-full bg-indigo-200 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-500 rounded-full animate-pulse" style={{ width: analysisPhase.includes("儲存") ? "90%" : analysisPhase.includes("解析") ? "60%" : "30%" }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {analyzedStyle && (
         <div className="bg-white border border-indigo-100 rounded-xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 relative">
