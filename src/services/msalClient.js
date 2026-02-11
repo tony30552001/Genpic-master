@@ -53,8 +53,5 @@ export const loginRequest = {
 
 export const msalInstance = new PublicClientApplication(msalConfig);
 
-// Initialize the instance (required for MSAL Browser v3)
-// We use a promise to ensure initialization completes before usage in strict mode contexts if needed,
-// but MsalProvider typically handles this. However, explicitly initializing helps catch errors early.
-msalInstance.initialize().catch(console.error);
+// Initialize is handled in main.jsx to prevent race conditions and handle popup flow gracefully
 
