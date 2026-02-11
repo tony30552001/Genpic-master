@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useMsal, useIsAuthenticated } from '@azure/msal-react';
+import { googleLogout } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { loginWithMicrosoft, logout as microsoftLogout } from '../services/authService';
 import { AUTH_BYPASS } from '../config';
@@ -49,6 +50,7 @@ export const AuthProvider = ({ children }) => {
 
     const handleLogout = useCallback(async () => {
         if (googleUser) {
+            googleLogout();
             setGoogleUser(null);
             localStorage.removeItem('google_user');
         } else {
