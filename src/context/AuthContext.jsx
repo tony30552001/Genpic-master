@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
     const [googleUser, setGoogleUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [authExpired, setAuthExpired] = useState(false);
+    const [msalInitialized, setMsalInitialized] = useState(false);
 
     // 初始化 Google 登入狀態 (從 localStorage)
     useEffect(() => {
@@ -34,8 +35,31 @@ export const AuthProvider = ({ children }) => {
                 localStorage.removeItem('google_user');
             }
         }
-        setIsLoading(false);
     }, []);
+
+    // 監聽 MSAL 初始化完成
+    useEffect(() => {
+        // 等待 MSAL 初始化完成（instance 已準備就緒）
+        const checkMsalInit = async () => {
+            try {
+                // MSAL 初始化由 main.jsx 處理，這裡等待一個渲染周期
+                // 確保 useIsAuthenticated 已經有正確的初始值
+                await new Promise(resolve => setTimeout(resolve, 0));
+                setMsalInitialized(true);
+            } catch (e) {
+                console.error('MSAL 初始化檢查失敗:', e);
+                setMsalInitialized(true);
+            }
+        };
+        checkMsalInit();
+    }, []);
+
+    // 當 Google 或 MSAL 任一載入完成時，設定 isLoading 為 false
+    useEffect(() => {
+        if (msalInitialized) {
+            setIsLoading(false);
+        }
+    }, [msalInitialized]);
 
     // 設定 Token 過期處理回呼
     useEffect(() => {
