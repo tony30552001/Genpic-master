@@ -1,5 +1,19 @@
 import { loginRequest, msalInstance } from "./msalClient";
 
+// 從 AuthContext 外部獲取 Google User Token 的後路方法
+const getGoogleToken = () => {
+  try {
+    const savedUser = localStorage.getItem('google_user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      return user.idToken || null;
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+};
+
 export const getActiveAccount = () => {
   const active = msalInstance.getActiveAccount();
   if (active) return active;
@@ -28,6 +42,11 @@ export const logout = async () => {
 };
 
 export const acquireAccessToken = async () => {
+  // 優先檢查是否有 Google Token
+  const googleToken = getGoogleToken();
+  if (googleToken) return googleToken;
+
+  // 若無 Google Token，則走 Microsoft 流程
   const account = getActiveAccount();
   if (!account) {
     throw new Error("尚未登入");
@@ -40,10 +59,15 @@ export const acquireAccessToken = async () => {
     });
     return result.accessToken;
   } catch (error) {
-    const result = await msalInstance.acquireTokenPopup({
-      ...loginRequest,
-      account,
-    });
-    return result.accessToken;
+    // Silent 失敗則嘗試彈窗（通常用於 MFA 或過期）
+    try {
+      const result = await msalInstance.acquireTokenPopup({
+        ...loginRequest,
+        account,
+      });
+      return result.accessToken;
+    } catch (popupError) {
+      throw new Error("認證已過期，請重新登入");
+    }
   }
 };
