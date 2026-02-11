@@ -2,7 +2,7 @@
   "routes": [
     {
       "route": "/api/*",
-      "rewrite": "/api/*"
+      "allowedRoles": ["anonymous", "authenticated"]
     }
   ],
   "navigationFallback": {
