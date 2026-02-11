@@ -22,8 +22,44 @@ jobs:
         with:
           submodules: true
           lfs: false
+      
+      # 設定 Node.js 版本
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      
+      # 安裝前端依賴並建置
+      - name: Install Dependencies and Build Frontend
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_MSAL_CLIENT_ID: ${{ secrets.VITE_MSAL_CLIENT_ID }}
+          VITE_MSAL_TENANT_ID: ${{ secrets.VITE_MSAL_TENANT_ID }}
+          VITE_MSAL_REDIRECT_URI: "https://thankful-island-0ab89420f.1.azurestaticapps.net"
+          VITE_MSAL_SCOPES: "openid,profile,User.Read"
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_AUTH_BYPASS: "false"
+          VITE_API_BASE_URL: "/api"
+      
+      # 安裝 API 依賴
+      - name: Install API Dependencies
+        run: |
+          cd api
+          npm ci
+      
+      # 列出 API 目錄結構（除錯用）
+      - name: Debug - List API Structure
+        run: |
+          echo "=== API Directory Structure ==="
+          find api -name "*.json" -o -name "*.js" | head -30
+          echo "=== host.json ==="
+          cat api/host.json
+
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
+      
       - name: Get Id Token
         uses: actions/github-script@v6
         id: idtoken
@@ -32,6 +68,7 @@ jobs:
                const coredemo = require('@actions/core')
                return await coredemo.getIDToken()
            result-encoding: string
+      
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
