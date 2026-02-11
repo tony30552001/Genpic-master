@@ -59,15 +59,9 @@ export const acquireAccessToken = async () => {
     });
     return result.accessToken;
   } catch (error) {
-    // Silent 失敗則嘗試彈窗（通常用於 MFA 或過期）
-    try {
-      const result = await msalInstance.acquireTokenPopup({
-        ...loginRequest,
-        account,
-      });
-      return result.accessToken;
-    } catch (popupError) {
-      throw new Error("認證已過期，請重新登入");
-    }
+    // Silent 失敗時，不應自動彈窗，而是讓呼叫者決定如何處理
+    // 通常這表示需要重新導向到登入頁面
+    console.warn('無法靜默取得 Access Token，可能需要重新登入:', error.message);
+    throw new Error("認證已過期，請重新登入");
   }
 };
