@@ -60,7 +60,7 @@ module.exports = async function (context, req) {
   }
 
   const sharedKey = new StorageSharedKeyCredential(account, key);
-  const startsOn = new Date();
+  const startsOn = new Date(new Date().valueOf() - 5 * 60 * 1000); // Backdate 5 mins for clock skew
   const expiresOn = new Date(startsOn.getTime() + 15 * 60 * 1000);
 
   const sasToken = generateBlobSASQueryParameters(
