@@ -1,29 +1,35 @@
 const jwt = require("jsonwebtoken");
 const jwksClient = require("jwks-rsa");
+const { OAuth2Client } = require("google-auth-library");
 const { error } = require("./http");
 
 const tenantId = process.env.AZURE_TENANT_ID;
-const clientId = process.env.AZURE_CLIENT_ID;
+const microsoftClientId = process.env.AZURE_CLIENT_ID;
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const authDisabled = process.env.AUTH_DISABLED === "true";
 
-const jwksUri = tenantId
+// Microsoft JWKS Client
+const msJwksUri = tenantId
   ? `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`
   : null;
 
-const client = jwksUri
+const msClient = msJwksUri
   ? jwksClient({
-    jwksUri,
+    jwksUri: msJwksUri,
     cache: true,
     rateLimit: true,
   })
   : null;
 
-const getSigningKey = (header, callback) => {
-  if (!client) {
-    callback(new Error("Missing jwks client"));
+// Google OAuth Client
+const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
+
+const getMsSigningKey = (header, callback) => {
+  if (!msClient) {
+    callback(new Error("Missing Microsoft JWKS client"));
     return;
   }
-  client.getSigningKey(header.kid, (err, key) => {
+  msClient.getSigningKey(header.kid, (err, key) => {
     if (err) {
       callback(err);
       return;
@@ -39,43 +45,53 @@ const parseBearer = (req) => {
   return header.substring("Bearer ".length);
 };
 
-const verifyToken = (token) =>
+const verifyMicrosoftToken = (token) =>
   new Promise((resolve, reject) => {
-    const issuer = tenantId
-      ? `https://login.microsoftonline.com/${tenantId}/v2.0`
-      : null;
-
     jwt.verify(
       token,
-      getSigningKey,
+      getMsSigningKey,
       {
         algorithms: ["RS256"],
-        audience: clientId,
-        // issuer, // Remove strict issuer check to avoid v1/v2 mismatch issues during setup
+        audience: microsoftClientId,
       },
       (err, decoded) => {
         if (err) {
           reject(err);
           return;
         }
-        resolve(decoded);
+        resolve({
+          displayName: decoded.name || decoded.preferred_username,
+          email: decoded.preferred_username || decoded.upn,
+          authType: 'microsoft'
+        });
       }
     );
   });
+
+const verifyGoogleToken = async (token) => {
+  if (!googleClient) throw new Error("Google Client ID not configured on backend");
+  const ticket = await googleClient.verifyIdToken({
+    idToken: token,
+    audience: googleClientId,
+  });
+  const payload = ticket.getPayload();
+  return {
+    displayName: payload.name,
+    email: payload.email,
+    photoURL: payload.picture,
+    authType: 'google'
+  };
+};
 
 const requireAuth = async (context, req) => {
   if (authDisabled) {
     return {
       user: {
-        preferred_username: "local.dev@example.com",
-        name: "Local Dev",
+        displayName: "Local Dev",
+        email: "local.dev@example.com",
+        authType: 'bypass'
       },
     };
-  }
-
-  if (!tenantId || !clientId) {
-    context.res = error("Auth 設定缺失", "auth_config_missing", 500);
-    return null;
   }
 
   const token = parseBearer(req);
@@ -85,10 +101,28 @@ const requireAuth = async (context, req) => {
   }
 
   try {
-    const decoded = await verifyToken(token);
-    return { user: decoded };
+    // 預先解碼以判定發行者 (issuer)
+    const decodedRaw = jwt.decode(token);
+    if (!decodedRaw) throw new Error("Invalid token format");
+
+    const iss = decodedRaw.iss || "";
+    let user;
+
+    if (iss.includes("google.com")) {
+      // Google Token
+      user = await verifyGoogleToken(token);
+    } else if (iss.includes("microsoftonline.com") || iss.includes("sts.windows.net")) {
+      // Microsoft Token
+      if (!tenantId || !microsoftClientId) throw new Error("Microsoft Auth Config Missing");
+      user = await verifyMicrosoftToken(token);
+    } else {
+      throw new Error(`Unsupported token issuer: ${iss}`);
+    }
+
+    return { user };
   } catch (err) {
-    context.res = error("Token 驗證失敗", "unauthorized", 401);
+    console.error("Auth Error:", err.message);
+    context.res = error("Token 驗證失敗: " + err.message, "unauthorized", 401);
     return null;
   }
 };
