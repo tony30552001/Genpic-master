@@ -5,8 +5,10 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["post", "options"],
-      "route": "blob-sas"
+      "methods": [
+        "post",
+        "options"
+      ]
     },
     {
       "type": "http",
