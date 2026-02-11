@@ -1,0 +1,16 @@
+{
+  "name": "genpic-master-functions",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "migrate": "node scripts/migrate.cjs"
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.27.0",
+    "@google/genai": "^1.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.1.0",
+    "pg": "^8.13.3"
+  }
+}

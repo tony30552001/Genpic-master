@@ -1,263 +1,155 @@
-import React, { useState, useEffect } from 'react';
-import {
-    Upload,
-    Image as ImageIcon,
-    Wand2,
-    Save,
-    History,
-    Layout,
-    Loader2,
-    Trash2,
-    Palette,
-    FileText,
-    AlertCircle,
-    X,
-    Tag,
-    Bookmark,
-    Plus,
-    Monitor,
-    Square,
-    Smartphone,
-    Search
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, History, Bookmark, Wand2 } from 'lucide-react';
 
-// Firebase Imports
-import { initializeApp } from 'firebase/app';
-import {
-    getAuth,
-    signInAnonymously,
-    onAuthStateChanged,
-    signInWithCustomToken,
-    OAuthProvider,
-    signInWithPopup,
-    signOut
-} from 'firebase/auth';
-import { LogIn, LogOut, User as UserIcon } from 'lucide-react';
-import {
-    getFirestore,
-    collection,
-    addDoc,
-    query,
-    orderBy,
-    onSnapshot,
-    deleteDoc,
-    doc,
-    serverTimestamp
-} from 'firebase/firestore';
+import useAuth from './hooks/useAuth';
+import useStyles from './hooks/useStyles';
+import useHistory from './hooks/useHistory';
+import useImageGeneration from './hooks/useImageGeneration';
+import { requestBlobSas, uploadBlob } from './services/storageService';
 
-// Import local configuration
-import {
-    firebaseConfig as defaultFirebaseConfig,
-    APP_ID,
-    GEMINI_API_KEY,
-    GEMINI_MODEL_ANALYSIS,
-    GEMINI_MODEL_GENERATION
-} from './config';
+import AppHeader from './components/layout/AppHeader';
+import StyleAnalyzer from './components/create/StyleAnalyzer';
+import ScriptEditor from './components/create/ScriptEditor';
+import ImagePreview from './components/create/ImagePreview';
+import StyleLibrary from './components/styles/StyleLibrary';
+import HistoryPanel from './components/history/HistoryPanel';
 
-// --- Firebase Configuration & Initialization ---
-const getFirebaseConfig = () => {
-    // Try to use global injected variable (production/embedded)
-    if (typeof window !== 'undefined' && window.__firebase_config) {
-        return JSON.parse(window.__firebase_config);
-    }
-    // Try to use globally defined variable directly (user code style)
-    try {
-        if (typeof __firebase_config !== 'undefined') {
-            return JSON.parse(__firebase_config);
-        }
-    } catch (e) { }
-
-    return defaultFirebaseConfig;
-};
-
-const firebaseConfig = getFirebaseConfig();
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-const getAppId = () => {
-    if (typeof window !== 'undefined' && window.__app_id) return window.__app_id;
-    try {
-        if (typeof __app_id !== 'undefined') return __app_id;
-    } catch (e) { }
-    return APP_ID;
-};
-const appId = getAppId();
-
-export default function InfographicGenerator() {
+export default function InfographicGenerator({ initialTab = 'create' }) {
     // --- State Management ---
-    const [user, setUser] = useState(null);
-    const [activeTab, setActiveTab] = useState('create'); // 'create', 'history', 'styles'
+    const [activeTab, setActiveTab] = useState(initialTab); // 'create', 'history', 'styles'
 
     // Input States
     const [referenceImage, setReferenceImage] = useState(null); // The file object
     const [referencePreview, setReferencePreview] = useState(null); // Base64 for preview
-
-    const [analyzedStyle, setAnalyzedStyle] = useState(''); // The AI extracted style prompt (English)
-    const [analysisResultData, setAnalysisResultData] = useState(null); // Full JSON result (Chinese desc, tags)
+    const [referenceBlobUrl, setReferenceBlobUrl] = useState(null);
+    const [referenceBlobSasUrl, setReferenceBlobSasUrl] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     const [userScript, setUserScript] = useState(''); // The user's content text
     const [aspectRatio, setAspectRatio] = useState('16:9'); // 16:9, 4:3, 1:1, 9:16
+    const [imageSize, setImageSize] = useState('1K'); // 1K, 2K, 4K
     const [resolutionLevel, setResolutionLevel] = useState('standard'); // standard (faster), high (slower)
-
-    // Style Saving States
-    const [savedStyles, setSavedStyles] = useState([]);
-    const [newStyleName, setNewStyleName] = useState('');
-    const [newStyleTags, setNewStyleTags] = useState('');
-    const [isSavingStyle, setIsSavingStyle] = useState(false);
-
-    // Process States
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generatedImage, setGeneratedImage] = useState(null);
-    const [historyItems, setHistoryItems] = useState([]);
     const [errorMsg, setErrorMsg] = useState('');
+    const [warningMsg, setWarningMsg] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isInputFocused, setIsInputFocused] = useState(false); // For mobile UI optimization
+    const [isStyleNameTouched, setIsStyleNameTouched] = useState(false);
+    const [isStyleTagsTouched, setIsStyleTagsTouched] = useState(false);
 
-    // API Key (Use config or empty string)
-    const apiKey = GEMINI_API_KEY || "";
-
-    // --- Auth Functions ---
-    const handleMicrosoftLogin = async () => {
-        const provider = new OAuthProvider('microsoft.com');
-
-        // 如果有設定 Tenant ID，則強制限制為該組織登入
-        const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID;
-        if (tenantId) {
-            provider.setCustomParameters({
-                tenant: tenantId
-            });
-        }
-
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (error) {
-            console.error("Microsoft Login Error:", error);
-            setErrorMsg(`登入失敗: ${error.message}`);
-        }
-    };
-
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-            // Auto login as anonymous for browsing usage
-            await signInAnonymously(auth);
-        } catch (error) {
-            console.error("Logout Error:", error);
-        }
-    };
-
-    // --- Auth & Data Loading ---
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
-
-            // Only auto-sign-in anonymously if absolutely no user session exists
-            if (!currentUser) {
-                try {
-                    let token = null;
-                    if (typeof window !== 'undefined' && window.__initial_auth_token) token = window.__initial_auth_token;
-
-                    if (token) {
-                        await signInWithCustomToken(auth, token);
-                    } else {
-                        // Fallback to anonymous:
-                        // Check if we just logged out deliberately? 
-                        // For now, simpler to just keep app usable.
-                        await signInAnonymously(auth);
-                    }
-                } catch (err) {
-                    console.error("Anon Auth failed:", err);
-                }
-            }
-        });
-        return () => unsubscribe();
-    }, []);
-
-    // Fetch History & Styles
-    useEffect(() => {
-        if (!user || !appId) return;
-
-        // Fetch History
-        const qHistory = query(
-            collection(db, 'artifacts', appId, 'users', user.uid, 'infographics'),
-            orderBy('createdAt', 'desc')
-        );
-        const unsubHistory = onSnapshot(qHistory, (snapshot) => {
-            setHistoryItems(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        // Fetch Saved Styles
-        const qStyles = query(
-            collection(db, 'artifacts', appId, 'users', user.uid, 'styles'),
-            orderBy('createdAt', 'desc')
-        );
-        const unsubStyles = onSnapshot(qStyles, (snapshot) => {
-            setSavedStyles(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        return () => {
-            unsubHistory();
-            unsubStyles();
-        };
-    }, [user, appId]);
-
-    // --- Helper Functions ---
-
-    // Compress image for Firestore storage (limit 1MB)
-    const compressImage = (dataUrl) => {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.src = dataUrl;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-
-                // Scale down if necessary (max 800px width is usually enough for history)
-                const maxWidth = 800;
-                let width = img.width;
-                let height = img.height;
-
-                if (width > maxWidth) {
-                    height = (height * maxWidth) / width;
-                    width = maxWidth;
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-
-                // Convert to JPEG with compression (0.6 quality) to ensure small size
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                resolve(compressedDataUrl);
-            };
-            img.onerror = (err) => reject(err);
-        });
-    };
+        setActiveTab(initialTab);
+    }, [initialTab]);
+    const { user, handleMicrosoftLogin, handleLogout } = useAuth();
+    const {
+        savedStyles,
+        newStyleName,
+        newStyleTags,
+        isSavingStyle,
+        isSearching,
+        setNewStyleName,
+        setNewStyleTags,
+        saveStyle,
+        deleteStyle,
+        searchStyles
+    } = useStyles({ user });
+    const { historyItems, saveHistoryItem, deleteHistoryItem } = useHistory({ user });
+    const {
+        analyzedStyle,
+        analysisResultData,
+        generatedImage,
+        isAnalyzing,
+        isGenerating,
+        analyzeStyle,
+        generateImage,
+        clearStyle,
+        setAnalyzedStyle,
+        setAnalysisResultData,
+        setGeneratedImage
+    } = useImageGeneration();
 
     // --- Core Logic Functions ---
 
     // 1. Image Upload & Pre-processing
-    const handleImageUpload = (e) => {
+    const uploadBlobWithProgress = ({ blobUrl, sasToken, file, contentType, onProgress }) =>
+        new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', `${blobUrl}?${sasToken}`, true);
+            xhr.setRequestHeader('x-ms-blob-type', 'BlockBlob');
+            xhr.setRequestHeader('Content-Type', contentType);
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const percent = Math.round((event.loaded / event.total) * 100);
+                    onProgress(percent);
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(blobUrl);
+                } else {
+                    reject(new Error(`Upload failed: ${xhr.status}`));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Upload failed'));
+            xhr.send(file);
+        });
+
+    const handleImageUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Check size (simple limit ~4MB for API safety)
         if (file.size > 4 * 1024 * 1024) {
             setErrorMsg("圖片過大，請上傳小於 4MB 的圖片。");
             return;
         }
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setReferenceImage(file);
-            setReferencePreview(reader.result);
-            setAnalyzedStyle(''); // Reset style when new image uploaded
-            setAnalysisResultData(null);
-            setErrorMsg('');
-        };
-        reader.readAsDataURL(file);
+        try {
+            setIsUploading(true);
+            setUploadProgress(0);
+            const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "-");
+            const sas = await requestBlobSas({
+                fileName: safeName,
+                contentType: file.type,
+                container: "uploads"
+            });
+            const blobUrl = await uploadBlobWithProgress({
+                blobUrl: sas.blobUrl,
+                sasToken: sas.sasToken,
+                file,
+                contentType: file.type,
+                onProgress: setUploadProgress
+            });
+            const blobSasUrl = `${sas.blobUrl}?${sas.sasToken}`;
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setReferenceImage(file);
+                setReferencePreview(reader.result);
+                setReferenceBlobUrl(blobUrl);
+                setReferenceBlobSasUrl(blobSasUrl);
+                setAnalyzedStyle('');
+                setAnalysisResultData(null);
+                setErrorMsg('');
+                setWarningMsg('');
+                setIsStyleNameTouched(false);
+                setIsStyleTagsTouched(false);
+                setTimeout(() => {
+                    setIsUploading(false);
+                    setUploadProgress(0);
+                }, 1500);
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error("Upload failed:", err);
+            setErrorMsg(err.message || "上傳失敗，請稍後再試。");
+        } finally {
+            if (!referencePreview) {
+                setIsUploading(false);
+            }
+        }
     };
 
     // New function to clear reference
@@ -268,110 +160,76 @@ export default function InfographicGenerator() {
         }
         setReferenceImage(null);
         setReferencePreview(null);
-        setAnalyzedStyle('');
-        setAnalysisResultData(null);
+        setReferenceBlobUrl(null);
+        setReferenceBlobSasUrl(null);
+        setIsUploading(false);
+        setUploadProgress(0);
+        setWarningMsg('');
+        setIsStyleNameTouched(false);
+        setIsStyleTagsTouched(false);
+        clearStyle();
         // We intentionally keep userScript so user doesn't lose their text
     };
 
-    // 2. Analyze Style (Using Gemini Multimodal)
+    // 2. Analyze Style (via API)
     const analyzeImageStyle = async () => {
-        if (!referencePreview) {
-            setErrorMsg("請先上傳參考圖片。");
-            return;
-        }
-
-        if (!apiKey) {
-            setErrorMsg("請先於 config.js 設定 API Key。");
-            return;
-        }
-
-        setIsAnalyzing(true);
-        setErrorMsg('');
-
         try {
-            const base64Data = referencePreview.split(',')[1];
+            const analysisResult = await analyzeStyle({
+                referencePreview,
+                imageUrl: referenceBlobSasUrl
+            });
+            setUserScript(analysisResult.image_content || '');
 
-            // Updated Prompt: Ask for JSON with both style (English & Chinese) and content
-            // Note: We ask for Traditional Chinese explicitly
-            const promptText = `請擔任專業視覺分析師。請分析這張圖片並回傳一個 JSON 物件，包含以下欄位：
-      1. "style_prompt": (英文) 詳細描述圖片的視覺風格、藝術流派、配色方案、光影與材質、構圖特徵。這將用於生成類似風格圖片的 Image Gen Prommpt。
-      2. "style_description_zh": (繁體中文) 以優美的文字，詳細描述此風格的視覺特徵、帶給人的感受、適合的使用場景。這將呈現給使用者看作為風格介紹。
-      3. "image_content": (繁體中文) 詳細描述圖片中的具體內容、發生的劇情、人物動作、場景細節。這將作為預設的劇情腳本。
-      4. "suggested_tags": (Array of Strings) 針對此風格建議的 3-5 個繁體中文標籤 (Tags)。`;
-
-            // Using configured model
-            const modelName = GEMINI_MODEL_ANALYSIS;
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        role: "user",
-                        parts: [
-                            { text: promptText },
-                            { inlineData: { mimeType: "image/png", data: base64Data } }
-                        ]
-                    }],
-                    generationConfig: {
-                        responseMimeType: "application/json"
-                    }
-                })
+            const tags = Array.isArray(analysisResult.suggested_tags)
+                ? analysisResult.suggested_tags
+                : [];
+            const autoStyleName =
+                analysisResult.style_name ||
+                tags[0] ||
+                '未命名風格';
+            const shouldSetName = !isStyleNameTouched;
+            const shouldSetTags = !isStyleTagsTouched;
+            const finalStyleName = shouldSetName ? autoStyleName : newStyleName.trim();
+            if (shouldSetName) {
+                setNewStyleName(autoStyleName);
+            }
+            if (shouldSetTags) {
+                setNewStyleTags(tags.join(', '));
+            }
+            setAnalysisResultData({
+                ...analysisResult,
+                style_name: finalStyleName
             });
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error('Analysis failed: ' + (errData.error?.message || response.statusText));
+            if (analysisResult.embedding_error) {
+                setWarningMsg('向量產生失敗，已略過風格向量寫入。');
+            } else {
+                setWarningMsg('');
             }
-
-            const result = await response.json();
-            const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            // Parse JSON result
-            const analysisResult = JSON.parse(responseText);
-
-            setAnalyzedStyle(analysisResult.style_prompt);
-            setAnalysisResultData(analysisResult);
-            setUserScript(analysisResult.image_content);
-
-            // Auto-fill tags if suggested
-            if (analysisResult.suggested_tags && Array.isArray(analysisResult.suggested_tags)) {
-                setNewStyleTags(analysisResult.suggested_tags.join(', '));
-            }
-
+            setErrorMsg('');
         } catch (err) {
-            console.error(err);
-            setErrorMsg("圖片分析失敗，請確認圖片或 API Key 設定。");
-        } finally {
-            setIsAnalyzing(false);
+            console.error("Analysis Failed:", err);
+            setErrorMsg(err.message || "圖片分析失敗，請確認 API 是否啟用。");
+            setWarningMsg('');
         }
     };
 
     // --- Style Management Functions ---
     const saveCurrentStyle = async () => {
-        if (!user || !analyzedStyle) return;
-        if (!newStyleName.trim()) {
-            setErrorMsg("請輸入風格名稱");
-            return;
-        }
-
-        setIsSavingStyle(true);
         try {
-            await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'styles'), {
-                name: newStyleName,
-                tags: newStyleTags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
-                prompt: analyzedStyle,
-                description: analysisResultData?.style_description_zh || '',
-                previewUrl: referencePreview || '',
-                createdAt: serverTimestamp()
+            await saveStyle({
+                analyzedStyle,
+                analysisResultData,
+                referencePreview,
+                referenceBlobUrl
             });
-            setNewStyleName('');
-            setNewStyleTags('');
             alert('風格已儲存！');
+            setErrorMsg('');
+            setIsStyleNameTouched(false);
+            setIsStyleTagsTouched(false);
         } catch (err) {
             console.error("Save style failed:", err);
-            setErrorMsg("儲存風格失敗");
-        } finally {
-            setIsSavingStyle(false);
+            setErrorMsg(err.message || "儲存風格失敗");
         }
     };
 
@@ -379,7 +237,7 @@ export default function InfographicGenerator() {
         e.stopPropagation();
         if (!user || !confirm('確定要刪除此風格收藏嗎？')) return;
         try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'styles', id));
+            await deleteStyle(id);
         } catch (err) {
             console.error("Delete style failed:", err);
         }
@@ -392,98 +250,71 @@ export default function InfographicGenerator() {
             style_description_zh: styleData.description,
             suggested_tags: styleData.tags
         });
+        setNewStyleName(styleData.name || '');
+        setNewStyleTags((styleData.tags || []).join(', '));
+        setIsStyleNameTouched(true);
+        setIsStyleTagsTouched(true);
         setActiveTab('create');
     };
 
-    // 3. Generate Image (Using Imagen)
+    const handleStyleNameChange = (value) => {
+        setNewStyleName(value);
+        setIsStyleNameTouched(true);
+    };
+
+    const handleStyleTagsChange = (value) => {
+        setNewStyleTags(value);
+        setIsStyleTagsTouched(true);
+    };
+
+    const handleClearStyle = () => {
+        clearStyle();
+        setNewStyleName('');
+        setNewStyleTags('');
+        setIsStyleNameTouched(false);
+        setIsStyleTagsTouched(false);
+    };
+
+    // 3. Generate Image (via API)
     const generateInfographic = async () => {
-        if (!userScript) {
-            setErrorMsg("請輸入您想要生成的內容或劇情。");
-            return;
-        }
-
-        if (!apiKey) {
-            setErrorMsg("請先於 config.js 設定 API Key。");
-            return;
-        }
-
-        setIsGenerating(true);
-        setErrorMsg('');
-
         try {
-            // Combine analyzed style with user script
-            const finalPrompt = `Create an image with the following style: ${analyzedStyle || "High quality, professional corporate style"}. The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.`;
-
-            // Using configured model
-            const modelName = GEMINI_MODEL_GENERATION;
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    instances: [{ prompt: finalPrompt }],
-                    instances: [{ prompt: finalPrompt }],
-                    parameters: { sampleCount: 1, aspectRatio: aspectRatio }
-                })
+            const { imageUrl, finalPrompt } = await generateImage({
+                userScript,
+                analyzedStyle,
+                aspectRatio,
+                imageSize
             });
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error('Image generation failed: ' + (errData.error?.message || response.statusText));
-            }
-
-            const result = await response.json();
-            const base64Image = result.predictions[0].bytesBase64Encoded;
-            const imageUrl = `data:image/png;base64,${base64Image}`;
-
-            setGeneratedImage(imageUrl);
-
-            // Auto-save to history
-            saveToHistory(imageUrl, finalPrompt);
-
-        } catch (err) {
-            console.error(err);
-            // Show the actual error message from the API if available
-            setErrorMsg(`圖片生成失敗: ${err.message || "請確認您有 Imagen API 使用權限"}`);
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    // 4. Save to Firestore
-    const saveToHistory = async (imgUrl, promptUsed) => {
-        if (!user) return;
-        try {
-            // Compress image before saving to avoid Firestore 1MB limit
-            const compressedUrl = await compressImage(imgUrl);
-
-            await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'infographics'), {
-                imageUrl: compressedUrl,
-                userScript: userScript,
+            await saveHistoryItem({
+                imageUrl,
+                userScript,
                 stylePrompt: analyzedStyle,
-                fullPrompt: promptUsed,
-                createdAt: serverTimestamp()
+                fullPrompt: finalPrompt,
+                styleId: analysisResultData?.styleId || null
             });
+            setErrorMsg('');
         } catch (err) {
-            console.error("Save failed:", err);
-            // Warning only, don't block user
-            // setErrorMsg("警告：圖片無法儲存到歷史紀錄。");
-        }
-    };
-
-    const deleteHistoryItem = async (id) => {
-        if (!user) return;
-        try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'infographics', id));
-        } catch (err) {
-            console.error("Delete failed:", err);
+            console.error("Image Generation Failed:", err);
+            setErrorMsg(`圖片生成失敗: ${err.message || "請確認模型名稱支援圖片生成"}`);
         }
     };
 
     const loadFromHistory = (item) => {
         setUserScript(item.userScript);
-        setAnalyzedStyle(item.stylePrompt);
+        setAnalyzedStyle(item.stylePrompt || '');
+        setAnalysisResultData(null);
         setGeneratedImage(item.imageUrl);
         setActiveTab('create');
+    };
+
+    const handleDownload = () => {
+        if (!generatedImage) return;
+        const link = document.createElement('a');
+        link.href = generatedImage;
+        link.download = `generated-infographic-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     // --- Render Components ---
@@ -494,44 +325,18 @@ export default function InfographicGenerator() {
             {/* Left Sidebar - Controls */}
             <div className={`w-full md:w-1/3 md:min-w-[350px] bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shadow-lg z-10 order-1 relative transition-all duration-300 ${isInputFocused ? 'h-full' : 'h-[60%] md:h-full'}`}>
 
-                {/* Header */}
-                <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h1 className="text-xl font-bold flex items-center gap-2">
-                                <Layout className="w-6 h-6" />
-                                企業風格圖產生器
-                            </h1>
-                            <p className="text-xs text-indigo-100 mt-1 opacity-80">
-                                Powered by Gemini & Imagen
-                            </p>
-                        </div>
-                        {/* Auth Status/Button */}
-                        <div className="ml-4">
-                            {user && !user.isAnonymous ? (
-                                <div className="flex items-center gap-3 bg-white/10 px-3 py-1.5 rounded-full border border-white/20 backdrop-blur-sm">
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-xs font-bold leading-none mb-0.5">{user.displayName || "User"}</span>
-                                        <button onClick={handleLogout} className="text-[10px] opacity-80 hover:opacity-100 hover:text-red-200 transition-colors flex items-center gap-1">
-                                            <LogOut className="w-2.5 h-2.5" /> 登出
-                                        </button>
-                                    </div>
-                                    <div className="w-9 h-9 rounded-full bg-indigo-200 flex items-center justify-center text-sm font-bold text-indigo-700 border-2 border-white/30 overflow-hidden shadow-inner">
-                                        {user.photoURL ? <img src={user.photoURL} alt="User" className="w-full h-full object-cover" /> : (user.displayName?.[0] || 'U')}
-                                    </div>
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={handleMicrosoftLogin}
-                                    className="bg-white text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-                                    title="使用公司帳號登入以同步紀錄"
-                                >
-                                    <LogIn className="w-4 h-4" /> 登入
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <AppHeader
+                    user={user}
+                    onLogin={async () => {
+                        try {
+                            await handleMicrosoftLogin();
+                        } catch (error) {
+                            console.error("Microsoft Login Error:", error);
+                            setErrorMsg(`登入失敗: ${error.message}`);
+                        }
+                    }}
+                    onLogout={handleLogout}
+                />
 
                 {/* Tabs */}
                 <div className="flex border-b border-slate-200 shrink-0">
@@ -565,285 +370,72 @@ export default function InfographicGenerator() {
                         </div>
                     )}
 
+                    {warningMsg && (
+                        <div className="bg-amber-50 text-amber-700 p-3 rounded-lg text-sm flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                            {warningMsg}
+                        </div>
+                    )}
+
                     {activeTab === 'create' ? (
                         <>
-                            {/* Step 1: Style Upload */}
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2 text-slate-800 font-semibold">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">1</div>
-                                    上傳風格範例圖
-                                </div>
-
-                                <div className="relative group">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleImageUpload}
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                    />
-                                    <div className={`border-2 border-dashed rounded-xl p-4 transition-all text-center ${referencePreview ? 'border-indigo-300 bg-indigo-50' : 'border-slate-300 hover:border-indigo-300 hover:bg-slate-50'}`}>
-                                        {referencePreview ? (
-                                            <div className="relative h-32 w-full">
-                                                <img src={referencePreview} alt="Reference" className="h-full w-full object-contain rounded-md" />
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-md pointer-events-none">
-                                                    <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">點擊更換</span>
-                                                </div>
-                                                {/* Clear Button - z-index higher than input */}
-                                                <button
-                                                    onClick={handleClearReference}
-                                                    className="absolute -top-2 -right-2 bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-200 rounded-full p-1.5 shadow-md z-20 transition-all transform hover:scale-110"
-                                                    title="移除圖片與風格"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 flex flex-col items-center text-slate-400">
-                                                <Upload className="w-8 h-8 mb-2" />
-                                                <span className="text-sm">點擊上傳或拖曳圖片</span>
-                                                <span className="text-xs mt-1">支援 JPG, PNG</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={analyzeImageStyle}
-                                    disabled={!referencePreview || isAnalyzing}
-                                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-sm"
-                                >
-                                    {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Palette className="w-4 h-4" />}
-                                    {isAnalyzing ? '正在全方位分析...' : '解析風格與內容'}
-                                </button>
-
-                                {analyzedStyle && (
-                                    <div className="bg-white border border-indigo-100 rounded-xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 relative">
-                                        <div className="flex items-start justify-between">
-                                            <h3 className="font-bold text-indigo-900 text-sm flex items-center gap-2">
-                                                <Wand2 className="w-4 h-4" />
-                                                {analysisResultData?.style_name || '風格分析結果'}
-                                            </h3>
-                                            <button
-                                                onClick={() => setAnalyzedStyle('')}
-                                                className="text-slate-400 hover:text-slate-600"
-                                                title="清除風格"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-
-                                        <div className="text-xs leading-relaxed text-slate-600 bg-indigo-50/50 p-3 rounded-lg border border-indigo-50">
-                                            {analysisResultData?.style_description_zh || analyzedStyle}
-                                        </div>
-
-                                        {analysisResultData?.suggested_tags && (
-                                            <div className="flex flex-wrap gap-1">
-                                                {analysisResultData.suggested_tags.map((tag, i) => (
-                                                    <span key={i} className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1">
-                                                        <Tag className="w-2.5 h-2.5" /> {tag}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        <div className="pt-2 border-t border-slate-100 space-y-2">
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={newStyleName}
-                                                    onChange={(e) => setNewStyleName(e.target.value)}
-                                                    placeholder="為此風格命名..."
-                                                    className="flex-1 text-xs border border-slate-200 rounded px-2 py-1.5 focus:border-indigo-500 outline-none"
-                                                />
-                                                <button
-                                                    onClick={saveCurrentStyle}
-                                                    disabled={isSavingStyle}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
-                                                >
-                                                    {isSavingStyle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                                    收藏
-                                                </button>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                value={newStyleTags}
-                                                onChange={(e) => setNewStyleTags(e.target.value)}
-                                                placeholder="標籤 (以逗號分隔)..."
-                                                className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:border-indigo-500 outline-none"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            <StyleAnalyzer
+                                referencePreview={referencePreview}
+                                isUploading={isUploading}
+                                uploadProgress={uploadProgress}
+                                isAnalyzing={isAnalyzing}
+                                analyzedStyle={analyzedStyle}
+                                analysisResultData={analysisResultData}
+                                newStyleName={newStyleName}
+                                newStyleTags={newStyleTags}
+                                isSavingStyle={isSavingStyle}
+                                onImageUpload={handleImageUpload}
+                                onClearReference={handleClearReference}
+                                onAnalyze={analyzeImageStyle}
+                                onStyleNameChange={handleStyleNameChange}
+                                onStyleTagsChange={handleStyleTagsChange}
+                                onSaveStyle={saveCurrentStyle}
+                                onClearStyle={handleClearStyle}
+                            />
 
                             <div className="h-px bg-slate-200 my-2"></div>
 
-                            {/* Step 2: Content Input */}
-                            {/* Step 2: Content Input */}
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2 text-slate-800 font-semibold">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">2</div>
-                                    輸入內容劇情與規格
-                                </div>
-
-                                {/* Settings Row: Aspect Ratio */}
-                                <div className="flex gap-2 mb-2 p-1 bg-slate-50 rounded-lg border border-slate-200">
-                                    {[
-                                        { id: '16:9', label: '16:9 簡報', icon: Monitor },
-                                        { id: '4:3', label: '4:3 傳統', icon: Layout },
-                                        { id: '1:1', label: '1:1 社群', icon: Square },
-                                        { id: '9:16', label: '9:16 手機', icon: Smartphone }
-                                    ].map((ratio) => (
-                                        <button
-                                            key={ratio.id}
-                                            onClick={() => setAspectRatio(ratio.id)}
-                                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-md transition-all ${aspectRatio === ratio.id ? 'bg-white text-indigo-600 font-bold shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
-                                            title={ratio.label}
-                                        >
-                                            <ratio.icon className="w-3.5 h-3.5" />
-                                            <span className="hidden xl:inline">{ratio.id}</span>
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <textarea
-                                    value={userScript}
-                                    onChange={(e) => setUserScript(e.target.value)}
-                                    onFocus={() => setIsInputFocused(true)}
-                                    onBlur={() => setTimeout(() => setIsInputFocused(false), 100)} // Delay to allow button clicks
-                                    placeholder="例如：一位穿著西裝的員工正在向團隊展示數據圖表，背景是現代化的辦公室，氣氛積極向上..."
-                                    className="w-full h-32 md:h-64 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-y bg-white transition-all"
-                                />
-
-                                <button
-                                    onClick={generateInfographic}
-                                    disabled={!userScript || isGenerating}
-                                    className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 transform active:scale-[0.98]"
-                                >
-                                    {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
-                                    {isGenerating ? 'AI 生成中...' : '開始生成圖片'}
-                                </button>
-                            </div>
+                            <ScriptEditor
+                                userScript={userScript}
+                                onUserScriptChange={setUserScript}
+                                onFocus={() => setIsInputFocused(true)}
+                                onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
+                                aspectRatio={aspectRatio}
+                                onAspectRatioChange={setAspectRatio}
+                                imageSize={imageSize}
+                                onImageSizeChange={setImageSize}
+                                isGenerating={isGenerating}
+                                onGenerate={generateInfographic}
+                            />
                         </>
                     ) : activeTab === 'styles' ? (
-                        // Style Library Tab
-                        <div className="space-y-4">
-                            {/* Search Bar */}
-                            <div className="relative">
-                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                                <input
-                                    type="text"
-                                    placeholder="搜尋風格名稱或標籤..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
-                                />
-                            </div>
-
-                            {savedStyles.filter(s => {
-                                const q = searchQuery.toLowerCase();
-                                return !q || s.name.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q));
-                            }).length === 0 ? (
-                                <div className="text-center py-10 text-slate-400 text-sm flex flex-col items-center gap-2">
-                                    <Bookmark className="w-8 h-8 opacity-50" />
-                                    {searchQuery ? '找不到符合的風格' : '尚未收藏任何風格'}
-                                </div>
-                            ) : (
-                                savedStyles.filter(s => {
-                                    const q = searchQuery.toLowerCase();
-                                    return !q || s.name.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q));
-                                }).map((style) => (
-                                    <div key={style.id} className="bg-white border border-slate-200 rounded-xl p-3 hover:shadow-md transition-all group relative cursor-pointer" onClick={() => applySavedStyle(style)}>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <h4 className="font-bold text-slate-700 text-sm">{style.name}</h4>
-                                            <button
-                                                onClick={(e) => deleteSavedStyle(style.id, e)}
-                                                className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                        <p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
-                                            {style.description || "無描述"}
-                                        </p>
-                                        {style.tags && style.tags.length > 0 && (
-                                            <div className="flex flex-wrap gap-1 mb-2">
-                                                {style.tags.map((tag, i) => (
-                                                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full">
-                                                        #{tag}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div className="text-[10px] text-indigo-500 font-medium flex items-center gap-1 mt-2">
-                                            點擊套用此風格 <Plus className="w-3 h-3" />
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                        <StyleLibrary
+                            savedStyles={savedStyles}
+                            isSearching={isSearching}
+                            searchQuery={searchQuery}
+                            onSearchChange={(value) => {
+                                setSearchQuery(value);
+                                searchStyles(value);
+                            }}
+                            onApplyStyle={applySavedStyle}
+                            onDeleteStyle={deleteSavedStyle}
+                        />
                     ) : (
-                        // History Tab
-                        <div className="space-y-4">
-                            {/* Search Bar */}
-                            <div className="relative">
-                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                                <input
-                                    type="text"
-                                    placeholder="搜尋內容或日期 (YYYY-MM-DD)..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
-                                />
-                            </div>
-
-                            {historyItems.filter(item => {
-                                const q = searchQuery.toLowerCase();
-                                const dateStr = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : '';
-                                return !q || item.userScript.toLowerCase().includes(q) || dateStr.includes(q);
-                            }).length === 0 ? (
-                                <div className="text-center py-10 text-slate-400 text-sm">
-                                    {searchQuery ? '找不到符合的紀錄' : '尚無生成紀錄'}
-                                </div>
-                            ) : (
-                                historyItems.filter(item => {
-                                    const q = searchQuery.toLowerCase();
-                                    const dateStr = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : '';
-                                    return !q || item.userScript.toLowerCase().includes(q) || dateStr.includes(q);
-                                }).map((item) => (
-                                    <div key={item.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
-                                        <div className="aspect-video w-full bg-slate-100 relative cursor-pointer" onClick={() => loadFromHistory(item)}>
-                                            <img src={item.imageUrl} alt="Generated" className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                                        </div>
-                                        <div className="p-3">
-                                            <p className="text-xs text-slate-500 mb-2 line-clamp-2">{item.userScript}</p>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-slate-400">
-                                                    {item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : '剛剛'}
-                                                </span>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => loadFromHistory(item)}
-                                                        className="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-md transition-colors"
-                                                        title="Reuse Style"
-                                                    >
-                                                        <FileText className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => deleteHistoryItem(item.id)}
-                                                        className="p-1.5 hover:bg-red-50 text-red-500 rounded-md transition-colors"
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                        <HistoryPanel
+                            historyItems={historyItems}
+                            savedStyles={savedStyles}
+                            searchQuery={searchQuery}
+                            onSearchChange={setSearchQuery}
+                            onLoad={loadFromHistory}
+                            onDelete={deleteHistoryItem}
+                            onGoCreate={() => setActiveTab('create')}
+                            onGoStyles={() => setActiveTab('styles')}
+                        />
                     )}
                 </div>
             </div>
@@ -861,71 +453,12 @@ export default function InfographicGenerator() {
 
                 <div className="max-w-4xl w-full flex flex-col gap-6 relative z-10">
 
-                    {/* Main Preview Card */}
-                    <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 flex flex-col min-h-[500px]">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                            <div className="flex items-center gap-2">
-                                <ImageIcon className="w-5 h-5 text-indigo-500" />
-                                <span className="font-semibold text-slate-700">生成預覽</span>
-                            </div>
-                            {generatedImage && (
-                                <button
-                                    onClick={() => {
-                                        // Create a link element, set the href to the blob or data URL, and click it
-                                        const link = document.createElement('a');
-                                        link.href = generatedImage;
-                                        link.download = `generated-infographic-${Date.now()}.png`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                    }}
-                                    className="flex items-center gap-2 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-full transition-colors"
-                                >
-                                    <Save className="w-3.5 h-3.5" /> 下載圖片
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="flex-1 bg-slate-50 flex items-center justify-center p-8">
-                            {generatedImage ? (
-                                <img
-                                    src={generatedImage}
-                                    alt="AI Result"
-                                    className="max-w-full max-h-[600px] object-contain shadow-lg rounded-lg animate-in fade-in zoom-in-95 duration-500"
-                                />
-                            ) : (
-                                <div className="text-center text-slate-400">
-                                    {isGenerating ? (
-                                        <div className="flex flex-col items-center gap-4">
-                                            <div className="relative">
-                                                <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <Wand2 className="w-6 h-6 text-indigo-500 animate-pulse" />
-                                                </div>
-                                            </div>
-                                            <p className="text-lg font-medium text-slate-600">正在繪製您的構想...</p>
-                                            <p className="text-sm">這通常需要 5-10 秒鐘</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-4 opacity-50">
-                                            <div className="w-32 h-32 bg-slate-200 rounded-full flex items-center justify-center">
-                                                <ImageIcon className="w-12 h-12 text-slate-400" />
-                                            </div>
-                                            <p className="text-lg">請在左側面板上傳參考圖並輸入內容</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Info Footer */}
-                        {generatedImage && analyzedStyle && (
-                            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 text-xs text-slate-500">
-                                <p className="font-semibold mb-1 text-slate-700">使用風格：</p>
-                                <p className="line-clamp-2">{analyzedStyle}</p>
-                            </div>
-                        )}
-                    </div>
+                    <ImagePreview
+                        generatedImage={generatedImage}
+                        isGenerating={isGenerating}
+                        analyzedStyle={analyzedStyle}
+                        onDownload={handleDownload}
+                    />
 
                 </div>
             </div>
