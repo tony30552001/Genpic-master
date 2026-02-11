@@ -8,22 +8,37 @@ import { msalInstance } from './services/msalClient'
 const root = createRoot(document.getElementById('root'));
 
 // 確保 MSAL 初始化完成後再渲染，能夠正確處理 Redirect/Popup 回調
+// 確保 MSAL 初始化完成後再渲染
 msalInstance.initialize().then(() => {
-  // 檢查是否為 Popup Authentication (有 opener 且網址帶有 hash)
-  // 如果是，我們不渲染完整的 App，以免干擾 MSAL 處理 Hash
-  if (window.opener && window.name.includes('msal')) {
-    console.log("Running in MSAL Popup - keeping hash for processing");
-    return; // 直接結束，什麼都不渲染，或渲染一個簡單的 Loading
-  }
+  const isPopup = window.opener && window.name.includes("msal");
+  const hasAuthHash = window.location.hash.includes("code=") || window.location.hash.includes("error=");
 
-  // 雙重檢查：有時候 window.name 不準，檢查 hash
-  if (window.opener && (window.location.hash.includes('code=') || window.location.hash.includes('error='))) {
-    console.log("Detected auth callback in popup. Rendering closer.");
+  // Debug Info
+  console.log("Main.jsx: Initialized. isPopup:", isPopup, "HasOpener:", !!window.opener, "WindowName:", window.name, "Hash:", window.location.hash);
+
+  // 寬鬆判斷：只要有 opener 且不是空的 hash，就假設是 Auth Callback
+  if (isPopup || (window.opener && window.location.hash.length > 10)) {
+    console.log("Detected popup auth flow. Attempting to handle redirect and close.");
+
+    // 嘗試手動處理 (雖然 MsalProvider 也會做，但我們想攔截渲染)
+    msalInstance.handleRedirectPromise().then((tokenResponse) => {
+      console.log("HandleRedirectPromise done:", tokenResponse);
+      if (tokenResponse || window.location.hash.includes("code=")) {
+        // 成功處理或仍有 hash，嘗試關閉
+        // 注意：如果 opener 遺失，window.close 可能無效，但通常在同源下有效
+        window.close();
+      }
+    }).catch(e => console.error("Redirect Error:", e));
+
+    // 渲染一個「正在登入」的提示，而不是整個 App
     root.render(
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#666' }}>
-        <div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>正在完成登入...</h2>
-          <p>請稍候，視窗將自動關閉。</p>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#333', background: '#f9f9f9' }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>正在驗證身分...</h2>
+          <p style={{ marginBottom: '2rem' }}>視窗將在驗證完成後自動關閉。</p>
+          <div style={{ fontSize: '0.8rem', color: '#999', padding: '10px', background: '#eee', borderRadius: '4px' }}>
+            Debug: Opener {window.opener ? 'Found' : 'Missing'} | Hash Length: {window.location.hash.length}
+          </div>
         </div>
       </div>
     );
