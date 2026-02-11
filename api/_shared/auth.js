@@ -45,6 +45,18 @@ const parseBearer = (req) => {
   return header.substring("Bearer ".length);
 };
 
+// 檢查是否為 Azure 內部服務產生的 Token（非使用者憑證）
+const isAzureInternalToken = (issuer) => {
+  if (!issuer) return false;
+  return (
+    issuer.includes(".scm.azurewebsites.net") ||  // SCM Site token
+    issuer.includes(".azurewebsites.net") ||       // Azure App Service token
+    issuer.includes("sts.windows.net") === false && // 不是 Microsoft IDP
+    issuer.includes("microsoftonline.com") === false &&
+    issuer.includes("google.com") === false
+  );
+};
+
 const verifyMicrosoftToken = (token) =>
   new Promise((resolve, reject) => {
     jwt.verify(
@@ -95,6 +107,14 @@ const requireAuth = async (context, req) => {
   }
 
   const token = parseBearer(req);
+
+  // Debug 日誌：記錄所有收到的 headers（排除敏感資訊）
+  console.log("[Auth Debug] Request headers:", {
+    hasAuth: !!req.headers?.authorization,
+    authLength: req.headers?.authorization?.length,
+    allHeaders: Object.keys(req.headers || {}).join(", ")
+  });
+
   if (!token) {
     context.res = error("缺少 Bearer Token", "unauthorized", 401);
     return null;
@@ -106,19 +126,32 @@ const requireAuth = async (context, req) => {
     if (!decodedRaw) throw new Error("Invalid token format");
 
     const iss = decodedRaw.iss || "";
+
+    // Debug 日誌
+    console.log("[Auth Debug] Token issuer:", iss);
+    console.log("[Auth Debug] Token subject:", decodedRaw.sub);
+
     let user;
 
     if (iss.includes("google.com")) {
       // Google Token
+      console.log("[Auth Debug] Verifying Google token...");
       user = await verifyGoogleToken(token);
     } else if (iss.includes("microsoftonline.com") || iss.includes("sts.windows.net")) {
       // Microsoft Token
       if (!tenantId || !microsoftClientId) throw new Error("Microsoft Auth Config Missing");
+      console.log("[Auth Debug] Verifying Microsoft token...");
       user = await verifyMicrosoftToken(token);
+    } else if (isAzureInternalToken(iss)) {
+      // Azure 內部服務產生的 Token（如 SCM、EasyAuth proxy token）
+      // 這表示前端沒有正確傳送使用者憑證，或 Azure Static Web Apps 攔截了請求
+      console.log("[Auth Error] Azure internal token detected, not user credential");
+      throw new Error("偵測到 Azure 內部 Token，請重新登入");
     } else {
       throw new Error(`Unsupported token issuer: ${iss}`);
     }
 
+    console.log("[Auth Debug] Auth success:", user.email);
     return { user };
   } catch (err) {
     console.error("Auth Error:", err.message);
