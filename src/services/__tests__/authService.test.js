@@ -1,23 +1,25 @@
 import { describe, it, expect, vi } from "vitest";
 
-const loginPopup = vi.fn(() => Promise.resolve({ account: { id: "1" } }));
-const logoutPopup = vi.fn();
-const acquireTokenSilent = vi.fn(() => Promise.resolve({ accessToken: "token" }));
-const acquireTokenPopup = vi.fn(() => Promise.resolve({ accessToken: "token" }));
-const getActiveAccount = vi.fn(() => ({ id: "1" }));
-const setActiveAccount = vi.fn();
-const getAllAccounts = vi.fn(() => [{ id: "1" }]);
+const mocks = vi.hoisted(() => ({
+  loginPopup: vi.fn(() => Promise.resolve({ account: { id: "1" } })),
+  logoutPopup: vi.fn(),
+  acquireTokenSilent: vi.fn(() => Promise.resolve({ accessToken: "token" })),
+  acquireTokenPopup: vi.fn(() => Promise.resolve({ accessToken: "token" })),
+  getActiveAccount: vi.fn(() => ({ id: "1" })),
+  setActiveAccount: vi.fn(),
+  getAllAccounts: vi.fn(() => [{ id: "1" }]),
+}));
 
 vi.mock("../msalClient", () => ({
   loginRequest: { scopes: ["User.Read"] },
   msalInstance: {
-    loginPopup,
-    logoutPopup,
-    acquireTokenSilent,
-    acquireTokenPopup,
-    getActiveAccount,
-    setActiveAccount,
-    getAllAccounts,
+    loginPopup: mocks.loginPopup,
+    logoutPopup: mocks.logoutPopup,
+    acquireTokenSilent: mocks.acquireTokenSilent,
+    acquireTokenPopup: mocks.acquireTokenPopup,
+    getActiveAccount: mocks.getActiveAccount,
+    setActiveAccount: mocks.setActiveAccount,
+    getAllAccounts: mocks.getAllAccounts,
   },
 }));
 
@@ -30,26 +32,26 @@ import {
 describe("authService", () => {
   it("loginWithMicrosoft sets active account", async () => {
     const account = await loginWithMicrosoft();
-    expect(loginPopup).toHaveBeenCalled();
-    expect(setActiveAccount).toHaveBeenCalled();
+    expect(mocks.loginPopup).toHaveBeenCalled();
+    expect(mocks.setActiveAccount).toHaveBeenCalled();
     expect(account).toEqual({ id: "1" });
   });
 
   it("logout uses popup", async () => {
     await logout();
-    expect(logoutPopup).toHaveBeenCalled();
+    expect(mocks.logoutPopup).toHaveBeenCalled();
   });
 
   it("acquireAccessToken uses silent first", async () => {
     const token = await acquireAccessToken();
-    expect(acquireTokenSilent).toHaveBeenCalled();
+    expect(mocks.acquireTokenSilent).toHaveBeenCalled();
     expect(token).toBe("token");
   });
 
   it("acquireAccessToken falls back to popup", async () => {
-    acquireTokenSilent.mockRejectedValueOnce(new Error("fail"));
+    mocks.acquireTokenSilent.mockRejectedValueOnce(new Error("fail"));
     const token = await acquireAccessToken();
-    expect(acquireTokenPopup).toHaveBeenCalled();
+    expect(mocks.acquireTokenPopup).toHaveBeenCalled();
     expect(token).toBe("token");
   });
 });

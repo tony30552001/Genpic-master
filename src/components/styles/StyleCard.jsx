@@ -31,7 +31,7 @@ export default function StyleCard({ style, onApply, onDelete }) {
           ))}
         </div>
       )}
-      <div className="text-[10px] text-indigo-500 font-medium flex items-center gap-1 mt-2">
+      <div className="text-[10px] text-blue-500 font-medium flex items-center gap-1 mt-2">
         點擊套用此風格 <Plus className="w-3 h-3" />
       </div>
     </div>

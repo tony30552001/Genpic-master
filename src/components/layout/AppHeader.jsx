@@ -3,14 +3,14 @@ import { Layout, LogIn, LogOut } from "lucide-react";
 
 export default function AppHeader({ user, onLogin, onLogout }) {
   return (
-    <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+    <div className="p-6 border-b border-border bg-gradient-to-r from-blue-700 to-sky-500 text-white">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Layout className="w-6 h-6" />
             企業風格圖產生器
           </h1>
-          <p className="text-xs text-indigo-100 mt-1 opacity-80">
+          <p className="text-xs text-blue-100 mt-1 opacity-80">
             Powered by Gemini & Imagen
           </p>
         </div>
@@ -28,7 +28,7 @@ export default function AppHeader({ user, onLogin, onLogout }) {
                   <LogOut className="w-2.5 h-2.5" /> 登出
                 </button>
               </div>
-              <div className="w-9 h-9 rounded-full bg-indigo-200 flex items-center justify-center text-sm font-bold text-indigo-700 border-2 border-white/30 overflow-hidden shadow-inner">
+              <div className="w-9 h-9 rounded-full bg-blue-200 flex items-center justify-center text-sm font-bold text-blue-700 border-2 border-white/30 overflow-hidden shadow-inner">
                 {user.photoURL ? (
                   <img
                     src={user.photoURL}
@@ -43,7 +43,7 @@ export default function AppHeader({ user, onLogin, onLogout }) {
           ) : (
             <button
               onClick={onLogin}
-              className="bg-white text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              className="bg-white text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
               title="使用公司帳號登入以同步紀錄"
             >
               <LogIn className="w-4 h-4" /> 登入

@@ -14,6 +14,9 @@ export default function useDocumentAnalysis() {
   const [currentFile, setCurrentFile] = useState(null);
   const [error, setError] = useState(null);
 
+  // 4MB 以下直接用 base64；以上走 Blob Storage 上傳
+  const BASE64_THRESHOLD = 4 * 1024 * 1024;
+
   /**
    * 分析文件並提取分鏡腳本
    * @param {File} file - 上傳的文件物件
@@ -32,10 +35,10 @@ export default function useDocumentAnalysis() {
       "image/png",
       "image/jpeg",
     ];
-    
+
     const fileExtension = file.name.split(".").pop().toLowerCase();
     const supportedExtensions = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg"];
-    
+
     if (!supportedTypes.includes(file.type) && !supportedExtensions.includes(fileExtension)) {
       throw new Error("不支援的檔案格式。請上傳 PDF、DOCX、PPTX、TXT 或圖片檔案。");
     }
@@ -49,45 +52,47 @@ export default function useDocumentAnalysis() {
     setIsAnalyzing(true);
     setError(null);
     setCurrentFile(file);
-    
-    try {
-      // 步驟 1: 上傳文件到 Blob Storage 並取得 SAS URL
-      setAnalysisPhase("上傳文件到雲端儲存空間...");
-      let documentUrl = null;
-      try {
-        const uploadResult = await uploadFileToBlob(file);
-        documentUrl = uploadResult.url;
-      } catch (uploadErr) {
-        // 如果上傳失敗，改用 base64 方式傳送
-        console.warn("Blob upload failed, falling back to base64:", uploadErr);
-        setAnalysisPhase("準備文件內容...");
-      }
 
-      // 步驟 2: 呼叫 AI 分析
-      setAnalysisPhase("AI 正在分析文件內容（約需 15-30 秒）...");
-      
+    try {
       const analysisParams = {
         fileName: file.name,
         contentType: file.type,
       };
 
-      // 如果有 documentUrl，使用它；否則用 base64
-      if (documentUrl) {
-        analysisParams.documentUrl = documentUrl;
-      } else {
-        // 轉換為 base64
+      if (file.size < BASE64_THRESHOLD) {
+        // 小檔案：直接轉 base64 傳送
+        setAnalysisPhase("準備文件內容...");
         const arrayBuffer = await file.arrayBuffer();
         const base64 = btoa(
           new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
         );
         analysisParams.base64Content = base64;
+      } else {
+        // 大檔案：上傳到 Blob Storage，後端用 SDK 直讀
+        setAnalysisPhase("上傳文件到雲端儲存空間...");
+        try {
+          const uploadResult = await uploadFileToBlob(file);
+          analysisParams.documentUrl = uploadResult.url;
+        } catch (uploadErr) {
+          // Blob 上傳失敗時回退到 base64
+          console.warn("Blob upload failed, falling back to base64:", uploadErr);
+          setAnalysisPhase("準備文件內容...");
+          const arrayBuffer = await file.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+          );
+          analysisParams.base64Content = base64;
+        }
       }
+
+      // 呼叫 AI 分析
+      setAnalysisPhase("AI 正在分析文件內容（約需 15-30 秒）...");
 
       const result = await analyzeDocument(analysisParams);
 
       // 步驟 3: 處理結果
       setAnalysisPhase("整理分析結果...");
-      
+
       if (!result.scenes || result.scenes.length === 0) {
         throw new Error("無法從文件中提取場景，請嘗試其他文件。");
       }
@@ -127,12 +132,12 @@ export default function useDocumentAnalysis() {
   const updateScene = useCallback((sceneIndex, updates) => {
     setDocumentResult((prev) => {
       if (!prev || !prev.scenes) return prev;
-      
+
       const newScenes = [...prev.scenes];
       if (newScenes[sceneIndex]) {
         newScenes[sceneIndex] = { ...newScenes[sceneIndex], ...updates };
       }
-      
+
       return { ...prev, scenes: newScenes };
     });
   }, []);
@@ -143,16 +148,16 @@ export default function useDocumentAnalysis() {
   const removeScene = useCallback((sceneIndex) => {
     setDocumentResult((prev) => {
       if (!prev || !prev.scenes) return prev;
-      
+
       const newScenes = prev.scenes.filter((_, index) => index !== sceneIndex);
       // 重新編號
       const renumberedScenes = newScenes.map((scene, idx) => ({
         ...scene,
         scene_number: idx + 1,
       }));
-      
-      return { 
-        ...prev, 
+
+      return {
+        ...prev,
         scenes: renumberedScenes,
         total_scenes: renumberedScenes.length,
       };
@@ -166,13 +171,13 @@ export default function useDocumentAnalysis() {
     documentResult,
     currentFile,
     error,
-    
+
     // 動作
     analyzeDocument: analyzeDocumentFromFile,
     clearDocument,
     updateScene,
     removeScene,
-    
+
     // 計算屬性
     hasDocument: !!documentResult,
     totalScenes: documentResult?.scenes?.length || 0,
