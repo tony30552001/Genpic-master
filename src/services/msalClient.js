@@ -1,4 +1,4 @@
-import { PublicClientApplication } from "@azure/msal-browser";
+import { PublicClientApplication, LogLevel } from "@azure/msal-browser";
 
 import {
   MSAL_CLIENT_ID,
@@ -16,10 +16,34 @@ export const msalConfig = {
     clientId: MSAL_CLIENT_ID,
     authority,
     redirectUri: MSAL_REDIRECT_URI,
+    navigateToLoginRequestUrl: false,
   },
   cache: {
     cacheLocation: "localStorage",
     storeAuthStateInCookie: false,
+  },
+  system: {
+    loggerOptions: {
+      loggerCallback: (level, message, containsPii) => {
+        if (containsPii) {
+          return;
+        }
+        switch (level) {
+          case LogLevel.Error:
+            console.error(message);
+            return;
+          case LogLevel.Info:
+            // console.info(message);
+            return;
+          case LogLevel.Verbose:
+            console.debug(message);
+            return;
+          case LogLevel.Warning:
+            console.warn(message);
+            return;
+        }
+      },
+    },
   },
 };
 
@@ -28,3 +52,9 @@ export const loginRequest = {
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);
+
+// Initialize the instance (required for MSAL Browser v3)
+// We use a promise to ensure initialization completes before usage in strict mode contexts if needed,
+// but MsalProvider typically handles this. However, explicitly initializing helps catch errors early.
+msalInstance.initialize().catch(console.error);
+

@@ -3,7 +3,7 @@
 // 1. Microsoft Entra ID 設定 (MSAL)
 export const MSAL_CLIENT_ID = import.meta.env.VITE_MSAL_CLIENT_ID || "";
 export const MSAL_TENANT_ID = import.meta.env.VITE_MSAL_TENANT_ID || "";
-export const MSAL_REDIRECT_URI = import.meta.env.VITE_MSAL_REDIRECT_URI || window.location.origin;
+export const MSAL_REDIRECT_URI = (import.meta.env.VITE_MSAL_REDIRECT_URI || window.location.origin).replace(/\/$/, "");
 export const MSAL_SCOPES = (import.meta.env.VITE_MSAL_SCOPES || "User.Read")
     .split(",")
     .map((scope) => scope.trim())
