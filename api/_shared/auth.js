@@ -143,10 +143,12 @@ const requireAuth = async (context, req) => {
       console.log("[Auth Debug] Verifying Microsoft token...");
       user = await verifyMicrosoftToken(token);
     } else if (isAzureInternalToken(iss)) {
-      // Azure 內部服務產生的 Token（如 SCM、EasyAuth proxy token）
-      // 這表示前端沒有正確傳送使用者憑證，或 Azure Static Web Apps 攔截了請求
-      console.log("[Auth Error] Azure internal token detected, not user credential");
-      throw new Error("偵測到 Azure 內部 Token，請重新登入");
+      // Azure SWA 或 App Service 可能會注入自己的 Token
+      console.log("[Auth Warning] Azure internal token detected. Issuer:", iss);
+      // 嘗試將其視為 Microsoft 體系的 Token 進行後續驗證，
+      // 或者如果之後 verifyMicrosoftToken 失敗，它仍會進入 catch 並報錯。
+      // 這裡我們先移除直接 throw，給予驗證機會。
+      user = await verifyMicrosoftToken(token);
     } else {
       throw new Error(`Unsupported token issuer: ${iss}`);
     }
