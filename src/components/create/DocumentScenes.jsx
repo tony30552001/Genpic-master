@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -37,9 +37,15 @@ export default function DocumentScenes({
   const [expandedScenes, setExpandedScenes] = useState(new Set([0]));
   const [editingScene, setEditingScene] = useState(null);
   const [editForm, setEditForm] = useState({});
-  // 每個場景獨立的生成狀態和圖片
   // 每個場景獨立的生成狀態
   const [generatingIndex, setGeneratingIndex] = useState(null);
+
+  // 當 documentResult 更新時（例如剛分析完），自動展開所有場景
+  useEffect(() => {
+    if (documentResult?.scenes) {
+      setExpandedScenes(new Set(documentResult.scenes.map((_, i) => i)));
+    }
+  }, [documentResult?.title, documentResult?.scenes?.length]);
 
   if (!documentResult || !documentResult.scenes) return null;
 
