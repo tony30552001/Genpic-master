@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
     FileText, Palette, PenLine, LogIn, LogOut, User
@@ -51,7 +52,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
 
-    const { user, handleMicrosoftLogin, handleLogout } = useAuth();
+    const navigate = useNavigate();
+    const { user, handleMicrosoftLogin, handleLogout, isLoading } = useAuth();
     const {
         savedStyles, newStyleName, newStyleTags, isSavingStyle, isSearching,
         setNewStyleName, setNewStyleTags, saveStyle, deleteStyle, searchStyles
@@ -326,25 +328,36 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                     </nav>
 
                     {/* User Controls */}
-                    <div className="flex items-center gap-2">
-                        {user ? (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleLogout}
-                                className="text-white/90 hover:text-white hover:bg-white/10 gap-1.5"
-                            >
-                                <User className="w-4 h-4" />
-                                <span className="hidden md:inline text-xs">{user.displayName || user.email}</span>
-                                <LogOut className="w-3.5 h-3.5 ml-1" />
-                            </Button>
-                        ) : (
+                    <div className="flex items-center gap-3">
+                        {user && (
+                            <div className="flex items-center gap-3 pl-3 border-l border-white/20">
+                                <div className="flex flex-col items-end hidden md:flex">
+                                    <span className="text-xs font-bold leading-tight">{user.displayName}</span>
+                                    <span className="text-[10px] text-white/70 leading-tight">{user.email}</span>
+                                </div>
+                                <div className="w-8 h-8 rounded-full bg-white/20 border border-white/30 overflow-hidden flex items-center justify-center">
+                                    {user.photoURL ? (
+                                        <img src={user.photoURL} alt="User Avatar" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <User className="w-4 h-4" />
+                                    )}
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleLogout}
+                                    className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                                    title="登出系統"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        )}
+                        {!user && !isLoading && (
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={async () => {
-                                    try { await handleMicrosoftLogin(); } catch (error) { setErrorMsg(`登入失敗: ${error.message}`); }
-                                }}
+                                onClick={() => navigate("/login")}
                                 className="gap-1.5 bg-white/20 hover:bg-white/30 text-white border-0"
                             >
                                 <LogIn className="w-4 h-4" />
