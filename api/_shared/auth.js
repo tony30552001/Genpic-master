@@ -59,25 +59,45 @@ const isAzureInternalToken = (issuer) => {
 
 const verifyMicrosoftToken = (token) =>
   new Promise((resolve, reject) => {
-    jwt.verify(
-      token,
-      getMsSigningKey,
-      {
-        algorithms: ["RS256"],
-        audience: microsoftClientId,
-      },
-      (err, decoded) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve({
-          displayName: decoded.name || decoded.preferred_username,
-          email: decoded.preferred_username || decoded.upn,
-          authType: 'microsoft'
-        });
+    // 1. 預先解碼 Header 以獲取 kid (Key ID)
+    const decodedToken = jwt.decode(token, { complete: true });
+    if (!decodedToken || !decodedToken.header || !decodedToken.header.kid) {
+      reject(new Error("Token header missing 'kid' field"));
+      return;
+    }
+
+    const kid = decodedToken.header.kid;
+
+    // 2. 使用 kid 從 JWKS 中獲取具體的簽署金鑰
+    msClient.getSigningKey(kid, (err, key) => {
+      if (err) {
+        reject(new Error("Failed to get MS signing key: " + err.message));
+        return;
       }
-    );
+
+      const signingKey = key.getPublicKey();
+
+      // 3. 執行正式驗證
+      jwt.verify(
+        token,
+        signingKey,
+        {
+          algorithms: ["RS256"],
+          audience: microsoftClientId,
+        },
+        (verifyErr, decoded) => {
+          if (verifyErr) {
+            reject(verifyErr);
+            return;
+          }
+          resolve({
+            displayName: decoded.name || decoded.preferred_username,
+            email: decoded.preferred_username || decoded.upn,
+            authType: "microsoft",
+          });
+        }
+      );
+    });
   });
 
 const verifyGoogleToken = async (token) => {
