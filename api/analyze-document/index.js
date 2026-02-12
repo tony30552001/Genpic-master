@@ -313,7 +313,7 @@ module.exports = async function (context, req) {
     }
 
     // 呼叫 Gemini 分析
-    const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-2.0-flash";
+    const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-3.0-flash";
     context.log("[analyze-document] Step 4: Call Gemini, model:", modelName, "finalMimeType:", finalMimeType);
     const model = getModel(modelName);
 
