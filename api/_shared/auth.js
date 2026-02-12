@@ -115,6 +115,25 @@ const verifyGoogleToken = async (token) => {
   };
 };
 
+const parseSWAHeader = (req) => {
+  const header = req.headers["x-ms-client-principal"];
+  if (!header) return null;
+  try {
+    const buffer = Buffer.from(header, "base64");
+    const principal = JSON.parse(buffer.toString("utf8"));
+    return {
+      displayName: principal.userDetails,
+      email: principal.userDetails,
+      authType: principal.identityProvider || "swa",
+      userId: principal.userId,
+      roles: principal.userRoles || []
+    };
+  } catch (err) {
+    console.warn("[Auth Warning] Failed to parse x-ms-client-principal:", err.message);
+    return null;
+  }
+};
+
 const requireAuth = async (context, req) => {
   if (authDisabled) {
     return {
@@ -124,6 +143,13 @@ const requireAuth = async (context, req) => {
         authType: 'bypass'
       },
     };
+  }
+
+  // 優先檢查 Azure SWA 注入的 Client Principal Header
+  const swaUser = parseSWAHeader(req);
+  if (swaUser) {
+    console.log("[Auth Debug] SWA Header detected:", swaUser.email);
+    return { user: swaUser };
   }
 
   const token = parseBearer(req);
