@@ -120,7 +120,10 @@ module.exports = async function (context, req) {
     }
     const identity = await resolveIdentity(auth.user);
     if (!identity.userId) {
-      context.res = error("無法辨識使用者", "unauthorized", 401);
+      // DEBUG: 暴露更多使用者資訊以利除錯
+      const debugInfo = JSON.stringify(auth.user);
+      console.error("[Identity Error] User resolution failed:", debugInfo);
+      context.res = error(`無法辨識使用者: ${debugInfo}`, "unauthorized", 401);
       return;
     }
 
