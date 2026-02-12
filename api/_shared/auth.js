@@ -80,13 +80,17 @@ const verifyMicrosoftToken = (token) =>
       const email = payload.preferred_username || payload.upn || payload.email || payload.unique_name;
       const displayName = payload.name || payload.preferred_username || payload.unique_name || "Azure User";
 
-      if (!email) {
-        console.error("[Auth Error] Could not extract email from HS256 token payload. Available keys:", Object.keys(payload));
+      // 嘗試找尋任何可用的唯一識別碼: email -> sub -> oid -> meaningful displayName
+      const identifier = email || payload.sub || payload.oid || (displayName !== "Azure User" ? displayName : null);
+
+      if (!identifier) {
+        console.error("[Auth Error] Could not extract identifier from HS256 token payload. Available keys:", Object.keys(payload));
       }
 
       resolve({
         displayName,
-        email,
+        email: identifier,
+        userDetails: identifier, // Add userDetails for identity resolution compatibility
         authType: "microsoft-internal",
       });
       return;
