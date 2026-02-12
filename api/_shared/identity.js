@@ -16,7 +16,7 @@ const getDefaultTenant = async () => {
 
 const getUserIdentity = (user) => {
   if (!user) return null;
-  const email = user.preferred_username || user.upn || user.email;
+  const email = user.preferred_username || user.upn || user.email || user.userDetails;
   const displayName = user.name || email;
   return email ? { email, displayName } : null;
 };
