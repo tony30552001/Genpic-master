@@ -6,7 +6,8 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "migrate": "node scripts/migrate.cjs"
+    "migrate": "node scripts/migrate.cjs",
+    "enable-cors": "node scripts/enable-cors.js"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.27.0",

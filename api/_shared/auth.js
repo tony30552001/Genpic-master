@@ -74,12 +74,19 @@ const verifyMicrosoftToken = (token) =>
     // 如果是在 Azure 環境內 (有特定環境變數)，且 Token 看起來合理，則信任其內容 (僅限特定 issuer)
     if (decodedToken.header.alg === "HS256" && !decodedToken.header.kid) {
       console.warn("[Auth Warning] HS256 Token detected. Skipping signature verification for internal token.");
-      // 注意：這在安全性上並非完美，但在 SWA + Function 的整合環境中，
-      // 請求通常是經過 SWA Proxy 轉發的，外部難以偽造此類特定格式的 Token。
-      // 若要嚴格驗證，必須依賴 x-ms-client-principal。
+
+      const payload = decodedToken.payload || {};
+      // 嘗試從多個常見欄位中獲取 Email
+      const email = payload.preferred_username || payload.upn || payload.email || payload.unique_name;
+      const displayName = payload.name || payload.preferred_username || payload.unique_name || "Azure User";
+
+      if (!email) {
+        console.error("[Auth Error] Could not extract email from HS256 token payload. Available keys:", Object.keys(payload));
+      }
+
       resolve({
-        displayName: decodedToken.payload.name || decodedToken.payload.preferred_username,
-        email: decodedToken.payload.preferred_username || decodedToken.payload.upn || decodedToken.payload.email,
+        displayName,
+        email,
         authType: "microsoft-internal",
       });
       return;
