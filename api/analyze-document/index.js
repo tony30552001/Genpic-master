@@ -136,15 +136,33 @@ const isSupportedFormat = (mimeType, fileName) => {
 /**
  * 解析 Gemini 回應，處理各種可能的格式
  */
-const parseGeminiResponse = (result) => {
+const parseGeminiResponse = (result, context) => {
   // 嘗試多種路徑找到文字內容
   let responseText = "";
 
-  if (result?.text) {
-    responseText = result.text;
-  } else if (result?.response?.text) {
-    responseText = result.response.text;
-  } else {
+  // 路徑 1: 直接 .text（@google/genai v1.x 的標準回傳）
+  try {
+    if (typeof result?.text === "string" && result.text) {
+      responseText = result.text;
+    }
+  } catch (e) {
+    // text 可能是 getter 並拋出錯誤
+    context?.log?.warn?.("[Parse] result.text getter threw:", e.message);
+  }
+
+  // 路徑 2: response.text
+  if (!responseText) {
+    try {
+      if (typeof result?.response?.text === "string" && result.response.text) {
+        responseText = result.response.text;
+      }
+    } catch (e) {
+      context?.log?.warn?.("[Parse] result.response.text threw:", e.message);
+    }
+  }
+
+  // 路徑 3: 從 candidates 中提取
+  if (!responseText) {
     const parts =
       result?.candidates?.[0]?.content?.parts ||
       result?.response?.candidates?.[0]?.content?.parts ||
@@ -154,21 +172,67 @@ const parseGeminiResponse = (result) => {
     }
   }
 
+  // Log 回應結構以利除錯
   if (!responseText) {
-    throw new Error("Empty response from AI");
+    context?.log?.error?.(
+      "[Parse] Could not extract text from result. Keys:",
+      Object.keys(result || {}),
+      "Type:", typeof result
+    );
+    if (result?.candidates) {
+      context?.log?.error?.(
+        "[Parse] candidates[0]:", JSON.stringify(result.candidates[0])?.substring(0, 500)
+      );
+    }
+    throw new Error("Empty response from AI (無法從回應中提取文字)");
   }
 
-  // 嘗試直接解析 JSON
-  try {
-    return JSON.parse(responseText);
-  } catch (parseErr) {
-    // 嘗試從文字中提取 JSON
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("無法從 AI 回應中解析 JSON");
-    }
-    return JSON.parse(jsonMatch[0]);
+  context?.log?.("[Parse] responseText length:", responseText.length, "preview:", responseText.substring(0, 200));
+
+  // 清理回應文字 — 移除 markdown 程式碼區塊標記
+  let cleanText = responseText.trim();
+
+  // 移除 ```json ... ``` 或 ``` ... ``` 包裝
+  const codeBlockMatch = cleanText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (codeBlockMatch) {
+    cleanText = codeBlockMatch[1].trim();
   }
+
+  // 嘗試策略 1: 直接 JSON.parse
+  try {
+    return JSON.parse(cleanText);
+  } catch (parseErr1) {
+    context?.log?.warn?.("[Parse] Direct JSON.parse failed:", parseErr1.message);
+  }
+
+  // 嘗試策略 2: 找到最外層的 { ... } JSON 物件
+  try {
+    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch (parseErr2) {
+    context?.log?.warn?.("[Parse] Extracted JSON parse failed:", parseErr2.message);
+  }
+
+  // 嘗試策略 3: 找到 [ ... ] JSON 陣列（有時模型只回傳陣列）
+  try {
+    const arrayMatch = cleanText.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      const arr = JSON.parse(arrayMatch[0]);
+      // 如果是場景陣列，包裝成標準格式
+      if (Array.isArray(arr) && arr.length > 0 && arr[0].scene_number) {
+        return { scenes: arr, title: "文件分析結果", summary: "" };
+      }
+      return arr;
+    }
+  } catch (parseErr3) {
+    context?.log?.warn?.("[Parse] Array JSON parse failed:", parseErr3.message);
+  }
+
+  // 所有策略都失敗
+  context?.log?.error?.("[Parse] All strategies failed. Text preview:", cleanText.substring(0, 500));
+  throw new Error("無法從 AI 回應中解析 JSON，回應長度: " + responseText.length);
 };
 
 module.exports = async function (context, req) {
@@ -273,10 +337,14 @@ module.exports = async function (context, req) {
     // 解析回應
     let data;
     try {
-      data = parseGeminiResponse(result);
+      data = parseGeminiResponse(result, context);
     } catch (parseErr) {
       context.log.error("Parse error:", parseErr.message);
-      context.res = error("AI 回應格式異常，請重試", "parse_error", 502);
+      context.res = error(
+        `AI 回應格式異常：${parseErr.message}`,
+        "parse_error",
+        502
+      );
       return;
     }
 
