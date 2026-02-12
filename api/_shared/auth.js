@@ -155,7 +155,8 @@ const parseSWAHeader = (req) => {
     const principal = JSON.parse(buffer.toString("utf8"));
     return {
       displayName: principal.userDetails,
-      email: principal.userDetails,
+      email: principal.userDetails, // SWA 通常將 email 放在 userDetails
+      userDetails: principal.userDetails,
       authType: principal.identityProvider || "swa",
       userId: principal.userId,
       roles: principal.userRoles || []
