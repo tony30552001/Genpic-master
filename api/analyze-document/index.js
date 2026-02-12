@@ -236,44 +236,56 @@ const parseGeminiResponse = (result, context) => {
 };
 
 module.exports = async function (context, req) {
-  if ((req.method || "").toUpperCase() === "OPTIONS") {
-    context.res = options();
-    return;
-  }
+  context.log("[analyze-document] Function invoked, method:", req.method);
 
-  // 驗證身份
-  const auth = await requireAuth(context, req);
-  if (!auth) return;
-
-  // 速率限制
-  const limited = rateLimit(req, auth.user);
-  if (limited.limited) {
-    context.res = error("請求過於頻繁", "rate_limited", 429);
-    return;
-  }
-
-  // 取得請求參數
-  const { documentUrl, fileName, contentType, base64Content } = req.body || {};
-
-  // 驗證必要參數
-  if (!documentUrl && !base64Content) {
-    context.res = error("缺少文件內容（需提供 documentUrl 或 base64Content）", "bad_request", 400);
-    return;
-  }
-
-  // 驗證檔案格式
-  const mimeType = contentType || getMimeType(fileName);
-  if (!isSupportedFormat(mimeType, fileName)) {
-    context.res = error(
-      `不支援的檔案格式。支援：PDF、DOCX、PPTX、TXT、MD、PNG、JPG`,
-      "unsupported_format",
-      400
-    );
-    return;
-  }
-
+  // 最外層保護 — 確保任何未預期錯誤都會回傳 JSON 而非 crash
   try {
+    if ((req.method || "").toUpperCase() === "OPTIONS") {
+      context.res = options();
+      return;
+    }
+
+    // 驗證身份
+    context.log("[analyze-document] Step 1: Auth");
+    const auth = await requireAuth(context, req);
+    if (!auth) return;
+
+    // 速率限制
+    const limited = rateLimit(req, auth.user);
+    if (limited.limited) {
+      context.res = error("請求過於頻繁", "rate_limited", 429);
+      return;
+    }
+
+    // 取得請求參數
+    const { documentUrl, fileName, contentType, base64Content } = req.body || {};
+    context.log("[analyze-document] Step 2: Params -",
+      "fileName:", fileName,
+      "contentType:", contentType,
+      "hasBase64:", !!base64Content,
+      "base64Len:", base64Content?.length || 0,
+      "hasUrl:", !!documentUrl
+    );
+
+    // 驗證必要參數
+    if (!documentUrl && !base64Content) {
+      context.res = error("缺少文件內容（需提供 documentUrl 或 base64Content）", "bad_request", 400);
+      return;
+    }
+
+    // 驗證檔案格式
+    const mimeType = contentType || getMimeType(fileName);
+    if (!isSupportedFormat(mimeType, fileName)) {
+      context.res = error(
+        `不支援的檔案格式。支援：PDF、DOCX、PPTX、TXT、MD、PNG、JPG`,
+        "unsupported_format",
+        400
+      );
+      return;
+    }
+
     // 取得文件內容
+    context.log("[analyze-document] Step 3: Prepare content, mimeType:", mimeType);
     let base64Data;
     let finalMimeType = mimeType;
 
@@ -300,14 +312,16 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // 呼叫 Gemini 分析 - 使用 Pro 模型獲得更高品質分析
-    const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-1.5-pro";
+    // 呼叫 Gemini 分析
+    const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-2.0-flash";
+    context.log("[analyze-document] Step 4: Call Gemini, model:", modelName, "finalMimeType:", finalMimeType);
     const model = getModel(modelName);
 
     // 對於文字檔案，直接傳送文字內容
     let contents;
     if (finalMimeType === "text/plain") {
       const textContent = Buffer.from(base64Data, "base64").toString("utf-8");
+      context.log("[analyze-document] Text content length:", textContent.length);
       contents = [
         {
           role: "user",
@@ -330,16 +344,29 @@ module.exports = async function (context, req) {
       ];
     }
 
-    const result = await model.generateContent(contents, {
-      responseMimeType: "application/json",
-    });
+    let result;
+    try {
+      result = await model.generateContent(contents, {
+        responseMimeType: "application/json",
+      });
+      context.log("[analyze-document] Step 5: Gemini responded, result keys:", Object.keys(result || {}));
+    } catch (geminiErr) {
+      context.log.error("[analyze-document] Gemini API error:", geminiErr.message);
+      context.res = error(
+        `AI 模型呼叫失敗：${geminiErr.message}`,
+        "gemini_error",
+        502
+      );
+      return;
+    }
 
     // 解析回應
     let data;
     try {
       data = parseGeminiResponse(result, context);
+      context.log("[analyze-document] Step 6: Parse OK, scenes:", data?.scenes?.length);
     } catch (parseErr) {
-      context.log.error("Parse error:", parseErr.message);
+      context.log.error("[analyze-document] Parse error:", parseErr.message);
       context.res = error(
         `AI 回應格式異常：${parseErr.message}`,
         "parse_error",
@@ -380,17 +407,19 @@ module.exports = async function (context, req) {
       scenes: validatedScenes,
       characters: validatedCharacters,
       total_scenes: validatedScenes.length,
-      estimated_generation_time: validatedScenes.length * 15, // 預估每張15秒
+      estimated_generation_time: validatedScenes.length * 15,
     };
 
+    context.log("[analyze-document] Step 7: Success, total_scenes:", response.total_scenes);
     context.res = ok(response);
   } catch (err) {
-    context.log.error("Document analysis error:", err.message);
-    context.log.error("Error stack:", err.stack);
+    // 最外層 catch — 防止任何未預期錯誤導致函式崩潰
+    context.log.error("[analyze-document] UNHANDLED ERROR:", err.message);
+    context.log.error("[analyze-document] Stack:", err.stack);
     context.res = error(
       err.message || "文件分析失敗，請稍後重試",
       "analysis_failed",
-      502
+      500
     );
   }
 };
