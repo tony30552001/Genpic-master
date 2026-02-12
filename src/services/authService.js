@@ -57,7 +57,7 @@ export const acquireAccessToken = async () => {
       ...loginRequest,
       account,
     });
-    return result.accessToken;
+    return result.idToken;
   } catch (error) {
     // Silent 失敗時，不應自動彈窗，而是讓呼叫者決定如何處理
     // 通常這表示需要重新導向到登入頁面
