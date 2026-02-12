@@ -40,6 +40,11 @@ const getMsSigningKey = (header, callback) => {
 };
 
 const parseBearer = (req) => {
+  // 優先使用自訂 header（避免 Azure SWA 攔截標準 Authorization header）
+  const customToken = req.headers?.['x-auth-token'] || req.headers?.['X-Auth-Token'];
+  if (customToken) return customToken;
+
+  // Fallback: 標準 Authorization header
   const header = req.headers?.authorization || req.headers?.Authorization;
   if (!header || !header.startsWith("Bearer ")) return null;
   return header.substring("Bearer ".length);

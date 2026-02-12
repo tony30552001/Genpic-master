@@ -17,7 +17,7 @@ const buildHeaders = async (options) => {
   if (!AUTH_BYPASS && options.auth !== false) {
     try {
       const token = await acquireAccessToken();
-      headers.Authorization = `Bearer ${token}`;
+      headers['X-Auth-Token'] = token;
     } catch (error) {
       // 無法取得 token，觸發認證過期處理
       if (onAuthExpiredCallback) {
