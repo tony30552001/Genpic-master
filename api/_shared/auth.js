@@ -61,8 +61,20 @@ const verifyMicrosoftToken = (token) =>
   new Promise((resolve, reject) => {
     // 1. 預先解碼 Header 以獲取 kid (Key ID)
     const decodedToken = jwt.decode(token, { complete: true });
-    if (!decodedToken || !decodedToken.header || !decodedToken.header.kid) {
-      reject(new Error("Token header missing 'kid' field"));
+
+    if (!decodedToken) {
+      reject(new Error("Token failed to decode"));
+      return;
+    }
+
+    if (!decodedToken.header) {
+      reject(new Error("Token header is missing"));
+      return;
+    }
+
+    if (!decodedToken.header.kid) {
+      const headerKeys = Object.keys(decodedToken.header).join(", ");
+      reject(new Error(`Token header missing 'kid' field. Available headers: ${headerKeys}. Alg: ${decodedToken.header.alg}`));
       return;
     }
 
