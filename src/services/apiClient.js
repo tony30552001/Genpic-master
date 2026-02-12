@@ -33,7 +33,14 @@ const buildHeaders = async (options) => {
 const parseResponse = async (response) => {
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `Request failed: ${response.status}`);
+    let message = `Request failed: ${response.status}`;
+    try {
+      const json = JSON.parse(text);
+      message = json?.error?.message || json?.message || text || message;
+    } catch {
+      message = text || message;
+    }
+    throw new Error(message);
   }
 
   if (response.status === 204) return null;
