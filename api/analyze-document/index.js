@@ -317,7 +317,8 @@ module.exports = async function (context, req) {
 
     context.res = ok(response);
   } catch (err) {
-    context.log.error("Document analysis error:", err.message, err.stack);
+    context.log.error("Document analysis error:", err.message);
+    context.log.error("Error stack:", err.stack);
     context.res = error(
       err.message || "文件分析失敗，請稍後重試",
       "analysis_failed",
