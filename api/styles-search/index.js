@@ -37,8 +37,8 @@ module.exports = async function (context, req) {
 
   const limit = Math.min(Number(topK || 5), 20);
   const result = await query(
-    "SELECT id, name, prompt, description, tags, preview_url, created_at, embedding <=> $2::vector AS distance FROM styles WHERE tenant_id = $1 AND embedding IS NOT NULL ORDER BY embedding <=> $2::vector LIMIT $3",
-    [identity.tenantId, vectorString, limit]
+    "SELECT id, name, prompt, description, tags, preview_url, created_at, embedding <=> $2::vector AS distance FROM styles WHERE tenant_id = $1 AND created_by = $4 AND embedding IS NOT NULL ORDER BY embedding <=> $2::vector LIMIT $3",
+    [identity.tenantId, vectorString, limit, identity.userId]
   );
 
   const items = result.rows.map((row) => ({
