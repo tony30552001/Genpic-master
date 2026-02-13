@@ -17,7 +17,7 @@ export default function useImageGeneration() {
 
     setIsAnalyzing(true);
     setAnalysisPhase("上傳圖片並準備分析...");
-    
+
     try {
       setAnalysisPhase("AI 正在解析風格特徵（約需 5-10 秒）...");
       const result = await analyzeStyle({
@@ -36,16 +36,30 @@ export default function useImageGeneration() {
   }, []);
 
   const runGeneration = useCallback(
-    async ({ userScript, analyzedStyle: stylePrompt, aspectRatio, imageSize }) => {
+    async ({ userScript, analyzedStyle: stylePrompt, aspectRatio, imageSize, imageLanguage }) => {
       if (!userScript) {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
 
       setIsGenerating(true);
       try {
-        const finalPrompt = `Create an image with the following style: ${
-          stylePrompt || "High quality, professional corporate style"
-        }. The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.`;
+        // 語系指令
+        const LANG_DIRECTIVES = {
+          'en': 'All text in the image MUST be in English.',
+          'zh-TW': '圖片中的所有文字必須使用繁體中文。All text in the image MUST be in Traditional Chinese (zh-TW).',
+          'zh-CN': '图片中的所有文字必须使用简体中文。All text in the image MUST be in Simplified Chinese (zh-CN).',
+          'ja': '画像内のすべてのテキストは日本語にしてください。All text in the image MUST be in Japanese.',
+          'ko': '이미지의 모든 텍스트는 한국어로 작성하세요. All text in the image MUST be in Korean.',
+          'es': 'Todo el texto en la imagen DEBE estar en español.',
+          'fr': 'Tout le texte de l\'image DOIT être en français.',
+          'de': 'Aller Text im Bild MUSS auf Deutsch sein.',
+          'none': 'Do NOT include any text, labels, titles, or words in the image. The image should be purely visual with zero text.',
+        };
+        const langDirective = imageLanguage ? (LANG_DIRECTIVES[imageLanguage] || '') : '';
+
+        const finalPrompt = `Create an image with the following style: ${stylePrompt || "High quality, professional corporate style"
+          }. The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.${langDirective ? ` ${langDirective}` : ''
+          }`;
 
         const result = await generateImage({
           prompt: finalPrompt,
