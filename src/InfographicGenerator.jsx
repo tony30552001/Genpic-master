@@ -249,12 +249,13 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         if (!scene) return;
         try {
             setErrorMsg('');
-            // 呼叫圖片生成
+            // 呼叫圖片生成（帶入語系設定）
             const result = await generateImage({
                 userScript: scene.scene_description,
                 analyzedStyle,
                 aspectRatio,
-                imageSize
+                imageSize,
+                imageLanguage
             });
 
             // 1. 更新 DocumentAnalysis 的狀態 (顯示在卡片上)
