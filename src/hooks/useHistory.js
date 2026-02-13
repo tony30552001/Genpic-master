@@ -83,5 +83,6 @@ export default function useHistory({ user }) {
     historyItems,
     saveHistoryItem,
     deleteHistoryItem: deleteHistory,
+    deleteHistoryItems,
   };
 }
