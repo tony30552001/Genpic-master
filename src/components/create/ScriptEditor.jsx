@@ -39,6 +39,7 @@ export default function ScriptEditor({
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [styleSearch, setStyleSearch] = useState("");
   const [selectedStyleId, setSelectedStyleId] = useState(null);
+  const [selectedStyleInfo, setSelectedStyleInfo] = useState(null);
   const [charCount, setCharCount] = useState(userScript?.length || 0);
 
   // 將 Editor.js blocks 轉換為純文字
@@ -176,9 +177,10 @@ export default function ScriptEditor({
     );
   });
 
-  // 套用風格
+  // 套用風格（不跳頁）
   const handleApplyStyle = (style) => {
     setSelectedStyleId(style.id);
+    setSelectedStyleInfo({ name: style.name, tags: style.tags, previewUrl: style.previewUrl });
     onApplyStyle?.(style);
     setShowStylePicker(false);
   };
@@ -199,13 +201,27 @@ export default function ScriptEditor({
       </div>
 
       {/* 目前套用的風格 */}
-      {analyzedStyle && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+      {(analyzedStyle || selectedStyleInfo) && (
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+          {selectedStyleInfo?.previewUrl && (
+            <img src={selectedStyleInfo.previewUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0 border border-blue-200" />
+          )}
           <Palette className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-          <span className="text-xs text-blue-700 line-clamp-1 flex-1">
-            已套用風格
-          </span>
-          <Check className="w-3.5 h-3.5 text-blue-500" />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-medium text-blue-700 line-clamp-1">
+              {selectedStyleInfo?.name || '已套用風格'}
+            </span>
+            {selectedStyleInfo?.tags?.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {selectedStyleInfo.tags.slice(0, 4).map((tag, i) => (
+                  <span key={i} className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-600 rounded-full">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />
         </div>
       )}
 
@@ -304,16 +320,16 @@ export default function ScriptEditor({
         </div>
       )}
 
-      {/* Editor.js 容器 */}
+      {/* Editor.js 容器 — 乾淨無邊框排版 */}
       <div
-        className="min-h-[240px] md:min-h-[320px] bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400/20 transition-all"
+        className="min-h-[240px] md:min-h-[360px] rounded-xl overflow-hidden"
         onFocus={onFocus}
         onBlur={onBlur}
       >
         <div
           ref={holderRef}
           id="editorjs-holder"
-          className="editorjs-container px-4 py-3"
+          className="editorjs-container py-3"
         />
       </div>
 
