@@ -14,9 +14,6 @@ export default function useDocumentAnalysis() {
   const [currentFile, setCurrentFile] = useState(null);
   const [error, setError] = useState(null);
 
-  // 4MB 以下直接用 base64；以上走 Blob Storage 上傳
-  const BASE64_THRESHOLD = 4 * 1024 * 1024;
-
   /**
    * 分析文件並提取分鏡腳本
    * @param {File} file - 上傳的文件物件
@@ -32,6 +29,7 @@ export default function useDocumentAnalysis() {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
       "application/vnd.openxmlformats-officedocument.presentationml.presentation", // pptx
       "text/plain",
+      "text/markdown",
       "image/png",
       "image/jpeg",
     ];
@@ -56,32 +54,30 @@ export default function useDocumentAnalysis() {
     try {
       const analysisParams = {
         fileName: file.name,
-        contentType: file.type,
+        contentType: file.type || getMimeTypeFromExt(fileExtension),
       };
 
-      if (file.size < BASE64_THRESHOLD) {
-        // 小檔案：直接轉 base64 傳送
-        setAnalysisPhase("準備文件內容...");
-        const arrayBuffer = await file.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-        );
-        analysisParams.base64Content = base64;
-      } else {
-        // 大檔案：上傳到 Blob Storage，後端用 SDK 直讀
-        setAnalysisPhase("上傳文件到雲端儲存空間...");
-        try {
-          const uploadResult = await uploadFileToBlob(file);
-          analysisParams.documentUrl = uploadResult.url;
-        } catch (uploadErr) {
-          // Blob 上傳失敗時回退到 base64
-          console.warn("Blob upload failed, falling back to base64:", uploadErr);
+      // 統一走 Blob Storage 上傳（避免 Azure SWA 請求大小限制）
+      setAnalysisPhase("上傳文件到雲端儲存空間...");
+      try {
+        const uploadResult = await uploadFileToBlob(file, "documents");
+        analysisParams.documentUrl = uploadResult.url;
+      } catch (uploadErr) {
+        console.warn("Blob upload failed, trying base64 for small files:", uploadErr);
+
+        // 僅對極小檔案 fallback 到 base64（<100KB，Azure SWA body 限制內）
+        const SWA_SAFE_LIMIT = 80 * 1024; // 80KB raw → ~107KB base64，留安全餘量
+        if (file.size <= SWA_SAFE_LIMIT) {
           setAnalysisPhase("準備文件內容...");
           const arrayBuffer = await file.arrayBuffer();
           const base64 = btoa(
             new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
           );
           analysisParams.base64Content = base64;
+        } else {
+          throw new Error(
+            `檔案上傳失敗：${uploadErr.message}。請確認網路連線後重試。`
+          );
         }
       }
 
@@ -186,4 +182,21 @@ export default function useDocumentAnalysis() {
     title: documentResult?.title || "",
     summary: documentResult?.summary || "",
   };
+}
+
+/**
+ * 根據副檔名推斷 MIME type（browser 的 file.type 有時為空）
+ */
+function getMimeTypeFromExt(ext) {
+  const map = {
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    txt: "text/plain",
+    md: "text/plain",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+  };
+  return map[ext] || "application/octet-stream";
 }
