@@ -68,6 +68,17 @@ export default function useStyles({ user }) {
     [user]
   );
 
+  const removeStyles = useCallback(
+    async (styleIds) => {
+      if (!user || !styleIds || styleIds.length === 0) return;
+      // 這裡暫時使用 Promise.all 併發刪除，若量大再改為後端批次處理
+      await Promise.all(styleIds.map((id) => deleteStyle(id)));
+      const styles = await listStyles();
+      setSavedStyles(styles || []);
+    },
+    [user]
+  );
+
   const searchStyles = useCallback(
     (query) => {
       if (!user) return;
@@ -143,6 +154,7 @@ export default function useStyles({ user }) {
     setNewStyleTags,
     saveStyle,
     deleteStyle: removeStyle,
+    deleteStyles: removeStyles,
     searchStyles,
   };
 }

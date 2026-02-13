@@ -658,6 +658,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                 onSearchChange={(value) => { setSearchQuery(value); searchStyles(value); }}
                                 onApplyStyle={applySavedStyle}
                                 onDeleteStyle={deleteSavedStyle}
+                                onDeleteStyles={deleteStyles}
                             />
                         </div>
                     </div>
@@ -674,6 +675,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                 onSearchChange={setSearchQuery}
                                 onLoad={loadFromHistory}
                                 onDelete={deleteHistoryItem}
+                                onDeleteItems={deleteHistoryItems}
                                 onGoCreate={() => setActiveTab('create')}
                                 onGoStyles={() => setActiveTab('styles')}
                             />

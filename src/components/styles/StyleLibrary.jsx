@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Bookmark, Filter, Loader2, Search, X } from "lucide-react";
+import { Bookmark, CheckSquare, Filter, Loader2, Search, Trash2, X } from "lucide-react";
 import StyleCard from "./StyleCard";
 
 export default function StyleLibrary({
@@ -9,9 +9,14 @@ export default function StyleLibrary({
   onSearchChange,
   onApplyStyle,
   onDeleteStyle,
+  onDeleteStyles, // 新增：批次刪除 callback
 }) {
   const [selectedTags, setSelectedTags] = useState([]);
   const [showAllTags, setShowAllTags] = useState(false);
+
+  // 批次操作狀態
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   // 收集所有標籤及其出現次數
   const allTags = useMemo(() => {
@@ -65,6 +70,39 @@ export default function StyleLibrary({
   };
 
   const hasActiveFilters = selectedTags.length > 0 || searchQuery;
+
+  // --- 批次操作邏輯 ---
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((s) => s.id)));
+    }
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (confirm(`確定要刪除選取的 ${selectedIds.size} 個風格嗎？`)) {
+      onDeleteStyles(Array.from(selectedIds));
+      setIsSelectionMode(false);
+      setSelectedIds(new Set());
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -146,33 +184,81 @@ export default function StyleLibrary({
         )}
       </div>
 
-      {/* 結果計數 */}
-      {hasActiveFilters && (
-        <div className="flex items-center gap-2 text-xs text-slate-500 px-1">
-          <span>
-            找到 <strong className="text-slate-700">{filtered.length}</strong> 個風格
-          </span>
-          {selectedTags.length > 0 && (
-            <div className="flex items-center gap-1">
-              <span>·</span>
-              {selectedTags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-0.5 text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md"
-                >
-                  #{tag}
-                  <button
-                    onClick={() => toggleTag(tag)}
-                    className="hover:text-blue-800 ml-0.5"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              ))}
+      {isSelectionMode && (
+        <div className="flex items-center justify-between bg-blue-50/80 border border-blue-100 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                onChange={selectAll}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              <span className="text-sm font-medium text-blue-900">
+                已選取 {selectedIds.size} 個風格
+              </span>
             </div>
-          )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsSelectionMode(false)}
+              className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              disabled={selectedIds.size === 0}
+              className="px-3 py-1.5 text-xs text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              刪除選取項目
+            </button>
+          </div>
         </div>
       )}
+
+      {/* 結果計數與操作列 */}
+      <div className="flex items-center justify-between px-1">
+        {hasActiveFilters ? (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>
+              找到 <strong className="text-slate-700">{filtered.length}</strong> 個風格
+            </span>
+            {selectedTags.length > 0 && (
+              <div className="flex items-center gap-1">
+                <span>·</span>
+                {selectedTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-0.5 text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md"
+                  >
+                    #{tag}
+                    <button
+                      onClick={() => toggleTag(tag)}
+                      className="hover:text-blue-800 ml-0.5"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-xs text-slate-500">共 {savedStyles.length} 個風格</div>
+        )}
+
+        {!isSelectionMode && savedStyles.length > 0 && (
+          <button
+            onClick={toggleSelectionMode}
+            className="text-xs font-medium text-slate-500 hover:text-blue-600 flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            批次管理
+          </button>
+        )}
+      </div>
 
       {/* Grid 顯示 */}
       {filtered.length === 0 ? (
@@ -209,6 +295,9 @@ export default function StyleLibrary({
               onDelete={onDeleteStyle}
               selectedTags={selectedTags}
               onToggleTag={toggleTag}
+              isSelectionMode={isSelectionMode}
+              isSelected={selectedIds.has(style.id)}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </div>
