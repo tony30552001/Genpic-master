@@ -60,7 +60,7 @@ export default function useDocumentAnalysis() {
       // 統一走 Blob Storage 上傳（避免 Azure SWA 請求大小限制）
       setAnalysisPhase("上傳文件到雲端儲存空間...");
       try {
-        const uploadResult = await uploadFileToBlob(file, "documents");
+        const uploadResult = await uploadFileToBlob(file, "uploads");
         analysisParams.documentUrl = uploadResult.url;
       } catch (uploadErr) {
         console.warn("Blob upload failed, trying base64 for small files:", uploadErr);
