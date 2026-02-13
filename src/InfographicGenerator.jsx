@@ -70,9 +70,9 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const { user, handleMicrosoftLogin, handleLogout, isLoading } = useAuth();
     const {
         savedStyles, newStyleName, newStyleTags, isSavingStyle, isSearching,
-        setNewStyleName, setNewStyleTags, saveStyle, deleteStyle, searchStyles
+        setNewStyleName, setNewStyleTags, saveStyle, deleteStyle, searchStyles, deleteStyles
     } = useStyles({ user });
-    const { historyItems, saveHistoryItem, deleteHistoryItem } = useHistory({ user });
+    const { historyItems, saveHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
 
     const {
         isAnalyzing: isAnalyzingDocument, analysisPhase: documentAnalysisPhase,
