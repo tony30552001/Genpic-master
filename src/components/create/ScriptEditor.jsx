@@ -16,6 +16,10 @@ import {
   Check,
   Search,
   Image,
+  Loader2,
+  Wand2,
+  Tag,
+  Save,
 } from "lucide-react";
 
 /**
@@ -38,6 +42,17 @@ export default function ScriptEditor({
   onContentImageUpload,
   onClearContentImage,
   isUploadingContent,
+  // 風格分析 Props
+  isAnalyzing,
+  analysisPhase,
+  analysisResultData,
+  newStyleName,
+  newStyleTags,
+  isSavingStyle,
+  onAnalyze,
+  onStyleNameChange,
+  onStyleTagsChange,
+  onSaveStyle,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -285,6 +300,87 @@ export default function ScriptEditor({
                 作為生成內容的視覺參考 (支援 JPG, PNG)
               </p>
             </div>
+          </div>
+        )}
+
+        {/* 風格分析與結果顯示區 */}
+        {contentImagePreview && (
+          <div className="mt-2 space-y-3">
+            {/* 分析按鈕 */}
+            {!analyzedStyle && !analysisResultData && (
+              <button
+                onClick={onAnalyze}
+                disabled={isAnalyzing || isUploadingContent}
+                className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 border border-blue-200"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {analysisPhase || "正在分析風格..."}
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-3.5 h-3.5" />
+                    分析此圖片風格
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* 分析結果卡片 (從 StyleAnalyzer 移植) */}
+            {(analyzedStyle || analysisResultData) && (
+              <div className="bg-white border border-blue-100 rounded-xl p-3 shadow-sm space-y-2 animate-in fade-in slide-in-from-top-2 relative">
+                <div className="flex items-start justify-between">
+                  <h3 className="font-bold text-blue-900 text-xs flex items-center gap-1.5">
+                    <Wand2 className="w-3.5 h-3.5" />
+                    {analysisResultData?.style_name || "風格分析結果"}
+                  </h3>
+                  {/* 清除風格按鈕不需要在這裡，因為上方已經有清除個別風格的按鈕，或者是清除圖片時已經清除了 */}
+                </div>
+
+                <div className="text-[10px] leading-relaxed text-slate-600 bg-blue-50/50 p-2 rounded-lg border border-blue-50">
+                  {analysisResultData?.style_description_zh || analyzedStyle}
+                </div>
+
+                {analysisResultData?.suggested_tags && (
+                  <div className="flex flex-wrap gap-1">
+                    {analysisResultData.suggested_tags.map((tag, i) => (
+                      <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1">
+                        <Tag className="w-2.5 h-2.5" /> {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* 儲存風格介面 */}
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newStyleName || ''}
+                      onChange={(e) => onStyleNameChange && onStyleNameChange(e.target.value)}
+                      placeholder="為此風格命名..."
+                      className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 focus:border-blue-500 outline-none"
+                    />
+                    <button
+                      onClick={onSaveStyle}
+                      disabled={isSavingStyle}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {isSavingStyle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                      收藏
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={newStyleTags || ''}
+                    onChange={(e) => onStyleTagsChange && onStyleTagsChange(e.target.value)}
+                    placeholder="標籤 (以逗號分隔)..."
+                    className="w-full text-xs border border-slate-200 rounded px-2 py-1 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
