@@ -16,7 +16,26 @@ const allowedContentTypes = new Set([
   "text/markdown",
   "image/png",
   "image/jpeg",
+  "application/octet-stream",
 ]);
+
+/**
+ * 根據檔名推斷 MIME type（當 contentType 不在允許清單時使用）
+ */
+const inferContentType = (fileName) => {
+  const ext = (fileName || "").split(".").pop().toLowerCase();
+  const map = {
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    txt: "text/plain",
+    md: "text/plain",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+  };
+  return map[ext] || null;
+};
 
 const isValidBlobName = (name) => {
   if (!name || typeof name !== "string") return false;
@@ -42,15 +61,23 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { fileName, contentType, container } = req.body || {};
+  const { fileName, container } = req.body || {};
+  let { contentType } = req.body || {};
+
   if (!isValidBlobName(fileName)) {
     context.res = error("檔名不合法", "bad_request", 400);
     return;
   }
 
-  if (!allowedContentTypes.has(contentType)) {
-    context.res = error("不支援的檔案格式", "bad_request", 400);
-    return;
+  // 如果 contentType 為空或不在允許清單，嘗試從檔名推斷
+  if (!contentType || !allowedContentTypes.has(contentType)) {
+    const inferred = inferContentType(fileName);
+    if (inferred) {
+      contentType = inferred;
+    } else if (!allowedContentTypes.has(contentType)) {
+      context.res = error("不支援的檔案格式", "bad_request", 400);
+      return;
+    }
   }
 
   const account = process.env.AZURE_STORAGE_ACCOUNT;
