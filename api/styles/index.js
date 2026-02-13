@@ -87,13 +87,24 @@ module.exports = async function (context, req) {
   }
 
   if (method === "DELETE") {
-    if (!id) {
+    // 支援從不同來源取得 id (Azure Functions bindingData, params, query)
+    const targetId = id || context.bindingData?.id || req.query?.id;
+
+    if (!targetId) {
       context.res = error("缺少 style id", "bad_request", 400);
       return;
     }
+
+    // 先解除 history 表中的關聯 (Foreign Key Constraint)
+    await query(
+      "UPDATE history SET style_id = NULL WHERE style_id = $1 AND tenant_id = $2",
+      [targetId, identity.tenantId]
+    );
+
+    // 再刪除 style
     const result = await query(
       "DELETE FROM styles WHERE id = $1 AND tenant_id = $2 RETURNING id",
-      [id, identity.tenantId]
+      [targetId, identity.tenantId]
     );
     if (result.rows.length === 0) {
       context.res = error("找不到 style", "not_found", 404);
