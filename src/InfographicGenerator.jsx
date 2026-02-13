@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 
-import StyleAnalyzer from './components/create/StyleAnalyzer';
+
 import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
 import StyleLibrary from './components/styles/StyleLibrary';
@@ -29,7 +29,7 @@ import SettingsPanel from './components/settings/SettingsPanel';
 export default function InfographicGenerator({ initialTab = 'create' }) {
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [createSubTab, setCreateSubTab] = useState('style');
+    const [createSubTab, setCreateSubTab] = useState('general');
 
     // Input States
     const [referenceImage, setReferenceImage] = useState(null);
@@ -168,6 +168,13 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                 setContentImagePreview(reader.result);
                 setContentBlobUrl(blobUrl);
                 setContentBlobSasUrl(blobSasUrl);
+
+                // 同步設定為風格參考圖，以便進行風格分析
+                setReferenceImage(file);
+                setReferencePreview(reader.result);
+                setReferenceBlobUrl(blobUrl);
+                setReferenceBlobSasUrl(blobSasUrl);
+
                 setErrorMsg('');
                 setTimeout(() => { setIsUploadingContent(false); setContentUploadProgress(0); }, 1500);
             };
@@ -187,6 +194,13 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         setContentBlobSasUrl(null);
         setIsUploadingContent(false);
         setContentUploadProgress(0);
+
+        // 同步清除風格參考
+        setReferenceImage(null);
+        setReferencePreview(null);
+        setReferenceBlobUrl(null);
+        setReferenceBlobSasUrl(null);
+        clearStyle(); // 清除已分析的風格
     };
 
     const analyzeImageStyle = async () => {
@@ -483,9 +497,9 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                         {/* Sub Tabs Bar */}
                         <div className="shrink-0 px-4 lg:px-8 pt-3 pb-1">
                             <div className="inline-flex items-center gap-1 bg-muted rounded-lg p-1">
+
                                 {[
-                                    { id: 'style', label: '風格', icon: Palette, active: hasStyle },
-                                    { id: 'content', label: '內容', icon: PenLine, active: hasContent },
+                                    { id: 'general', label: '一般創作', icon: Wand2, active: hasContent || hasStyle },
                                     { id: 'document', label: '文件分析', icon: FileText, active: hasDocument },
                                 ].map((tab) => (
                                     <button
@@ -539,28 +553,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
                                     {/* Left: Controls (takes 3/5 on large screens) */}
                                     <div className="lg:col-span-3 overflow-y-auto custom-scrollbar pr-1">
-                                        {createSubTab === 'style' && (
-                                            <StyleAnalyzer
-                                                referencePreview={referencePreview}
-                                                isUploading={isUploading}
-                                                uploadProgress={uploadProgress}
-                                                isAnalyzing={isAnalyzing}
-                                                analyzedStyle={analyzedStyle}
-                                                analysisResultData={analysisResultData}
-                                                newStyleName={newStyleName}
-                                                newStyleTags={newStyleTags}
-                                                isSavingStyle={isSavingStyle}
-                                                analysisPhase={analysisPhase}
-                                                onImageUpload={handleImageUpload}
-                                                onClearReference={handleClearReference}
-                                                onAnalyze={analyzeImageStyle}
-                                                onStyleNameChange={handleStyleNameChange}
-                                                onStyleTagsChange={handleStyleTagsChange}
-                                                onSaveStyle={saveCurrentStyle}
-                                                onClearStyle={handleClearStyle}
-                                            />
-                                        )}
-                                        {createSubTab === 'content' && (
+                                        {createSubTab === 'general' && (
                                             <ScriptEditor
                                                 userScript={userScript}
                                                 onUserScriptChange={setUserScript}
@@ -568,13 +561,28 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                                 onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
                                                 hideGenerate
                                                 savedStyles={savedStyles}
+
+                                                // 風格與內容整合
                                                 analyzedStyle={analyzedStyle}
                                                 onApplyStyle={applySavedStyle}
                                                 onClearStyle={handleClearStyle}
+
                                                 contentImagePreview={contentImagePreview}
                                                 onContentImageUpload={handleContentImageUpload}
                                                 onClearContentImage={handleClearContentImage}
                                                 isUploadingContent={isUploadingContent}
+
+                                                // 風格分析 Props
+                                                isAnalyzing={isAnalyzing}
+                                                analysisPhase={analysisPhase}
+                                                analysisResultData={analysisResultData}
+                                                newStyleName={newStyleName}
+                                                newStyleTags={newStyleTags}
+                                                isSavingStyle={isSavingStyle}
+                                                onAnalyze={analyzeImageStyle}
+                                                onStyleNameChange={handleStyleNameChange}
+                                                onStyleTagsChange={handleStyleTagsChange}
+                                                onSaveStyle={saveCurrentStyle}
                                             />
                                         )}
                                     </div>
@@ -641,7 +649,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                             }
                             disabled={
                                 (createSubTab === 'document' && (!scenes || scenes.length === 0)) ||
-                                (createSubTab !== 'document' && !userScript && !hasDocument)
+                                (createSubTab !== 'document' && !userScript && !contentImagePreview)
                             }
                         />
                     </div>
