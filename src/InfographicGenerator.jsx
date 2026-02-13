@@ -517,6 +517,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                                 savedStyles={savedStyles}
                                                 analyzedStyle={analyzedStyle}
                                                 onApplyStyle={applySavedStyle}
+                                                onClearStyle={handleClearStyle}
                                             />
                                         )}
                                     </div>

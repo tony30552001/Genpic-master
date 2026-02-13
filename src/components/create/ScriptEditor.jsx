@@ -31,6 +31,7 @@ export default function ScriptEditor({
   savedStyles = [],
   analyzedStyle,
   onApplyStyle,
+  onClearStyle,
 }) {
   const editorRef = useRef(null);
   const holderRef = useRef(null);
@@ -185,6 +186,13 @@ export default function ScriptEditor({
     setShowStylePicker(false);
   };
 
+  // 清除風格
+  const handleClearStyle = () => {
+    setSelectedStyleId(null);
+    setSelectedStyleInfo(null);
+    onClearStyle?.();
+  };
+
   return (
     <div className="space-y-3">
       {/* 標題與風格選取 */}
@@ -221,7 +229,13 @@ export default function ScriptEditor({
               </div>
             )}
           </div>
-          <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+          <button
+            onClick={handleClearStyle}
+            className="p-1 hover:bg-blue-100 text-blue-400 hover:text-blue-600 rounded-full transition-colors"
+            title="移除風格"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
