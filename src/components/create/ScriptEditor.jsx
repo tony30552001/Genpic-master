@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Check,
   Search,
+  Image,
 } from "lucide-react";
 
 /**
@@ -32,7 +33,15 @@ export default function ScriptEditor({
   analyzedStyle,
   onApplyStyle,
   onClearStyle,
+  // 新增：內容參考圖相關 props
+  contentImagePreview,
+  onContentImageUpload,
+  onClearContentImage,
+  isUploadingContent,
 }) {
+  const [isDraging, setIsDraging] = useState(false);
+  const fileInputRef = useRef(null);
+
   const editorRef = useRef(null);
   const holderRef = useRef(null);
   const isInitializing = useRef(false);
@@ -206,6 +215,78 @@ export default function ScriptEditor({
             描述你想生成的畫面，包含人物、場景、動作和氛圍
           </p>
         </div>
+      </div>
+
+      {/* 內容參考圖片區塊 */}
+      <div className="space-y-2">
+        {contentImagePreview ? (
+          <div className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+            <img
+              src={contentImagePreview}
+              alt="Content Reference"
+              className="w-full h-48 object-contain bg-slate-100/50"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
+              <button
+                onClick={onClearContentImage}
+                className="p-1.5 bg-white text-slate-500 hover:text-red-500 rounded-full shadow-sm transition-colors"
+                title="移除參考圖片"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
+              參考圖片
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setIsDraging(true); }}
+            onDragLeave={() => setIsDraging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraging(false);
+              const file = e.dataTransfer.files[0];
+              if (file && onContentImageUpload) {
+                onContentImageUpload({ target: { files: [file] } });
+              }
+            }}
+            className={`
+              relative group flex items-center gap-3 px-4 py-3 rounded-xl border-dashed border-2 cursor-pointer transition-all
+              ${isDraging
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+              }
+            `}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onContentImageUpload}
+              className="hidden"
+            />
+            <div className={`
+              w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors
+              ${isUploadingContent ? 'bg-slate-100' : 'bg-blue-50 text-blue-500 group-hover:bg-blue-100 group-hover:text-blue-600'}
+            `}>
+              {isUploadingContent ? (
+                <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+              ) : (
+                <Image className="w-5 h-5" />
+              )}
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-medium text-slate-700 group-hover:text-blue-700 transition-colors">
+                上傳內容參考圖片
+              </p>
+              <p className="text-xs text-slate-400">
+                作為生成內容的視覺參考 (支援 JPG, PNG)
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 目前套用的風格 */}

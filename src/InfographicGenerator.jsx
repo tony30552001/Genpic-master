@@ -41,6 +41,14 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
     const [userScript, setUserScript] = useState('');
 
+    // Content Image States
+    const [contentImage, setContentImage] = useState(null);
+    const [contentImagePreview, setContentImagePreview] = useState(null);
+    const [contentBlobUrl, setContentBlobUrl] = useState(null);
+    const [contentBlobSasUrl, setContentBlobSasUrl] = useState(null);
+    const [isUploadingContent, setIsUploadingContent] = useState(false);
+    const [contentUploadProgress, setContentUploadProgress] = useState(0);
+
     // 全域設定
     const [imageLanguage, setImageLanguage] = useState(() => {
         try { return localStorage.getItem('genpic_image_language') || 'en'; } catch { return 'en'; }
@@ -143,6 +151,44 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         clearStyle();
     };
 
+    const handleContentImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) { setErrorMsg("圖片過大，請上傳小於 10MB 的圖片。"); return; }
+        try {
+            setIsUploadingContent(true);
+            setContentUploadProgress(0);
+            const safeName = `content-${Date.now()}-${file.name}`.replace(/\s+/g, "-");
+            const sas = await requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
+            const blobUrl = await uploadBlobWithProgress({ blobUrl: sas.blobUrl, sasToken: sas.sasToken, file, contentType: file.type, onProgress: setContentUploadProgress });
+            const blobSasUrl = `${sas.blobUrl}?${sas.sasToken}`;
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setContentImage(file);
+                setContentImagePreview(reader.result);
+                setContentBlobUrl(blobUrl);
+                setContentBlobSasUrl(blobSasUrl);
+                setErrorMsg('');
+                setTimeout(() => { setIsUploadingContent(false); setContentUploadProgress(0); }, 1500);
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error("Content Upload failed:", err);
+            setErrorMsg(err.message || "上傳失敗，請稍後再試。");
+            setIsUploadingContent(false);
+        }
+    };
+
+    const handleClearContentImage = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        setContentImage(null);
+        setContentImagePreview(null);
+        setContentBlobUrl(null);
+        setContentBlobSasUrl(null);
+        setIsUploadingContent(false);
+        setContentUploadProgress(0);
+    };
+
     const analyzeImageStyle = async () => {
         try {
             const analysisResult = await analyzeStyle({ referencePreview, imageUrl: referenceBlobSasUrl });
@@ -204,7 +250,14 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
     const generateInfographic = async () => {
         try {
-            const { imageUrl, finalPrompt } = await generateImage({ userScript, analyzedStyle, aspectRatio, imageSize, imageLanguage });
+            const { imageUrl, finalPrompt } = await generateImage({
+                userScript,
+                analyzedStyle,
+                aspectRatio,
+                imageSize,
+                imageLanguage,
+                contentImageUrl: contentBlobSasUrl
+            });
             await saveHistoryItem({ imageUrl, userScript, stylePrompt: analyzedStyle, fullPrompt: finalPrompt, styleId: analysisResultData?.styleId || null });
             setErrorMsg('');
         } catch (err) {
@@ -518,6 +571,10 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                                 analyzedStyle={analyzedStyle}
                                                 onApplyStyle={applySavedStyle}
                                                 onClearStyle={handleClearStyle}
+                                                contentImagePreview={contentImagePreview}
+                                                onContentImageUpload={handleContentImageUpload}
+                                                onClearContentImage={handleClearContentImage}
+                                                isUploadingContent={isUploadingContent}
                                             />
                                         )}
                                     </div>

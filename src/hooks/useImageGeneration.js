@@ -36,7 +36,7 @@ export default function useImageGeneration() {
   }, []);
 
   const runGeneration = useCallback(
-    async ({ userScript, analyzedStyle: stylePrompt, aspectRatio, imageSize, imageLanguage }) => {
+    async ({ userScript, analyzedStyle: stylePrompt, aspectRatio, imageSize, imageLanguage, contentImageUrl }) => {
       if (!userScript) {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
@@ -65,6 +65,7 @@ export default function useImageGeneration() {
           prompt: finalPrompt,
           aspectRatio,
           imageSize,
+          imageUrl: contentImageUrl,
         });
 
         setGeneratedImage(result.imageUrl);

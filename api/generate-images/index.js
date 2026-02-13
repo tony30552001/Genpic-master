@@ -18,7 +18,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { prompt, aspectRatio, imageSize } = req.body || {};
+  const { prompt, aspectRatio, imageSize, imageUrl } = req.body || {};
   if (!prompt) {
     context.res = error("缺少 prompt", "bad_request", 400);
     return;
@@ -27,9 +27,32 @@ module.exports = async function (context, req) {
   try {
     const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3-pro-image-preview";
     const model = getModel(modelName);
-    const finalPrompt = aspectRatio
+    const textPrompt = aspectRatio
       ? `${prompt}\nAspect ratio: ${aspectRatio}.`
       : prompt;
+
+    const parts = [{ text: textPrompt }];
+
+    if (imageUrl) {
+      try {
+        const imageResponse = await fetch(imageUrl);
+        if (!imageResponse.ok) throw new Error("Failed to fetch image");
+        const arrayBuffer = await imageResponse.arrayBuffer();
+        const base64Image = Buffer.from(arrayBuffer).toString("base64");
+        const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+
+        parts.push({
+          inlineData: {
+            mimeType: contentType,
+            data: base64Image,
+          },
+        });
+      } catch (imgErr) {
+        context.log.warn("Failed to fetch reference image:", imgErr);
+        // Continue without image or return error? 
+        // Let's continue with just text but log warning
+      }
+    }
 
     const config = {
       responseModalities: ["TEXT", "IMAGE"],
@@ -39,16 +62,16 @@ module.exports = async function (context, req) {
       },
     };
 
-    const result = await model.generateContent([finalPrompt], config);
+    const result = await model.generateContent(parts, config);
 
-    const parts =
+    const responseParts =
       result?.candidates?.[0]?.content?.parts ||
       result?.parts ||
       result?.response?.candidates?.[0]?.content?.parts ||
       [];
     let base64Image = null;
     let mimeType = "image/png";
-    for (const part of parts) {
+    for (const part of responseParts) {
       const inlineData = part.inlineData || part.inline_data;
       if (inlineData?.data) {
         base64Image = inlineData.data;
