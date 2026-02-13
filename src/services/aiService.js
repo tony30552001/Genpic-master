@@ -10,6 +10,9 @@ export const generateImage = async ({ prompt, aspectRatio, imageSize, imageUrl }
 export const embedText = async ({ text }) =>
   apiPost(`${API_BASE_URL}/embeddings`, { text });
 
+export const optimizePrompt = async ({ userScript, styleContext }) =>
+  apiPost(`${API_BASE_URL}/optimize-prompt`, { userScript, styleContext });
+
 /**
  * 分析文件內容並提取分鏡腳本
  * @param {Object} params

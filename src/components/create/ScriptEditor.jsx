@@ -21,6 +21,7 @@ import {
   Tag,
   Save,
 } from "lucide-react";
+import { optimizePrompt } from "../../services/aiService";
 
 /**
  * ScriptEditor — 整合 Editor.js 的內容編輯器
@@ -66,6 +67,7 @@ export default function ScriptEditor({
   const [selectedStyleId, setSelectedStyleId] = useState(null);
   const [selectedStyleInfo, setSelectedStyleInfo] = useState(null);
   const [charCount, setCharCount] = useState(userScript?.length || 0);
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
   // 將 Editor.js blocks 轉換為純文字
   const blocksToText = useCallback((blocks) => {
@@ -217,6 +219,38 @@ export default function ScriptEditor({
     onClearStyle?.();
   };
 
+  // AI 智能優化
+  const handleSmartOptimize = async () => {
+    if (!userScript || !userScript.trim()) return;
+    setIsOptimizing(true);
+    try {
+      // 1. 呼叫 API
+      const result = await optimizePrompt({
+        userScript,
+        styleContext: analyzedStyle || selectedStyleInfo?.name || ""
+      });
+
+      if (result && result.optimizedPrompt) {
+        const newText = result.optimizedPrompt;
+
+        // 2. 更新 Editor.js 內容
+        if (editorRef.current) {
+          const newBlocks = textToBlocks(newText);
+          await editorRef.current.render({ blocks: newBlocks });
+        }
+
+        // 3. 更新上層狀態
+        onUserScriptChange(newText);
+        setCharCount(newText.length);
+      }
+    } catch (err) {
+      console.error("Smart optimize failed:", err);
+      alert("優化失敗，請稍後再試。");
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       {/* 標題與風格選取 */}
@@ -230,6 +264,26 @@ export default function ScriptEditor({
             描述你想生成的畫面，包含人物、場景、動作和氛圍
           </p>
         </div>
+
+        <button
+          onClick={handleSmartOptimize}
+          disabled={isOptimizing || !userScript?.trim()}
+          className={`
+            flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+            ${!userScript?.trim()
+              ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+              : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-transparent shadow-sm hover:shadow-md hover:from-violet-600 hover:to-fuchsia-600'
+            }
+          `}
+          title="使用 AI 自動豐富畫面細節與提示詞"
+        >
+          {isOptimizing ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Wand2 className="w-3.5 h-3.5" />
+          )}
+          {isOptimizing ? "優化中..." : "AI 智能優化"}
+        </button>
       </div>
 
       {/* 內容參考圖片區塊 */}
