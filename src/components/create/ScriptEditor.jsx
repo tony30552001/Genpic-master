@@ -343,7 +343,7 @@ export default function ScriptEditor({
         <div
           ref={holderRef}
           id="editorjs-holder"
-          className="editorjs-container py-3 pl-4 md:pl-14"
+          className="editorjs-container py-3 pl-4 md:pl-24"
         />
       </div>
 
