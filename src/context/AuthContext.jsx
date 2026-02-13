@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useMsal, useIsAuthenticated } from '@azure/msal-react';
 import { googleLogout } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
@@ -16,7 +16,52 @@ export const AuthProvider = ({ children }) => {
     const [authExpired, setAuthExpired] = useState(false);
     const [msalInitialized, setMsalInitialized] = useState(false);
 
-    // 初始化 Google 登入狀態 (從 localStorage)
+    // Google Token 過期計時器 ref（提前 2 分鐘偵測過期）
+    const EXPIRY_WARN_BUFFER_MS = 2 * 60 * 1000;
+    const expiryTimerRef = useRef(null);
+
+    // 清除過期計時器的輔助函式
+    const clearExpiryTimer = useCallback(() => {
+        if (expiryTimerRef.current) {
+            clearTimeout(expiryTimerRef.current);
+            expiryTimerRef.current = null;
+        }
+    }, []);
+
+    // 設置 Google Token 過期計時器
+    const setupExpiryTimer = useCallback((token) => {
+        clearExpiryTimer();
+        try {
+            const decoded = jwtDecode(token);
+            const expiresAtMs = decoded.exp * 1000;
+            const timeUntilExpiry = expiresAtMs - Date.now() - EXPIRY_WARN_BUFFER_MS;
+
+            if (timeUntilExpiry <= 0) {
+                // 已過期或即將過期
+                googleLogout();
+                localStorage.removeItem('google_user');
+                setGoogleUser(null);
+                setAuthExpired(true);
+                return false;
+            }
+
+            // 設定計時器，在過期前 2 分鐘自動觸發重新登入提示
+            expiryTimerRef.current = setTimeout(() => {
+                console.warn('[Auth] Google Token 即將過期，觸發重新登入提醒');
+                googleLogout();
+                localStorage.removeItem('google_user');
+                setGoogleUser(null);
+                setAuthExpired(true);
+            }, timeUntilExpiry);
+
+            console.log(`[Auth] Google Token 過期計時器已設定，${Math.round(timeUntilExpiry / 1000 / 60)} 分鐘後過期`);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }, [clearExpiryTimer]);
+
+    // 初始化 Google 登入狀態 (從 localStorage) 並設置過期計時器
     useEffect(() => {
         const savedUser = localStorage.getItem('google_user');
         if (savedUser) {
@@ -30,11 +75,15 @@ export const AuthProvider = ({ children }) => {
                     setAuthExpired(true);
                 } else {
                     setGoogleUser(user);
+                    // 設置自動過期計時器
+                    setupExpiryTimer(user.idToken);
                 }
             } catch (e) {
                 localStorage.removeItem('google_user');
             }
         }
+
+        return () => clearExpiryTimer();
     }, []);
 
     // 監聽 MSAL 初始化完成
@@ -106,9 +155,12 @@ export const AuthProvider = ({ children }) => {
         setGoogleUser(user);
         localStorage.setItem('google_user', JSON.stringify(user));
         setAuthExpired(false); // 清除過期標記
-    }, []);
+        // 設置新的過期計時器
+        setupExpiryTimer(credentialResponse.credential);
+    }, [setupExpiryTimer]);
 
     const handleLogout = useCallback(async () => {
+        clearExpiryTimer(); // 清除過期計時器
         if (googleUser) {
             googleLogout();
             setGoogleUser(null);
@@ -117,7 +169,7 @@ export const AuthProvider = ({ children }) => {
             await microsoftLogout();
         }
         setAuthExpired(false);
-    }, [googleUser]);
+    }, [googleUser, clearExpiryTimer]);
 
     const user = React.useMemo(() => {
         if (AUTH_BYPASS) {

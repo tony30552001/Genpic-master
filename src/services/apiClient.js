@@ -17,13 +17,20 @@ const buildHeaders = async (options) => {
   if (!AUTH_BYPASS && options.auth !== false) {
     try {
       const token = await acquireAccessToken();
+      if (!token) {
+        // Token 取得為空（例如 Google token 已過期被清除）
+        if (onAuthExpiredCallback) {
+          onAuthExpiredCallback();
+        }
+        throw new Error("登入已過期，請重新登入");
+      }
       headers['X-Auth-Token'] = token;
     } catch (error) {
       // 無法取得 token，觸發認證過期處理
       if (onAuthExpiredCallback) {
         onAuthExpiredCallback();
       }
-      throw new Error("無法取得認證資訊，請重新登入");
+      throw new Error(error.message || "無法取得認證資訊，請重新登入");
     }
   }
 

@@ -1,4 +1,24 @@
+import { jwtDecode } from "jwt-decode";
 import { loginRequest, msalInstance } from "./msalClient";
+
+// 提前 5 分鐘判定 Token 過期，避免在請求途中過期
+const TOKEN_EXPIRY_BUFFER_SECONDS = 5 * 60;
+
+/**
+ * 檢查 Google Token 是否仍在有效期內
+ * @param {string} token - JWT token
+ * @returns {boolean} - true = 仍有效
+ */
+const isGoogleTokenValid = (token) => {
+  try {
+    const decoded = jwtDecode(token);
+    const currentTime = Date.now() / 1000;
+    // 提前 5 分鐘判定過期
+    return decoded.exp > currentTime + TOKEN_EXPIRY_BUFFER_SECONDS;
+  } catch (e) {
+    return false;
+  }
+};
 
 // 從 AuthContext 外部獲取 Google User Token 的後路方法
 const getGoogleToken = () => {
@@ -6,7 +26,17 @@ const getGoogleToken = () => {
     const savedUser = localStorage.getItem('google_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
-      return user.idToken || null;
+      const token = user.idToken;
+      if (!token) return null;
+
+      // 檢查 token 是否已過期或即將過期
+      if (!isGoogleTokenValid(token)) {
+        console.warn('[Auth] Google Token 已過期或即將過期，清除登入狀態');
+        localStorage.removeItem('google_user');
+        return null;
+      }
+
+      return token;
     }
   } catch (e) {
     return null;
