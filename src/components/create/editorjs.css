@@ -1,0 +1,134 @@
+/* Editor.js 容器樣式 */
+.editorjs-container {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+/* 編輯區域基礎 */
+.editorjs-container .codex-editor__redactor {
+  padding-bottom: 80px !important;
+}
+
+.editorjs-container .ce-block__content {
+  max-width: 100% !important;
+  margin: 0 !important;
+}
+
+.editorjs-container .ce-toolbar__content {
+  max-width: 100% !important;
+  margin: 0 !important;
+}
+
+/* 區塊樣式 */
+.editorjs-container .ce-paragraph {
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.editorjs-container .ce-paragraph[data-placeholder]:empty::before {
+  color: #94a3b8;
+  font-style: normal;
+}
+
+/* 標題樣式 */
+.editorjs-container .ce-header {
+  padding: 0;
+  margin: 0;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.editorjs-container h2.ce-header {
+  font-size: 1.25rem;
+  padding-top: 0.5rem;
+}
+
+.editorjs-container h3.ce-header {
+  font-size: 1.1rem;
+  padding-top: 0.25rem;
+}
+
+/* 列表樣式 */
+.editorjs-container .cdx-list {
+  padding-left: 1rem;
+}
+
+.editorjs-container .cdx-list__item {
+  padding: 4px 0;
+  line-height: 1.6;
+}
+
+/* 分隔線 */
+.editorjs-container .ce-delimiter {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.editorjs-container .ce-delimiter::before {
+  content: "· · ·";
+  color: #94a3b8;
+  font-size: 1.5rem;
+  letter-spacing: 0.5em;
+}
+
+/* 標記文字 */
+.editorjs-container .cdx-marker {
+  background: rgba(59, 130, 246, 0.15);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* 內聯代碼 */
+.editorjs-container .inline-code {
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* 工具列 */
+.editorjs-container .ce-toolbar__plus,
+.editorjs-container .ce-toolbar__settings-btn {
+  color: #64748b;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.editorjs-container .ce-toolbar__plus:hover,
+.editorjs-container .ce-toolbar__settings-btn:hover {
+  background: #f1f5f9;
+  color: #3b82f6;
+}
+
+/* 工具選單 */
+.editorjs-container .ce-popover {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.editorjs-container .ce-popover-item:hover {
+  background: #f8fafc;
+}
+
+.editorjs-container .ce-popover-item__icon {
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* 內聯工具列 */
+.editorjs-container .ce-inline-toolbar {
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 聚焦時的區塊指示 */
+.editorjs-container .ce-block--focused {
+  background: transparent;
+}
