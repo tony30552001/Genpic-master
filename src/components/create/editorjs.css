@@ -1,23 +1,33 @@
-/* Editor.js 容器樣式 */
+/* Editor.js 容器樣式 — 仿官方 demo 寬敞排版 */
 .editorjs-container {
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.75;
   color: #334155;
 }
 
 /* 編輯區域基礎 */
 .editorjs-container .codex-editor__redactor {
-  padding-bottom: 80px !important;
+  padding-bottom: 60px !important;
 }
 
+/* 內容區塊 — 限制最大寬度 + 居中 + 兩側呼吸空間 */
 .editorjs-container .ce-block__content {
   max-width: 100% !important;
-  margin: 0 !important;
+  margin: 0 auto !important;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 
 .editorjs-container .ce-toolbar__content {
   max-width: 100% !important;
-  margin: 0 !important;
+  margin: 0 auto !important;
+}
+
+/* 聚焦區塊微提示 */
+.editorjs-container .ce-block--focused .ce-block__content {
+  border-left: 2px solid #3b82f6;
+  padding-left: 14px;
+  transition: border-color 0.2s, padding-left 0.2s;
 }
 
 /* 區塊樣式 */

@@ -190,8 +190,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         setNewStyleTags((styleData.tags || []).join(', '));
         setIsStyleNameTouched(true);
         setIsStyleTagsTouched(true);
-        setActiveTab('create');
-        setCreateSubTab('style');
+        // 不再跳頁 — 讓使用者留在目前位置
     };
 
     const handleStyleNameChange = (value) => { setNewStyleName(value); setIsStyleNameTouched(true); };
@@ -484,8 +483,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                             <>
                                 <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-0 lg:gap-6 px-4 lg:px-8 py-3">
 
-                                    {/* Left: Controls (takes 2/5 on large screens) */}
-                                    <div className="lg:col-span-2 overflow-y-auto custom-scrollbar pr-1">
+                                    {/* Left: Controls (takes 3/5 on large screens) */}
+                                    <div className="lg:col-span-3 overflow-y-auto custom-scrollbar pr-1">
                                         {createSubTab === 'style' && (
                                             <StyleAnalyzer
                                                 referencePreview={referencePreview}
@@ -521,8 +520,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                         )}
                                     </div>
 
-                                    {/* Right: Preview (takes 3/5 on large screens) */}
-                                    <div className="lg:col-span-3 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
+                                    {/* Right: Preview (takes 2/5 on large screens) */}
+                                    <div className="lg:col-span-2 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
                                         {/* Decorative grid background */}
                                         <div
                                             className="absolute inset-0 opacity-[0.03]"
