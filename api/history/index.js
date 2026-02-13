@@ -29,8 +29,8 @@ module.exports = async function (context, req) {
 
   if (method === "GET") {
     const result = await query(
-      "SELECT id, image_url, prompt, user_script, style_prompt, style_id, created_at FROM history WHERE tenant_id = $1 ORDER BY created_at DESC",
-      [identity.tenantId]
+      "SELECT id, image_url, prompt, user_script, style_prompt, style_id, created_at FROM history WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC",
+      [identity.tenantId, identity.userId]
     );
     const items = result.rows.map((row) => ({
       id: row.id,
@@ -81,8 +81,8 @@ module.exports = async function (context, req) {
       return;
     }
     const result = await query(
-      "DELETE FROM history WHERE id = $1 AND tenant_id = $2 RETURNING id",
-      [id, identity.tenantId]
+      "DELETE FROM history WHERE id = $1 AND tenant_id = $2 AND user_id = $3 RETURNING id",
+      [id, identity.tenantId, identity.userId]
     );
     if (result.rows.length === 0) {
       context.res = error("找不到 history", "not_found", 404);

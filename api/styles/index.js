@@ -30,8 +30,8 @@ module.exports = async function (context, req) {
 
   if (method === "GET") {
     const result = await query(
-      "SELECT id, name, prompt, description, tags, preview_url, created_at FROM styles WHERE tenant_id = $1 ORDER BY created_at DESC",
-      [identity.tenantId]
+      "SELECT id, name, prompt, description, tags, preview_url, created_at FROM styles WHERE tenant_id = $1 AND created_by = $2 ORDER BY created_at DESC",
+      [identity.tenantId, identity.userId]
     );
     const items = result.rows.map((row) => ({
       id: row.id,
@@ -96,6 +96,7 @@ module.exports = async function (context, req) {
     }
 
     // 先解除 history 表中的關聯 (Foreign Key Constraint)
+    // 這裡只解除該使用者自己的 history 關聯，避免影響他人（雖然理論上 style 不應被他人引用）
     await query(
       "UPDATE history SET style_id = NULL WHERE style_id = $1 AND tenant_id = $2",
       [targetId, identity.tenantId]
@@ -103,11 +104,11 @@ module.exports = async function (context, req) {
 
     // 再刪除 style
     const result = await query(
-      "DELETE FROM styles WHERE id = $1 AND tenant_id = $2 RETURNING id",
-      [targetId, identity.tenantId]
+      "DELETE FROM styles WHERE id = $1 AND tenant_id = $2 AND created_by = $3 RETURNING id",
+      [targetId, identity.tenantId, identity.userId]
     );
     if (result.rows.length === 0) {
-      context.res = error("找不到 style", "not_found", 404);
+      context.res = error("找不到 style 或無權限刪除", "not_found", 404);
       return;
     }
     context.res = ok(null, 204);
