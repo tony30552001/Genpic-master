@@ -78,6 +78,16 @@ export default function useHistory({ user }) {
     },
     [user]
   );
+  const deleteHistoryItems = useCallback(
+    async (itemIds) => {
+      if (!user || !itemIds || itemIds.length === 0) return;
+      // 這裡暫時使用 Promise.all 併發刪除
+      await Promise.all(itemIds.map((id) => removeHistoryItem(id)));
+      const items = await listHistory();
+      setHistoryItems(items || []);
+    },
+    [user]
+  );
 
   return {
     historyItems,
