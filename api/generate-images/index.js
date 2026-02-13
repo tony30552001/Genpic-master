@@ -94,9 +94,10 @@ module.exports = async function (context, req) {
     context.res = ok({
       imageUrl: `data:${mimeType};base64,${base64Image}`,
       aspectRatio: aspectRatio || "16:9",
-      prompt: finalPrompt,
+      prompt: textPrompt,
     });
   } catch (err) {
-    context.res = error("生成失敗", "generation_failed", 502);
+    context.log.error("Image generation failed:", err);
+    context.res = error("生成失敗: " + err.message, "generation_failed", 502);
   }
 };
