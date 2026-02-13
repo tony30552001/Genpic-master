@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Bookmark, CheckSquare, Search, Trash2, Wand2, X } from "lucide-react";
+import { Bookmark, CheckSquare, Search, Trash2, Wand2, X, ArrowRightLeft } from "lucide-react";
 import HistoryCard from "./HistoryCard";
+import ComparisonView from "./ComparisonView";
 
 export default function HistoryPanel({
   historyItems,
@@ -14,6 +15,7 @@ export default function HistoryPanel({
 }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showComparison, setShowComparison] = useState(false);
 
   const styleMap = (savedStyles || []).reduce((acc, style) => {
     acc[style.id] = style;
@@ -43,6 +45,7 @@ export default function HistoryPanel({
   const toggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
     setSelectedIds(new Set());
+    setShowComparison(false);
   };
 
   const toggleSelect = (id) => {
@@ -71,6 +74,17 @@ export default function HistoryPanel({
       setSelectedIds(new Set());
     }
   };
+
+  const handleCompare = () => {
+    if (selectedIds.size !== 2) {
+      alert("請選擇 2 筆紀錄進行比對");
+      return;
+    }
+    setShowComparison(true);
+  };
+
+  // 取得選取的 items 供比對使用
+  const selectedItems = filtered.filter(item => selectedIds.has(item.id));
 
   return (
     <div className="space-y-5">
@@ -127,8 +141,26 @@ export default function HistoryPanel({
               <Trash2 className="w-3.5 h-3.5" />
               刪除選取項目
             </button>
+            <button
+              onClick={handleCompare}
+              disabled={selectedIds.size !== 2}
+              className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+              title="請選擇 2 筆紀錄進行比對"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+              比對 (2)
+            </button>
           </div>
         </div>
+      )}
+
+      {/* 比對與結果顯示區塊 */}
+      {showComparison && selectedItems.length === 2 && (
+        <ComparisonView
+          item1={selectedItems[0]}
+          item2={selectedItems[1]}
+          onClose={() => setShowComparison(false)}
+        />
       )}
 
       {/* 結果計數與操作按鈕 */}
@@ -191,5 +223,5 @@ export default function HistoryPanel({
         </div>
       )}
     </div>
-  ); // return end
+  );
 }
