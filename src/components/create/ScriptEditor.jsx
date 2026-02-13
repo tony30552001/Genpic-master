@@ -322,14 +322,14 @@ export default function ScriptEditor({
 
       {/* Editor.js 容器 — 乾淨無邊框排版 */}
       <div
-        className="min-h-[240px] md:min-h-[360px] rounded-xl overflow-hidden"
+        className="min-h-[240px] md:min-h-[360px] rounded-xl"
         onFocus={onFocus}
         onBlur={onBlur}
       >
         <div
           ref={holderRef}
           id="editorjs-holder"
-          className="editorjs-container py-3"
+          className="editorjs-container py-3 pl-4 md:pl-14"
         />
       </div>
 
