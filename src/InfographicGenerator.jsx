@@ -501,6 +501,9 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                                 onFocus={() => setIsInputFocused(true)}
                                                 onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
                                                 hideGenerate
+                                                savedStyles={savedStyles}
+                                                analyzedStyle={analyzedStyle}
+                                                onApplyStyle={applySavedStyle}
                                             />
                                         )}
                                     </div>

@@ -1,115 +1,326 @@
-import React from "react";
-import { Layout, Monitor, Square, Smartphone, Wand2 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import "./editorjs.css";
+import EditorJS from "@editorjs/editorjs";
+import Header from "@editorjs/header";
+import List from "@editorjs/list";
+import Delimiter from "@editorjs/delimiter";
+import Marker from "@editorjs/marker";
+import InlineCode from "@editorjs/inline-code";
+import {
+  Palette,
+  PenLine,
+  Sparkles,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  Search,
+} from "lucide-react";
 
-const ASPECT_RATIOS = [
-  { id: "16:9", label: "16:9 簡報", icon: Monitor },
-  { id: "4:3", label: "4:3 傳統", icon: Layout },
-  { id: "1:1", label: "1:1 社群", icon: Square },
-  { id: "9:16", label: "9:16 手機", icon: Smartphone },
-];
-
-const IMAGE_SIZES = [
-  { id: "1K", label: "1K" },
-  { id: "2K", label: "2K" },
-  { id: "4K", label: "4K" },
-];
-
+/**
+ * ScriptEditor — 整合 Editor.js 的內容編輯器
+ * 支援區塊式編輯、風格庫快速選取
+ */
 export default function ScriptEditor({
   userScript,
   onUserScriptChange,
   onFocus,
   onBlur,
-  aspectRatio,
-  onAspectRatioChange,
-  imageSize,
-  onImageSizeChange,
-  isGenerating,
-  onGenerate,
   hideGenerate = false,
+  // 新增：風格庫相關 props
+  savedStyles = [],
+  analyzedStyle,
+  onApplyStyle,
 }) {
+  const editorRef = useRef(null);
+  const holderRef = useRef(null);
+  const isInitializing = useRef(false);
+  const skipNextChange = useRef(false);
+  const [showStylePicker, setShowStylePicker] = useState(false);
+  const [styleSearch, setStyleSearch] = useState("");
+  const [selectedStyleId, setSelectedStyleId] = useState(null);
+  const [charCount, setCharCount] = useState(userScript?.length || 0);
+
+  // 將 Editor.js blocks 轉換為純文字
+  const blocksToText = useCallback((blocks) => {
+    return blocks
+      .map((block) => {
+        switch (block.type) {
+          case "header":
+            return block.data?.text || "";
+          case "paragraph":
+            return (block.data?.text || "").replace(/<[^>]+>/g, "");
+          case "list": {
+            const items = block.data?.items || [];
+            return items
+              .map((item) => {
+                const text = typeof item === "string" ? item : item?.content || "";
+                return `• ${text.replace(/<[^>]+>/g, "")}`;
+              })
+              .join("\n");
+          }
+          case "delimiter":
+            return "---";
+          default:
+            return block.data?.text || "";
+        }
+      })
+      .filter(Boolean)
+      .join("\n\n");
+  }, []);
+
+  // 將純文字轉換為 Editor.js blocks
+  const textToBlocks = useCallback((text) => {
+    if (!text || !text.trim()) return [];
+
+    const paragraphs = text.split(/\n\n+/);
+    return paragraphs.map((p) => ({
+      type: "paragraph",
+      data: { text: p.replace(/\n/g, "<br>") },
+    }));
+  }, []);
+
+  // 初始化 Editor.js
+  useEffect(() => {
+    if (!holderRef.current || isInitializing.current) return;
+    isInitializing.current = true;
+
+    const initEditor = async () => {
+      // 如果已有 instance，先銷毀
+      if (editorRef.current) {
+        try {
+          await editorRef.current.destroy();
+        } catch (e) {
+          // ignore
+        }
+        editorRef.current = null;
+      }
+
+      const editor = new EditorJS({
+        holder: holderRef.current,
+        placeholder: "描述你想生成的畫面內容...\n可用 / 選擇區塊類型，或直接打字",
+        autofocus: false,
+        minHeight: 120,
+        tools: {
+          header: {
+            class: Header,
+            inlineToolbar: true,
+            config: {
+              placeholder: "標題",
+              levels: [2, 3],
+              defaultLevel: 2,
+            },
+          },
+          list: {
+            class: List,
+            inlineToolbar: true,
+          },
+          delimiter: Delimiter,
+          marker: {
+            class: Marker,
+            shortcut: "CMD+SHIFT+M",
+          },
+          inlineCode: {
+            class: InlineCode,
+            shortcut: "CMD+SHIFT+C",
+          },
+        },
+        data: {
+          blocks: userScript ? textToBlocks(userScript) : [],
+        },
+        onChange: async (api) => {
+          if (skipNextChange.current) {
+            skipNextChange.current = false;
+            return;
+          }
+          try {
+            const data = await api.saver.save();
+            const text = blocksToText(data.blocks);
+            setCharCount(text.length);
+            onUserScriptChange(text);
+          } catch (e) {
+            // ignore save errors during transitions
+          }
+        },
+        onReady: () => {
+          isInitializing.current = false;
+        },
+      });
+
+      editorRef.current = editor;
+    };
+
+    initEditor();
+
+    return () => {
+      if (editorRef.current) {
+        try {
+          editorRef.current.destroy();
+        } catch (e) {
+          // ignore
+        }
+        editorRef.current = null;
+      }
+      isInitializing.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 篩選風格
+  const filteredStyles = savedStyles.filter((style) => {
+    const q = styleSearch.toLowerCase();
+    return (
+      !q ||
+      style.name.toLowerCase().includes(q) ||
+      style.tags?.some((tag) => tag.toLowerCase().includes(q))
+    );
+  });
+
+  // 套用風格
+  const handleApplyStyle = (style) => {
+    setSelectedStyleId(style.id);
+    onApplyStyle?.(style);
+    setShowStylePicker(false);
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="script-input" className="text-sm font-semibold">
-          劇情描述
-        </Label>
-        <p className="text-xs text-muted-foreground">
-          描述你想生成的畫面內容，包含人物、場景、動作和氛圍。越詳細越好。
-        </p>
+    <div className="space-y-3">
+      {/* 標題與風格選取 */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+            <PenLine className="w-4 h-4 text-blue-500" />
+            內容描述
+          </label>
+          <p className="text-xs text-slate-400">
+            描述你想生成的畫面，包含人物、場景、動作和氛圍
+          </p>
+        </div>
       </div>
 
-      <Textarea
-        id="script-input"
-        value={userScript}
-        onChange={(e) => onUserScriptChange(e.target.value)}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        placeholder="例如：一位穿著西裝的員工正在向團隊展示數據圖表，背景是現代化的辦公室，會議桌上擺著筆電和咖啡，氣氛積極向上..."
-        className="min-h-[200px] md:min-h-[320px] resize-y text-sm"
-      />
+      {/* 目前套用的風格 */}
+      {analyzedStyle && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+          <Palette className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+          <span className="text-xs text-blue-700 line-clamp-1 flex-1">
+            已套用風格
+          </span>
+          <Check className="w-3.5 h-3.5 text-blue-500" />
+        </div>
+      )}
 
-      <div className="text-xs text-muted-foreground text-right">
-        {userScript.length} 字
-      </div>
-
-      {/* Legacy: 獨立使用時仍顯示比例/解析度/生成按鈕 */}
-      {!hideGenerate && (
-        <>
-          <div className="flex gap-2 mb-2 p-1 bg-muted rounded-lg border border-border">
-            {ASPECT_RATIOS.map((ratio) => (
-              <button
-                key={ratio.id}
-                onClick={() => onAspectRatioChange(ratio.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-md transition-all ${aspectRatio === ratio.id
-                    ? "bg-background text-primary font-bold shadow-sm border border-border"
-                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                  }`}
-                title={ratio.label}
-              >
-                <ratio.icon className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">{ratio.id}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">解析度</span>
-            <div className="flex gap-2">
-              {IMAGE_SIZES.map((size) => (
-                <button
-                  key={size.id}
-                  onClick={() => onImageSizeChange(size.id)}
-                  className={`px-2.5 py-1 rounded-md border text-xs transition-all ${imageSize === size.id
-                      ? "bg-background text-primary font-semibold border-border shadow-sm"
-                      : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted"
-                    }`}
-                  title={size.label}
-                >
-                  {size.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
+      {/* 風格快速選取列 */}
+      {savedStyles.length > 0 && (
+        <div className="relative">
           <button
-            onClick={onGenerate}
-            disabled={!userScript || isGenerating}
-            className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 transform active:scale-[0.98]"
+            onClick={() => setShowStylePicker(!showStylePicker)}
+            className="flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 px-3 py-2 rounded-lg transition-all w-full justify-between"
           >
-            {isGenerating ? (
-              <span className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 animate-spin" /> AI 生成中...
-              </span>
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              從風格庫選擇風格
+              <span className="text-slate-400">({savedStyles.length})</span>
+            </span>
+            {showStylePicker ? (
+              <ChevronUp className="w-3.5 h-3.5" />
             ) : (
-              <span className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5" /> 開始生成圖片
-              </span>
+              <ChevronDown className="w-3.5 h-3.5" />
             )}
           </button>
-        </>
+
+          {/* 風格選取下拉面板 */}
+          {showStylePicker && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-[320px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+              {/* 搜尋 */}
+              <div className="sticky top-0 bg-white border-b border-slate-100 px-3 py-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                  <input
+                    type="text"
+                    placeholder="搜尋風格..."
+                    value={styleSearch}
+                    onChange={(e) => setStyleSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:border-blue-400 focus:ring-1 focus:ring-blue-400/30 outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+
+              {/* 風格列表 */}
+              <div className="overflow-y-auto flex-1 py-1">
+                {filteredStyles.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400">
+                    找不到符合的風格
+                  </div>
+                ) : (
+                  filteredStyles.map((style) => (
+                    <button
+                      key={style.id}
+                      onClick={() => handleApplyStyle(style)}
+                      className={`w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors flex items-start gap-3 ${selectedStyleId === style.id ? "bg-blue-50" : ""
+                        }`}
+                    >
+                      {/* 縮圖 */}
+                      {style.previewUrl ? (
+                        <img
+                          src={style.previewUrl}
+                          alt=""
+                          className="w-10 h-10 rounded-md object-cover shrink-0 border border-slate-200"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-md bg-slate-100 shrink-0 flex items-center justify-center">
+                          <Palette className="w-4 h-4 text-slate-300" />
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-slate-700 truncate">
+                            {style.name}
+                          </span>
+                          {selectedStyleId === style.id && (
+                            <Check className="w-3 h-3 text-blue-500 shrink-0" />
+                          )}
+                        </div>
+                        {style.tags && style.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {style.tags.slice(0, 3).map((tag, i) => (
+                              <span
+                                key={i}
+                                className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       )}
+
+      {/* Editor.js 容器 */}
+      <div
+        className="min-h-[240px] md:min-h-[320px] bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400/20 transition-all"
+        onFocus={onFocus}
+        onBlur={onBlur}
+      >
+        <div
+          ref={holderRef}
+          id="editorjs-holder"
+          className="editorjs-container px-4 py-3"
+        />
+      </div>
+
+      {/* 字數統計 */}
+      <div className="text-xs text-slate-400 text-right px-1">
+        {charCount} 字
+      </div>
     </div>
   );
 }
