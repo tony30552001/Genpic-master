@@ -57,9 +57,8 @@ export default function useImageGeneration() {
         };
         const langDirective = imageLanguage ? (LANG_DIRECTIVES[imageLanguage] || '') : '';
 
-        const finalPrompt = `Create an image with the following style: ${stylePrompt || "High quality, professional corporate style"
-          }. The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.${langDirective ? ` ${langDirective}` : ''
-          }`;
+        const stylePart = stylePrompt ? `Create an image with the following style: ${stylePrompt}. ` : "";
+        const finalPrompt = `${stylePart}The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.${langDirective ? ` ${langDirective}` : ''}`;
 
         const result = await generateImage({
           prompt: finalPrompt,
