@@ -1,6 +1,6 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel } = require("../_shared/gemini");
+const { getModel, parseGeminiResponse } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
 
 const OPTIMIZE_PROMPT_SYSTEM_MESSAGE = `
@@ -68,17 +68,15 @@ Style Context: "${styleContext || '無特定風格 (General)'}"
             responseMimeType: "application/json"
         });
 
-        // 6. Parse Result
-        const responseText = result.response.text();
+        // 6. Parse Result using shared utility
         let data;
         try {
-            data = JSON.parse(responseText);
+            data = parseGeminiResponse(result);
         } catch (e) {
-            context.log.error("Failed to parse JSON:", responseText);
-            // Fallback if JSON parsing fails, though responseMimeType should prevent this
+            context.log.error("Failed to parse Gemini response:", e);
             data = {
                 optimizedPrompt: userScript, // Fallback to original
-                explanation: "優化失敗，請重試。"
+                explanation: "優化回應解析失敗，請稍後重試。"
             };
         }
 
