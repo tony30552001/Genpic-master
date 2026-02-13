@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, Palette, PenLine, LogIn, LogOut, User
+    FileText, Palette, PenLine, LogIn, LogOut, User, Settings
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -24,6 +24,7 @@ import HistoryPanel from './components/history/HistoryPanel';
 import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
 import GenerateBar from './components/create/GenerateBar';
+import SettingsPanel from './components/settings/SettingsPanel';
 
 export default function InfographicGenerator({ initialTab = 'create' }) {
     // --- State Management ---
@@ -39,6 +40,11 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const [uploadProgress, setUploadProgress] = useState(0);
 
     const [userScript, setUserScript] = useState('');
+
+    // 全域設定
+    const [imageLanguage, setImageLanguage] = useState(() => {
+        try { return localStorage.getItem('genpic_image_language') || 'en'; } catch { return 'en'; }
+    });
 
     // 風格設定相關
     const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -192,9 +198,14 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const handleStyleTagsChange = (value) => { setNewStyleTags(value); setIsStyleTagsTouched(true); };
     const handleClearStyle = () => { clearStyle(); setNewStyleName(''); setNewStyleTags(''); setIsStyleNameTouched(false); setIsStyleTagsTouched(false); };
 
+    const handleLanguageChange = (lang) => {
+        setImageLanguage(lang);
+        try { localStorage.setItem('genpic_image_language', lang); } catch { }
+    };
+
     const generateInfographic = async () => {
         try {
-            const { imageUrl, finalPrompt } = await generateImage({ userScript, analyzedStyle, aspectRatio, imageSize });
+            const { imageUrl, finalPrompt } = await generateImage({ userScript, analyzedStyle, aspectRatio, imageSize, imageLanguage });
             await saveHistoryItem({ imageUrl, userScript, stylePrompt: analyzedStyle, fullPrompt: finalPrompt, styleId: analysisResultData?.styleId || null });
             setErrorMsg('');
         } catch (err) {
@@ -312,6 +323,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                             { id: 'create', label: '製作區', icon: Wand2 },
                             { id: 'styles', label: '風格庫', icon: Bookmark },
                             { id: 'history', label: '紀錄', icon: History },
+                            { id: 'settings', label: '設定', icon: Settings },
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -373,6 +385,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                         { id: 'create', label: '製作區', icon: Wand2 },
                         { id: 'styles', label: '風格庫', icon: Bookmark },
                         { id: 'history', label: '紀錄', icon: History },
+                        { id: 'settings', label: '設定', icon: Settings },
                     ].map((tab) => (
                         <button
                             key={tab.id}
@@ -607,6 +620,16 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                 onGoStyles={() => setActiveTab('styles')}
                             />
                         </div>
+                    </div>
+                )}
+
+                {/* ─── Settings Tab ─── */}
+                {activeTab === 'settings' && (
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        <SettingsPanel
+                            imageLanguage={imageLanguage}
+                            onImageLanguageChange={handleLanguageChange}
+                        />
                     </div>
                 )}
             </main>

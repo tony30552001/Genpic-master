@@ -12,9 +12,12 @@ import {
   Wand2,
   Check,
   X,
-  GripHorizontal,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,8 +26,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
 /**
- * 文件場景列表元件（Trello 風格水平看板佈局）
- * 場景卡片水平排列，可左右捲動
+ * 文件場景列表元件（Trello 風格水平看板佈局 + 展開/收合）
+ * 場景卡片水平排列，可左右捲動，可展開查看完整內容
  */
 export default function DocumentScenes({
   documentResult,
@@ -38,6 +41,8 @@ export default function DocumentScenes({
   const [editingScene, setEditingScene] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [generatingIndex, setGeneratingIndex] = useState(null);
+  const [expandedCards, setExpandedCards] = useState(new Set());
+  const [allExpanded, setAllExpanded] = useState(false);
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -75,9 +80,34 @@ export default function DocumentScenes({
     el.scrollBy({ left: direction * cardWidth, behavior: "smooth" });
   };
 
+  // 展開/收合
+  const toggleExpand = (index) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllExpanded = () => {
+    if (allExpanded) {
+      setExpandedCards(new Set());
+      setAllExpanded(false);
+    } else {
+      setExpandedCards(new Set(scenes.map((_, i) => i)));
+      setAllExpanded(true);
+    }
+  };
+
   const startEditing = (scene, index) => {
     setEditingScene(index);
     setEditForm({ ...scene });
+    // 展開該卡片以便編輯
+    setExpandedCards((prev) => new Set(prev).add(index));
   };
 
   const saveEditing = (index) => {
@@ -150,6 +180,18 @@ export default function DocumentScenes({
 
               {/* 操作按鈕 */}
               <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleAllExpanded}
+                  className="text-xs h-8 gap-1"
+                >
+                  {allExpanded ? (
+                    <><Minimize2 className="h-3 w-3" /> 全部收合</>
+                  ) : (
+                    <><Maximize2 className="h-3 w-3" /> 全部展開</>
+                  )}
+                </Button>
                 <Button variant="outline" size="sm" onClick={onClear} disabled={isGenerating} className="text-xs h-8">
                   清除分析
                 </Button>
@@ -201,11 +243,13 @@ export default function DocumentScenes({
             const isEditing = editingScene === index;
             const isThisGenerating = generatingIndex === index;
             const sceneImage = scene.generatedImage;
+            const isExpanded = expandedCards.has(index);
 
             return (
               <div
                 key={index}
-                className="snap-start shrink-0 w-[300px] sm:w-[320px] md:w-[340px] flex flex-col"
+                className={`snap-start shrink-0 flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? "w-[420px] sm:w-[480px] md:w-[540px]" : "w-[300px] sm:w-[320px] md:w-[340px]"
+                  }`}
               >
                 <Card className="flex flex-col h-full overflow-hidden transition-all hover:shadow-lg border-border/60 group">
                   {/* 卡片標題 */}
@@ -220,16 +264,26 @@ export default function DocumentScenes({
                       )}
                     </div>
                     {/* 操作按鈕 */}
-                    <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-0.5 shrink-0">
                       <Button
-                        variant="ghost" size="icon" className="h-7 w-7"
+                        variant="ghost" size="icon"
+                        className={`h-7 w-7 transition-opacity ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                        onClick={() => toggleExpand(index)}
+                        title={isExpanded ? "收合" : "展開"}
+                      >
+                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon"
+                        className={`h-7 w-7 transition-opacity ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         onClick={() => startEditing(scene, index)}
                         title="編輯場景"
                       >
                         <Edit2 className="h-3 w-3" />
                       </Button>
                       <Button
-                        variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                        variant="ghost" size="icon"
+                        className={`h-7 w-7 text-destructive hover:text-destructive transition-opacity ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         onClick={() => onRemoveScene(index)}
                         title="刪除場景"
                       >
@@ -287,11 +341,14 @@ export default function DocumentScenes({
                     )}
                   </div>
 
-                  {/* 場景內容 */}
-                  <CardContent className="flex-1 p-3 overflow-y-auto min-h-0" style={{ maxHeight: "calc(100% - 180px)" }}>
+                  {/* 場景內容 — 可展開/收合 */}
+                  <CardContent
+                    className={`flex-1 p-3 overflow-y-auto min-h-0 transition-all duration-300 ease-in-out ${isExpanded ? "" : "max-h-[160px]"
+                      }`}
+                  >
                     {isEditing ? (
                       /* 編輯模式 */
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <div>
                           <label className="text-[10px] font-medium text-muted-foreground">場景標題</label>
                           <Input
@@ -305,7 +362,8 @@ export default function DocumentScenes({
                           <Textarea
                             value={editForm.scene_description || ""}
                             onChange={(e) => setEditForm((prev) => ({ ...prev, scene_description: e.target.value }))}
-                            className="mt-0.5 text-xs" rows={3}
+                            className="mt-0.5 text-xs"
+                            rows={isExpanded ? 5 : 3}
                           />
                         </div>
                         <div>
@@ -313,9 +371,23 @@ export default function DocumentScenes({
                           <Textarea
                             value={editForm.visual_prompt || ""}
                             onChange={(e) => setEditForm((prev) => ({ ...prev, visual_prompt: e.target.value }))}
-                            className="mt-0.5 font-mono text-[10px]" rows={3}
+                            className="mt-0.5 font-mono text-[10px]"
+                            rows={isExpanded ? 5 : 3}
                           />
                         </div>
+                        {isExpanded && editForm.key_elements && (
+                          <div>
+                            <label className="text-[10px] font-medium text-muted-foreground">關鍵元素（逗號分隔）</label>
+                            <Input
+                              value={(editForm.key_elements || []).join(", ")}
+                              onChange={(e) => setEditForm((prev) => ({
+                                ...prev,
+                                key_elements: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                              }))}
+                              className="mt-0.5 h-8 text-xs"
+                            />
+                          </div>
+                        )}
                         <div className="flex gap-1.5 pt-1">
                           <Button size="sm" className="h-7 text-xs" onClick={() => saveEditing(index)}>
                             <Check className="h-3 w-3 mr-1" /> 儲存
@@ -330,11 +402,13 @@ export default function DocumentScenes({
                       <div className="space-y-2">
                         <div>
                           <p className="text-[10px] font-medium text-muted-foreground mb-0.5">場景描述</p>
-                          <p className="text-xs text-foreground leading-relaxed line-clamp-4">{scene.scene_description}</p>
+                          <p className={`text-xs text-foreground leading-relaxed ${isExpanded ? "" : "line-clamp-3"}`}>
+                            {scene.scene_description}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[10px] font-medium text-muted-foreground mb-0.5">英文 Prompt</p>
-                          <p className="text-[10px] text-muted-foreground bg-muted/60 p-2 rounded font-mono leading-relaxed line-clamp-3">
+                          <p className={`text-[10px] text-muted-foreground bg-muted/60 p-2 rounded font-mono leading-relaxed ${isExpanded ? "" : "line-clamp-3"}`}>
                             {scene.visual_prompt}
                           </p>
                         </div>
@@ -350,6 +424,23 @@ export default function DocumentScenes({
                             </div>
                           </div>
                         )}
+                        {isExpanded && scene.mood && (
+                          <div>
+                            <p className="text-[10px] font-medium text-muted-foreground mb-0.5">氛圍</p>
+                            <p className="text-xs text-foreground">{scene.mood}</p>
+                          </div>
+                        )}
+                        {/* 展開/收合按鈕 */}
+                        <button
+                          onClick={() => toggleExpand(index)}
+                          className="text-[10px] text-primary hover:text-primary/80 font-medium flex items-center gap-0.5 pt-1 transition-colors"
+                        >
+                          {isExpanded ? (
+                            <><ChevronUp className="h-3 w-3" /> 收合內容</>
+                          ) : (
+                            <><ChevronDown className="h-3 w-3" /> 展開完整內容</>
+                          )}
+                        </button>
                       </div>
                     )}
                   </CardContent>
