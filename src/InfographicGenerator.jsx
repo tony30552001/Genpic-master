@@ -111,7 +111,11 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
             setIsUploading(true);
             setUploadProgress(0);
             const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "-");
-            const sas = await requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
+            // 加入超時保護，避免 auth 過期時 Promise 永遠 pending
+            const sasPromise = requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('上傳請求逾時，請確認網路連線或重新登入')), 30000));
+            const sas = await Promise.race([sasPromise, timeoutPromise]);
+            if (!sas || !sas.blobUrl || !sas.sasToken) throw new Error('無法取得上傳授權，請確認已登入');
             const blobUrl = await uploadBlobWithProgress({ blobUrl: sas.blobUrl, sasToken: sas.sasToken, file, contentType: file.type, onProgress: setUploadProgress });
             const blobSasUrl = `${sas.blobUrl}?${sas.sasToken}`;
             const reader = new FileReader();
@@ -132,8 +136,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         } catch (err) {
             console.error("Upload failed:", err);
             setErrorMsg(err.message || "上傳失敗，請稍後再試。");
-        } finally {
-            if (!referencePreview) setIsUploading(false);
+            setIsUploading(false);
+            setUploadProgress(0);
         }
     };
 
@@ -159,7 +163,11 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
             setIsUploadingContent(true);
             setContentUploadProgress(0);
             const safeName = `content-${Date.now()}-${file.name}`.replace(/\s+/g, "-");
-            const sas = await requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
+            // 加入超時保護，避免 auth 過期時 Promise 永遠 pending
+            const sasPromise = requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('上傳請求逾時，請確認網路連線或重新登入')), 30000));
+            const sas = await Promise.race([sasPromise, timeoutPromise]);
+            if (!sas || !sas.blobUrl || !sas.sasToken) throw new Error('無法取得上傳授權，請確認已登入');
             const blobUrl = await uploadBlobWithProgress({ blobUrl: sas.blobUrl, sasToken: sas.sasToken, file, contentType: file.type, onProgress: setContentUploadProgress });
             const blobSasUrl = `${sas.blobUrl}?${sas.sasToken}`;
             const reader = new FileReader();
@@ -183,6 +191,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
             console.error("Content Upload failed:", err);
             setErrorMsg(err.message || "上傳失敗，請稍後再試。");
             setIsUploadingContent(false);
+            setContentUploadProgress(0);
         }
     };
 

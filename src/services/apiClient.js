@@ -1,6 +1,14 @@
 import { acquireAccessToken } from "./authService";
 import { AUTH_BYPASS } from "../config";
 
+// 認證過期專用錯誤類別
+export class AuthExpiredError extends Error {
+  constructor(message = '登入已過期，請重新登入') {
+    super(message);
+    this.name = 'AuthExpiredError';
+  }
+}
+
 // Google Token 過期時的通知回呼 (由 AuthContext 設定)
 let onAuthExpiredCallback = null;
 
@@ -82,8 +90,8 @@ const requestWithRetry = async (url, baseOptions, options) => {
   } catch (error) {
     // 當 authExpired 時，onAuthExpiredCallback() 已經在 buildHeaders 中被觸發
     if (error.message.includes("請重新登入") || error.message.includes("無法取得認證資訊")) {
-      // 停止該請求的後續執行，避免產生 Uncaught (in promise) Error
-      return new Promise(() => { });
+      // 拋出 AuthExpiredError，讓呼叫端能正確 catch 並重置 UI 狀態
+      throw new AuthExpiredError(error.message);
     }
     throw new Error(`網路請求失敗: ${error.message}`);
   }
@@ -96,7 +104,7 @@ const requestWithRetry = async (url, baseOptions, options) => {
       if (onAuthExpiredCallback) {
         onAuthExpiredCallback();
       }
-      return new Promise(() => { });
+      throw new AuthExpiredError('Google 登入已過期，請重新登入');
     }
 
     // Microsoft 使用者：嘗試重新取得 Token 並重試一次
@@ -114,7 +122,7 @@ const requestWithRetry = async (url, baseOptions, options) => {
       if (onAuthExpiredCallback) {
         onAuthExpiredCallback();
       }
-      return new Promise(() => { });
+      throw new AuthExpiredError('認證失敗，請重新登入');
     }
   }
 
