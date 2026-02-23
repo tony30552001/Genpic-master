@@ -8,7 +8,7 @@ export default function ImagePreview({
   onDownload,
 }) {
   return (
-    <div className="relative flex items-center justify-center w-full h-full min-h-[500px] bg-slate-100 rounded-xl overflow-hidden">
+    <div className="relative flex items-center justify-center w-full h-full min-h-[200px] lg:min-h-[500px] bg-slate-100 rounded-xl overflow-hidden">
       {/* 棋盤格背景（透明度指示） */}
       {!generatedImage && !isGenerating && (
         <div

@@ -548,69 +548,47 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
                         {/* ─── Two-Column Layout (Controls + Preview) for other tabs ─── */}
                         {createSubTab !== 'document' && (
-                            <>
-                                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-0 lg:gap-6 px-4 lg:px-8 py-3">
+                            <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-5 gap-0 lg:gap-6 px-4 lg:px-8 py-3 overflow-y-auto lg:overflow-hidden custom-scrollbar">
 
-                                    {/* Left: Controls (takes 3/5 on large screens) */}
-                                    <div className="lg:col-span-3 overflow-y-auto custom-scrollbar pr-1">
-                                        {createSubTab === 'general' && (
-                                            <ScriptEditor
-                                                userScript={userScript}
-                                                onUserScriptChange={setUserScript}
-                                                onFocus={() => setIsInputFocused(true)}
-                                                onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
-                                                hideGenerate
-                                                savedStyles={savedStyles}
+                                {/* Left: Controls (takes 3/5 on large screens) */}
+                                <div className="lg:col-span-3 lg:overflow-y-auto lg:custom-scrollbar pr-1">
+                                    {createSubTab === 'general' && (
+                                        <ScriptEditor
+                                            userScript={userScript}
+                                            onUserScriptChange={setUserScript}
+                                            onFocus={() => setIsInputFocused(true)}
+                                            onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
+                                            hideGenerate
+                                            savedStyles={savedStyles}
 
-                                                // 風格與內容整合
-                                                analyzedStyle={analyzedStyle}
-                                                onApplyStyle={applySavedStyle}
-                                                onClearStyle={handleClearStyle}
+                                            // 風格與內容整合
+                                            analyzedStyle={analyzedStyle}
+                                            onApplyStyle={applySavedStyle}
+                                            onClearStyle={handleClearStyle}
 
-                                                contentImagePreview={contentImagePreview}
-                                                onContentImageUpload={handleContentImageUpload}
-                                                onClearContentImage={handleClearContentImage}
-                                                isUploadingContent={isUploadingContent}
+                                            contentImagePreview={contentImagePreview}
+                                            onContentImageUpload={handleContentImageUpload}
+                                            onClearContentImage={handleClearContentImage}
+                                            isUploadingContent={isUploadingContent}
 
-                                                // 風格分析 Props
-                                                isAnalyzing={isAnalyzing}
-                                                analysisPhase={analysisPhase}
-                                                analysisResultData={analysisResultData}
-                                                newStyleName={newStyleName}
-                                                newStyleTags={newStyleTags}
-                                                isSavingStyle={isSavingStyle}
-                                                onAnalyze={analyzeImageStyle}
-                                                onStyleNameChange={handleStyleNameChange}
-                                                onStyleTagsChange={handleStyleTagsChange}
-                                                onSaveStyle={saveCurrentStyle}
-                                            />
-                                        )}
-                                    </div>
-
-                                    {/* Right: Preview (takes 2/5 on large screens) */}
-                                    <div className="lg:col-span-2 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
-                                        {/* Decorative grid background */}
-                                        <div
-                                            className="absolute inset-0 opacity-[0.03]"
-                                            style={{
-                                                backgroundImage: 'linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)',
-                                                backgroundSize: '24px 24px'
-                                            }}
+                                            // 風格分析 Props
+                                            isAnalyzing={isAnalyzing}
+                                            analysisPhase={analysisPhase}
+                                            analysisResultData={analysisResultData}
+                                            newStyleName={newStyleName}
+                                            newStyleTags={newStyleTags}
+                                            isSavingStyle={isSavingStyle}
+                                            onAnalyze={analyzeImageStyle}
+                                            onStyleNameChange={handleStyleNameChange}
+                                            onStyleTagsChange={handleStyleTagsChange}
+                                            onSaveStyle={saveCurrentStyle}
                                         />
-                                        <div className="relative z-10 w-full max-w-2xl p-6">
-                                            <ImagePreview
-                                                generatedImage={generatedImage}
-                                                isGenerating={isGenerating}
-                                                analyzedStyle={analyzedStyle}
-                                                onDownload={handleDownload}
-                                            />
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
 
-                                {/* Mobile-only Preview (shows below controls) */}
-                                <div className="lg:hidden px-4 pb-3">
-                                    {generatedImage && (
+                                {/* Mobile-only Preview (shows below controls, inside the same scrollable container) */}
+                                {generatedImage && (
+                                    <div className="lg:hidden pb-3">
                                         <div className="rounded-xl bg-muted/40 border border-border/50 p-3">
                                             <ImagePreview
                                                 generatedImage={generatedImage}
@@ -619,9 +597,29 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                                 onDownload={handleDownload}
                                             />
                                         </div>
-                                    )}
+                                    </div>
+                                )}
+
+                                {/* Right: Preview (takes 2/5 on large screens) */}
+                                <div className="lg:col-span-2 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
+                                    {/* Decorative grid background */}
+                                    <div
+                                        className="absolute inset-0 opacity-[0.03]"
+                                        style={{
+                                            backgroundImage: 'linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)',
+                                            backgroundSize: '24px 24px'
+                                        }}
+                                    />
+                                    <div className="relative z-10 w-full max-w-2xl p-6">
+                                        <ImagePreview
+                                            generatedImage={generatedImage}
+                                            isGenerating={isGenerating}
+                                            analyzedStyle={analyzedStyle}
+                                            onDownload={handleDownload}
+                                        />
+                                    </div>
                                 </div>
-                            </>
+                            </div>
                         )}
 
                         {/* Fixed Bottom Generate Bar */}
