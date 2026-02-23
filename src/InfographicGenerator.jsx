@@ -13,7 +13,6 @@ import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import { requestBlobSas } from './services/storageService';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 
 
@@ -489,16 +488,16 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                         {(errorMsg || warningMsg) && (
                             <div className="shrink-0 px-4 lg:px-8 pt-3 space-y-2">
                                 {errorMsg && (
-                                    <Alert variant="destructive" className="py-2">
-                                        <AlertCircle className="h-4 w-4" />
-                                        <AlertDescription className="text-sm">{errorMsg}</AlertDescription>
-                                    </Alert>
+                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/50 bg-destructive/5 text-destructive">
+                                        <AlertCircle className="h-4 w-4 shrink-0" />
+                                        <span className="text-sm">{errorMsg}</span>
+                                    </div>
                                 )}
                                 {warningMsg && (
-                                    <Alert className="py-2 border-warning bg-warning/10">
-                                        <AlertCircle className="h-4 w-4 text-yellow-600" />
-                                        <AlertDescription className="text-sm text-yellow-700">{warningMsg}</AlertDescription>
-                                    </Alert>
+                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-yellow-300 bg-yellow-50">
+                                        <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0" />
+                                        <span className="text-sm text-yellow-700">{warningMsg}</span>
+                                    </div>
                                 )}
                             </div>
                         )}
