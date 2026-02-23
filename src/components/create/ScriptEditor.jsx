@@ -20,9 +20,11 @@ import {
   Wand2,
   Tag,
   Save,
+  LayoutTemplate,
 } from "lucide-react";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
+import SaveTemplateDialog from "../templates/SaveTemplateDialog";
 
 /**
  * ScriptEditor — 整合 Editor.js 的內容編輯器
@@ -55,6 +57,9 @@ export default function ScriptEditor({
   onStyleNameChange,
   onStyleTagsChange,
   onSaveStyle,
+  // 範本相關 Props
+  onSaveTemplate,
+  analyzedStyleForTemplate,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -70,6 +75,7 @@ export default function ScriptEditor({
   const [charCount, setCharCount] = useState(userScript?.length || 0);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [suggestionData, setSuggestionData] = useState(null);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
 
   // 將 Editor.js blocks 轉換為純文字
   const blocksToText = useCallback((blocks) => {
@@ -284,26 +290,60 @@ export default function ScriptEditor({
           </p>
         </div>
 
-        <button
-          onClick={handleSmartOptimize}
-          disabled={isOptimizing || !userScript?.trim()}
-          className={`
-            flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
-            ${!userScript?.trim()
-              ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-              : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-transparent shadow-sm hover:shadow-md hover:from-violet-600 hover:to-fuchsia-600'
-            }
-          `}
-          title="使用 AI 自動豐富畫面細節與提示詞"
-        >
-          {isOptimizing ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Wand2 className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-2">
+          {/* 存為範本按鈕 */}
+          {onSaveTemplate && (
+            <button
+              onClick={() => setShowSaveTemplate(!showSaveTemplate)}
+              disabled={!userScript?.trim()}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+                ${!userScript?.trim()
+                  ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-transparent shadow-sm hover:shadow-md hover:from-blue-600 hover:to-cyan-600'
+                }
+              `}
+              title="將當前內容與風格存為可重複使用的範本"
+            >
+              <LayoutTemplate className="w-3.5 h-3.5" />
+              存為範本
+            </button>
           )}
-          {isOptimizing ? "優化中..." : "AI 智能優化"}
-        </button>
+          {/* AI 智能優化按鈕 */}
+          <button
+            onClick={handleSmartOptimize}
+            disabled={isOptimizing || !userScript?.trim()}
+            className={`
+              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+              ${!userScript?.trim()
+                ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-transparent shadow-sm hover:shadow-md hover:from-violet-600 hover:to-fuchsia-600'
+              }
+            `}
+            title="使用 AI 自動豐富畫面細節與提示詞"
+          >
+            {isOptimizing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Wand2 className="w-3.5 h-3.5" />
+            )}
+            {isOptimizing ? "優化中..." : "AI 智能優化"}
+          </button>
+        </div>
       </div>
+
+      {/* 存為範本面板 */}
+      {showSaveTemplate && onSaveTemplate && (
+        <SaveTemplateDialog
+          userScript={userScript}
+          stylePrompt={analyzedStyleForTemplate || analyzedStyle || ''}
+          styleId={selectedStyleId}
+          onSave={async (data) => {
+            await onSaveTemplate(data);
+          }}
+          onClose={() => setShowSaveTemplate(false)}
+        />
+      )}
 
       {/* 內容參考圖片區塊 */}
       <div className="space-y-2">

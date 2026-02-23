@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import { apiDelete, apiGet, apiPost } from "./apiClient";
+import { apiDelete, apiGet, apiPost, apiPut } from "./apiClient";
 
 export const listHistory = async () =>
   apiGet(`${API_BASE_URL}/history`);
@@ -76,3 +76,18 @@ export const uploadFileToBlob = async (file, container = "uploads") => {
     blobName: sasResult.blobName,
   };
 };
+
+// ── Templates API ──
+
+export const listTemplates = async (category) =>
+  apiGet(`${API_BASE_URL}/templates${category ? `?category=${category}` : ''}`);
+
+export const addTemplate = async (templateData) =>
+  apiPost(`${API_BASE_URL}/templates`, templateData);
+
+export const updateTemplate = async (id, templateData) =>
+  apiPut(`${API_BASE_URL}/templates/${id}`, templateData);
+
+export const deleteTemplate = async (templateId) =>
+  apiDelete(`${API_BASE_URL}/templates/${templateId}`);
+

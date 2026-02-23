@@ -74,6 +74,14 @@ export async function apiPost(url, body, options = {}) {
   );
 }
 
+export async function apiPut(url, body, options = {}) {
+  return requestWithRetry(
+    url,
+    { method: "PUT", body: JSON.stringify(body ?? {}) },
+    options
+  );
+}
+
 export async function apiDelete(url, options = {}) {
   return requestWithRetry(url, { method: "DELETE" }, options);
 }

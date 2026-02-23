@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, Palette, PenLine, LogIn, LogOut, User, Settings
+    FileText, Palette, PenLine, LogIn, LogOut, User, Settings, LayoutTemplate
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -10,6 +10,7 @@ import useStyles from './hooks/useStyles';
 import useHistory from './hooks/useHistory';
 import useImageGeneration from './hooks/useImageGeneration';
 import useDocumentAnalysis from './hooks/useDocumentAnalysis';
+import useTemplates from './hooks/useTemplates';
 import { requestBlobSas } from './services/storageService';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -24,6 +25,7 @@ import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
+import TemplateLibrary from './components/templates/TemplateLibrary';
 
 export default function InfographicGenerator({ initialTab = 'create' }) {
     // --- State Management ---
@@ -72,6 +74,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         setNewStyleName, setNewStyleTags, saveStyle, deleteStyle, searchStyles, deleteStyles
     } = useStyles({ user });
     const { historyItems, saveHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
+    const { templates, saveTemplate, removeTemplate, removeTemplates } = useTemplates({ user });
 
     const {
         isAnalyzing: isAnalyzingDocument, analysisPhase: documentAnalysisPhase,
@@ -265,6 +268,22 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const handleStyleTagsChange = (value) => { setNewStyleTags(value); setIsStyleTagsTouched(true); };
     const handleClearStyle = () => { clearStyle(); setNewStyleName(''); setNewStyleTags(''); setIsStyleNameTouched(false); setIsStyleTagsTouched(false); };
 
+    // ─── Template Functions ───
+    const applyTemplate = (template) => {
+        if (template.userScript) setUserScript(template.userScript);
+        if (template.stylePrompt) {
+            setAnalyzedStyle(template.stylePrompt);
+            setAnalysisResultData({ style_prompt: template.stylePrompt });
+        }
+        setActiveTab('create');
+    };
+
+    const handleDeleteTemplate = async (id, e) => {
+        if (e) e.stopPropagation();
+        if (!user || !confirm('確定要刪除此範本嗎？')) return;
+        try { await removeTemplate(id); } catch (err) { console.error('Delete template failed:', err); }
+    };
+
     const handleLanguageChange = (lang) => {
         setImageLanguage(lang);
         try { localStorage.setItem('genpic_image_language', lang); } catch { }
@@ -396,6 +415,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                     <nav className="hidden sm:flex items-center gap-1 bg-white/10 backdrop-blur-sm rounded-lg p-1">
                         {[
                             { id: 'create', label: '製作區', icon: Wand2 },
+                            { id: 'templates', label: '範本', icon: LayoutTemplate },
                             { id: 'styles', label: '風格庫', icon: Bookmark },
                             { id: 'history', label: '紀錄', icon: History },
                             { id: 'settings', label: '設定', icon: Settings },
@@ -458,6 +478,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                 <div className="sm:hidden flex border-t border-white/20">
                     {[
                         { id: 'create', label: '製作區', icon: Wand2 },
+                        { id: 'templates', label: '範本', icon: LayoutTemplate },
                         { id: 'styles', label: '風格庫', icon: Bookmark },
                         { id: 'history', label: '紀錄', icon: History },
                         { id: 'settings', label: '設定', icon: Settings },
@@ -594,6 +615,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                             onStyleNameChange={handleStyleNameChange}
                                             onStyleTagsChange={handleStyleTagsChange}
                                             onSaveStyle={saveCurrentStyle}
+                                            onSaveTemplate={saveTemplate}
+                                            analyzedStyleForTemplate={analyzedStyle}
                                         />
                                     )}
                                 </div>
@@ -662,6 +685,20 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                 (createSubTab !== 'document' && !userScript && !contentImagePreview)
                             }
                         />
+                    </div>
+                )}
+
+                {/* ─── Templates Tab ─── */}
+                {activeTab === 'templates' && (
+                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-6 custom-scrollbar">
+                        <div className="max-w-5xl mx-auto">
+                            <TemplateLibrary
+                                templates={templates}
+                                onApplyTemplate={applyTemplate}
+                                onDeleteTemplate={handleDeleteTemplate}
+                                onDeleteTemplates={removeTemplates}
+                            />
+                        </div>
                     </div>
                 )}
 
