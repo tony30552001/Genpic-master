@@ -20,26 +20,26 @@ export const msalConfig = {
   },
   cache: {
     cacheLocation: "localStorage",
-    storeAuthStateInCookie: false,
+    // storeAuthStateInCookie: true 可解決部分瀏覽器在 Safari / 隱私模式下
+    // 因 SameSite Cookie 政策導致 iframe 靜默取 Token 失敗 (block_iframe_reload) 的問題
+    storeAuthStateInCookie: true,
   },
   system: {
+    // 避免在 iframe 內部發起額外的 redirect，防止無限重新載入
+    allowRedirectInIframe: false,
     loggerOptions: {
+      // 只顯示 Warning 及 Error，減少 console 噪音
+      logLevel: LogLevel.Warning,
       loggerCallback: (level, message, containsPii) => {
-        if (containsPii) {
-          return;
-        }
+        if (containsPii) return;
         switch (level) {
           case LogLevel.Error:
-            console.error(message);
-            return;
-          case LogLevel.Info:
-            console.info(message);
-            return;
-          case LogLevel.Verbose:
-            console.debug(message);
+            console.error('[MSAL]', message);
             return;
           case LogLevel.Warning:
-            console.warn(message);
+            console.warn('[MSAL]', message);
+            return;
+          default:
             return;
         }
       },

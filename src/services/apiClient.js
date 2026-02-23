@@ -3,9 +3,24 @@ import { AUTH_BYPASS } from "../config";
 
 // Google Token 過期時的通知回呼 (由 AuthContext 設定)
 let onAuthExpiredCallback = null;
+// 防重複觸發：避免多個並發請求同時失敗時重複通知
+let authExpiredNotified = false;
 
 export const setAuthExpiredHandler = (callback) => {
   onAuthExpiredCallback = callback;
+  // 設定新的 handler 時重置旗標（例如重新登入後）
+  authExpiredNotified = false;
+};
+
+/** 安全地觸發認證過期回呼，只呼叫一次 */
+const notifyAuthExpired = () => {
+  if (authExpiredNotified) return;
+  authExpiredNotified = true;
+  if (onAuthExpiredCallback) {
+    onAuthExpiredCallback();
+  }
+  // 5 秒後重置，允許使用者重新登入後再次偵測
+  setTimeout(() => { authExpiredNotified = false; }, 5000);
 };
 
 const buildHeaders = async (options) => {
@@ -19,17 +34,14 @@ const buildHeaders = async (options) => {
       const token = await acquireAccessToken();
       if (!token) {
         // Token 取得為空（例如 Google token 已過期被清除）
-        if (onAuthExpiredCallback) {
-          onAuthExpiredCallback();
-        }
+        notifyAuthExpired();
         throw new Error("登入已過期，請重新登入");
       }
       headers['X-Auth-Token'] = token;
     } catch (error) {
-      // 無法取得 token，觸發認證過期處理
-      if (onAuthExpiredCallback) {
-        onAuthExpiredCallback();
-      }
+      // acquireAccessToken 內部已處理 needsInteraction 情況
+      // 此處僅需通知 UI 即可
+      notifyAuthExpired();
       throw new Error(error.message || "無法取得認證資訊，請重新登入");
     }
   }
@@ -92,9 +104,7 @@ const requestWithRetry = async (url, baseOptions, options) => {
     const googleUser = localStorage.getItem('google_user');
     if (googleUser) {
       // Google Token 過期，觸發重新登入
-      if (onAuthExpiredCallback) {
-        onAuthExpiredCallback();
-      }
+      notifyAuthExpired();
       throw new Error("登入已過期，請重新登入");
     }
 
@@ -109,9 +119,7 @@ const requestWithRetry = async (url, baseOptions, options) => {
       return parseResponse(retryResponse);
     } catch (retryError) {
       // 重試失敗，觸發登出
-      if (onAuthExpiredCallback) {
-        onAuthExpiredCallback();
-      }
+      notifyAuthExpired();
       throw new Error("認證已過期，請重新登入");
     }
   }

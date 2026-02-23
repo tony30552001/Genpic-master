@@ -89,9 +89,31 @@ export const acquireAccessToken = async () => {
     });
     return result.idToken;
   } catch (error) {
-    // Silent 失敗時，不應自動彈窗，而是讓呼叫者決定如何處理
-    // 通常這表示需要重新導向到登入頁面
-    console.warn('無法靜默取得 Access Token，可能需要重新登入:', error.message);
+    console.warn('[Auth] 無法靜默取得 Access Token:', error.errorCode || error.message);
+
+    // InteractionRequiredAuthError：需要使用者互動（session 過期、MFA、consent 等）
+    // 此時自動導向登入，不應讓後續 API 請求繼續嘗試
+    const needsInteraction = [
+      'interaction_required',
+      'login_required',
+      'consent_required',
+      'block_iframe_reload',
+      'monitor_session_iframe_timeout',
+    ].some(code => (error.errorCode || '').includes(code));
+
+    if (needsInteraction) {
+      console.warn('[Auth] 需要重新登入，自動重新導向...');
+      // 延遲執行避免在 React 渲染過程中直接跳轉
+      setTimeout(() => {
+        msalInstance.loginRedirect({ ...loginRequest, account }).catch(() => {
+          // 若 redirect 失敗（例如在 iframe 內），僅記錄警告
+          console.warn('[Auth] loginRedirect 失敗，請手動重新整理頁面');
+        });
+      }, 100);
+      throw new Error("認證已過期，正在重新導向登入頁面...");
+    }
+
+    // 其他錯誤（例如 timed_out，可能是暫時性問題），讓呼叫者決定如何處理
     throw new Error("認證已過期，請重新登入");
   }
 };
