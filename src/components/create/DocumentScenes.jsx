@@ -14,6 +14,9 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Palette,
+  ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -259,9 +262,15 @@ export default function DocumentScenes({
   onGenerateAll,
   onClear,
   isGenerating = false,
+  // 風格相關 props
+  savedStyles = [],
+  analyzedStyle = "",
+  onApplyStyle,
+  onClearStyle,
 }) {
   const [generatingIndex, setGeneratingIndex] = useState(null);
   const [modalScene, setModalScene] = useState(null); // { scene, index }
+  const [showStylePicker, setShowStylePicker] = useState(false);
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -371,6 +380,143 @@ export default function DocumentScenes({
             )}
           </CardContent>
         </Card>
+
+        {/* ═══════ 風格選擇面板 ═══════ */}
+        <div className="mt-3">
+          <button
+            onClick={() => setShowStylePicker((v) => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+          >
+            <Palette className="h-4 w-4" />
+            <span>套用風格</span>
+            {analyzedStyle && (
+              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-primary/90">
+                已套用
+              </Badge>
+            )}
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${showStylePicker ? "rotate-180" : ""
+                }`}
+            />
+          </button>
+
+          {/* 目前套用的風格摘要（收合時也顯示） */}
+          {!showStylePicker && analyzedStyle && (
+            <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+              <p className="text-xs text-foreground truncate flex-1">
+                {analyzedStyle.length > 80 ? analyzedStyle.slice(0, 80) + "..." : analyzedStyle}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-destructive hover:text-destructive shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearStyle?.();
+                }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+
+          {/* 展開的風格選擇器 */}
+          {showStylePicker && (
+            <div className="mt-2 rounded-xl border border-border bg-background/80 backdrop-blur-sm shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-200">
+              {/* 已套用風格 */}
+              {analyzedStyle && (
+                <div className="px-4 py-3 bg-primary/5 border-b border-border/50">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-foreground">目前套用的風格</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
+                          {analyzedStyle}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs shrink-0 text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => {
+                        onClearStyle?.();
+                      }}
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      清除
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* 風格列表 */}
+              <div className="p-3">
+                {savedStyles.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Palette className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-xs">尚無收藏的風格</p>
+                    <p className="text-[10px] mt-1 text-muted-foreground/70">請在「一般創作」或「風格庫」中分析並收藏風格</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                    {savedStyles.map((style) => {
+                      const isActive = analyzedStyle === style.prompt;
+                      return (
+                        <button
+                          key={style.id}
+                          onClick={() => {
+                            onApplyStyle?.(style);
+                            setShowStylePicker(false);
+                          }}
+                          className={`group/style relative flex flex-col rounded-lg border overflow-hidden text-left transition-all duration-200 ${isActive
+                              ? "border-primary ring-2 ring-primary/20 shadow-md"
+                              : "border-border/60 hover:border-primary/40 hover:shadow-md"
+                            }`}
+                        >
+                          {/* 預覽圖 */}
+                          <div className="aspect-[4/3] bg-muted/30 overflow-hidden">
+                            {style.previewUrl ? (
+                              <img
+                                src={style.previewUrl}
+                                alt={style.name}
+                                className="w-full h-full object-cover group-hover/style:scale-105 transition-transform duration-300"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Palette className="w-6 h-6 text-muted-foreground/20" />
+                              </div>
+                            )}
+                            {isActive && (
+                              <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                <Check className="h-3 w-3 text-white" />
+                              </div>
+                            )}
+                          </div>
+                          {/* 名稱 */}
+                          <div className="p-1.5">
+                            <p className={`text-[11px] font-medium truncate ${isActive ? "text-primary" : "text-foreground"
+                              }`}>
+                              {style.name}
+                            </p>
+                            {style.tags?.length > 0 && (
+                              <p className="text-[9px] text-muted-foreground truncate mt-0.5">
+                                {style.tags.slice(0, 3).map(t => `#${t}`).join(" ")}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ═══════ 場景看板 — 水平捲動 + 點擊 popup ═══════ */}

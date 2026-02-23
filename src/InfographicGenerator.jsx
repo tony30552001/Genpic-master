@@ -540,6 +540,10 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                         onGenerateAll={handleGenerateAllScenes}
                                         onClear={clearDocument}
                                         isGenerating={isGenerating}
+                                        savedStyles={savedStyles}
+                                        analyzedStyle={analyzedStyle}
+                                        onApplyStyle={applySavedStyle}
+                                        onClearStyle={handleClearStyle}
                                     />
                                 ) : (
                                     <div className="max-w-3xl mx-auto py-8">
