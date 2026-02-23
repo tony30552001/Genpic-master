@@ -22,6 +22,7 @@ import {
   Save,
 } from "lucide-react";
 import { optimizePrompt } from "../../services/aiService";
+import PromptSuggestionPanel from "./PromptSuggestionPanel";
 
 /**
  * ScriptEditor — 整合 Editor.js 的內容編輯器
@@ -68,6 +69,7 @@ export default function ScriptEditor({
   const [selectedStyleInfo, setSelectedStyleInfo] = useState(null);
   const [charCount, setCharCount] = useState(userScript?.length || 0);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [suggestionData, setSuggestionData] = useState(null);
 
   // 將 Editor.js blocks 轉換為純文字
   const blocksToText = useCallback((blocks) => {
@@ -219,29 +221,24 @@ export default function ScriptEditor({
     onClearStyle?.();
   };
 
-  // AI 智能優化
+  // AI 智能優化 — 呼叫 API 取得建議，不直接替換
   const handleSmartOptimize = async () => {
     if (!userScript || !userScript.trim()) return;
     setIsOptimizing(true);
+    setSuggestionData(null);
     try {
-      // 1. 呼叫 API
       const result = await optimizePrompt({
         userScript,
         styleContext: analyzedStyle || selectedStyleInfo?.name || ""
       });
 
       if (result && result.optimizedPrompt) {
-        const newText = result.optimizedPrompt;
-
-        // 2. 更新 Editor.js 內容
-        if (editorRef.current) {
-          const newBlocks = textToBlocks(newText);
-          await editorRef.current.render({ blocks: newBlocks });
-        }
-
-        // 3. 更新上層狀態
-        onUserScriptChange(newText);
-        setCharCount(newText.length);
+        // 儲存建議資料，顯示預覽面板
+        setSuggestionData({
+          originalText: userScript,
+          optimizedText: result.optimizedPrompt,
+          explanation: result.explanation || "",
+        });
       }
     } catch (err) {
       console.error("Smart optimize failed:", err);
@@ -249,6 +246,28 @@ export default function ScriptEditor({
     } finally {
       setIsOptimizing(false);
     }
+  };
+
+  // 接受優化建議
+  const handleAcceptSuggestion = async () => {
+    if (!suggestionData) return;
+    const newText = suggestionData.optimizedText;
+
+    // 更新 Editor.js 內容
+    if (editorRef.current) {
+      const newBlocks = textToBlocks(newText);
+      await editorRef.current.render({ blocks: newBlocks });
+    }
+
+    // 更新上層狀態
+    onUserScriptChange(newText);
+    setCharCount(newText.length);
+    setSuggestionData(null);
+  };
+
+  // 拒絕優化建議
+  const handleRejectSuggestion = () => {
+    setSuggestionData(null);
   };
 
   return (
@@ -563,6 +582,17 @@ export default function ScriptEditor({
             </div>
           )}
         </div>
+      )}
+
+      {/* AI 優化建議面板 */}
+      {suggestionData && (
+        <PromptSuggestionPanel
+          originalText={suggestionData.originalText}
+          optimizedText={suggestionData.optimizedText}
+          explanation={suggestionData.explanation}
+          onAccept={handleAcceptSuggestion}
+          onReject={handleRejectSuggestion}
+        />
       )}
 
       {/* Editor.js 容器 — 乾淨無邊框排版 */}
