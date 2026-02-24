@@ -1,11 +1,14 @@
 import React from "react";
 import { Image as ImageIcon, Save, Download, Wand2 } from "lucide-react";
+import ShareToLineButton from "../share/ShareToLineButton";
 
 export default function ImagePreview({
   generatedImage,
   isGenerating,
   analyzedStyle,
   onDownload,
+  user,
+  message,
 }) {
   return (
     <div className="relative flex items-center justify-center w-full h-full min-h-[200px] lg:min-h-[500px] bg-slate-100 rounded-xl overflow-hidden">
@@ -41,13 +44,23 @@ export default function ImagePreview({
             </button>
           </div>
 
-          {/* 始終可見的下載按鈕（小型） */}
-          <button
-            onClick={onDownload}
-            className="absolute bottom-3 right-3 flex items-center gap-1.5 text-xs font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 py-2 rounded-lg transition-colors shadow-md border border-slate-200/50"
-          >
-            <Save className="w-3.5 h-3.5" /> 下載圖片
-          </button>
+          {/* 始終可見的按鈕 */}
+          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+            {user && (
+              <ShareToLineButton
+                imageUrl={generatedImage}
+                user={user}
+                message={message}
+                className="[&>button]:h-9 [&>button]:px-3 [&>button]:text-xs [&>button]:rounded-lg [&>button]:shadow-md"
+              />
+            )}
+            <button
+              onClick={onDownload}
+              className="flex items-center h-9 gap-1.5 text-xs font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 py-2 rounded-lg transition-colors shadow-md border border-slate-200/50"
+            >
+              <Save className="w-3.5 h-3.5" /> 下載圖片
+            </button>
+          </div>
 
           {/* 風格資訊浮層 */}
           {analyzedStyle && (
