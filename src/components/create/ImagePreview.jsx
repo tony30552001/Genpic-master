@@ -5,13 +5,12 @@ import ShareToLineButton from "../share/ShareToLineButton";
 export default function ImagePreview({
   generatedImage,
   isGenerating,
-  analyzedStyle,
   onDownload,
   user,
   message,
 }) {
   return (
-    <div className="relative flex items-center justify-center w-full h-full min-h-[200px] lg:min-h-[500px] bg-slate-100 rounded-xl overflow-y-auto overflow-x-hidden custom-scrollbar">
+    <div className="relative flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-slate-100 rounded-xl overflow-hidden group">
       {/* 棋盤格背景（透明度指示） */}
       {!generatedImage && !isGenerating && (
         <div
@@ -25,49 +24,14 @@ export default function ImagePreview({
         />
       )}
 
-      {/* 生成的圖片 — 直接滿版顯示 */}
+      {/* 生成的圖片區域：加上 padding 確保底部不被遮擋 */}
       {generatedImage ? (
-        <div className="relative my-auto flex-shrink-0 w-full flex items-center justify-center">
+        <div className="relative w-full h-full p-4 pb-[72px] overflow-y-auto custom-scrollbar flex items-center justify-center">
           <img
             src={generatedImage}
             alt="AI Generated"
-            className="max-w-full my-auto object-contain animate-in fade-in zoom-in-95 duration-500"
-            style={{ maxHeight: 'calc(100vh - 200px)' }}
+            className="max-w-full my-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-sm"
           />
-
-          {/* 浮動工具列 — hover 時顯示 */}
-          <div className="absolute top-3 right-3 flex gap-2 opacity-0 hover:opacity-100 transition-opacity duration-300 group-hover:opacity-100">
-            <button
-              onClick={onDownload}
-              className="flex items-center gap-1.5 text-xs font-medium bg-black/60 backdrop-blur-sm hover:bg-black/80 text-white px-3 py-2 rounded-lg transition-colors shadow-lg"
-            >
-              <Download className="w-3.5 h-3.5" /> 下載
-            </button>
-          </div>
-
-          {/* 始終可見的按鈕 */}
-          <div className="absolute bottom-3 right-3 z-10 flex flex-wrap justify-end items-center gap-2">
-            <ShareToLineButton
-              imageUrl={generatedImage}
-              user={user}
-              message={message}
-              className="[&>button]:h-9 [&>button]:px-3 [&>button]:text-xs [&>button]:rounded-lg [&>button]:shadow-md"
-            />
-            <button
-              onClick={onDownload}
-              className="flex items-center h-9 gap-1.5 text-xs font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 py-2 rounded-lg transition-colors shadow-md border border-slate-200/50"
-            >
-              <Save className="w-3.5 h-3.5 shrink-0" /> <span className="whitespace-nowrap">下載圖片</span>
-            </button>
-          </div>
-
-          {/* 風格資訊浮層 */}
-          {analyzedStyle && (
-            <div className="absolute bottom-3 left-3 z-10 max-w-[calc(100%-140px)] max-h-[80px] overflow-y-auto custom-scrollbar bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md border border-slate-200/50">
-              <p className="text-[10px] font-semibold text-slate-500 mb-0.5 sticky top-0 bg-white/90">使用風格</p>
-              <p className="text-xs text-slate-700">{analyzedStyle}</p>
-            </div>
-          )}
         </div>
       ) : isGenerating ? (
         /* 生成中動畫 */
@@ -88,6 +52,24 @@ export default function ImagePreview({
             <ImageIcon className="w-8 h-8 text-slate-300" />
           </div>
           <p className="text-sm text-slate-400">請在左側面板上傳參考圖並輸入內容</p>
+        </div>
+      )}
+
+      {/* 獨立出來不受圖片滾動影響的按鈕層：固定在整個容器最上方的一層右下方，而不是跟隨圖片滾動 */}
+      {generatedImage && (
+        <div className="absolute bottom-4 right-4 z-20 flex flex-wrap justify-end items-center gap-2 drop-shadow-md">
+          <ShareToLineButton
+            imageUrl={generatedImage}
+            user={user}
+            message={message}
+            className="[&>button]:h-10 [&>button]:px-4 [&>button]:text-sm [&>button]:rounded-lg [&>button]:shadow-lg"
+          />
+          <button
+            onClick={onDownload}
+            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-4 py-2 rounded-lg transition-colors shadow-lg border border-slate-200/50"
+          >
+            <Save className="w-4 h-4 shrink-0" /> <span className="whitespace-nowrap">下載圖片</span>
+          </button>
         </div>
       )}
     </div>
