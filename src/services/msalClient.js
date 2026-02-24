@@ -32,14 +32,12 @@ export const msalConfig = {
           case LogLevel.Error:
             console.error(message);
             return;
-          case LogLevel.Info:
-            console.info(message);
-            return;
-          case LogLevel.Verbose:
-            console.debug(message);
-            return;
           case LogLevel.Warning:
             console.warn(message);
+            return;
+          case LogLevel.Info:
+          case LogLevel.Verbose:
+            // 忽略 Info 與 Verbose，避免倒出大量 MSAL 內部雜訊
             return;
         }
       },
