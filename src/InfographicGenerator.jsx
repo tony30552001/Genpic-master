@@ -744,6 +744,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                         <SettingsPanel
                             imageLanguage={imageLanguage}
                             onImageLanguageChange={handleLanguageChange}
+                            user={user}
                         />
                     </div>
                 )}

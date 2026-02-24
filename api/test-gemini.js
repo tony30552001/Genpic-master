@@ -1,0 +1,1 @@
+const { GoogleGenAI } = require('@google/genai'); const ai = new GoogleGenAI({apiKey: 'AIzaSyCX-9cLPnJf8lQzlRrJkfV3KOGhHR_R_7E'}); ai.models.generateContent({model: 'gemini-3-pro-image-preview', contents: 'a cute cat'}).then(res => console.log('OK', Object.keys(res))).catch(err => { console.error('ERROR LOG:', err); })

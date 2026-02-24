@@ -5,9 +5,12 @@ import {
     Image as ImageIcon,
     Info,
     Check,
+    MessageSquare,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import LineSettings from "./LineSettings";
+import useLineConfig from "../../hooks/useLineConfig";
 
 const LANGUAGE_OPTIONS = [
     {
@@ -79,8 +82,9 @@ const LANGUAGE_OPTIONS = [
  * 設定面板 — 全域語系選擇
  * 控制生成圖片中文字的語言
  */
-export default function SettingsPanel({ imageLanguage, onImageLanguageChange }) {
+export default function SettingsPanel({ imageLanguage, onImageLanguageChange, user }) {
     const currentLang = LANGUAGE_OPTIONS.find((l) => l.id === imageLanguage) || LANGUAGE_OPTIONS[0];
+    const lineConfigHook = useLineConfig({ user });
 
     return (
         <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
@@ -129,8 +133,8 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange }) 
                                     key={lang.id}
                                     onClick={() => onImageLanguageChange(lang.id)}
                                     className={`text-left p-3 rounded-xl border-2 transition-all duration-200 group ${isSelected
-                                            ? "border-primary bg-primary/5 shadow-sm"
-                                            : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
+                                        ? "border-primary bg-primary/5 shadow-sm"
+                                        : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
                                         }`}
                                 >
                                     <div className="flex items-center gap-2 mb-1">
@@ -166,6 +170,19 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange }) 
                     </div>
                 </CardContent>
             </Card>
+
+            {/* LINE 整合 */}
+            <div className="space-y-1">
+                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-[#06C755]" />
+                    LINE 整合
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                    連結 LINE 官方帳號或使用 LIFF 分享圖片
+                </p>
+            </div>
+
+            <LineSettings useLineConfigHook={lineConfigHook} />
         </div>
     );
 }
