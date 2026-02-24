@@ -3,7 +3,6 @@ const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
-const { toVectorString } = require("../_shared/vector");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -48,17 +47,11 @@ module.exports = async function (context, req) {
 
   if (method === "POST") {
     const payload = req.body || {};
-    let vectorString = null;
-    if (payload.embedding) {
-      try {
-        vectorString = toVectorString(payload.embedding);
-      } catch (err) {
-        context.res = error(err.message, "bad_request", 400);
-        return;
-      }
-    }
+
+    // 不再處理 embedding
+
     const result = await query(
-      "INSERT INTO styles (tenant_id, name, prompt, description, tags, preview_url, embedding, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7::vector, $8) RETURNING id, name, prompt, description, tags, preview_url, created_at",
+      "INSERT INTO styles (tenant_id, name, prompt, description, tags, preview_url, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, prompt, description, tags, preview_url, created_at",
       [
         identity.tenantId,
         payload.name,
@@ -66,7 +59,6 @@ module.exports = async function (context, req) {
         payload.description || null,
         payload.tags || [],
         payload.previewUrl || null,
-        vectorString,
         identity.userId,
       ]
     );

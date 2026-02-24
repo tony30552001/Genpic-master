@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { addStyle, deleteStyle, listStyles, searchStylesByEmbedding } from "../services/storageService";
-import { embedText } from "../services/aiService";
+import { addStyle, deleteStyle, listStyles } from "../services/storageService";
 
 const compressImage = (dataUrl) =>
   new Promise((resolve, reject) => {
@@ -139,22 +138,19 @@ export default function useStyles({ user }) {
         searchSeqRef.current = seq;
 
         try {
-          const embeddingResult = await embedText({ text: trimmed });
-          if (!Array.isArray(embeddingResult?.embedding)) {
-            const styles = await listStyles();
-            if (searchSeqRef.current === seq) {
-              setSavedStyles(styles || []);
-              setIsSearching(false);
-            }
-            return;
-          }
-
-          const result = await searchStylesByEmbedding({
-            embedding: embeddingResult.embedding,
-            topK: 12,
-          });
+          // 不再使用 embedding 搜尋，改為客戶端直接過濾或先全撈
+          const styles = await listStyles();
           if (searchSeqRef.current === seq) {
-            setSavedStyles(result || []);
+            // 在前端對全拿回來的 styles 做簡單關鍵字過濾
+            const filtered = (styles || []).filter((s) => {
+              const textToSearch = [
+                s.name,
+                s.description,
+                ...(s.tags || []),
+              ].join(" ").toLowerCase();
+              return textToSearch.includes(trimmed.toLowerCase());
+            });
+            setSavedStyles(filtered);
             setIsSearching(false);
           }
         } catch (err) {

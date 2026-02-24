@@ -94,30 +94,6 @@ module.exports = async function (context, req) {
     const tags = Array.isArray(data.suggested_tags) ? data.suggested_tags : [];
     const styleName = tags[0] || "未命名風格";
 
-    const embeddingModel = process.env.EMBEDDING_MODEL || "text-embedding-004";
-    const embeddingText = [
-      data.style_prompt,
-      data.style_description_zh,
-      tags.length > 0 ? tags.join(",") : null,
-    ]
-      .filter(Boolean)
-      .join("\n");
-    let embedding = null;
-    let vectorString = null;
-    let embeddingError = null;
-    try {
-      const values = await embedText(embeddingModel, embeddingText);
-      if (Array.isArray(values)) {
-        embedding = values;
-        vectorString = toVectorString(values);
-      } else {
-        embeddingError = "embedding_not_available";
-      }
-    } catch (embedErr) {
-      embedding = null;
-      vectorString = null;
-      embeddingError = "embedding_failed";
-    }
     const identity = await resolveIdentity(auth.user);
     if (!identity.userId) {
       // DEBUG: 暴露更多使用者資訊以利除錯
@@ -128,7 +104,7 @@ module.exports = async function (context, req) {
     }
 
     const insertResult = await query(
-      "INSERT INTO styles (tenant_id, name, prompt, description, tags, preview_url, embedding, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7::vector, $8) RETURNING id",
+      "INSERT INTO styles (tenant_id, name, prompt, description, tags, preview_url, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
       [
         identity.tenantId,
         styleName,
@@ -136,16 +112,13 @@ module.exports = async function (context, req) {
         data.style_description_zh || null,
         tags,
         imageUrl || null,
-        vectorString,
         identity.userId,
       ]
     );
 
     context.res = ok({
       ...data,
-      embedding,
       styleId: insertResult.rows[0]?.id,
-      embedding_error: embeddingError,
     });
   } catch (err) {
     context.log.error("Analyze style failed", err);
