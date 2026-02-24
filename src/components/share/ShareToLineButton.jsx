@@ -4,8 +4,22 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Share2, CheckCircle, AlertCircle } from "lucide-react";
 import useLineConfig from "../../hooks/useLineConfig";
 import { sendImageToLine } from "../../services/lineService";
+import { uploadFileToBlob } from "../../services/storageService";
 
 const LINE_GREEN = "#06C755"; // Official LINE brand color
+
+// Convert base64 data URI to File
+const dataURLtoFile = (dataurl, filename) => {
+    const arr = dataurl.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+};
 
 export default function ShareToLineButton({ imageUrl, message, user, className = "" }) {
     const { isBound, config } = useLineConfig({ user });
@@ -18,7 +32,24 @@ export default function ShareToLineButton({ imageUrl, message, user, className =
         setErrorMsg("");
 
         try {
-            const result = await sendImageToLine(imageUrl, message);
+            let finalImageUrl = imageUrl;
+
+            // 如果圖片是 base64 string，必須先上傳到雲端，因為 LINE 分享需要公開的 HTTP/HTTPS URL
+            if (imageUrl.startsWith("data:")) {
+                try {
+                    const mimeMatch = imageUrl.match(/data:([^;]+);/);
+                    const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+                    const ext = mimeType.split("/")[1] || "png";
+                    const file = dataURLtoFile(imageUrl, `share-to-line-${Date.now()}.${ext}`);
+
+                    const uploadResult = await uploadFileToBlob(file, "uploads"); // uploading to uploads container
+                    finalImageUrl = uploadResult.url;
+                } catch (uploadErr) {
+                    throw new Error("上傳圖片準備分享失敗: " + uploadErr.message);
+                }
+            }
+
+            const result = await sendImageToLine(finalImageUrl, message);
 
             // Track B fallback: open LINE share URL in new tab automatically
             if (result && result.track === "liff_fallback" && result.url) {
