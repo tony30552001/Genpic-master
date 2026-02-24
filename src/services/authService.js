@@ -15,7 +15,7 @@ const isGoogleTokenValid = (token) => {
     const currentTime = Date.now() / 1000;
     // 提前 5 分鐘判定過期
     return decoded.exp > currentTime + TOKEN_EXPIRY_BUFFER_SECONDS;
-  } catch (e) {
+  } catch {
     return false;
   }
 };
@@ -38,7 +38,7 @@ const getGoogleToken = () => {
 
       return token;
     }
-  } catch (e) {
+  } catch {
     return null;
   }
   return null;

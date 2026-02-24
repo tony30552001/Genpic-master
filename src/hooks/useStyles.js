@@ -56,7 +56,7 @@ export default function useStyles({ user }) {
   }, [user]);
 
   const saveStyle = useCallback(
-    async ({ analyzedStyle, analysisResultData, referencePreview, referenceBlobUrl }) => {
+    async ({ analyzedStyle, analysisResultData, referencePreview }) => {
       if (!user || !analyzedStyle) return;
       if (!newStyleName.trim()) {
         throw new Error("請輸入風格名稱");
@@ -153,7 +153,7 @@ export default function useStyles({ user }) {
             setSavedStyles(filtered);
             setIsSearching(false);
           }
-        } catch (err) {
+        } catch {
           const styles = await listStyles();
           if (searchSeqRef.current === seq) {
             setSavedStyles(styles || []);

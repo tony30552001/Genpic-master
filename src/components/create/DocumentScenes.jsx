@@ -259,7 +259,6 @@ export default function DocumentScenes({
   onUpdateScene,
   onRemoveScene,
   onGenerateScene,
-  onGenerateAll,
   onClear,
   isGenerating = false,
   // 風格相關 props
@@ -472,8 +471,8 @@ export default function DocumentScenes({
                             setShowStylePicker(false);
                           }}
                           className={`group/style relative flex flex-col rounded-lg border overflow-hidden text-left transition-all duration-200 ${isActive
-                              ? "border-primary ring-2 ring-primary/20 shadow-md"
-                              : "border-border/60 hover:border-primary/40 hover:shadow-md"
+                            ? "border-primary ring-2 ring-primary/20 shadow-md"
+                            : "border-border/60 hover:border-primary/40 hover:shadow-md"
                             }`}
                         >
                           {/* 預覽圖 */}

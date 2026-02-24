@@ -33,22 +33,21 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const [createSubTab, setCreateSubTab] = useState('general');
 
     // Input States
-    const [referenceImage, setReferenceImage] = useState(null);
+    const [, setReferenceImage] = useState(null);
     const [referencePreview, setReferencePreview] = useState(null);
-    const [referenceBlobUrl, setReferenceBlobUrl] = useState(null);
+    const [, setReferenceBlobUrl] = useState(null);
     const [referenceBlobSasUrl, setReferenceBlobSasUrl] = useState(null);
-    const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
+
 
     const [userScript, setUserScript] = useState('');
 
     // Content Image States
-    const [contentImage, setContentImage] = useState(null);
+    const [, setContentImage] = useState(null);
     const [contentImagePreview, setContentImagePreview] = useState(null);
-    const [contentBlobUrl, setContentBlobUrl] = useState(null);
+    const [, setContentBlobUrl] = useState(null);
     const [contentBlobSasUrl, setContentBlobSasUrl] = useState(null);
     const [isUploadingContent, setIsUploadingContent] = useState(false);
-    const [contentUploadProgress, setContentUploadProgress] = useState(0);
+    const [, setContentUploadProgress] = useState(0);
 
     // 全域設定
     const [imageLanguage, setImageLanguage] = useState(() => {
@@ -61,14 +60,14 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const [errorMsg, setErrorMsg] = useState('');
     const [warningMsg, setWarningMsg] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-    const [isInputFocused, setIsInputFocused] = useState(false);
+    const [, setIsInputFocused] = useState(false);
     const [isStyleNameTouched, setIsStyleNameTouched] = useState(false);
     const [isStyleTagsTouched, setIsStyleTagsTouched] = useState(false);
 
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
 
     const navigate = useNavigate();
-    const { user, handleMicrosoftLogin, handleLogout, isLoading } = useAuth();
+    const { user, handleLogout, isLoading } = useAuth();
     const {
         savedStyles, newStyleName, newStyleTags, isSavingStyle, isSearching,
         setNewStyleName, setNewStyleTags, saveStyle, deleteStyle, searchStyles, deleteStyles
@@ -79,7 +78,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
     const {
         isAnalyzing: isAnalyzingDocument, analysisPhase: documentAnalysisPhase,
         documentResult, analyzeDocument, clearDocument, updateScene, removeScene,
-        scenes, totalScenes,
+        scenes,
     } = useDocumentAnalysis();
 
     const {
@@ -105,57 +104,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
             xhr.send(file);
         });
 
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 4 * 1024 * 1024) { setErrorMsg("圖片過大，請上傳小於 4MB 的圖片。"); return; }
-        try {
-            setIsUploading(true);
-            setUploadProgress(0);
-            const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, "-");
-            // 加入超時保護，避免 auth 過期時 Promise 永遠 pending
-            const sasPromise = requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('上傳請求逾時，請確認網路連線或重新登入')), 30000));
-            const sas = await Promise.race([sasPromise, timeoutPromise]);
-            if (!sas || !sas.blobUrl || !sas.sasToken) throw new Error('無法取得上傳授權，請確認已登入');
-            const blobUrl = await uploadBlobWithProgress({ blobUrl: sas.blobUrl, sasToken: sas.sasToken, file, contentType: file.type, onProgress: setUploadProgress });
-            const blobSasUrl = `${sas.blobUrl}?${sas.sasToken}`;
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setReferenceImage(file);
-                setReferencePreview(reader.result);
-                setReferenceBlobUrl(blobUrl);
-                setReferenceBlobSasUrl(blobSasUrl);
-                setAnalyzedStyle('');
-                setAnalysisResultData(null);
-                setErrorMsg('');
-                setWarningMsg('');
-                setIsStyleNameTouched(false);
-                setIsStyleTagsTouched(false);
-                setTimeout(() => { setIsUploading(false); setUploadProgress(0); }, 1500);
-            };
-            reader.readAsDataURL(file);
-        } catch (err) {
-            console.error("Upload failed:", err);
-            setErrorMsg(err.message || "上傳失敗，請稍後再試。");
-            setIsUploading(false);
-            setUploadProgress(0);
-        }
-    };
 
-    const handleClearReference = (e) => {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        setReferenceImage(null);
-        setReferencePreview(null);
-        setReferenceBlobUrl(null);
-        setReferenceBlobSasUrl(null);
-        setIsUploading(false);
-        setUploadProgress(0);
-        setWarningMsg('');
-        setIsStyleNameTouched(false);
-        setIsStyleTagsTouched(false);
-        clearStyle();
-    };
 
     const handleContentImageUpload = async (e) => {
         const file = e.target.files[0];
@@ -237,7 +186,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
     const saveCurrentStyle = async () => {
         try {
-            await saveStyle({ analyzedStyle, analysisResultData, referencePreview, referenceBlobUrl });
+            await saveStyle({ analyzedStyle, analysisResultData, referencePreview });
             alert('風格已儲存！');
             setErrorMsg('');
             setIsStyleNameTouched(false);
@@ -286,7 +235,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
 
     const handleLanguageChange = (lang) => {
         setImageLanguage(lang);
-        try { localStorage.setItem('genpic_image_language', lang); } catch { }
+        try { localStorage.setItem('genpic_image_language', lang); } catch { /* ignore */ }
     };
 
     const generateInfographic = async () => {

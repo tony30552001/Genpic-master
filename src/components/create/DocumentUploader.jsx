@@ -70,14 +70,16 @@ const getCurrentStepIndex = (phase) => {
 function AnalysisProgress({ analysisPhase, fileName }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [simulatedProgress, setSimulatedProgress] = useState(0);
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(0);
 
   const currentStepIndex = getCurrentStepIndex(analysisPhase);
 
   // 計時器
   useEffect(() => {
     startTimeRef.current = Date.now();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setElapsedSeconds(0);
+     
     setSimulatedProgress(0);
 
     const timer = setInterval(() => {
@@ -171,25 +173,24 @@ function AnalysisProgress({ analysisPhase, fileName }) {
           const StepIcon = step.icon;
           const isCompleted = idx < currentStepIndex;
           const isCurrent = idx === currentStepIndex;
-          const isPending = idx > currentStepIndex;
 
           return (
             <div
               key={step.id}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-500 ${isCurrent
-                  ? "bg-primary/5 border border-primary/20"
-                  : isCompleted
-                    ? "opacity-70"
-                    : "opacity-40"
+                ? "bg-primary/5 border border-primary/20"
+                : isCompleted
+                  ? "opacity-70"
+                  : "opacity-40"
                 }`}
             >
               {/* 圖標 */}
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-500 ${isCompleted
-                    ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-                    : isCurrent
-                      ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
+                  ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                  : isCurrent
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground"
                   }`}
               >
                 {isCompleted ? (
@@ -271,6 +272,21 @@ export default function DocumentUploader({
     { ext: "jpg", label: "JPG", color: "text-green-500" },
   ];
 
+  const handleFile = useCallback((file) => {
+    const MAX_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert("檔案大小超過 50MB 限制");
+      return;
+    }
+    const supportedExtensions = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg"];
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (!supportedExtensions.includes(ext)) {
+      alert("不支援的檔案格式。請上傳 PDF、DOCX、PPTX、TXT 或圖片檔案。");
+      return;
+    }
+    setSelectedFile(file);
+  }, []);
+
   const handleDrag = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -288,29 +304,14 @@ export default function DocumentUploader({
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFile(e.dataTransfer.files[0]);
     }
-  }, []);
+  }, [handleFile]);
 
   const handleChange = useCallback((e) => {
     e.preventDefault();
     if (e.target.files && e.target.files[0]) {
       handleFile(e.target.files[0]);
     }
-  }, []);
-
-  const handleFile = (file) => {
-    const MAX_SIZE = 50 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-      alert("檔案大小超過 50MB 限制");
-      return;
-    }
-    const supportedExtensions = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg"];
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (!supportedExtensions.includes(ext)) {
-      alert("不支援的檔案格式。請上傳 PDF、DOCX、PPTX、TXT 或圖片檔案。");
-      return;
-    }
-    setSelectedFile(file);
-  };
+  }, [handleFile]);
 
   const clearFile = () => {
     setSelectedFile(null);
@@ -321,7 +322,7 @@ export default function DocumentUploader({
     if (!selectedFile) return;
     try {
       await onAnalyze(selectedFile);
-    } catch (err) {
+    } catch {
       // 錯誤已在父層處理
     }
   };
@@ -365,10 +366,10 @@ export default function DocumentUploader({
       {/* 上傳區域 */}
       <div
         className={`relative border-2 border-dashed rounded-lg p-6 transition-colors ${dragActive
-            ? "border-blue-500 bg-blue-50"
-            : selectedFile
-              ? "border-green-500 bg-green-50"
-              : "border-slate-300 hover:border-slate-400"
+          ? "border-blue-500 bg-blue-50"
+          : selectedFile
+            ? "border-green-500 bg-green-50"
+            : "border-slate-300 hover:border-slate-400"
           } ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}

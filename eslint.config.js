@@ -26,4 +26,36 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    files: ['api/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+      sourceType: 'commonjs'
+    }
+  },
+  {
+    files: ['*.config.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      }
+    }
+  },
+  {
+    files: ['src/**/__tests__/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.jest,
+      }
+    }
+  },
+  {
+    files: ['src/components/ui/**/*.jsx'],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    }
+  }
 ])

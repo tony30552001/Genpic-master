@@ -14,7 +14,7 @@ const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
-const { encrypt, decrypt } = require("../_shared/lineEncryption");
+const { encrypt } = require("../_shared/lineEncryption");
 
 // ─── Verify Line Token by calling Messaging API ────────────────────────────
 const verifyLineToken = async (channelAccessToken) => {

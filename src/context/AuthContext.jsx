@@ -56,10 +56,22 @@ export const AuthProvider = ({ children }) => {
 
             console.log(`[Auth] Google Token 過期計時器已設定，${Math.round(timeUntilExpiry / 1000 / 60)} 分鐘後過期`);
             return true;
-        } catch (e) {
+        } catch {
             return false;
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [clearExpiryTimer]);
+
+    // 檢查 Token 是否過期的輔助函數
+    const isTokenExpired = useCallback((token) => {
+        try {
+            const decoded = jwtDecode(token);
+            const currentTime = Date.now() / 1000;
+            return decoded.exp < currentTime;
+        } catch {
+            return true;
+        }
+    }, []);
 
     // 初始化 Google 登入狀態 (從 localStorage) 並設置過期計時器
     useEffect(() => {
@@ -72,18 +84,20 @@ export const AuthProvider = ({ children }) => {
                     // Token 已過期，清除登入狀態
                     googleLogout();
                     localStorage.removeItem('google_user');
+                     
                     setAuthExpired(true);
                 } else {
                     setGoogleUser(user);
                     // 設置自動過期計時器
                     setupExpiryTimer(user.idToken);
                 }
-            } catch (e) {
+            } catch {
                 localStorage.removeItem('google_user');
             }
         }
 
         return () => clearExpiryTimer();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // 監聽 MSAL 初始化完成
@@ -106,6 +120,7 @@ export const AuthProvider = ({ children }) => {
     // 當 Google 或 MSAL 任一載入完成時，設定 isLoading 為 false
     useEffect(() => {
         if (msalInitialized) {
+             
             setIsLoading(false);
         }
     }, [msalInitialized]);
@@ -131,16 +146,6 @@ export const AuthProvider = ({ children }) => {
         }
     }, [accounts, instance]);
 
-    // 檢查 Token 是否過期的輔助函數
-    const isTokenExpired = (token) => {
-        try {
-            const decoded = jwtDecode(token);
-            const currentTime = Date.now() / 1000;
-            return decoded.exp < currentTime;
-        } catch (e) {
-            return true;
-        }
-    };
 
     const handleGoogleLoginSuccess = useCallback((credentialResponse) => {
         const decoded = jwtDecode(credentialResponse.credential);
@@ -211,6 +216,7 @@ export const AuthProvider = ({ children }) => {
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuthContext = () => {
     const context = useContext(AuthContext);
     if (!context) throw new Error('useAuthContext must be used within AuthProvider');

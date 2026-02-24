@@ -65,7 +65,7 @@ const parseResponse = async (response) => {
 
   try {
     return JSON.parse(text);
-  } catch (err) {
+  } catch {
     return text; // 如果不是 JSON 就直接回傳字串
   }
 };
@@ -132,7 +132,7 @@ const requestWithRetry = async (url, baseOptions, options) => {
         ...retryOptions,
       });
       return parseResponse(retryResponse);
-    } catch (retryError) {
+    } catch {
       // 重試失敗，觸發登出
       // buildHeaders 如果出現錯誤，在上一層自己就會處理了，但這裡是 fetch 拋出 
       if (onAuthExpiredCallback) {

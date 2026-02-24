@@ -1,10 +1,10 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel, embedText } = require("../_shared/gemini");
+const { getModel } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
-const { toVectorString } = require("../_shared/vector");
+
 
 const STYLE_ANALYSIS_PROMPT = `請擔任專業視覺分析師。請分析這張圖片並回傳一個 JSON 物件，包含以下欄位：
 1. "style_prompt": (英文) 詳細描述圖片的視覺風格、藝術流派、配色方案、光影與材質、構圖特徵。這將用於生成類似風格圖片的 Image Gen Prommpt。
@@ -84,7 +84,7 @@ module.exports = async function (context, req) {
     let data;
     try {
       data = JSON.parse(responseText);
-    } catch (parseErr) {
+    } catch {
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error("解析 JSON 失敗");

@@ -35,7 +35,7 @@ export default function ScriptEditor({
   onUserScriptChange,
   onFocus,
   onBlur,
-  hideGenerate = false,
+
   // 新增：風格庫相關 props
   savedStyles = [],
   analyzedStyle,
@@ -126,7 +126,7 @@ export default function ScriptEditor({
       if (editorRef.current) {
         try {
           await editorRef.current.destroy();
-        } catch (e) {
+        } catch {
           // ignore
         }
         editorRef.current = null;
@@ -174,7 +174,7 @@ export default function ScriptEditor({
             const text = blocksToText(data.blocks);
             setCharCount(text.length);
             onUserScriptChange(text);
-          } catch (e) {
+          } catch {
             // ignore save errors during transitions
           }
         },
@@ -192,7 +192,7 @@ export default function ScriptEditor({
       if (editorRef.current) {
         try {
           editorRef.current.destroy();
-        } catch (e) {
+        } catch {
           // ignore
         }
         editorRef.current = null;

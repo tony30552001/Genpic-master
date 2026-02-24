@@ -70,7 +70,7 @@ module.exports = async function (context, req) {
           );
         }
         updated += 1;
-      } catch (err) {
+      } catch {
         failed.push({ id: row.id, reason: "embedding_failed" });
       }
     }
@@ -88,7 +88,7 @@ module.exports = async function (context, req) {
       remaining,
       dryRun,
     });
-  } catch (err) {
+  } catch {
     context.res = error("回補失敗", "backfill_failed", 502);
   }
 };

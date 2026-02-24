@@ -24,20 +24,7 @@ const msClient = msJwksUri
 // Google OAuth Client
 const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
 
-const getMsSigningKey = (header, callback) => {
-  if (!msClient) {
-    callback(new Error("Missing Microsoft JWKS client"));
-    return;
-  }
-  msClient.getSigningKey(header.kid, (err, key) => {
-    if (err) {
-      callback(err);
-      return;
-    }
-    const signingKey = key.getPublicKey();
-    callback(null, signingKey);
-  });
-};
+
 
 const parseBearer = (req) => {
   // 優先使用自訂 header（避免 Azure SWA 攔截標準 Authorization header）

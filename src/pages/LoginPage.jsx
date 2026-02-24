@@ -1,15 +1,14 @@
 import React from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { LogIn, Mail, ShieldCheck, AlertCircle } from "lucide-react";
-import { useNavigate, useLocation, Navigate } from "react-router-dom";
+import { LogIn, ShieldCheck, AlertCircle } from "lucide-react";
+import { useLocation, Navigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
-    const { user, handleMicrosoftLogin, handleGoogleLoginSuccess, isAuthenticated, isLoading, authExpired } = useAuth();
-    const navigate = useNavigate();
+    const { handleMicrosoftLogin, handleGoogleLoginSuccess, isAuthenticated, isLoading, authExpired } = useAuth();
     const location = useLocation();
 
     const from = location.state?.from?.pathname || "/";

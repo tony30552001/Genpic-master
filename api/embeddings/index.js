@@ -34,7 +34,7 @@ module.exports = async function (context, req) {
     }
 
     context.res = ok({ embedding: values });
-  } catch (err) {
+  } catch {
     context.res = error("Embedding 產生失敗", "embedding_failed", 502);
   }
 };

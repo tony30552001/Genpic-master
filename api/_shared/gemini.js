@@ -48,7 +48,7 @@ const parseGeminiResponse = (result) => {
     } else if (typeof result?.text === "function") {
       responseText = result.text();
     }
-  } catch (e) {
+  } catch {
     // text 可能是 getter 並拋出錯誤
   }
 
@@ -60,7 +60,7 @@ const parseGeminiResponse = (result) => {
       } else if (typeof result?.response?.text === "string") {
         responseText = result.response.text;
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
