@@ -11,7 +11,7 @@ export default function ImagePreview({
   message,
 }) {
   return (
-    <div className="relative flex items-center justify-center w-full h-full min-h-[200px] lg:min-h-[500px] bg-slate-100 rounded-xl overflow-hidden">
+    <div className="relative flex items-center justify-center w-full h-full min-h-[200px] lg:min-h-[500px] bg-slate-100 rounded-xl overflow-y-auto overflow-x-hidden custom-scrollbar">
       {/* 棋盤格背景（透明度指示） */}
       {!generatedImage && !isGenerating && (
         <div
@@ -27,11 +27,12 @@ export default function ImagePreview({
 
       {/* 生成的圖片 — 直接滿版顯示 */}
       {generatedImage ? (
-        <>
+        <div className="relative my-auto flex-shrink-0 w-full flex items-center justify-center">
           <img
             src={generatedImage}
             alt="AI Generated"
-            className="max-w-full max-h-full object-contain animate-in fade-in zoom-in-95 duration-500"
+            className="max-w-full my-auto object-contain animate-in fade-in zoom-in-95 duration-500"
+            style={{ maxHeight: 'calc(100vh - 200px)' }}
           />
 
           {/* 浮動工具列 — hover 時顯示 */}
@@ -45,7 +46,7 @@ export default function ImagePreview({
           </div>
 
           {/* 始終可見的按鈕 */}
-          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+          <div className="absolute bottom-3 right-3 z-10 flex flex-wrap justify-end items-center gap-2">
             <ShareToLineButton
               imageUrl={generatedImage}
               user={user}
@@ -56,18 +57,18 @@ export default function ImagePreview({
               onClick={onDownload}
               className="flex items-center h-9 gap-1.5 text-xs font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 py-2 rounded-lg transition-colors shadow-md border border-slate-200/50"
             >
-              <Save className="w-3.5 h-3.5" /> 下載圖片
+              <Save className="w-3.5 h-3.5 shrink-0" /> <span className="whitespace-nowrap">下載圖片</span>
             </button>
           </div>
 
           {/* 風格資訊浮層 */}
           {analyzedStyle && (
-            <div className="absolute bottom-3 left-3 max-w-[60%] bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md border border-slate-200/50">
-              <p className="text-[10px] font-semibold text-slate-500 mb-0.5">使用風格</p>
-              <p className="text-xs text-slate-700 line-clamp-2">{analyzedStyle}</p>
+            <div className="absolute bottom-3 left-3 z-10 max-w-[calc(100%-140px)] max-h-[80px] overflow-y-auto custom-scrollbar bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md border border-slate-200/50">
+              <p className="text-[10px] font-semibold text-slate-500 mb-0.5 sticky top-0 bg-white/90">使用風格</p>
+              <p className="text-xs text-slate-700">{analyzedStyle}</p>
             </div>
           )}
-        </>
+        </div>
       ) : isGenerating ? (
         /* 生成中動畫 */
         <div className="flex flex-col items-center gap-4 text-slate-400">
