@@ -126,17 +126,24 @@ export const verifyLineToken = (channelAccessToken) =>
  * @returns {Promise<{ track: "bot"|"liff", success: boolean }>}
  */
 export const sendImageToLine = async (imageUrl, message) => {
-    const result = await apiPost(`${API_BASE_URL}/send-line-image`, {
-        imageUrl,
-        message,
-    });
+    try {
+        const result = await apiPost(`${API_BASE_URL}/send-line-image`, {
+            imageUrl,
+            message,
+        });
 
-    if (result.track === "liff") {
-        // Track B: open LIFF picker
+        if (result.track === "liff") {
+            // Track B: open LIFF picker
+            const sent = await shareViaLiff(imageUrl, message);
+            return { track: "liff", success: !!sent };
+        }
+
+        // Track A: bot already pushed
+        return { track: "bot", success: result.success };
+    } catch (err) {
+        console.warn("Backend LINE API failed, falling back to LIFF:", err);
+        // Fallback to Track B if backend is unreachable or user not authenticated
         const sent = await shareViaLiff(imageUrl, message);
         return { track: "liff", success: !!sent };
     }
-
-    // Track A: bot already pushed
-    return { track: "bot", success: result.success };
 };

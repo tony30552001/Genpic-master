@@ -46,14 +46,12 @@ export default function ImagePreview({
 
           {/* 始終可見的按鈕 */}
           <div className="absolute bottom-3 right-3 flex items-center gap-2">
-            {user && (
-              <ShareToLineButton
-                imageUrl={generatedImage}
-                user={user}
-                message={message}
-                className="[&>button]:h-9 [&>button]:px-3 [&>button]:text-xs [&>button]:rounded-lg [&>button]:shadow-md"
-              />
-            )}
+            <ShareToLineButton
+              imageUrl={generatedImage}
+              user={user}
+              message={message}
+              className="[&>button]:h-9 [&>button]:px-3 [&>button]:text-xs [&>button]:rounded-lg [&>button]:shadow-md"
+            />
             <button
               onClick={onDownload}
               className="flex items-center h-9 gap-1.5 text-xs font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 py-2 rounded-lg transition-colors shadow-md border border-slate-200/50"
