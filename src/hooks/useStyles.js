@@ -3,6 +3,35 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { addStyle, deleteStyle, listStyles, searchStylesByEmbedding } from "../services/storageService";
 import { embedText } from "../services/aiService";
 
+const compressImage = (dataUrl) =>
+  new Promise((resolve, reject) => {
+    if (!dataUrl || !dataUrl.startsWith("data:image")) return resolve(dataUrl);
+
+    const img = new Image();
+    img.src = dataUrl;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const maxWidth = 800; // 前端壓縮到最多 800 寬
+      let { width, height } = img;
+
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // 設定輸出格式和品質 (JPEG, 0.6)
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.6);
+      resolve(compressedDataUrl);
+    };
+    img.onerror = (err) => reject(err);
+  });
+
 export default function useStyles({ user }) {
   const [savedStyles, setSavedStyles] = useState([]);
   const [newStyleName, setNewStyleName] = useState("");
@@ -36,6 +65,8 @@ export default function useStyles({ user }) {
 
       setIsSavingStyle(true);
       try {
+        const compressedPreview = await compressImage(referencePreview);
+
         await addStyle({
           name: newStyleName,
           tags: newStyleTags
@@ -44,7 +75,7 @@ export default function useStyles({ user }) {
             .filter(Boolean),
           prompt: analyzedStyle,
           description: analysisResultData?.style_description_zh || "",
-          previewUrl: referenceBlobUrl || referencePreview || "",
+          previewUrl: compressedPreview || "",
         });
 
         const styles = await listStyles();

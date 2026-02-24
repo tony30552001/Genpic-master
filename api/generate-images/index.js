@@ -62,7 +62,32 @@ module.exports = async function (context, req) {
       },
     };
 
-    const result = await model.generateContent(parts, config);
+    let result;
+    const maxRetries = 2; // 最多重試 2 次
+    let delayMs = 2000;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        result = await model.generateContent(parts, config);
+        break; // 成功則跳出迴圈
+      } catch (apiErr) {
+        const errStr = String(apiErr.message || apiErr);
+        const isOverloaded =
+          errStr.includes("503") ||
+          errStr.includes("429") ||
+          errStr.includes("UNAVAILABLE") ||
+          errStr.includes("high demand");
+
+        if (attempt < maxRetries && isOverloaded) {
+          context.log.warn(`AI API overload (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          delayMs *= 2; // 指數退避
+        } else {
+          // 非過載錯誤或是已達重試上限，直接拋出讓外層 Catch 處理
+          throw apiErr;
+        }
+      }
+    }
 
     const responseParts =
       result?.candidates?.[0]?.content?.parts ||
@@ -98,6 +123,19 @@ module.exports = async function (context, req) {
     });
   } catch (err) {
     context.log.error("Image generation failed:", err);
-    context.res = error("生成失敗: " + err.message, "generation_failed", 502);
+
+    // 檢查是否為伺服器尖峰過載錯誤
+    const errStr = String(err.message || err);
+    const isOverloaded = errStr.includes("503") || errStr.includes("429") || errStr.includes("UNAVAILABLE") || errStr.includes("high demand");
+
+    if (isOverloaded) {
+      context.res = error(
+        "目前 AI 繪圖伺服器處於尖峰時段，過於繁忙，請稍後一分鐘再試。",
+        "server_overloaded",
+        503
+      );
+    } else {
+      context.res = error("生成失敗: " + err.message, "generation_failed", 502);
+    }
   }
 };
