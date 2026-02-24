@@ -42,6 +42,7 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_AUTH_BYPASS: "false"
           VITE_API_BASE_URL: "/api"
+          VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
       
       # 安裝 API 依賴
       - name: Install API Dependencies
@@ -100,6 +101,7 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_AUTH_BYPASS: "false"
           VITE_API_BASE_URL: "/api"
+          VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
