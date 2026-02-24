@@ -65,7 +65,13 @@ export const shareViaLiff = async (imageUrl, altText) => {
     const liff = await initLiff();
 
     if (!liff.isApiAvailable("shareTargetPicker")) {
-        throw new Error("shareTargetPicker 不可用（需在 LINE App 內執行）");
+        // Fallback for non-LIFF environment (e.g. desktop browser)
+        // Note: LINE web share only officially supports sending text/links natively smoothly.
+        // We will append the URL to the text message to share it.
+        const shareText = altText ? `${altText}\n${imageUrl}` : imageUrl;
+        const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(imageUrl)}&text=${encodeURIComponent(shareText)}`;
+        window.open(lineShareUrl, "_blank");
+        return true;
     }
 
     const messages = [];
