@@ -55,6 +55,16 @@ export const initLiff = async () => {
 };
 
 /**
+ * Build a LINE social sharing fallback URL (works in any browser without LIFF).
+ * Returns { fallbackUrl: string }.
+ */
+const buildLineShareFallback = (imageUrl, altText) => {
+    const shareText = altText ? `${altText}\n${imageUrl}` : imageUrl;
+    const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(imageUrl)}&text=${encodeURIComponent(shareText)}`;
+    return { fallbackUrl: lineShareUrl };
+};
+
+/**
  * Open the LINE Share Target Picker (Track B).
  * User selects a friend or group — the message is sent from their personal LINE account.
  *
@@ -62,14 +72,22 @@ export const initLiff = async () => {
  * @param {string} [altText] - Optional text message before the image
  */
 export const shareViaLiff = async (imageUrl, altText) => {
-    const liff = await initLiff();
+    // If LIFF_ID is not configured, skip LIFF entirely and return fallback URL
+    if (!LIFF_ID) {
+        return buildLineShareFallback(imageUrl, altText);
+    }
+
+    let liff;
+    try {
+        liff = await initLiff();
+    } catch {
+        // LIFF init failed (e.g. invalid LIFF_ID, network error) — graceful fallback
+        return buildLineShareFallback(imageUrl, altText);
+    }
 
     if (!liff.isApiAvailable("shareTargetPicker")) {
         // Fallback for non-LIFF environment (e.g. desktop browser)
-        const shareText = altText ? `${altText}\n${imageUrl}` : imageUrl;
-        const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(imageUrl)}&text=${encodeURIComponent(shareText)}`;
-        // 回傳 url 讓呼叫端決定如何處理（例如：顯示一個真實的 <a> 連結避免 popup 被擋）
-        return { fallbackUrl: lineShareUrl };
+        return buildLineShareFallback(imageUrl, altText);
     }
 
     const messages = [];
