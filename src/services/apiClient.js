@@ -59,7 +59,15 @@ const parseResponse = async (response) => {
   }
 
   if (response.status === 204) return null;
-  return response.json();
+
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return text; // 如果不是 JSON 就直接回傳字串
+  }
 };
 
 export async function apiGet(url, options = {}) {

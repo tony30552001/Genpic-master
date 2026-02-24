@@ -66,12 +66,10 @@ export const shareViaLiff = async (imageUrl, altText) => {
 
     if (!liff.isApiAvailable("shareTargetPicker")) {
         // Fallback for non-LIFF environment (e.g. desktop browser)
-        // Note: LINE web share only officially supports sending text/links natively smoothly.
-        // We will append the URL to the text message to share it.
         const shareText = altText ? `${altText}\n${imageUrl}` : imageUrl;
         const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(imageUrl)}&text=${encodeURIComponent(shareText)}`;
-        window.open(lineShareUrl, "_blank");
-        return true;
+        // 回傳 url 讓呼叫端決定如何處理（例如：顯示一個真實的 <a> 連結避免 popup 被擋）
+        return { fallbackUrl: lineShareUrl };
     }
 
     const messages = [];
@@ -138,18 +136,20 @@ export const sendImageToLine = async (imageUrl, message) => {
             message,
         });
 
-        if (result.track === "liff") {
+        if (result && result.track === "liff") {
             // Track B: open LIFF picker
             const sent = await shareViaLiff(imageUrl, message);
+            if (sent?.fallbackUrl) return { track: "liff_fallback", url: sent.fallbackUrl };
             return { track: "liff", success: !!sent };
         }
 
         // Track A: bot already pushed
-        return { track: "bot", success: result.success };
+        return { track: "bot", success: result ? result.success : false };
     } catch (err) {
         console.warn("Backend LINE API failed, falling back to LIFF:", err);
         // Fallback to Track B if backend is unreachable or user not authenticated
         const sent = await shareViaLiff(imageUrl, message);
+        if (sent?.fallbackUrl) return { track: "liff_fallback", url: sent.fallbackUrl };
         return { track: "liff", success: !!sent };
     }
 };
