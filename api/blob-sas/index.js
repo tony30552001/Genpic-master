@@ -106,12 +106,28 @@ module.exports = async function (context, req) {
       sharedKey
     ).toString();
 
+    const readExpiresOn = new Date(startsOn.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year
+    const readSasToken = generateBlobSASQueryParameters(
+      {
+        containerName,
+        blobName: fileName,
+        permissions: BlobSASPermissions.parse("r"),
+        startsOn,
+        expiresOn: readExpiresOn,
+        contentType,
+      },
+      sharedKey
+    ).toString();
+
     const blobUrl = `https://${account}.blob.core.windows.net/${containerName}/${encodeURIComponent(
       fileName
     )}`;
 
+    const readUrl = `${blobUrl}?${readSasToken}`;
+
     context.res = ok({
       blobUrl,
+      readUrl,
       sasToken,
       expiresAt: expiresOn.toISOString(),
       blobName: fileName

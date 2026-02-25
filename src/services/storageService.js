@@ -73,6 +73,7 @@ export const uploadFileToBlob = async (file, container = "uploads") => {
 
   return {
     url: sasResult.blobUrl,
+    readUrl: sasResult.readUrl || sasResult.blobUrl,
     blobName: sasResult.blobName,
   };
 };

@@ -43,7 +43,7 @@ export default function ShareToLineButton({ imageUrl, message, user, className =
                     const file = dataURLtoFile(imageUrl, `share-to-line-${Date.now()}.${ext}`);
 
                     const uploadResult = await uploadFileToBlob(file, "uploads"); // uploading to uploads container
-                    finalImageUrl = uploadResult.url;
+                    finalImageUrl = uploadResult.readUrl || uploadResult.url;
                 } catch (uploadErr) {
                     throw new Error("上傳圖片準備分享失敗: " + uploadErr.message);
                 }
