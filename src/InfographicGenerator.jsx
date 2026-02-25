@@ -529,7 +529,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                             <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-5 gap-0 lg:gap-6 px-4 lg:px-8 py-3 overflow-y-auto lg:overflow-hidden custom-scrollbar">
 
                                 {/* Left: Controls (takes 3/5 on large screens) */}
-                                <div className="lg:col-span-3 lg:overflow-y-auto lg:custom-scrollbar pr-1">
+                                <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pr-1">
                                     {createSubTab === 'general' && (
                                         <ScriptEditor
                                             userScript={userScript}
@@ -582,7 +582,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                 )}
 
                                 {/* Right: Preview (takes 2/5 on large screens) */}
-                                <div className="lg:col-span-2 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
+                                <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
                                     {/* Decorative grid background */}
                                     <div
                                         className="absolute inset-0 opacity-[0.03]"

@@ -103,22 +103,9 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const insertResult = await query(
-      "INSERT INTO styles (tenant_id, name, prompt, description, tags, preview_url, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-      [
-        identity.tenantId,
-        styleName,
-        data.style_prompt,
-        data.style_description_zh || null,
-        tags,
-        imageUrl || null,
-        identity.userId,
-      ]
-    );
-
     context.res = ok({
       ...data,
-      styleId: insertResult.rows[0]?.id,
+      styleId: null,
     });
   } catch (err) {
     context.log.error("Analyze style failed", err);
