@@ -602,6 +602,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                             isGenerating={isGenerating}
                                             analyzedStyle={analyzedStyle}
                                             onDownload={handleDownload}
+                                            user={user}
+                                            message={userScript}
                                         />
                                     </div>
                                 </div>
