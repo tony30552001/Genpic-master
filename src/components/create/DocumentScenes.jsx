@@ -28,6 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { optimizeScene } from "@/services/aiService";
 
 
@@ -305,14 +306,17 @@ function SceneModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
 
             {/* 左：預覽圖 */}
-            <div className="relative aspect-[4/3] md:aspect-auto bg-muted/20 border-b md:border-b-0 md:border-r border-border/30 flex items-center justify-center">
+            <div className="relative aspect-[4/3] md:aspect-auto bg-muted/20 border-b md:border-b-0 md:border-r border-border/30 flex items-center justify-center overflow-hidden">
               {isThisGenerating ? (
-                <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-                    <Wand2 className="w-5 h-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                <div className="absolute inset-0 p-4 flex flex-col items-center justify-center">
+                  <Skeleton className="absolute inset-4 rounded-xl opacity-50" />
+                  <div className="relative z-10 flex flex-col items-center justify-center gap-2 text-primary bg-background/60 px-4 py-3 rounded-xl backdrop-blur-sm shadow-sm border border-primary/10">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                      <Wand2 className="w-4 h-4 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                    </div>
+                    <p className="text-xs font-medium animate-pulse">圖片生成中...</p>
                   </div>
-                  <p className="text-xs">AI 生成中...</p>
                 </div>
               ) : sceneImage ? (
                 <div className="relative w-full h-full group">
@@ -967,14 +971,17 @@ export default function DocumentScenes({
                   </div>
 
                   {/* 預覽圖 */}
-                  <div className="shrink-0 relative aspect-video bg-muted/20 border-b border-border/30 overflow-hidden">
+                  <div className="shrink-0 relative aspect-video bg-muted/20 border-b border-border/30 overflow-hidden w-full">
                     {isThisGenerating ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground bg-muted/10">
-                        <div className="relative">
-                          <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-                          <Wand2 className="w-4 h-4 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-3">
+                        <Skeleton className="absolute inset-3 rounded-lg opacity-60" />
+                        <div className="relative z-10 flex flex-col items-center justify-center gap-2 text-primary bg-background/70 px-4 py-3 rounded-xl backdrop-blur-md shadow-sm border border-primary/10">
+                          <div className="relative">
+                            <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                            <Wand2 className="w-3.5 h-3.5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                          </div>
+                          <p className="text-[10px] font-medium animate-pulse">圖片生成中...</p>
                         </div>
-                        <p className="text-xs">AI 生成中...</p>
                       </div>
                     ) : sceneImage ? (
                       <div className="relative w-full h-full group/img">
