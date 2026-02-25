@@ -18,7 +18,7 @@ export default function useDocumentAnalysis() {
    * 分析文件並提取分鏡腳本
    * @param {File} file - 上傳的文件物件
    */
-  const analyzeDocumentFromFile = useCallback(async (file) => {
+  const analyzeDocumentFromFile = useCallback(async (file, sceneCount) => {
     if (!file) {
       throw new Error("請先選擇文件。");
     }
@@ -53,6 +53,7 @@ export default function useDocumentAnalysis() {
       const analysisParams = {
         fileName: file.name,
         contentType: file.type || getMimeTypeFromExt(fileExtension),
+        sceneCount: sceneCount || 'auto',
       };
 
       // 統一走 Blob Storage 上傳（避免 Azure SWA 請求大小限制）

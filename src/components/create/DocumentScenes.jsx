@@ -19,12 +19,143 @@ import {
   ChevronDown,
   Sparkles,
   FileDown,
+  ZoomIn,
+  ZoomOut,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { optimizeScene } from "@/services/aiService";
+
+
+/* ────────────────────────────────────────────
+ *  圖片放大 Lightbox
+ * ──────────────────────────────────────────── */
+function ImageLightbox({ src, alt, onClose }) {
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const positionRef = useRef({ x: 0, y: 0 });
+  const overlayRef = useRef(null);
+
+  // ESC / 滾輪縮放
+  useEffect(() => {
+    const keyHandler = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    const wheelHandler = (e) => {
+      e.preventDefault();
+      setScale((s) => Math.max(0.5, Math.min(5, s + (e.deltaY > 0 ? -0.15 : 0.15))));
+    };
+    window.addEventListener("keydown", keyHandler);
+    window.addEventListener("wheel", wheelHandler, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", keyHandler);
+      window.removeEventListener("wheel", wheelHandler);
+    };
+  }, [onClose]);
+
+  const handleMouseDown = (e) => {
+    if (scale <= 1) return;
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    const newPos = {
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y,
+    };
+    positionRef.current = newPos;
+    setPosition(newPos);
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+
+  const handleOverlayClick = (e) => {
+    if (e.target === overlayRef.current) onClose();
+  };
+
+  const resetView = () => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={handleOverlayClick}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-200"
+    >
+      {/* 控制列 */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 text-xs shadow-lg bg-black/60 text-white hover:bg-black/80 border-white/20"
+          onClick={() => setScale((s) => Math.min(5, s + 0.5))}
+        >
+          <ZoomIn className="h-3.5 w-3.5 mr-1" /> 放大
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 text-xs shadow-lg bg-black/60 text-white hover:bg-black/80 border-white/20"
+          onClick={() => setScale((s) => Math.max(0.5, s - 0.5))}
+        >
+          <ZoomOut className="h-3.5 w-3.5 mr-1" /> 縮小
+        </Button>
+        <span className="text-white/70 text-xs px-2">{Math.round(scale * 100)}%</span>
+        {scale !== 1 && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-8 text-xs shadow-lg bg-black/60 text-white hover:bg-black/80 border-white/20"
+            onClick={resetView}
+          >
+            重置
+          </Button>
+        )}
+        <Button
+          variant="secondary"
+          size="icon"
+          className="h-8 w-8 shadow-lg bg-black/60 text-white hover:bg-black/80 border-white/20"
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* 圖片 */}
+      <img
+        src={src}
+        alt={alt}
+        className={`max-w-[90vw] max-h-[90vh] object-contain select-none transition-transform duration-150 ${scale > 1 ? "cursor-grab" : ""
+          } ${isDragging ? "cursor-grabbing" : ""}`}
+        style={{
+          transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+        }}
+        onMouseDown={handleMouseDown}
+        draggable={false}
+      />
+
+      {/* 提示 */}
+      <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/50 text-xs">
+        滾輪縮放 · 拖曳移動 · ESC 關閉
+      </p>
+    </div>
+  );
+}
+
 
 /* ────────────────────────────────────────────
  *  場景詳情 Popup Modal
@@ -37,9 +168,14 @@ function SceneModal({
   onClose,
   onUpdate,
   onGenerate,
+  styleContext,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ ...scene });
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizationNotes, setOptimizationNotes] = useState(null);
+  const [showSourceText, setShowSourceText] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
   const overlayRef = useRef(null);
   const isThisGenerating = generatingIndex === index;
 
@@ -58,6 +194,36 @@ function SceneModal({
   const saveEditing = () => {
     onUpdate(index, editForm);
     setIsEditing(false);
+  };
+
+  // AI 優化場景
+  const handleOptimize = async () => {
+    setIsOptimizing(true);
+    setOptimizationNotes(null);
+    try {
+      const result = await optimizeScene({
+        scene_title: scene.scene_title,
+        scene_description: scene.scene_description,
+        visual_prompt: scene.visual_prompt,
+        mood: scene.mood,
+        key_elements: scene.key_elements,
+        styleContext: styleContext || "",
+      });
+
+      // 更新場景資料
+      const updates = {
+        scene_title: result.scene_title || scene.scene_title,
+        scene_description: result.scene_description || scene.scene_description,
+        visual_prompt: result.visual_prompt || scene.visual_prompt,
+      };
+      onUpdate(index, updates);
+      setOptimizationNotes(result.optimization_notes || "已完成優化");
+    } catch (err) {
+      console.error("Scene optimization failed:", err);
+      setOptimizationNotes("優化失敗：" + (err.message || "請稍後重試"));
+    } finally {
+      setIsOptimizing(false);
+    }
   };
 
   const sceneImage = scene.generatedImage;
@@ -81,6 +247,20 @@ function SceneModal({
             )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* AI 優化按鈕 */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+              onClick={handleOptimize}
+              disabled={isOptimizing || isEditing}
+            >
+              {isOptimizing ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> 優化中...</>
+              ) : (
+                <><Sparkles className="h-3 w-3" /> AI 優化</>
+              )}
+            </Button>
             <Button
               variant="ghost" size="sm"
               className="h-8 text-xs gap-1"
@@ -100,6 +280,26 @@ function SceneModal({
           </div>
         </div>
 
+        {/* AI 優化提示 */}
+        {optimizationNotes && (
+          <div className="shrink-0 px-5 py-2 border-b border-border/30 bg-primary/5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                <p className="text-xs text-foreground">{optimizationNotes}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 text-xs shrink-0"
+                onClick={() => setOptimizationNotes(null)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Modal Body — 可捲動 */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
@@ -116,8 +316,19 @@ function SceneModal({
                 </div>
               ) : sceneImage ? (
                 <div className="relative w-full h-full group">
-                  <img src={sceneImage} alt={`Scene ${scene.scene_number}`} className="w-full h-full object-contain p-2" />
+                  <img
+                    src={sceneImage}
+                    alt={`Scene ${scene.scene_number}`}
+                    className="w-full h-full object-contain p-2 cursor-zoom-in"
+                    onClick={() => setLightboxSrc(sceneImage)}
+                  />
                   <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+                    <Button
+                      size="sm" variant="secondary" className="shadow-lg h-7 text-xs"
+                      onClick={() => setLightboxSrc(sceneImage)}
+                    >
+                      <ZoomIn className="h-3 w-3 mr-1" /> 放大
+                    </Button>
                     <Button
                       size="sm" variant="secondary" className="shadow-lg h-7 text-xs"
                       onClick={() => {
@@ -223,6 +434,27 @@ function SceneModal({
                       <p className="text-sm text-foreground">{scene.mood}</p>
                     </div>
                   )}
+
+                  {/* 原始文字連結 */}
+                  {scene.source_text && (
+                    <div>
+                      <button
+                        onClick={() => setShowSourceText((v) => !v)}
+                        className="flex items-center gap-1.5 text-[11px] font-medium text-primary/80 hover:text-primary transition-colors"
+                      >
+                        <BookOpen className="h-3 w-3" />
+                        <span>對照原文</span>
+                        <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${showSourceText ? "rotate-180" : ""}`} />
+                      </button>
+                      {showSourceText && (
+                        <div className="mt-2 p-3 rounded-lg bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/40 dark:border-amber-800/30 animate-in slide-in-from-top-2 duration-200">
+                          <p className="text-xs text-amber-900/80 dark:text-amber-200/80 leading-relaxed whitespace-pre-wrap">
+                            {scene.source_text}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -248,6 +480,15 @@ function SceneModal({
           </Button>
         </div>
       </div>
+
+      {/* 圖片放大 Lightbox */}
+      {lightboxSrc && (
+        <ImageLightbox
+          src={lightboxSrc}
+          alt={`Scene ${scene.scene_number}`}
+          onClose={() => setLightboxSrc(null)}
+        />
+      )}
     </div>
   );
 }
@@ -272,6 +513,8 @@ export default function DocumentScenes({
   const [generatingIndex, setGeneratingIndex] = useState(null);
   const [modalScene, setModalScene] = useState(null); // { scene, index }
   const [showStylePicker, setShowStylePicker] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -317,7 +560,6 @@ export default function DocumentScenes({
   };
 
   const generatedCount = scenes.filter((s) => s.generatedImage).length;
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   /**
    * 使用 Canvas 將中文文字渲染為高解析圖片
@@ -369,6 +611,8 @@ export default function DocumentScenes({
 
   /**
    * 將所有已生成的場景圖片匯出為 PDF（支援中文）
+   * - 使用 source_text（原始文字）作為摘要
+   * - 標題不截斷
    */
   const exportToPdf = async () => {
     const generatedScenes = scenes.filter((s) => s.generatedImage);
@@ -387,7 +631,7 @@ export default function DocumentScenes({
 
         let cursorY = 8; // 起始 Y 座標 (mm)
 
-        // 標題（Canvas 渲染中文）
+        // 標題（不截斷）
         const titleImg = renderTextToCanvas(
           `#${scene.scene_number}  ${scene.scene_title || ""}`,
           { fontSize: 14, bold: true, maxWidthMm: contentWidth }
@@ -395,18 +639,19 @@ export default function DocumentScenes({
         pdf.addImage(titleImg.dataUrl, "PNG", 10, cursorY, titleImg.widthMm, titleImg.heightMm);
         cursorY += titleImg.heightMm + 1;
 
-        // 描述（Canvas 渲染中文，最多顯示前 120 字）
-        if (scene.scene_description) {
-          const descText = scene.scene_description.length > 120
-            ? scene.scene_description.slice(0, 120) + "..."
-            : scene.scene_description;
-          const descImg = renderTextToCanvas(descText, {
+        // 摘要：優先使用 source_text（原始文字），其次使用完整 scene_description
+        const summaryText = scene.source_text || scene.scene_description || "";
+        if (summaryText) {
+          const descImg = renderTextToCanvas(summaryText, {
             fontSize: 9,
-            color: "#666666",
+            color: "#555555",
             maxWidthMm: contentWidth,
           });
-          pdf.addImage(descImg.dataUrl, "PNG", 10, cursorY, descImg.widthMm, descImg.heightMm);
-          cursorY += descImg.heightMm + 3;
+          // 限制摘要高度，避免太長的文字佔過多空間
+          const maxDescHeight = 30; // mm
+          const descHeight = Math.min(descImg.heightMm, maxDescHeight);
+          pdf.addImage(descImg.dataUrl, "PNG", 10, cursorY, descImg.widthMm, descHeight);
+          cursorY += descHeight + 3;
         }
 
         // 加入場景圖片
@@ -732,7 +977,20 @@ export default function DocumentScenes({
                         <p className="text-xs">AI 生成中...</p>
                       </div>
                     ) : sceneImage ? (
-                      <img src={sceneImage} alt={`Scene ${scene.scene_number}`} className="w-full h-full object-cover" />
+                      <div className="relative w-full h-full group/img">
+                        <img src={sceneImage} alt={`Scene ${scene.scene_number}`} className="w-full h-full object-cover" />
+                        {/* 卡片上的放大按鈕 */}
+                        <button
+                          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-black/70"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightboxSrc(sceneImage);
+                          }}
+                          title="放大圖片"
+                        >
+                          <ZoomIn className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40">
                         <ImageIcon className="w-8 h-8" />
@@ -750,6 +1008,14 @@ export default function DocumentScenes({
                     <p className="text-[10px] text-muted-foreground bg-muted/60 p-2 rounded font-mono line-clamp-2">
                       {scene.visual_prompt}
                     </p>
+
+                    {/* 有原始文字時的指示 */}
+                    {scene.source_text && (
+                      <div className="flex items-center gap-1 mt-2">
+                        <BookOpen className="h-3 w-3 text-amber-600/60" />
+                        <span className="text-[10px] text-amber-600/60">附有原始文字對照</span>
+                      </div>
+                    )}
 
                     <p className="text-[10px] text-primary font-medium mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       點擊查看完整內容 →
@@ -791,6 +1057,16 @@ export default function DocumentScenes({
           onClose={() => setModalScene(null)}
           onUpdate={handleModalUpdate}
           onGenerate={handleGenerateScene}
+          styleContext={analyzedStyle}
+        />
+      )}
+
+      {/* ═══════ 卡片圖片 Lightbox ═══════ */}
+      {lightboxSrc && (
+        <ImageLightbox
+          src={lightboxSrc}
+          alt="Scene Preview"
+          onClose={() => setLightboxSrc(null)}
         />
       )}
     </div>

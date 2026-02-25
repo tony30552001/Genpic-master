@@ -260,6 +260,7 @@ export default function DocumentUploader({
   disabled = false,
 }) {
   const [selectedFile, setSelectedFile] = useState(null);
+  const [sceneCount, setSceneCount] = useState('auto');
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef(null);
 
@@ -320,7 +321,7 @@ export default function DocumentUploader({
   const handleAnalyze = async () => {
     if (!selectedFile) return;
     try {
-      await onAnalyze(selectedFile);
+      await onAnalyze(selectedFile, sceneCount);
     } catch {
       // 錯誤已在父層處理
     }
@@ -429,10 +430,28 @@ export default function DocumentUploader({
 
       {/* 分析按鈕 */}
       {selectedFile && (
-        <Button onClick={handleAnalyze} disabled={disabled} className="w-full">
-          <FileText className="h-4 w-4 mr-2" />
-          分析文件並提取場景
-        </Button>
+        <div className="space-y-3">
+          {/* 分鏡數量選擇 */}
+          <div className="flex items-center gap-3 justify-center">
+            <label className="text-sm font-medium text-slate-700">分鏡數量</label>
+            <select
+              value={sceneCount}
+              onChange={(e) => setSceneCount(e.target.value)}
+              className="h-9 px-3 rounded-md border border-slate-300 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              disabled={disabled}
+            >
+              <option value="auto">自動（AI 決定）</option>
+              {[3, 4, 5, 6, 7, 8, 10, 12, 15, 20].map((n) => (
+                <option key={n} value={n}>{n} 個場景</option>
+              ))}
+            </select>
+            <span className="text-xs text-slate-400">可依文件長度調整</span>
+          </div>
+          <Button onClick={handleAnalyze} disabled={disabled} className="w-full">
+            <FileText className="h-4 w-4 mr-2" />
+            分析文件並提取場景
+          </Button>
+        </div>
       )}
     </div>
   );

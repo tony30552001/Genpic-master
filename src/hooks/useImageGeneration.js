@@ -46,7 +46,7 @@ export default function useImageGeneration() {
         // 語系指令
         const LANG_DIRECTIVES = {
           'en': 'All text in the image MUST be in English.',
-          'zh-TW': '圖片中的所有文字必須使用繁體中文。All text in the image MUST be in Traditional Chinese (zh-TW).',
+          'zh-TW': '圖片中的所有文字必須使用繁體中文(Traditional Chinese)。文字必須清晰可讀、字體端正、無錯字。使用標準繁體中文字形（如「體」非「体」、「為」非「为」），避免簡體字或日文漢字。確保文字排版美觀、對齊工整。All text in the image MUST be in Traditional Chinese (zh-TW) with correct traditional stroke forms. Text must be crisp, legible, properly aligned and aesthetically pleasing. Never use simplified Chinese characters.',
           'zh-CN': '图片中的所有文字必须使用简体中文。All text in the image MUST be in Simplified Chinese (zh-CN).',
           'ja': '画像内のすべてのテキストは日本語にしてください。All text in the image MUST be in Japanese.',
           'ko': '이미지의 모든 텍스트는 한국어로 작성하세요. All text in the image MUST be in Korean.',
