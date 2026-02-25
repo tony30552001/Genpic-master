@@ -292,8 +292,11 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         try {
             setErrorMsg('');
             // 呼叫圖片生成（帶入語系設定）
+            // 使用英文的 visual_prompt 作為生成提示詞，若無則退回使用 scene_description
+            const promptToUse = scene.visual_prompt || scene.scene_description;
+
             const result = await generateImage({
-                userScript: scene.scene_description,
+                userScript: promptToUse,
                 analyzedStyle,
                 aspectRatio,
                 imageSize,
