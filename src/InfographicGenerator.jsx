@@ -278,7 +278,6 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         try {
             setErrorMsg('');
             const result = await analyzeDocument(file);
-            if (result.scenes && result.scenes.length > 0) setUserScript(result.scenes[0].scene_description || '');
             return result;
         } catch (err) {
             console.error("Document Analysis Failed:", err);
@@ -315,9 +314,6 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                 sceneNumber: scene.scene_number,
                 documentTitle: documentResult?.title
             });
-
-            // 3. 更新主預覽圖 (選用，讓使用者看到最新生成的圖)
-            setGeneratedImage(result.imageUrl);
 
             setErrorMsg('');
         } catch (err) {

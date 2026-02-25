@@ -26,8 +26,6 @@ export default function useDocumentAnalysis() {
     // 驗證檔案格式
     const supportedTypes = [
       "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation", // pptx
       "text/plain",
       "text/markdown",
       "image/png",
@@ -35,10 +33,10 @@ export default function useDocumentAnalysis() {
     ];
 
     const fileExtension = file.name.split(".").pop().toLowerCase();
-    const supportedExtensions = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg"];
+    const supportedExtensions = ["pdf", "txt", "md", "png", "jpg", "jpeg"];
 
     if (!supportedTypes.includes(file.type) && !supportedExtensions.includes(fileExtension)) {
-      throw new Error("不支援的檔案格式。請上傳 PDF、DOCX、PPTX、TXT 或圖片檔案。");
+      throw new Error("不支援的檔案格式。請上傳 PDF、TXT 或圖片檔案。");
     }
 
     // 檔案大小限制 (50MB)
@@ -190,8 +188,6 @@ export default function useDocumentAnalysis() {
 function getMimeTypeFromExt(ext) {
   const map = {
     pdf: "application/pdf",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     txt: "text/plain",
     md: "text/plain",
     png: "image/png",

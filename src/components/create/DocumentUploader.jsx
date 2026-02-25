@@ -7,12 +7,11 @@ import { Button } from "@/components/ui/button";
 
 /**
  * 分析進度步驟定義
- * 每步有對應的 phase 關鍵字、icon、標題、描述、預估時間佔比
+ * 每步有對應的 icon、標題、描述、預估時間佔比
  */
 const ANALYSIS_STEPS = [
   {
     id: "upload",
-    keywords: ["準備", "上傳"],
     icon: Upload,
     title: "文件準備",
     description: "正在讀取並傳送文件...",
@@ -20,15 +19,13 @@ const ANALYSIS_STEPS = [
   },
   {
     id: "reading",
-    keywords: ["AI 正在分析"],
     icon: FileSearch,
     title: "內容解析",
     description: "AI 正在閱讀並理解文件內容...",
-    weight: 35,
+    weight: 30,
   },
   {
     id: "analyzing",
-    keywords: [],
     icon: Brain,
     title: "智能分析",
     description: "提取敘事結構、角色和場景...",
@@ -36,7 +33,6 @@ const ANALYSIS_STEPS = [
   },
   {
     id: "generating",
-    keywords: ["整理"],
     icon: Clapperboard,
     title: "生成分鏡",
     description: "組織場景、撰寫視覺 Prompt...",
@@ -44,7 +40,6 @@ const ANALYSIS_STEPS = [
   },
   {
     id: "done",
-    keywords: [],
     icon: Sparkles,
     title: "完成",
     description: "分析結果已就緒！",
@@ -53,16 +48,22 @@ const ANALYSIS_STEPS = [
 ];
 
 /**
- * 根據 analysisPhase 文字判斷目前步驟
+ * 根據經過時間與 analysisPhase 綜合判斷目前步驟
+ * 時間驅動為主，keyword 為輔（解決 API 回應期間卡住問題）
  */
-const getCurrentStepIndex = (phase) => {
-  if (!phase) return 0;
-  for (let i = ANALYSIS_STEPS.length - 1; i >= 0; i--) {
-    const step = ANALYSIS_STEPS[i];
-    if (step.keywords.some((kw) => phase.includes(kw))) return i;
-  }
-  return 1; // 預設為讀取步驟
+const getCurrentStepIndex = (phase, elapsedSeconds) => {
+  // 若 analysisPhase 包含「整理」，表示 API 已回傳
+  if (phase && phase.includes("整理")) return 3;
+  // 上傳階段
+  if (phase && (phase.includes("準備") || phase.includes("上傳"))) return 0;
+
+  // AI 分析期間（長時間等待）以時間推進
+  if (elapsedSeconds < 5) return 1;    // 內容解析
+  if (elapsedSeconds < 15) return 2;   // 智能分析
+  if (elapsedSeconds < 30) return 3;   // 生成分鏡
+  return 3; // 超過 30 秒仍在第 3 步
 };
+
 
 /**
  * 分析進度面板
@@ -72,14 +73,14 @@ function AnalysisProgress({ analysisPhase, fileName }) {
   const [simulatedProgress, setSimulatedProgress] = useState(0);
   const startTimeRef = useRef(0);
 
-  const currentStepIndex = getCurrentStepIndex(analysisPhase);
+  const currentStepIndex = getCurrentStepIndex(analysisPhase, elapsedSeconds);
 
   // 計時器
   useEffect(() => {
     startTimeRef.current = Date.now();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setElapsedSeconds(0);
-     
+
     setSimulatedProgress(0);
 
     const timer = setInterval(() => {
@@ -264,8 +265,6 @@ export default function DocumentUploader({
 
   const supportedFormats = [
     { ext: "pdf", label: "PDF", color: "text-red-500" },
-    { ext: "docx", label: "Word", color: "text-blue-500" },
-    { ext: "pptx", label: "PowerPoint", color: "text-orange-500" },
     { ext: "txt", label: "Text", color: "text-gray-500" },
     { ext: "md", label: "Markdown", color: "text-gray-500" },
     { ext: "png", label: "PNG", color: "text-green-500" },
@@ -278,10 +277,10 @@ export default function DocumentUploader({
       alert("檔案大小超過 50MB 限制");
       return;
     }
-    const supportedExtensions = ["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg"];
+    const supportedExtensions = ["pdf", "txt", "md", "png", "jpg", "jpeg"];
     const ext = file.name.split(".").pop().toLowerCase();
     if (!supportedExtensions.includes(ext)) {
-      alert("不支援的檔案格式。請上傳 PDF、DOCX、PPTX、TXT 或圖片檔案。");
+      alert("不支援的檔案格式。請上傳 PDF、TXT 或圖片檔案。");
       return;
     }
     setSelectedFile(file);
@@ -339,8 +338,6 @@ export default function DocumentUploader({
     const ext = fileName.split(".").pop().toLowerCase();
     switch (ext) {
       case "pdf": return <FileText className="h-8 w-8 text-red-500" />;
-      case "docx": case "doc": return <FileText className="h-8 w-8 text-blue-500" />;
-      case "pptx": case "ppt": return <FileText className="h-8 w-8 text-orange-500" />;
       case "png": case "jpg": case "jpeg": return <FileType className="h-8 w-8 text-green-500" />;
       default: return <FileText className="h-8 w-8 text-gray-500" />;
     }
@@ -382,7 +379,7 @@ export default function DocumentUploader({
           type="file"
           className="hidden"
           onChange={handleChange}
-          accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg"
+          accept=".pdf,.txt,.md,.png,.jpg,.jpeg"
           disabled={disabled}
         />
 
@@ -408,7 +405,7 @@ export default function DocumentUploader({
               <Upload className="h-12 w-12 text-slate-400" />
               <div className="text-center">
                 <p className="text-sm font-medium text-slate-700">點擊或拖曳檔案至此處</p>
-                <p className="text-xs text-slate-500 mt-1">支援 PDF、Word、PowerPoint、文字檔案與圖片</p>
+                <p className="text-xs text-slate-500 mt-1">支援 PDF、文字檔案與圖片</p>
                 <p className="text-xs text-slate-400">最大 50MB</p>
               </div>
             </>

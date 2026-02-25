@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { jsPDF } from "jspdf";
 import {
   Image as ImageIcon,
   Edit2,
@@ -17,6 +18,7 @@ import {
   Palette,
   ChevronDown,
   Sparkles,
+  FileDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -315,6 +317,132 @@ export default function DocumentScenes({
   };
 
   const generatedCount = scenes.filter((s) => s.generatedImage).length;
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  /**
+   * 使用 Canvas 將中文文字渲染為高解析圖片
+   * 利用瀏覽器內建 CJK 字型，無需額外下載字型檔
+   */
+  const renderTextToCanvas = (text, { fontSize = 14, bold = false, color = "#282828", maxWidthMm = 260 } = {}) => {
+    const SCALE = 3; // 3x 高解析度
+    const PX_PER_MM = 96 / 25.4; // 96 DPI
+    const maxWidthPx = maxWidthMm * PX_PER_MM * SCALE;
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const fontWeight = bold ? "bold" : "normal";
+    const fontStr = `${fontWeight} ${fontSize * SCALE}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", sans-serif`;
+
+    ctx.font = fontStr;
+
+    // 逐字元換行（適用 CJK 文字）
+    const lines = [];
+    let currentLine = "";
+    for (const char of text) {
+      if (char === "\n") { lines.push(currentLine); currentLine = ""; continue; }
+      const testLine = currentLine + char;
+      if (ctx.measureText(testLine).width > maxWidthPx && currentLine) {
+        lines.push(currentLine);
+        currentLine = char;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+
+    const lineHeight = fontSize * SCALE * 1.5;
+    canvas.width = maxWidthPx;
+    canvas.height = Math.max(lines.length * lineHeight + 4 * SCALE, lineHeight);
+
+    // canvas resize 後需重設 font
+    ctx.font = fontStr;
+    ctx.fillStyle = color;
+    ctx.textBaseline = "top";
+    lines.forEach((line, i) => ctx.fillText(line, 0, i * lineHeight));
+
+    return {
+      dataUrl: canvas.toDataURL("image/png"),
+      widthMm: canvas.width / SCALE / PX_PER_MM,
+      heightMm: canvas.height / SCALE / PX_PER_MM,
+    };
+  };
+
+  /**
+   * 將所有已生成的場景圖片匯出為 PDF（支援中文）
+   */
+  const exportToPdf = async () => {
+    const generatedScenes = scenes.filter((s) => s.generatedImage);
+    if (generatedScenes.length === 0) return;
+
+    setIsExportingPdf(true);
+    try {
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const contentWidth = pageWidth - 20; // 左右各 10mm 留白
+
+      for (let i = 0; i < generatedScenes.length; i++) {
+        const scene = generatedScenes[i];
+        if (i > 0) pdf.addPage();
+
+        let cursorY = 8; // 起始 Y 座標 (mm)
+
+        // 標題（Canvas 渲染中文）
+        const titleImg = renderTextToCanvas(
+          `#${scene.scene_number}  ${scene.scene_title || ""}`,
+          { fontSize: 14, bold: true, maxWidthMm: contentWidth }
+        );
+        pdf.addImage(titleImg.dataUrl, "PNG", 10, cursorY, titleImg.widthMm, titleImg.heightMm);
+        cursorY += titleImg.heightMm + 1;
+
+        // 描述（Canvas 渲染中文，最多顯示前 120 字）
+        if (scene.scene_description) {
+          const descText = scene.scene_description.length > 120
+            ? scene.scene_description.slice(0, 120) + "..."
+            : scene.scene_description;
+          const descImg = renderTextToCanvas(descText, {
+            fontSize: 9,
+            color: "#666666",
+            maxWidthMm: contentWidth,
+          });
+          pdf.addImage(descImg.dataUrl, "PNG", 10, cursorY, descImg.widthMm, descImg.heightMm);
+          cursorY += descImg.heightMm + 3;
+        }
+
+        // 加入場景圖片
+        try {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = scene.generatedImage;
+          });
+
+          const maxW = contentWidth;
+          const maxH = pageHeight - cursorY - 5;
+          const ratio = Math.min(maxW / img.width, maxH / img.height);
+          const w = img.width * ratio;
+          const h = img.height * ratio;
+          const x = (pageWidth - w) / 2;
+          pdf.addImage(img, "PNG", x, cursorY, w, h);
+        } catch {
+          // 圖片載入失敗時的 fallback（用 Canvas 渲染錯誤訊息）
+          const errImg = renderTextToCanvas("[圖片載入失敗]", {
+            fontSize: 12, color: "#c83232",
+          });
+          pdf.addImage(errImg.dataUrl, "PNG", pageWidth / 2 - errImg.widthMm / 2, pageHeight / 2, errImg.widthMm, errImg.heightMm);
+        }
+      }
+
+      pdf.save(`${title || "document"}-scenes-${Date.now()}.pdf`);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      alert("PDF 匯出失敗，請稍後再試。");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   // 打開 modal 時使用最新的 scene 資料
   const openModal = (index) => {
@@ -361,6 +489,21 @@ export default function DocumentScenes({
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {generatedCount > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportToPdf}
+                    disabled={isGenerating || isExportingPdf}
+                    className="text-xs h-8 gap-1"
+                  >
+                    {isExportingPdf ? (
+                      <><Loader2 className="h-3 w-3 animate-spin" /> 匯出中...</>
+                    ) : (
+                      <><FileDown className="h-3 w-3" /> 匯出 PDF</>
+                    )}
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={onClear} disabled={isGenerating} className="text-xs h-8">
                   清除分析
                 </Button>
