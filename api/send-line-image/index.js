@@ -46,6 +46,9 @@ const pushImageMessage = async (channelAccessToken, targetId, imageUrl, altText)
 
     if (!resp.ok) {
         const body = await resp.text();
+        if (resp.status === 400 && body.includes("'to'")) {
+            throw new Error(`發送目標 (Target ID) 格式無效。請確認輸入正確的使用者 ID (U開頭) 或群組 ID (C開頭)。(LINE 回應: ${body})`);
+        }
         throw new Error(`LINE Messaging API 錯誤 ${resp.status}: ${body}`);
     }
     return true;

@@ -111,14 +111,34 @@ module.exports = async function (context, req) {
             targetType,
         } = req.body || {};
 
-        if (!channelAccessToken) {
+        const existingResult = await query(
+            `SELECT channel_access_token_enc, channel_secret_enc FROM line_configs WHERE user_id = $1 AND tenant_id = $2`,
+            [identity.userId, identity.tenantId]
+        );
+        const existing = existingResult.rows.length > 0 ? existingResult.rows[0] : null;
+
+        if (!channelAccessToken && !existing) {
             context.res = error("缺少 channelAccessToken", "bad_request", 400);
             return;
         }
 
-        // Encrypt sensitive fields
-        const tokenEnc = encrypt(channelAccessToken);
-        const secretEnc = channelSecret ? encrypt(channelSecret) : null;
+        let tokenEnc = null;
+        if (channelAccessToken === "********" && existing) {
+            tokenEnc = existing.channel_access_token_enc;
+        } else if (channelAccessToken) {
+            tokenEnc = encrypt(channelAccessToken);
+        } else if (existing) {
+            tokenEnc = existing.channel_access_token_enc;
+        }
+
+        let secretEnc = null;
+        if (channelSecret === "********" && existing) {
+            secretEnc = existing.channel_secret_enc;
+        } else if (channelSecret) {
+            secretEnc = encrypt(channelSecret);
+        } else if (existing) {
+            secretEnc = existing.channel_secret_enc;
+        }
 
         // Upsert (ON CONFLICT DO UPDATE)
         const result = await query(

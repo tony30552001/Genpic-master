@@ -55,8 +55,8 @@ export default function LineSettings({ useLineConfigHook }) {
         channelAccessToken: "",
         channelSecret: "",
         channelName: "",
-        targetId: config?.targetId || "",
-        targetType: config?.targetType || "group",
+        targetId: "",
+        targetType: "group",
     });
     const [verifyState, setVerifyState] = useState(null); // null | "verifying" | { valid, channelName, message }
     const [toast, setToast] = useState(null);
@@ -67,7 +67,7 @@ export default function LineSettings({ useLineConfigHook }) {
     };
 
     const handleVerify = async () => {
-        if (!form.channelAccessToken.trim()) return;
+        if (!form.channelAccessToken.trim() || form.channelAccessToken === "********") return;
         setVerifyState("verifying");
         try {
             const result = await verifyToken(form.channelAccessToken.trim());
@@ -158,7 +158,18 @@ export default function LineSettings({ useLineConfigHook }) {
                             <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => setShowForm(true)}
+                                onClick={() => {
+                                    if (config) {
+                                        setForm({
+                                            channelAccessToken: "********",
+                                            channelSecret: config.channelSecret ? "********" : "",
+                                            channelName: config.channelName || "",
+                                            targetId: config.targetId || "",
+                                            targetType: config.targetType || "group",
+                                        });
+                                    }
+                                    setShowForm(true);
+                                }}
                                 className="flex-1"
                             >
                                 修改設定
@@ -228,7 +239,7 @@ export default function LineSettings({ useLineConfigHook }) {
                                 size="sm"
                                 variant="outline"
                                 className="mt-2"
-                                disabled={!form.channelAccessToken.trim() || verifyState === "verifying"}
+                                disabled={!form.channelAccessToken.trim() || form.channelAccessToken === "********" || verifyState === "verifying"}
                                 onClick={handleVerify}
                             >
                                 <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
@@ -313,8 +324,8 @@ export default function LineSettings({ useLineConfigHook }) {
                 {toast && (
                     <div
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${toast.type === "error"
-                                ? "bg-destructive/10 text-destructive border border-destructive/20"
-                                : "bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+                            ? "bg-destructive/10 text-destructive border border-destructive/20"
+                            : "bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
                             }`}
                     >
                         {toast.type === "error" ? (
