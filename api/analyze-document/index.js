@@ -53,7 +53,7 @@ const buildAnalysisPrompt = (sceneCount) => {
  * @param {string} documentUrl - Blob URL，格式: https://<account>.blob.core.windows.net/<container>/<blobName>
  * @returns {{ base64: string, contentType: string }}
  */
-const fetchDocumentAsBase64 = async (documentUrl) => {
+const fetchDocumentAsBase64 = async (documentUrl, fileName) => {
   const account = process.env.AZURE_STORAGE_ACCOUNT;
   const key = process.env.AZURE_STORAGE_KEY;
 
@@ -78,8 +78,13 @@ const fetchDocumentAsBase64 = async (documentUrl) => {
         .getBlobClient(blobName);
 
       const downloadResponse = await blobClient.download(0);
-      const contentType =
-        downloadResponse.contentType || "application/pdf";
+      let contentType = downloadResponse.contentType || "";
+
+      // 若 Blob 儲存的 contentType 不可用（空或 octet-stream），依檔名推斷
+      if (!contentType || contentType === "application/octet-stream") {
+        const inferredName = fileName || blobName;
+        contentType = getMimeType(inferredName);
+      }
 
       // 讀取 stream 為 buffer
       const chunks = [];
@@ -96,7 +101,11 @@ const fetchDocumentAsBase64 = async (documentUrl) => {
   if (!response.ok) {
     throw new Error(`Document fetch failed: ${response.status}`);
   }
-  const contentType = response.headers.get("content-type") || "application/pdf";
+  let contentType = response.headers.get("content-type") || "";
+  // 若 HTTP 回傳的 content-type 是 octet-stream，依檔名推斷
+  if (!contentType || contentType === "application/octet-stream") {
+    contentType = fileName ? getMimeType(fileName) : "application/pdf";
+  }
   const arrayBuffer = await response.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString("base64");
   return { base64, contentType };
@@ -153,9 +162,11 @@ const parseGeminiResponse = (result, context) => {
   // 嘗試多種路徑找到文字內容
   let responseText = "";
 
-  // 路徑 1: 直接 .text（@google/genai v1.x 的標準回傳）
+  // 路徑 1: 直接 .text（@google/genai 的標準回傳，可能是 string 或 function）
   try {
-    if (typeof result?.text === "string" && result.text) {
+    if (typeof result?.text === "function") {
+      responseText = result.text();
+    } else if (typeof result?.text === "string" && result.text) {
       responseText = result.text;
     }
   } catch (e) {
@@ -315,10 +326,13 @@ module.exports = async function (context, req) {
         base64Data = base64Content;
       }
     } else if (documentUrl) {
-      // 從 URL 獲取
-      const fetched = await fetchDocumentAsBase64(documentUrl);
+      // 從 URL 獲取（傳入 fileName 以便 octet-stream 時可以回退推斷 MIME type）
+      const fetched = await fetchDocumentAsBase64(documentUrl, fileName);
       base64Data = fetched.base64;
-      finalMimeType = fetched.contentType;
+      // 若抓回來的 mimeType 仍是 octet-stream，再用 fileName 推斷一次
+      finalMimeType = (fetched.contentType && fetched.contentType !== "application/octet-stream")
+        ? fetched.contentType
+        : getMimeType(fileName);
     }
 
     if (!base64Data) {
@@ -335,8 +349,17 @@ module.exports = async function (context, req) {
     let contents;
     const analysisPrompt = buildAnalysisPrompt(sceneCount);
     if (finalMimeType === "text/plain") {
-      const textContent = Buffer.from(base64Data, "base64").toString("utf-8");
+      let textContent = Buffer.from(base64Data, "base64").toString("utf-8");
       context.log("[analyze-document] Text content length:", textContent.length);
+
+      // 防止輸入超出 token 限制（約每 4 字元 = 1 token）
+      // 保留 30000 字元（≈7500 tokens）給輸入，剩餘 token 留給輸出
+      const MAX_TEXT_CHARS = 30000;
+      if (textContent.length > MAX_TEXT_CHARS) {
+        context.log("[analyze-document] Text truncated from", textContent.length, "to", MAX_TEXT_CHARS, "chars");
+        textContent = textContent.substring(0, MAX_TEXT_CHARS) + "\n\n[... 文件因長度截斷，請依以上內容進行分析 ...]";
+      }
+
       contents = [
         {
           role: "user",
@@ -362,7 +385,11 @@ module.exports = async function (context, req) {
     let result;
     try {
       result = await model.generateContent(contents, {
+        // 正確的 Google GenAI SDK config 結構
         responseMimeType: "application/json",
+        // 增加 maxOutputTokens 防止大型 JSON 被截斷（10 個場景的 JSON 可能超過 8000 tokens）
+        maxOutputTokens: 65535,
+        temperature: 0.4, // 稍低隨機性以獲得更穩定的 JSON 輸出
       });
       context.log("[analyze-document] Step 5: Gemini responded, result keys:", Object.keys(result || {}));
     } catch (geminiErr) {
@@ -391,8 +418,21 @@ module.exports = async function (context, req) {
     }
 
     // 驗證必要欄位
-    if (!data.scenes || !Array.isArray(data.scenes)) {
-      context.res = error("AI 回應缺少場景資訊", "invalid_response", 502);
+    // Gemini 有時會直接回傳 scenes 陣列而非物件
+    if (Array.isArray(data)) {
+      context.log("[analyze-document] data is array, wrapping...");
+      data = { scenes: data, title: fileName || "未命名文件", summary: "" };
+    }
+
+    if (!data.scenes || !Array.isArray(data.scenes) || data.scenes.length === 0) {
+      context.log.error("[analyze-document] Missing scenes. data keys:", Object.keys(data || {}),
+        "data type:", typeof data,
+        "data preview:", JSON.stringify(data)?.substring(0, 500));
+      context.res = error(
+        "AI 回應缺少場景資訊，請稍後重試或減少場景數量",
+        "invalid_response",
+        502
+      );
       return;
     }
 

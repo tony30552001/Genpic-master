@@ -45,6 +45,23 @@ export const uploadBlob = async ({ blobUrl, sasToken, file, contentType }) => {
 };
 
 /**
+ * 從副檔名推斷 MIME type（處理瀏覽器對 .md 等格式回傳空 file.type 的情況）
+ */
+const inferMimeType = (file) => {
+  if (file.type && file.type !== "application/octet-stream") return file.type;
+  const ext = file.name.split(".").pop().toLowerCase();
+  const map = {
+    pdf: "application/pdf",
+    txt: "text/plain",
+    md: "text/plain",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+  };
+  return map[ext] || "application/octet-stream";
+};
+
+/**
  * 上傳檔案到 Blob Storage
  * 完整流程：取得 SAS Token → 上傳檔案
  * @param {File} file - 要上傳的檔案
@@ -52,10 +69,12 @@ export const uploadBlob = async ({ blobUrl, sasToken, file, contentType }) => {
  * @returns {Promise<{url: string, blobName: string}>}
  */
 export const uploadFileToBlob = async (file, container = "uploads") => {
+  const contentType = inferMimeType(file);
+
   // 步驟 1: 請求 SAS Token
   const sasResult = await requestBlobSas({
     fileName: file.name,
-    contentType: file.type,
+    contentType,
     container,
   });
 
@@ -68,7 +87,7 @@ export const uploadFileToBlob = async (file, container = "uploads") => {
     blobUrl: sasResult.blobUrl,
     sasToken: sasResult.sasToken,
     file,
-    contentType: file.type,
+    contentType,
   });
 
   return {
