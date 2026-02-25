@@ -8,13 +8,15 @@
  * - Enable/disable or remove the binding
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     CheckCircle,
     ChevronDown,
+    ChevronRight,
     ChevronUp,
     Eye,
     EyeOff,
+    HelpCircle,
     Info,
     Loader2,
     MessageSquare,
@@ -60,6 +62,20 @@ export default function LineSettings({ useLineConfigHook }) {
     });
     const [verifyState, setVerifyState] = useState(null); // null | "verifying" | { valid, channelName, message }
     const [toast, setToast] = useState(null);
+    const [showIdHelp, setShowIdHelp] = useState(false);
+
+    // ── 問題4修復：當 config 載入後同步到 form state ──
+    useEffect(() => {
+        if (config && isBound) {
+            setForm({
+                channelAccessToken: "********",
+                channelSecret: config.channelSecret ? "********" : "",
+                channelName: config.channelName || "",
+                targetId: config.targetId || "",
+                targetType: config.targetType || "group",
+            });
+        }
+    }, [config, isBound]);
 
     const showToast = (message, type = "success") => {
         setToast({ message, type });
@@ -283,6 +299,45 @@ export default function LineSettings({ useLineConfigHook }) {
                                     <option value="user">使用者</option>
                                 </select>
                             </div>
+
+                            {/* 操作指引 */}
+                            <button
+                                type="button"
+                                onClick={() => setShowIdHelp((p) => !p)}
+                                className="flex items-center gap-1 text-xs text-primary hover:underline mt-1.5"
+                            >
+                                <HelpCircle className="w-3 h-3" />
+                                {showIdHelp ? "收起說明" : "如何取得 ID？"}
+                                {showIdHelp ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            </button>
+                            {showIdHelp && (
+                                <div className="mt-2 p-3 bg-muted/50 border border-border/30 rounded-lg text-xs text-muted-foreground space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <p className="font-medium text-foreground">取得群組 ID (Group ID)</p>
+                                    <ol className="list-decimal list-inside space-y-1 ml-1">
+                                        <li>將你的 LINE 官方帳號（Bot）加入目標群組</li>
+                                        <li>在群組中傳送任意訊息</li>
+                                        <li>透過 Webhook 接收到的事件中，<code className="px-1 py-0.5 bg-muted rounded text-[11px]">source.groupId</code> 即為群組 ID（以 <strong>C</strong> 開頭）</li>
+                                    </ol>
+                                    <p className="font-medium text-foreground pt-1">取得使用者 ID (User ID)</p>
+                                    <ol className="list-decimal list-inside space-y-1 ml-1">
+                                        <li>使用者加入你的官方帳號為好友</li>
+                                        <li>使用者傳送任意訊息給官方帳號</li>
+                                        <li>透過 Webhook 接收到的事件中，<code className="px-1 py-0.5 bg-muted rounded text-[11px]">source.userId</code> 即為使用者 ID（以 <strong>U</strong> 開頭）</li>
+                                    </ol>
+                                    <p className="pt-1">
+                                        💡 提示：可在{" "}
+                                        <a
+                                            href="https://developers.line.biz/console/"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-primary hover:underline"
+                                        >
+                                            LINE Developers Console
+                                        </a>
+                                        {" "}的 Messaging API 設定中啟用 Webhook 並查看相關資訊。
+                                    </p>
+                                </div>
+                            )}
                         </Field>
 
                         {/* Info box */}

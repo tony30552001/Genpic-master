@@ -576,7 +576,6 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                                 analyzedStyle={analyzedStyle}
                                                 onDownload={handleDownload}
                                                 user={user}
-                                                message={userScript}
                                             />
                                         </div>
                                     </div>
@@ -599,7 +598,6 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                             analyzedStyle={analyzedStyle}
                                             onDownload={handleDownload}
                                             user={user}
-                                            message={userScript}
                                         />
                                     </div>
                                 </div>

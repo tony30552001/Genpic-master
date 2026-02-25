@@ -7,7 +7,6 @@ export default function ImagePreview({
   isGenerating,
   onDownload,
   user,
-  message,
 }) {
   return (
     <div className="relative flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-slate-100 rounded-xl overflow-hidden group">
@@ -61,7 +60,6 @@ export default function ImagePreview({
           <ShareToLineButton
             imageUrl={generatedImage}
             user={user}
-            message={message}
             className="[&>button]:h-10 [&>button]:px-4 [&>button]:text-sm [&>button]:rounded-lg [&>button]:shadow-lg"
           />
           <button

@@ -20,7 +20,7 @@ const dataURLtoFile = (dataurl, filename) => {
     return new File([u8arr], filename, { type: mime });
 };
 
-export default function ShareToLineButton({ imageUrl, message, user, className = "" }) {
+export default function ShareToLineButton({ imageUrl, user, className = "" }) {
     const { isBound } = useLineConfig({ user });
     const [status, setStatus] = useState("idle"); // "idle" | "loading" | "success" | "error"
     const [errorMsg, setErrorMsg] = useState("");
@@ -59,7 +59,7 @@ export default function ShareToLineButton({ imageUrl, message, user, className =
                 }
             }
 
-            const result = await sendImageToLine(finalImageUrl, message);
+            const result = await sendImageToLine(finalImageUrl);
 
             if (result && result.success) {
                 setStatus("success");
@@ -70,7 +70,7 @@ export default function ShareToLineButton({ imageUrl, message, user, className =
             setStatus("error");
             setTimeout(() => setStatus("idle"), 4000);
         }
-    }, [imageUrl, message, isBound]);
+    }, [imageUrl, isBound]);
 
     const isLoading = status === "loading";
     const isSuccess = status === "success";

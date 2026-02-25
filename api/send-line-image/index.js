@@ -18,7 +18,7 @@ const { resolveIdentity } = require("../_shared/identity");
 const { decrypt } = require("../_shared/lineEncryption");
 
 // ─── Push image via LINE Messaging API ────────────────────────────────────
-const pushImageMessage = async (channelAccessToken, targetId, imageUrl, altText) => {
+const pushImageMessage = async (channelAccessToken, targetId, imageUrl) => {
     const payload = {
         to: targetId,
         messages: [
@@ -29,11 +29,6 @@ const pushImageMessage = async (channelAccessToken, targetId, imageUrl, altText)
             },
         ],
     };
-
-    // Optionally prepend a text message
-    if (altText) {
-        payload.messages.unshift({ type: "text", text: altText });
-    }
 
     const resp = await fetch("https://api.line.me/v2/bot/message/push", {
         method: "POST",
@@ -119,7 +114,7 @@ module.exports = async function (context, req) {
     // Track A: Push via user's Official Account
     try {
         const token = decrypt(config.channel_access_token_enc);
-        await pushImageMessage(token, config.target_id, imageUrl, message || null);
+        await pushImageMessage(token, config.target_id, imageUrl);
         context.res = ok({ track: "bot", success: true });
     } catch (err) {
         console.error("[send-line-image] Error:", err.message);

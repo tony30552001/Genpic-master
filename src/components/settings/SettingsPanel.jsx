@@ -87,7 +87,7 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, us
     const lineConfigHook = useLineConfig({ user });
 
     return (
-        <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
+        <div className="max-w-6xl mx-auto py-6 px-4 space-y-5">
             {/* 標題 */}
             <div className="space-y-1">
                 <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -99,90 +99,96 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, us
                 </p>
             </div>
 
-            {/* 語系設定 */}
-            <Card className="border-border/60">
-                <CardContent className="p-5 space-y-4">
-                    {/* 區塊標題 */}
+            {/* 雙欄佈局 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {/* 左欄：語系設定 */}
+                <Card className="border-border/60">
+                    <CardContent className="p-5 space-y-4">
+                        {/* 區塊標題 */}
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Languages className="w-4 h-4 text-primary" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-sm text-foreground">圖片文字語系</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    決定 AI 生成圖片中顯示文字的語言
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* 目前選擇 */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
+                            <span className="text-lg">{currentLang.flag}</span>
+                            <span className="text-sm font-medium text-foreground">{currentLang.label}</span>
+                            <Badge variant="outline" className="text-[10px] ml-auto">
+                                目前選擇
+                            </Badge>
+                        </div>
+
+                        {/* 語系選項列表 */}
+                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
+                            {LANGUAGE_OPTIONS.map((lang) => {
+                                const isSelected = imageLanguage === lang.id;
+                                return (
+                                    <button
+                                        key={lang.id}
+                                        onClick={() => onImageLanguageChange(lang.id)}
+                                        className={`text-left p-2.5 rounded-xl border-2 transition-all duration-200 group ${isSelected
+                                            ? "border-primary bg-primary/5 shadow-sm"
+                                            : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span className="text-base">{lang.flag}</span>
+                                            <span className={`text-xs font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                                {lang.label}
+                                            </span>
+                                            {isSelected && (
+                                                <Check className="w-3.5 h-3.5 text-primary ml-auto" />
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-1">
+                                            {lang.description}
+                                        </p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* 說明 */}
+                        <div className="flex items-start gap-2 px-3 py-2.5 bg-muted/50 rounded-lg border border-border/30">
+                            <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="text-xs text-muted-foreground space-y-1">
+                                <p>
+                                    <strong>語系設定影響：</strong>
+                                </p>
+                                <ul className="list-disc list-inside space-y-0.5 ml-1">
+                                    <li>AI 生成圖片中出現的文字標題和說明會使用所選語言</li>
+                                    <li>Prompt 會自動附加語言指令，引導 AI 使用對應語言產出</li>
+                                    <li>選擇「無文字」模式會指示 AI 不在圖片中放置任何文字</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 右欄：LINE 整合 */}
+                <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Languages className="w-4 h-4 text-primary" />
+                        <div className="w-8 h-8 rounded-lg bg-[#06C755]/10 flex items-center justify-center">
+                            <MessageSquare className="w-4 h-4 text-[#06C755]" />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-sm text-foreground">圖片文字語系</h3>
+                            <h3 className="font-semibold text-sm text-foreground">LINE 整合</h3>
                             <p className="text-xs text-muted-foreground">
-                                決定 AI 生成圖片中顯示文字的語言
+                                連結 LINE 官方帳號或使用 LIFF 分享圖片
                             </p>
                         </div>
                     </div>
-
-                    {/* 目前選擇 */}
-                    <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
-                        <span className="text-lg">{currentLang.flag}</span>
-                        <span className="text-sm font-medium text-foreground">{currentLang.label}</span>
-                        <Badge variant="outline" className="text-[10px] ml-auto">
-                            目前選擇
-                        </Badge>
-                    </div>
-
-                    {/* 語系選項列表 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {LANGUAGE_OPTIONS.map((lang) => {
-                            const isSelected = imageLanguage === lang.id;
-                            return (
-                                <button
-                                    key={lang.id}
-                                    onClick={() => onImageLanguageChange(lang.id)}
-                                    className={`text-left p-3 rounded-xl border-2 transition-all duration-200 group ${isSelected
-                                        ? "border-primary bg-primary/5 shadow-sm"
-                                        : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-lg">{lang.flag}</span>
-                                        <span className={`text-sm font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
-                                            {lang.label}
-                                        </span>
-                                        {isSelected && (
-                                            <Check className="w-4 h-4 text-primary ml-auto" />
-                                        )}
-                                    </div>
-                                    <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
-                                        {lang.description}
-                                    </p>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* 說明 */}
-                    <div className="flex items-start gap-2 px-3 py-2.5 bg-muted/50 rounded-lg border border-border/30">
-                        <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                        <div className="text-xs text-muted-foreground space-y-1">
-                            <p>
-                                <strong>語系設定影響：</strong>
-                            </p>
-                            <ul className="list-disc list-inside space-y-0.5 ml-1">
-                                <li>AI 生成圖片中出現的文字標題和說明會使用所選語言</li>
-                                <li>Prompt 會自動附加語言指令，引導 AI 使用對應語言產出</li>
-                                <li>選擇「無文字」模式會指示 AI 不在圖片中放置任何文字</li>
-                            </ul>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* LINE 整合 */}
-            <div className="space-y-1">
-                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-[#06C755]" />
-                    LINE 整合
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    連結 LINE 官方帳號或使用 LIFF 分享圖片
-                </p>
+                    <LineSettings useLineConfigHook={lineConfigHook} />
+                </div>
             </div>
-
-            <LineSettings useLineConfigHook={lineConfigHook} />
         </div>
     );
 }
