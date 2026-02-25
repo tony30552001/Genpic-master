@@ -33,16 +33,44 @@ export default function ShareToLineButton({ imageUrl, message, user, className =
 
         try {
             let finalImageUrl = imageUrl;
+            let fileToShare = null;
 
+            // 先產生 fileToShare，供原生分享以及 Blob 上傳使用
+            if (imageUrl.startsWith("data:")) {
+                const mimeMatch = imageUrl.match(/data:([^;]+);/);
+                const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+                const ext = mimeType.split("/")[1] || "png";
+                fileToShare = dataURLtoFile(imageUrl, `share-to-line-${Date.now()}.${ext}`);
+            }
+
+            // [新增] 如果是「個人分享」(Track B) 且裝置支援原生的圖片分享 (Web Share API)
+            // 這樣會直接呼叫系統的分享選單（如 iOS Share Sheet），能直接將圖檔拋給 LINE App，不需只傳網址
+            if (!isBound && fileToShare && navigator.canShare && navigator.canShare({ files: [fileToShare] })) {
+                try {
+                    await navigator.share({
+                        files: [fileToShare],
+                        text: message || 'GenPic 圖片分享',
+                    });
+                    // 手機原生分享成功
+                    setStatus("success");
+                    setTimeout(() => setStatus("idle"), 3000);
+                    return;
+                } catch (shareErr) {
+                    // 若使用者自己取消 (AbortError) 就直接中止
+                    if (shareErr.name === 'AbortError') {
+                        setStatus("idle");
+                        return;
+                    }
+                    // 其他不明錯誤則無縫退回舊版網址分享流程
+                    console.warn("Native share failed, falling back to URL share", shareErr);
+                }
+            }
+
+            // ==== 以下為舊版 (或 Track A) 分享流程 ====
             // 如果圖片是 base64 string，必須先上傳到雲端，因為 LINE 分享需要公開的 HTTP/HTTPS URL
             if (imageUrl.startsWith("data:")) {
                 try {
-                    const mimeMatch = imageUrl.match(/data:([^;]+);/);
-                    const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
-                    const ext = mimeType.split("/")[1] || "png";
-                    const file = dataURLtoFile(imageUrl, `share-to-line-${Date.now()}.${ext}`);
-
-                    const uploadResult = await uploadFileToBlob(file, "uploads"); // uploading to uploads container
+                    const uploadResult = await uploadFileToBlob(fileToShare, "uploads"); // uploading to uploads container
                     finalImageUrl = uploadResult.readUrl || uploadResult.url;
                 } catch (uploadErr) {
                     throw new Error("上傳圖片準備分享失敗: " + uploadErr.message);
