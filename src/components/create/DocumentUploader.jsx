@@ -441,7 +441,7 @@ export default function DocumentUploader({
               disabled={disabled}
             >
               <option value="auto">自動（AI 決定）</option>
-              {[3, 4, 5, 6, 7, 8, 10, 12, 15, 20].map((n) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                 <option key={n} value={n}>{n} 個場景</option>
               ))}
             </select>
