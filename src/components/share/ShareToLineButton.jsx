@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, Share2, CheckCircle, AlertCircle } from "lucide-react";
 import useLineConfig from "../../hooks/useLineConfig";
 import { sendImageToLine } from "../../services/lineService";
@@ -22,12 +21,19 @@ const dataURLtoFile = (dataurl, filename) => {
 };
 
 export default function ShareToLineButton({ imageUrl, message, user, className = "" }) {
-    const { isBound, config } = useLineConfig({ user });
+    const { isBound } = useLineConfig({ user });
     const [status, setStatus] = useState("idle"); // "idle" | "loading" | "success" | "error"
     const [errorMsg, setErrorMsg] = useState("");
 
     const handleShare = useCallback(async () => {
         if (!imageUrl) return;
+
+        if (!isBound) {
+            setErrorMsg("查無 LINE 設定，請先去設定頁面綁定 LINE 官方帳號以啟用本功能。");
+            setStatus("error");
+            setTimeout(() => setStatus("idle"), 4000);
+            return;
+        }
         setStatus("loading");
         setErrorMsg("");
 
@@ -55,27 +61,16 @@ export default function ShareToLineButton({ imageUrl, message, user, className =
 
             const result = await sendImageToLine(finalImageUrl, message);
 
-            // Track B fallback: open LINE share URL in new tab automatically
-            if (result && result.track === "liff_fallback" && result.url) {
-                window.open(result.url, "_blank", "noopener,noreferrer");
-                setStatus("success");
-                setTimeout(() => setStatus("idle"), 3000);
-                return;
-            }
-
             if (result && result.success) {
                 setStatus("success");
                 setTimeout(() => setStatus("idle"), 3000);
-            } else {
-                // LIFF shareTargetPicker was cancelled by user
-                setStatus("idle");
             }
         } catch (err) {
             setErrorMsg(err.message);
             setStatus("error");
             setTimeout(() => setStatus("idle"), 4000);
         }
-    }, [imageUrl, message]);
+    }, [imageUrl, message, isBound]);
 
     const isLoading = status === "loading";
     const isSuccess = status === "success";
@@ -112,17 +107,7 @@ export default function ShareToLineButton({ imageUrl, message, user, className =
                             ? "發送失敗"
                             : "分享到 LINE"}
 
-                {/* Track Badge */}
-                {!isLoading && !isSuccess && !isError && (
-                    <Badge
-                        variant="outline"
-                        className="ml-2 text-[10px] border-white/40 text-white"
-                    >
-                        {isBound
-                            ? `Bot → ${config?.channelName || "官方帳號"}`
-                            : "個人分享"}
-                    </Badge>
-                )}
+
             </Button>
 
             {isError && errorMsg && (

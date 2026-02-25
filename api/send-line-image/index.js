@@ -93,23 +93,23 @@ module.exports = async function (context, req) {
         [identity.userId, identity.tenantId]
     );
 
-    // Track B: No binding → tell frontend to use LIFF
+    // No binding
     if (configResult.rows.length === 0) {
-        context.res = ok({ track: "liff" });
+        context.res = error("未綁定 LINE 官方帳號設定", "line_config_not_found", 400);
         return;
     }
 
     const config = configResult.rows[0];
 
-    // Track B: Binding exists but is disabled
+    // Binding exists but is disabled
     if (!config.is_active) {
-        context.res = ok({ track: "liff", reason: "line_config_disabled" });
+        context.res = error("LINE 官方帳號設定尚未啟用", "line_config_disabled", 400);
         return;
     }
 
-    // Track B: No target configured
+    // No target configured
     if (!config.target_id) {
-        context.res = ok({ track: "liff", reason: "no_target_configured" });
+        context.res = error("LINE 官方帳號發送目標尚未設定", "no_target_configured", 400);
         return;
     }
 
