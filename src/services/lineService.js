@@ -55,12 +55,12 @@ export const initLiff = async () => {
 };
 
 /**
- * Build a LINE social sharing fallback URL (works in any browser without LIFF).
+ * Build a LINE deep link fallback URL (works in any browser, opens LINE app directly).
  * Returns { fallbackUrl: string }.
  */
 const buildLineShareFallback = (imageUrl, altText) => {
     const shareText = altText ? `${altText}\n${imageUrl}` : imageUrl;
-    const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(imageUrl)}&text=${encodeURIComponent(shareText)}`;
+    const lineShareUrl = `https://line.me/R/share?text=${encodeURIComponent(shareText)}`;
     return { fallbackUrl: lineShareUrl };
 };
 
