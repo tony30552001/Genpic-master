@@ -27,10 +27,9 @@ import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import TemplateLibrary from './components/templates/TemplateLibrary';
 
-export default function InfographicGenerator({ initialTab = 'create' }) {
+export default function InfographicGenerator({ initialTab = 'general' }) {
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [createSubTab, setCreateSubTab] = useState('general');
 
     // Input States
     const [, setReferenceImage] = useState(null);
@@ -224,7 +223,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
             setAnalyzedStyle(template.stylePrompt);
             setAnalysisResultData({ style_prompt: template.stylePrompt });
         }
-        setActiveTab('create');
+        setActiveTab('general');
     };
 
     const handleDeleteTemplate = async (id, e) => {
@@ -261,7 +260,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
         setAnalyzedStyle(item.stylePrompt || '');
         setAnalysisResultData(null);
         setGeneratedImage(item.imageUrl);
-        setActiveTab('create');
+        setActiveTab('general');
     };
 
     const handleDownload = () => {
@@ -362,7 +361,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                     {/* Inline Main Tabs */}
                     <nav className="hidden sm:flex items-center gap-1 bg-white/10 backdrop-blur-sm rounded-lg p-1">
                         {[
-                            { id: 'create', label: '製作區', icon: Wand2 },
+                            { id: 'general', label: '一般創作', icon: Wand2 },
+                            { id: 'document', label: '文件分析', icon: FileText },
                             { id: 'templates', label: '範本', icon: LayoutTemplate },
                             { id: 'styles', label: '風格庫', icon: Bookmark },
                             { id: 'history', label: '紀錄', icon: History },
@@ -425,7 +425,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                 {/* Mobile Tabs */}
                 <div className="sm:hidden flex border-t border-white/20">
                     {[
-                        { id: 'create', label: '製作區', icon: Wand2 },
+                        { id: 'general', label: '一般創作', icon: Wand2 },
+                        { id: 'document', label: '文件分析', icon: FileText },
                         { id: 'templates', label: '範本', icon: LayoutTemplate },
                         { id: 'styles', label: '風格庫', icon: Bookmark },
                         { id: 'history', label: '紀錄', icon: History },
@@ -449,8 +450,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
             {/* ═══════════ Main Content Area ═══════════ */}
             <main className="flex-1 min-h-0 flex flex-col">
 
-                {/* ─── Create Tab ─── */}
-                {activeTab === 'create' && (
+                {/* ─── Create & Document Tabs Share Similar Container ─── */}
+                {(activeTab === 'general' || activeTab === 'document') && (
                     <div className="flex-1 flex flex-col min-h-0">
 
                         {/* Error / Warning Messages */}
@@ -471,34 +472,8 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                             </div>
                         )}
 
-                        {/* Sub Tabs Bar */}
-                        <div className="shrink-0 px-4 lg:px-8 pt-3 pb-1">
-                            <div className="inline-flex items-center gap-1 bg-muted rounded-lg p-1">
-
-                                {[
-                                    { id: 'general', label: '一般創作', icon: Wand2, active: hasContent || hasStyle },
-                                    { id: 'document', label: '文件分析', icon: FileText, active: hasDocument },
-                                ].map((tab) => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setCreateSubTab(tab.id)}
-                                        className={`relative flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${createSubTab === tab.id
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-                                            }`}
-                                    >
-                                        <tab.icon className="w-4 h-4" />
-                                        {tab.label}
-                                        {tab.active && (
-                                            <span className="w-2 h-2 bg-primary rounded-full ml-1 animate-pulse" />
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
                         {/* ─── Document Sub-Tab: Full-Width Layout ─── */}
-                        {createSubTab === 'document' && (
+                        {activeTab === 'document' && (
                             <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 lg:px-8 py-3">
                                 {documentResult ? (
                                     <DocumentScenes
@@ -528,45 +503,43 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                         )}
 
                         {/* ─── Two-Column Layout (Controls + Preview) for other tabs ─── */}
-                        {createSubTab !== 'document' && (
+                        {activeTab === 'general' && (
                             <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-5 gap-0 lg:gap-6 px-4 lg:px-8 py-3 overflow-y-auto lg:overflow-hidden custom-scrollbar">
 
                                 {/* Left: Controls (takes 3/5 on large screens) */}
                                 <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pr-1">
-                                    {createSubTab === 'general' && (
-                                        <ScriptEditor
-                                            userScript={userScript}
-                                            onUserScriptChange={setUserScript}
-                                            onFocus={() => setIsInputFocused(true)}
-                                            onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
-                                            hideGenerate
-                                            savedStyles={savedStyles}
+                                    <ScriptEditor
+                                        userScript={userScript}
+                                        onUserScriptChange={setUserScript}
+                                        onFocus={() => setIsInputFocused(true)}
+                                        onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
+                                        hideGenerate
+                                        savedStyles={savedStyles}
 
-                                            // 風格與內容整合
-                                            analyzedStyle={analyzedStyle}
-                                            onApplyStyle={applySavedStyle}
-                                            onClearStyle={handleClearStyle}
+                                        // 風格與內容整合
+                                        analyzedStyle={analyzedStyle}
+                                        onApplyStyle={applySavedStyle}
+                                        onClearStyle={handleClearStyle}
 
-                                            contentImagePreview={contentImagePreview}
-                                            onContentImageUpload={handleContentImageUpload}
-                                            onClearContentImage={handleClearContentImage}
-                                            isUploadingContent={isUploadingContent}
+                                        contentImagePreview={contentImagePreview}
+                                        onContentImageUpload={handleContentImageUpload}
+                                        onClearContentImage={handleClearContentImage}
+                                        isUploadingContent={isUploadingContent}
 
-                                            // 風格分析 Props
-                                            isAnalyzing={isAnalyzing}
-                                            analysisPhase={analysisPhase}
-                                            analysisResultData={analysisResultData}
-                                            newStyleName={newStyleName}
-                                            newStyleTags={newStyleTags}
-                                            isSavingStyle={isSavingStyle}
-                                            onAnalyze={analyzeImageStyle}
-                                            onStyleNameChange={handleStyleNameChange}
-                                            onStyleTagsChange={handleStyleTagsChange}
-                                            onSaveStyle={saveCurrentStyle}
-                                            onSaveTemplate={saveTemplate}
-                                            analyzedStyleForTemplate={analyzedStyle}
-                                        />
-                                    )}
+                                        // 風格分析 Props
+                                        isAnalyzing={isAnalyzing}
+                                        analysisPhase={analysisPhase}
+                                        analysisResultData={analysisResultData}
+                                        newStyleName={newStyleName}
+                                        newStyleTags={newStyleTags}
+                                        isSavingStyle={isSavingStyle}
+                                        onAnalyze={analyzeImageStyle}
+                                        onStyleNameChange={handleStyleNameChange}
+                                        onStyleTagsChange={handleStyleTagsChange}
+                                        onSaveStyle={saveCurrentStyle}
+                                        onSaveTemplate={saveTemplate}
+                                        analyzedStyleForTemplate={analyzedStyle}
+                                    />
                                 </div>
 
                                 {/* Mobile-only Preview (shows below controls, inside the same scrollable container) */}
@@ -608,7 +581,6 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                         )}
 
                         {/* Fixed Bottom Generate Bar */}
-                        {/* Fixed Bottom Generate Bar */}
                         <GenerateBar
                             aspectRatio={aspectRatio}
                             onAspectRatioChange={setAspectRatio}
@@ -616,23 +588,23 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                             onImageSizeChange={setImageSize}
                             isGenerating={isGenerating}
                             onGenerate={
-                                createSubTab === 'document' && documentResult
+                                activeTab === 'document' && documentResult
                                     ? handleGenerateAllScenes
                                     : generateInfographic
                             }
                             buttonText={
-                                createSubTab === 'document' && documentResult
+                                activeTab === 'document' && documentResult
                                     ? `批次生成所有圖片 (${scenes?.length || 0})`
                                     : "開始生成圖片"
                             }
                             isGeneratingText={
-                                createSubTab === 'document' && documentResult
+                                activeTab === 'document' && documentResult
                                     ? "批次生成中..."
                                     : "AI 生成中..."
                             }
                             disabled={
-                                (createSubTab === 'document' && (!scenes || scenes.length === 0)) ||
-                                (createSubTab !== 'document' && !userScript && !contentImagePreview)
+                                (activeTab === 'document' && (!scenes || scenes.length === 0)) ||
+                                (activeTab === 'general' && !userScript && !contentImagePreview)
                             }
                         />
                     </div>
@@ -681,7 +653,7 @@ export default function InfographicGenerator({ initialTab = 'create' }) {
                                 onLoad={loadFromHistory}
                                 onDelete={deleteHistoryItem}
                                 onDeleteItems={deleteHistoryItems}
-                                onGoCreate={() => setActiveTab('create')}
+                                onGoCreate={() => setActiveTab('general')}
                                 onGoStyles={() => setActiveTab('styles')}
                             />
                         </div>
