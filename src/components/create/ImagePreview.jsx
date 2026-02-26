@@ -1,5 +1,6 @@
 import React from "react";
 import { Image as ImageIcon, Save, Download, Wand2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import ShareToLineButton from "../share/ShareToLineButton";
 
 export default function ImagePreview({
@@ -9,17 +10,7 @@ export default function ImagePreview({
   user,
 }) {
   return (
-    <div
-      className="relative flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-slate-100 rounded-xl overflow-hidden group"
-      style={{
-        backgroundImage:
-          "linear-gradient(45deg, #94a3b8 25%, transparent 25%), linear-gradient(-45deg, #94a3b8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #94a3b8 75%), linear-gradient(-45deg, transparent 75%, #94a3b8 75%)",
-        backgroundSize: "20px 20px",
-        backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
-      }}
-    >
-      {/* 為了避免棋盤格太搶眼，加上一層半透明白色遮罩 */}
-      <div className="absolute inset-0 bg-white/90" />
+    <div className="relative flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-slate-50/50 rounded-xl overflow-hidden group border border-slate-200/50">
 
       {/* 生成的圖片區域：加上 padding 確保底部不被遮擋 */}
       {generatedImage ? (
@@ -33,16 +24,20 @@ export default function ImagePreview({
           </div>
         </div>
       ) : isGenerating ? (
-        /* 生成中動畫 */
-        <div className="flex flex-col items-center gap-4 text-slate-400">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Wand2 className="w-6 h-6 text-blue-500 animate-pulse" />
+        /* 生成中動畫 (shadcn/ui Skeleton) */
+        <div className="absolute inset-4 p-4 pb-[88px] flex items-center justify-center">
+          <Skeleton className="w-[85%] h-full max-h-[85%] rounded-xl opacity-60 relative overflow-hidden flex flex-col items-center justify-center gap-4">
+            <div className="relative z-10 flex flex-col items-center justify-center gap-3 backdrop-blur-sm bg-white/40 p-6 rounded-2xl border border-white/50 shadow-sm">
+              <div className="relative">
+                <div className="w-12 h-12 rounded-full border-[3px] border-blue-100 border-t-blue-500 animate-spin" />
+                <Wand2 className="w-5 h-5 text-blue-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+              </div>
+              <div className="flex flex-col items-center text-center">
+                <p className="text-sm font-semibold tracking-wide text-blue-900/80 mb-0.5 animate-pulse">正在為您繪製構想...</p>
+                <p className="text-[11px] text-blue-900/50">大約需要 5-10 秒鐘</p>
+              </div>
             </div>
-          </div>
-          <p className="text-lg font-medium text-slate-600">正在繪製您的構想...</p>
-          <p className="text-sm">這通常需要 5-10 秒鐘</p>
+          </Skeleton>
         </div>
       ) : (
         /* 空白狀態 */
