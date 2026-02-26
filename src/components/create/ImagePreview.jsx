@@ -26,11 +26,11 @@ export default function ImagePreview({
       {/* 生成的圖片區域：加上 padding 確保底部不被遮擋 */}
       {generatedImage ? (
         <div className="absolute inset-0 w-full h-full overflow-y-auto custom-scrollbar">
-          <div className="min-h-full w-full flex items-center justify-center p-4 pb-[72px]">
+          <div className="min-h-full w-full flex items-center justify-center p-8 pb-[88px]">
             <img
               src={generatedImage}
               alt="AI Generated"
-              className="max-w-full h-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-sm"
+              className="max-w-full lg:max-w-[85%] h-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-xl"
             />
           </div>
         </div>
