@@ -60,6 +60,9 @@ export default function ScriptEditor({
   // 範本相關 Props
   onSaveTemplate,
   analyzedStyleForTemplate,
+
+  // 新增：雙語 Prompt 處理
+  onOptimizedPromptEnChange,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -174,6 +177,12 @@ export default function ScriptEditor({
             const text = blocksToText(data.blocks);
             setCharCount(text.length);
             onUserScriptChange(text);
+
+            // 如果使用者手動修改了文字，則清除原本 AI 產生的英文 Prompt
+            // 如此一來，後端就會退回使用手動的中文來生成圖片
+            if (onOptimizedPromptEnChange) {
+              onOptimizedPromptEnChange("");
+            }
           } catch {
             // ignore save errors during transitions
           }
@@ -238,11 +247,12 @@ export default function ScriptEditor({
         styleContext: analyzedStyle || selectedStyleInfo?.name || ""
       });
 
-      if (result && result.optimizedPrompt) {
+      if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
         // 儲存建議資料，顯示預覽面板
         setSuggestionData({
           originalText: userScript,
-          optimizedText: result.optimizedPrompt,
+          optimizedText: result.optimizedPromptZh || result.optimizedPrompt,
+          optimizedTextEn: result.optimizedPromptEn || result.optimizedPrompt,
           explanation: result.explanation || "",
         });
       }
@@ -267,6 +277,10 @@ export default function ScriptEditor({
 
     // 更新上層狀態
     onUserScriptChange(newText);
+    if (onOptimizedPromptEnChange) {
+      onOptimizedPromptEnChange(suggestionData.optimizedTextEn);
+    }
+
     setCharCount(newText.length);
     setSuggestionData(null);
   };

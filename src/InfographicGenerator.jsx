@@ -39,6 +39,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
 
     const [userScript, setUserScript] = useState('');
+    const [optimizedPromptEn, setOptimizedPromptEn] = useState('');
 
     // Content Image States
     const [, setContentImage] = useState(null);
@@ -160,6 +161,9 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         setReferenceBlobUrl(null);
         setReferenceBlobSasUrl(null);
         clearStyle(); // 清除已分析的風格
+
+        // 清除 AI 生成的英文 prompt (如果有的話)
+        setOptimizedPromptEn('');
     };
 
     const analyzeImageStyle = async () => {
@@ -218,7 +222,10 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
     // ─── Template Functions ───
     const applyTemplate = (template) => {
-        if (template.userScript) setUserScript(template.userScript);
+        if (template.userScript) {
+            setUserScript(template.userScript);
+            setOptimizedPromptEn(''); // 重置優化 prompt，退回重新優化或套用 template 狀態
+        }
         if (template.stylePrompt) {
             setAnalyzedStyle(template.stylePrompt);
             setAnalysisResultData({ style_prompt: template.stylePrompt });
@@ -239,8 +246,11 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
     const generateInfographic = async () => {
         try {
+            // 如果存在 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的中文 userScript
+            const finalScriptToUse = optimizedPromptEn || userScript;
+
             const { imageUrl, finalPrompt } = await generateImage({
-                userScript,
+                userScript: finalScriptToUse,
                 analyzedStyle,
                 aspectRatio,
                 imageSize,
@@ -257,6 +267,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
     const loadFromHistory = (item) => {
         setUserScript(item.userScript);
+        setOptimizedPromptEn(''); // 歷史紀錄沒有記錄優化後的 prompt，所以清空
         setAnalyzedStyle(item.stylePrompt || '');
         setAnalysisResultData(null);
         setGeneratedImage(item.imageUrl);
@@ -512,6 +523,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                     <ScriptEditor
                                         userScript={userScript}
                                         onUserScriptChange={setUserScript}
+                                        onOptimizedPromptEnChange={setOptimizedPromptEn}
                                         onFocus={() => setIsInputFocused(true)}
                                         onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
                                         hideGenerate

@@ -9,36 +9,26 @@ const { rateLimit } = require("../_shared/rateLimit");
  * 文件分析的系統提示詞
  * 要求 Gemini 分析文件內容並回傳結構化的分鏡腳本
  */
-const DOCUMENT_ANALYSIS_PROMPT_BASE = `請擔任專業的文件分析師與視覺導演。請深入分析所提供的文件內容，並回傳一個 JSON 物件，包含以下欄位：
+const DOCUMENT_ANALYSIS_PROMPT_BASE = `請擔任專業的文件分析師與視覺導演。分析提供的文件，並以「最精簡有效」的 JSON 格式回傳：
 
-1. "title": (string) 文件的標題或主題
-2. "summary": (string, 繁體中文) 文件的整體摘要，100-200字
-3. "scenes": (array of objects) 分鏡腳本陣列。請根據文件長度與內容豐富度，動態決定最適合的場景數量（一般建議 3-10 個），每個場景包含：
-   - "scene_number": (number) 場景編號
-   - "scene_title": (string, 繁體中文, 不可為空) 場景標題（簡短描述，5-15字）
-   - "scene_description": (string, 繁體中文, 不可為空) 詳細的場景描述(50-150字)，包含人物動作、表情、場景細節
-   - "visual_prompt": (string, 英文, 不可為空) 專門用於 AI 圖片生成的英文 Prompt（150-300字），需詳細描述構圖、風格、光影、色調
-   - "key_elements": (array of strings) 場景中的關鍵視覺元素（人物、物品、場景特徵），至少 2 個
-   - "mood": (string, 繁體中文) 場景情緒氛圍（如：溫馨、緊張、專業、歡樂）
-   - "source_text": (string, 繁體中文) 此場景對應的原始文件內容片段（逐字引用原文，不要改寫，長度約50-200字）
+1. "title": (string) 文件標題
+2. "summary": (string, 繁體中文) 核心摘要（50字內）
+3. "scenes": (array of objects) 分鏡腳本，依邏輯切分（3-10個）。每個場景包含：
+   - "scene_number": (number) 編號
+   - "scene_title": (string, 繁體中文) 簡短標題
+   - "scene_description": (string, 繁體中文) 場景畫面描述與情緒氛圍（30-50字內）
+   - "visual_prompt": (string, 英文) AI 生圖專用 Prompt。請直接列出構圖、主體、光影、風格等英文關鍵字，並以逗號分隔（50-80字內，極為重要）
+   - "source_text": (string, 繁體中文) 擷取對應原文片段（30字內）
    
-4. "characters": (array of objects) 文件中出現的主要角色/物件，每個包含：
-   - "name": (string) 角色名稱或描述
-   - "description": (string, 繁體中文) 角色外觀特徵描述
-   - "consistency_prompt": (string, 英文) 確保角色跨場景一致的描述詞
-
-5. "page_count": (number) 估算的文件頁數/段落數
-6. "content_type": (string) 文件類型（如：簡報、報告、SOP、劇本、政策文件、教育訓練文件）
+4. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
+   - "name": (string) 名稱
+   - "description": (string, 繁體中文) 外觀特徵（30字內）
 
 **重要規則：**
-- 場景切分邏輯合理，能呈現連續的敘事流程
-- 請依據敘事邏輯自然切分場景。若文件夠長，請確保有引言/背景、主要內容與結語的流暢推進；若文件極短，則無需強求湊數。
-- 即使文件是 SOP、政策文件或技術規格，也要將其轉化為有**故事性的視覺場景**
-- visual_prompt 應足夠詳細（150-300字），包含構圖方式、藝術風格、光影效果、色彩調性
-- **scene_description 和 visual_prompt 絕對不可為空字串**
-- 如果是簡報或PPT，每張投影片建議對應1-2個場景
-- 如果是文章/報告，每個重要段落對應一個場景
-- source_text 必須是從原始文件中直接擷取的文字片段，讓使用者可以對照原始資料`;
+- 敘事流暢，專注於將文字轉化為視覺畫面。
+- visual_prompt 必須精簡有力，只保留視覺名詞與形容詞，不要寫完整的長句子。
+- scene_description 和 visual_prompt 絕對不可為空。
+- 直接回傳 JSON，不要其他多餘對話。`;
 
 /**
  * 根據 sceneCount 參數建構完整的 Prompt
@@ -406,10 +396,9 @@ module.exports = async function (context, req) {
         responseMimeType: "application/json",
         // 增加 maxOutputTokens 防止大型 JSON 被截斷（10 個場景的 JSON 可能超過 8000 tokens）
         maxOutputTokens: 8192, // Gemini flash max output token is 8192
-        temperature: 1.0, // 根據 Gemini 3 官方指南建議調高為預設的 1.0，防止效能下降並產生更豐富的描述
-        thinkingConfig: {
-          thinkingLevel: "high", // 明確開啟高深度思考配額，讓 AI 穩健拆分場景與邏輯
-        },
+        // 適度調降 Temperature 讓輸出更穩定且快速
+        temperature: 0.8,
+        // 關閉 thinkingConfig 高強度思考模式，大幅縮短首字回應時間 (TTFT) 以求最高生長速度
       });
       context.log("[analyze-document] Step 5: Gemini responded, result keys:", Object.keys(result || {}));
     } catch (geminiErr) {

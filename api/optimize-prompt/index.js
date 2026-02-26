@@ -5,17 +5,19 @@ const { rateLimit } = require("../_shared/rateLimit");
 
 const OPTIMIZE_PROMPT_SYSTEM_MESSAGE = `
 擔任專業的 AI 圖像生成提示詞工程師 (Prompt Engineer)。
-你的任務是接收使用者的簡短描述 (User Script) 與風格參考 (Style)，並將其優化為高品質的英文生成提示詞 (Prompt)。
+你的任務是接收使用者的簡短描述 (User Script) 與風格參考 (Style)，並將其優化為高品質的「繁體中文描述」與「英文生成提示詞 (Prompt)」。
 
 優化原則：
 1. 保持原意：保留使用者描述的核心主體與動作。
 2. 增加細節：補充光影 (Lighting)、構圖 (Composition)、材質 (Texture)、氛圍 (Mood) 等視覺細節。
-3. 風格一致：若有提供風格描述，請確保生成的 Prompt 符合該風格。
-4. 英文輸出：生成的 Prompt 必須是英文，因為大多數模型對英文理解最佳。
+3. 風格一致：若有提供風格描述，請確保雙語描述都符合該風格。
+4. 英文輸出極重要：生成的 Prompt 必須是詳細的英文關鍵字組合，因為大多數生圖模型對英文理解最佳。
+5. 中文輸出要流暢：給使用者看的中文版必須是通順的一段話，讓使用者輕易理解擴充了哪些內容。
 
-請回傳一個 JSON 物件，格式如下：
+請回傳一個 JSON 物件，格式嚴格如下：
 {
-  "optimizedPrompt": "這裡填寫優化後的英文 Prompt，包含豐富細節...",
+  "optimizedPromptZh": "這裡填寫優化後給使用者看的繁體中文描述，必須是通順的段落（約50-100字）...",
+  "optimizedPromptEn": "這裡填寫優化後實際送給 AI 生圖的英文 Prompt，包含豐富的視覺關鍵字，建議用逗號分隔...",
   "explanation": "這裡用繁體中文簡短說明你增加了哪些細節（例如：加入了電影光效與廣角鏡頭）..."
 }
 `;
@@ -72,10 +74,16 @@ Style Context: "${styleContext || '無特定風格 (General)'}"
         let data;
         try {
             data = parseGeminiResponse(result);
+            // Fallback for older model formats if it only returns optimizedPrompt
+            if (data && data.optimizedPrompt && (!data.optimizedPromptZh && !data.optimizedPromptEn)) {
+                data.optimizedPromptZh = data.optimizedPrompt;
+                data.optimizedPromptEn = data.optimizedPrompt;
+            }
         } catch (e) {
             context.log.error("Failed to parse Gemini response:", e);
             data = {
-                optimizedPrompt: userScript, // Fallback to original
+                optimizedPromptZh: userScript,
+                optimizedPromptEn: userScript,
                 explanation: "優化回應解析失敗，請稍後重試。"
             };
         }
