@@ -299,7 +299,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 analyzedStyle,
                 aspectRatio,
                 imageSize,
-                imageLanguage
+                imageLanguage,
+                updatePreview: false
             });
 
             // 1. 更新 DocumentAnalysis 的狀態 (顯示在卡片上)
