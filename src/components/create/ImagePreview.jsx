@@ -29,7 +29,7 @@ export default function ImagePreview({
           <img
             src={generatedImage}
             alt="AI Generated"
-            className="max-w-full my-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-sm"
+            className="max-w-full max-h-full my-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-sm"
           />
         </div>
       ) : isGenerating ? (
