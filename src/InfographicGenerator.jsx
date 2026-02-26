@@ -82,7 +82,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     } = useDocumentAnalysis();
 
     const {
-        analyzedStyle, analysisResultData, generatedImage,
+        analyzedStyle, analysisResultData, generatedImage, generatedFilename,
         isAnalyzing, isGenerating, analysisPhase,
         analyzeStyle, generateImage, clearStyle,
         setAnalyzedStyle, setAnalysisResultData, setGeneratedImage
@@ -278,7 +278,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         if (!generatedImage) return;
         const link = document.createElement('a');
         link.href = generatedImage;
-        link.download = `generated-infographic-${Date.now()}.png`;
+        const nameFallback = `generated-infographic-${Date.now()}.png`;
+        link.download = generatedFilename ? `${generatedFilename}.png` : nameFallback;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -318,6 +319,15 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             updateScene(sceneIndex, {
                 generatedImage: result.imageUrl
             });
+
+            // 取得檔名（背景非同步完成），並更新到場景中
+            if (result.filenamePromise) {
+                result.filenamePromise.then((aiFilename) => {
+                    updateScene(sceneIndex, {
+                        generatedFilename: aiFilename
+                    });
+                }).catch(() => { });
+            }
 
             // 2. 寫入歷史紀錄
             await saveHistoryItem({
@@ -687,3 +697,4 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         </div>
     );
 }
+

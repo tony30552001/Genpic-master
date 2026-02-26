@@ -13,6 +13,9 @@ export const embedText = async ({ text }) =>
 export const optimizePrompt = async ({ userScript, styleContext }) =>
   apiPost(`${API_BASE_URL}/optimize-prompt`, { userScript, styleContext });
 
+export const generateFilename = async ({ userScript }) =>
+  apiPost(`${API_BASE_URL}/generate-filename`, { userScript });
+
 /**
  * 分析文件內容並提取分鏡腳本
  * @param {Object} params

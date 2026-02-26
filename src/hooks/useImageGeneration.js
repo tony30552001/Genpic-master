@@ -1,14 +1,15 @@
 import { useCallback, useState } from "react";
 
-import { analyzeStyle, generateImage } from "../services/aiService";
+import { analyzeStyle, generateImage, generateFilename } from "../services/aiService";
 
 export default function useImageGeneration() {
   const [analyzedStyle, setAnalyzedStyle] = useState("");
   const [analysisResultData, setAnalysisResultData] = useState(null);
   const [generatedImage, setGeneratedImage] = useState(null);
+  const [generatedFilename, setGeneratedFilename] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [analysisPhase, setAnalysisPhase] = useState(""); // 新增：分析階段描述
+  const [analysisPhase, setAnalysisPhase] = useState(""); // 新增：分析階段狀態
 
   const runStyleAnalysis = useCallback(async ({ referencePreview, imageUrl }) => {
     if (!referencePreview && !imageUrl) {
@@ -42,7 +43,29 @@ export default function useImageGeneration() {
       }
 
       setIsGenerating(true);
+      // 一開始先重置檔名
+      setGeneratedFilename("");
+
       try {
+        // 同步發起檔名產生的 Request（不去 await 阻擋主流程，放到背景執行）
+        const fallbackFilename = `genpic-${Date.now()}`;
+        const filenamePromise = generateFilename({ userScript })
+          .then(res => {
+            if (res && res.filename) {
+              setGeneratedFilename(res.filename);
+              return res.filename;
+            } else {
+              setGeneratedFilename(fallbackFilename);
+              return fallbackFilename;
+            }
+          })
+          .catch(err => {
+            console.warn("Filename generation failed in background, using fallback", err);
+            setGeneratedFilename(fallbackFilename);
+            return fallbackFilename;
+          });
+
+
         // 語系指令
         const LANG_DIRECTIVES = {
           'en': 'All text in the image MUST be in English.',
@@ -70,7 +93,7 @@ export default function useImageGeneration() {
         if (updatePreview) {
           setGeneratedImage(result.imageUrl);
         }
-        return { imageUrl: result.imageUrl, finalPrompt };
+        return { imageUrl: result.imageUrl, finalPrompt, filenamePromise };
       } finally {
         setIsGenerating(false);
       }
@@ -87,9 +110,10 @@ export default function useImageGeneration() {
     analyzedStyle,
     analysisResultData,
     generatedImage,
+    generatedFilename, // 匯出產生的檔名
     isAnalyzing,
     isGenerating,
-    analysisPhase, // 回傳分析階段狀態
+    analysisPhase,
     analyzeStyle: runStyleAnalysis,
     generateImage: runGeneration,
     clearStyle,

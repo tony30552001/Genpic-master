@@ -338,7 +338,8 @@ function SceneModal({
                       onClick={() => {
                         const link = document.createElement("a");
                         link.href = sceneImage;
-                        link.download = `scene-${scene.scene_number}-${Date.now()}.png`;
+                        const defaultName = `scene-${scene.scene_number}-${Date.now()}.png`;
+                        link.download = scene.generatedFilename ? `${scene.generatedFilename}.png` : defaultName;
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
