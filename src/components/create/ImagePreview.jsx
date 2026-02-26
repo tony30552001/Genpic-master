@@ -9,28 +9,26 @@ export default function ImagePreview({
   user,
 }) {
   return (
-    <div className="relative flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-slate-100 rounded-xl overflow-hidden group">
-      {/* 棋盤格背景（透明度指示） */}
-      {!generatedImage && !isGenerating && (
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage:
-              "linear-gradient(45deg, #94a3b8 25%, transparent 25%), linear-gradient(-45deg, #94a3b8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #94a3b8 75%), linear-gradient(-45deg, transparent 75%, #94a3b8 75%)",
-            backgroundSize: "20px 20px",
-            backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
-          }}
-        />
-      )}
+    <div
+      className="relative flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-slate-100 rounded-xl overflow-hidden group"
+      style={{
+        backgroundImage:
+          "linear-gradient(45deg, #94a3b8 25%, transparent 25%), linear-gradient(-45deg, #94a3b8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #94a3b8 75%), linear-gradient(-45deg, transparent 75%, #94a3b8 75%)",
+        backgroundSize: "20px 20px",
+        backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
+      }}
+    >
+      {/* 為了避免棋盤格太搶眼，加上一層半透明白色遮罩 */}
+      <div className="absolute inset-0 bg-white/90" />
 
       {/* 生成的圖片區域：加上 padding 確保底部不被遮擋 */}
       {generatedImage ? (
         <div className="absolute inset-0 w-full h-full overflow-y-auto custom-scrollbar">
-          <div className="w-full flex justify-center p-4 pb-[88px]">
+          <div className="min-h-full w-full flex align-middle justify-center p-4 pb-[88px] relative z-10">
             <img
               src={generatedImage}
               alt="AI Generated"
-              className="max-w-full lg:max-w-[85%] h-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-xl"
+              className="max-w-full lg:max-w-[85%] h-auto my-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-xl"
             />
           </div>
         </div>
