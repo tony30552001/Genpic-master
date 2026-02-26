@@ -475,6 +475,11 @@ module.exports = async function (context, req) {
     // 如果過濾後沒有有效場景，代表 AI 完全無法解析文件內容
     if (validatedScenes.length === 0) {
       context.log.warn("[analyze-document] All scenes were empty after filtering. AI failed to extract meaningful content.");
+      context.log.warn("[analyze-document] === RAW JSON PARSED DATA ===");
+      context.log.warn(JSON.stringify(data, null, 2));
+      context.log.warn("[analyze-document] === RAW EXTRACTED SCENES ===");
+      context.log.warn(JSON.stringify(rawScenes, null, 2));
+
       context.res = error(
         "分析失敗：AI 無法從此文件中提取有效內容。請確認文件是否為純圖片且無可識別文字，或換一份文件再試一次。",
         "empty_scenes",
