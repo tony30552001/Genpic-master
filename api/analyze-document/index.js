@@ -262,7 +262,7 @@ const parseGeminiResponse = (result, context) => {
     if (arrayMatch) {
       const arr = JSON.parse(arrayMatch[0]);
       // 如果是場景陣列，包裝成標準格式
-      if (Array.isArray(arr) && arr.length > 0 && arr[0].scene_number) {
+      if (Array.isArray(arr) && arr.length > 0 && (arr[0].scene_number !== undefined || arr[0].sceneNumber !== undefined || arr[0].scene_title !== undefined || arr[0].sceneTitle !== undefined)) {
         return { scenes: arr, title: "文件分析結果", summary: "" };
       }
       return arr;
@@ -456,15 +456,15 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // 確保每個場景都有必要欄位，過濾掉完全空白的場景
+    // 確保每個場景都有必要欄位，過濾掉完全空白的場景（向下相容駝峰命名）
     const rawScenes = data.scenes.map((scene, index) => ({
-      scene_number: scene.scene_number || index + 1,
-      scene_title: scene.scene_title || `場景 ${index + 1}`,
-      scene_description: scene.scene_description || "",
-      visual_prompt: scene.visual_prompt || scene.scene_description || "",
-      key_elements: scene.key_elements || [],
+      scene_number: scene.scene_number || scene.sceneNumber || index + 1,
+      scene_title: scene.scene_title || scene.sceneTitle || `場景 ${index + 1}`,
+      scene_description: scene.scene_description || scene.sceneDescription || scene.description || "",
+      visual_prompt: scene.visual_prompt || scene.visualPrompt || scene.prompt || scene.scene_description || scene.sceneDescription || scene.description || "",
+      key_elements: scene.key_elements || scene.keyElements || [],
       mood: scene.mood || "",
-      source_text: scene.source_text || "",
+      source_text: scene.source_text || scene.sourceText || "",
     }));
 
     // 過濾掉 scene_description 和 visual_prompt 都為空的場景
@@ -495,19 +495,19 @@ module.exports = async function (context, req) {
       );
     }
 
-    // 確保角色資訊存在
+    // 確保角色資訊存在（向下相容駝峰命名）
     const validatedCharacters = (data.characters || []).map((char) => ({
       name: char.name || "未命名角色",
       description: char.description || "",
-      consistency_prompt: char.consistency_prompt || "",
+      consistency_prompt: char.consistency_prompt || char.consistencyPrompt || "",
     }));
 
     // 回傳標準化結果
     const response = {
       title: data.title || fileName || "未命名文件",
       summary: data.summary || "",
-      content_type: data.content_type || "document",
-      page_count: data.page_count || validatedScenes.length,
+      content_type: data.content_type || data.contentType || "document",
+      page_count: data.page_count || data.pageCount || validatedScenes.length,
       scenes: validatedScenes,
       characters: validatedCharacters,
       total_scenes: validatedScenes.length,
