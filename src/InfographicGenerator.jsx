@@ -568,15 +568,13 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 {/* Mobile-only Preview (shows below controls, inside the same scrollable container) */}
                                 {generatedImage && (
                                     <div className="lg:hidden pb-3">
-                                        <div className="rounded-xl bg-muted/40 border border-border/50 p-3">
-                                            <ImagePreview
-                                                generatedImage={generatedImage}
-                                                isGenerating={isGenerating}
-                                                analyzedStyle={analyzedStyle}
-                                                onDownload={handleDownload}
-                                                user={user}
-                                            />
-                                        </div>
+                                        <ImagePreview
+                                            generatedImage={generatedImage}
+                                            isGenerating={isGenerating}
+                                            analyzedStyle={analyzedStyle}
+                                            onDownload={handleDownload}
+                                            user={user}
+                                        />
                                     </div>
                                 )}
 
