@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, LogIn, LogOut, User, Settings, LayoutTemplate
+    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -63,6 +63,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [, setIsInputFocused] = useState(false);
     const [isStyleNameTouched, setIsStyleNameTouched] = useState(false);
     const [isStyleTagsTouched, setIsStyleTagsTouched] = useState(false);
+    const [showMobilePreview, setShowMobilePreview] = useState(false);
 
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
 
@@ -259,6 +260,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             });
             await saveHistoryItem({ imageUrl, userScript, stylePrompt: analyzedStyle, fullPrompt: finalPrompt, styleId: analysisResultData?.styleId || null });
             setErrorMsg('');
+            setShowMobilePreview(true); // 手機版：生成後自動顯示預覽
         } catch (err) {
             console.error("Image Generation Failed:", err);
             setErrorMsg(`圖片生成失敗: ${err.message || "請確認模型名稱支援圖片生成"}`);
@@ -405,8 +407,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id
-                                        ? 'bg-white text-primary shadow-sm'
-                                        : 'text-white/80 hover:text-white hover:bg-white/10'
+                                    ? 'bg-white text-primary shadow-sm'
+                                    : 'text-white/80 hover:text-white hover:bg-white/10'
                                     }`}
                             >
                                 <tab.icon className="w-4 h-4" />
@@ -552,19 +554,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                     />
                                 </div>
 
-                                {/* Mobile-only Preview (shows below controls, inside the same scrollable container) */}
-                                {generatedImage && (
-                                    <div className="lg:hidden pb-3">
-                                        <ImagePreview
-                                            generatedImage={generatedImage}
-                                            isGenerating={isGenerating}
-                                            analyzedStyle={analyzedStyle}
-                                            onDownload={handleDownload}
-                                            user={user}
-                                        />
-                                    </div>
-                                )}
-
                                 {/* Right: Preview (takes 2/5 on large screens) */}
                                 <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
                                     {/* Decorative grid background */}
@@ -680,6 +669,52 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 )}
             </main>
 
+            {/* ═══════════ 手機版：生成圖片 Bottom Sheet ═══════════ */}
+            {showMobilePreview && generatedImage && (
+                <div className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end" onClick={() => setShowMobilePreview(false)}>
+                    {/* 半透明遮罩 */}
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    {/* Sheet 主體 */}
+                    <div
+                        className="relative z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[85dvh] animate-in slide-in-from-bottom duration-300"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Sheet Header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
+                            <span className="text-sm font-semibold text-slate-700">生成結果</span>
+                            <button
+                                onClick={() => setShowMobilePreview(false)}
+                                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                                aria-label="關閉預覽"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        {/* 圖片內容（可捲動） */}
+                        <div className="flex-1 overflow-y-auto">
+                            <ImagePreview
+                                generatedImage={generatedImage}
+                                isGenerating={isGenerating}
+                                analyzedStyle={analyzedStyle}
+                                onDownload={handleDownload}
+                                user={user}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 手機版：圖片已生成時，顯示底部快速預覽入口按鈕 */}
+            {generatedImage && !showMobilePreview && !isGenerating && (
+                <button
+                    className="sm:hidden fixed bottom-[64px] right-4 z-40 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg transition-all active:scale-95"
+                    onClick={() => setShowMobilePreview(true)}
+                >
+                    <img src={generatedImage} alt="" className="w-6 h-6 rounded-md object-cover border border-white/30" />
+                    查看生成圖片
+                </button>
+            )}
+
             {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
             <nav className="sm:hidden shrink-0 bg-white border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-40">
                 <div className="flex items-stretch h-16">
@@ -690,8 +725,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 relative ${isActive
-                                        ? 'text-blue-600'
-                                        : 'text-slate-400 hover:text-slate-600'
+                                    ? 'text-blue-600'
+                                    : 'text-slate-400 hover:text-slate-600'
                                     }`}
                             >
                                 {/* 活躍指示器 */}
