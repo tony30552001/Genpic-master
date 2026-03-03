@@ -46,9 +46,9 @@ export default function SaveTemplateDialog({
     };
 
     return (
-        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="rounded-xl border border-blue-200 bg-secondary shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-primary text-white">
                 <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     <span className="text-sm font-bold">儲存為範本</span>
@@ -135,7 +135,7 @@ export default function SaveTemplateDialog({
                 <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 shadow-sm hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
                 >
                     {isSaving ? (
                         <>

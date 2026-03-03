@@ -3,12 +3,12 @@ import { Layout, LogIn, LogOut } from "lucide-react";
 
 export default function AppHeader({ user, onLogin, onLogout }) {
   return (
-    <div className="p-6 border-b border-border bg-gradient-to-r from-blue-700 to-sky-500 text-white">
+    <div className="p-6 border-b border-border bg-primary text-white">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Layout className="w-6 h-6" />
-            企業風格圖產生器
+            Pixora 智繪
           </h1>
           <p className="text-xs text-blue-100 mt-1 opacity-80">
             Powered by Gemini & Imagen

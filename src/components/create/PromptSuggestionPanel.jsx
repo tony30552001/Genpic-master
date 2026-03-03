@@ -13,9 +13,9 @@ export default function PromptSuggestionPanel({
     onReject,
 }) {
     return (
-        <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-white shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="rounded-xl border border-violet-200 bg-violet-50 shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
             {/* Header */}
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 text-white">
                 <Sparkles className="w-4 h-4" />
                 <span className="text-sm font-bold">AI 優化建議</span>
             </div>
@@ -66,7 +66,7 @@ export default function PromptSuggestionPanel({
             <div className="flex items-center gap-2 px-4 py-3 border-t border-violet-100 bg-white/60">
                 <button
                     onClick={onAccept}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-violet-500 hover:bg-violet-600 shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
                 >
                     <Check className="w-3.5 h-3.5" />
                     套用優化

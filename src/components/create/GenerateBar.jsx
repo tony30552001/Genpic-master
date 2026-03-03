@@ -85,8 +85,8 @@ export default function GenerateBar({
                 size="lg"
                 className={cn(
                     "w-full font-bold text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98]",
-                    "bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600",
-                    "disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:shadow-none"
+                    "bg-primary hover:bg-primary/90 text-primary-foreground",
+                    "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 )}
             >
                 {isGenerating ? (

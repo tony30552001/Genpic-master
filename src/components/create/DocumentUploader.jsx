@@ -149,7 +149,7 @@ function AnalysisProgress({ analysisPhase, fileName }) {
             className="h-full rounded-full transition-all duration-500 ease-out relative"
             style={{
               width: `${simulatedProgress}%`,
-              background: "linear-gradient(90deg, #3b82f6, #6366f1, #8b5cf6)",
+              background: "hsl(var(--primary))",
             }}
           >
             {/* 光澤動畫 */}
@@ -348,7 +348,7 @@ export default function DocumentUploader({
   if (isAnalyzing) {
     return (
       <div className="space-y-4">
-        <div className="border-2 border-primary/30 rounded-lg p-6 bg-gradient-to-br from-primary/5 via-background to-blue-50/50 dark:to-blue-950/20">
+        <div className="border-2 border-primary/30 rounded-lg p-6 bg-primary/5">
           <AnalysisProgress
             analysisPhase={analysisPhase}
             fileName={selectedFile?.name || "文件"}

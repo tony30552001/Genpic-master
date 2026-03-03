@@ -39,21 +39,21 @@ function TemplateCard({
     return (
         <div
             className={`group relative bg-white border rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col ${isSelected
-                    ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md transform scale-[0.98]"
-                    : "border-slate-200 hover:shadow-lg hover:border-blue-200"
+                ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md transform scale-[0.98]"
+                : "border-slate-200 hover:shadow-lg hover:border-blue-200"
                 }`}
             onClick={handleClick}
         >
             {/* 頂部色帶 */}
-            <div className="h-2 bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500" />
+            <div className="h-2 bg-primary" />
 
             {/* 選擇模式 Checkbox */}
             {isSelectionMode && (
                 <div className="absolute top-4 right-2 z-10">
                     <div
                         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected
-                                ? "bg-blue-500 border-blue-500"
-                                : "bg-white/80 border-slate-300"
+                            ? "bg-blue-500 border-blue-500"
+                            : "bg-white/80 border-slate-300"
                             }`}
                     >
                         {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}

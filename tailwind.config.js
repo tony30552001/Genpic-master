@@ -42,7 +42,7 @@ export default {
                     DEFAULT: "hsl(var(--card))",
                     foreground: "hsl(var(--card-foreground))",
                 },
-                // ── GenPic 品牌擴充色 ──
+                // ── Pixora 品牌擴充色 ──
                 brand: {
                     primary: "hsl(var(--brand-primary))",
                     "primary-hover": "hsl(var(--brand-primary-hover))",

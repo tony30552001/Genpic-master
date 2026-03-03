@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ════════════════════════════════════════════
-   shadcn/ui + GenPic Master — CSS Variables
+   shadcn/ui + Pixora — CSS Variables
    Theme: Blue (Official shadcn/ui)
    ════════════════════════════════════════════ */
 
@@ -40,7 +40,7 @@
 
     --radius: 0.5rem;
 
-    /* ── GenPic Brand Tokens (Blue-aligned) ── */
+    /* ── Pixora Brand Tokens (Blue-aligned) ── */
     --brand-primary: 221.2 83.2% 53.3%;        /* Match primary */
     --brand-primary-hover: 221.2 83.2% 43.3%;  /* Darker blue */
     --brand-primary-light: 210 40% 96.1%;      /* Light blue/slate */

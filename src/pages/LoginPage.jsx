@@ -37,7 +37,7 @@ export default function LoginPage() {
                     <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 mb-4 transform -rotate-3 hover:rotate-0 transition-transform duration-300">
                         <LogIn className="w-8 h-8 text-white" />
                     </div>
-                    <CardTitle className="text-3xl font-bold tracking-tight text-slate-900">歡迎回到 GenPic</CardTitle>
+                    <CardTitle className="text-3xl font-bold tracking-tight text-slate-900">歡迎回到 Pixora</CardTitle>
                     <CardDescription className="text-slate-500 font-medium">請選擇您的登入方式</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -99,7 +99,7 @@ export default function LoginPage() {
 
             {/* 底部文字 */}
             <p className="absolute bottom-8 left-0 right-0 text-center text-slate-400 text-sm">
-                &copy; 2026 GenPic Master. All rights reserved.
+                &copy; 2026 Pixora. All rights reserved.
             </p>
         </div>
     );

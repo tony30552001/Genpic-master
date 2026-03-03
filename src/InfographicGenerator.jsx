@@ -380,7 +380,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden">
 
             {/* ═══════════ Top Header Bar ═══════════ */}
-            <header className="shrink-0 border-b border-border bg-gradient-to-r from-blue-700 via-blue-600 to-sky-500 text-white shadow-md">
+            <header className="shrink-0 border-b border-border bg-primary text-white shadow-md">
                 <div className="flex items-center justify-between px-4 lg:px-8 h-14">
                     {/* Logo */}
                     <div className="flex items-center gap-3">
@@ -388,8 +388,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             <Wand2 className="w-5 h-5" />
                         </div>
                         <div>
-                            <h1 className="text-base font-bold leading-tight">企業風格圖產生器</h1>
-                            <p className="text-[10px] text-white/70 leading-none hidden sm:block">Powered by Gemini &amp; Imagen</p>
+                            <h1 className="text-base font-bold leading-tight">Pixora 智繪</h1>
+                            <p className="text-[10px] text-white/70 leading-none hidden sm:block">AI 智能視覺創作平台</p>
                         </div>
                         {/* 手機版：顯示當前頁面名稱 badge */}
                         {activeTabInfo && (

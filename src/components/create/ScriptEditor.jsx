@@ -314,7 +314,7 @@ export default function ScriptEditor({
                 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
                 ${!userScript?.trim()
                   ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-transparent shadow-sm hover:shadow-md hover:from-blue-600 hover:to-cyan-600'
+                  : 'bg-primary text-white border-transparent shadow-sm hover:shadow-md hover:bg-primary/90'
                 }
               `}
               title="將當前內容與風格存為可重複使用的範本"
@@ -331,7 +331,7 @@ export default function ScriptEditor({
               flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
               ${!userScript?.trim()
                 ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border-transparent shadow-sm hover:shadow-md hover:from-violet-600 hover:to-fuchsia-600'
+                : 'bg-violet-500 text-white border-transparent shadow-sm hover:shadow-md hover:bg-violet-600'
               }
             `}
             title="使用 AI 自動豐富畫面細節與提示詞"

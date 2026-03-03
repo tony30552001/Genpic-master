@@ -710,7 +710,7 @@ export default function DocumentScenes({
 
       {/* ═══════ 文件資訊摘要 ═══════ */}
       <div className="shrink-0 px-4 lg:px-8 pb-3">
-        <Card className="bg-gradient-to-br from-primary/5 via-blue-50 to-sky-50 border-primary/20 dark:from-primary/10 dark:via-blue-950/20 dark:to-cyan-950/20">
+        <Card className="bg-primary/5 border-primary/20 dark:bg-primary/10">
           <CardContent className="p-4">
             <div className="flex items-start gap-4 flex-wrap lg:flex-nowrap">
               <div className="flex-1 min-w-0">
