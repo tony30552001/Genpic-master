@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, Palette, PenLine, LogIn, LogOut, User, Settings, LayoutTemplate
+    FileText, LogIn, LogOut, User, Settings, LayoutTemplate
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -362,6 +362,17 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const hasContent = !!userScript;
     const hasDocument = !!documentResult;
 
+    // --- Tab 定義 ---
+    const tabs = [
+        { id: 'general', label: '一般創作', shortLabel: '創作', icon: Wand2 },
+        { id: 'document', label: '文件分析', shortLabel: '文件', icon: FileText },
+        { id: 'templates', label: '範本', shortLabel: '範本', icon: LayoutTemplate },
+        { id: 'styles', label: '風格庫', shortLabel: '風格', icon: Bookmark },
+        { id: 'history', label: '紀錄', shortLabel: '紀錄', icon: History },
+        { id: 'settings', label: '設定', shortLabel: '設定', icon: Settings },
+    ];
+    const activeTabInfo = tabs.find(t => t.id === activeTab);
+
     // --- Render ---
     return (
         <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden">
@@ -378,24 +389,24 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             <h1 className="text-base font-bold leading-tight">企業風格圖產生器</h1>
                             <p className="text-[10px] text-white/70 leading-none hidden sm:block">Powered by Gemini &amp; Imagen</p>
                         </div>
+                        {/* 手機版：顯示當前頁面名稱 badge */}
+                        {activeTabInfo && (
+                            <span className="sm:hidden flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-medium backdrop-blur-sm">
+                                <activeTabInfo.icon className="w-3 h-3" />
+                                {activeTabInfo.label}
+                            </span>
+                        )}
                     </div>
 
-                    {/* Inline Main Tabs */}
+                    {/* 桌面版：Inline Main Tabs */}
                     <nav className="hidden sm:flex items-center gap-1 bg-white/10 backdrop-blur-sm rounded-lg p-1">
-                        {[
-                            { id: 'general', label: '一般創作', icon: Wand2 },
-                            { id: 'document', label: '文件分析', icon: FileText },
-                            { id: 'templates', label: '範本', icon: LayoutTemplate },
-                            { id: 'styles', label: '風格庫', icon: Bookmark },
-                            { id: 'history', label: '紀錄', icon: History },
-                            { id: 'settings', label: '設定', icon: Settings },
-                        ].map((tab) => (
+                        {tabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id
-                                    ? 'bg-white text-primary shadow-sm'
-                                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                                        ? 'bg-white text-primary shadow-sm'
+                                        : 'text-white/80 hover:text-white hover:bg-white/10'
                                     }`}
                             >
                                 <tab.icon className="w-4 h-4" />
@@ -442,30 +453,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             </Button>
                         )}
                     </div>
-                </div>
-
-                {/* Mobile Tabs */}
-                <div className="sm:hidden flex border-t border-white/20">
-                    {[
-                        { id: 'general', label: '一般創作', icon: Wand2 },
-                        { id: 'document', label: '文件分析', icon: FileText },
-                        { id: 'templates', label: '範本', icon: LayoutTemplate },
-                        { id: 'styles', label: '風格庫', icon: Bookmark },
-                        { id: 'history', label: '紀錄', icon: History },
-                        { id: 'settings', label: '設定', icon: Settings },
-                    ].map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-all ${activeTab === tab.id
-                                ? 'bg-white/20 text-white'
-                                : 'text-white/60 hover:text-white'
-                                }`}
-                        >
-                            <tab.icon className="w-3.5 h-3.5" />
-                            {tab.label}
-                        </button>
-                    ))}
                 </div>
             </header>
 
@@ -692,6 +679,39 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     </div>
                 )}
             </main>
+
+            {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
+            <nav className="sm:hidden shrink-0 bg-white border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-40">
+                <div className="flex items-stretch h-16">
+                    {tabs.map((tab) => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 relative ${isActive
+                                        ? 'text-blue-600'
+                                        : 'text-slate-400 hover:text-slate-600'
+                                    }`}
+                            >
+                                {/* 活躍指示器 */}
+                                {isActive && (
+                                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-blue-500" />
+                                )}
+                                <span className={`flex items-center justify-center w-6 h-6 rounded-lg transition-all duration-200 ${isActive ? 'bg-blue-50' : ''
+                                    }`}>
+                                    <tab.icon className={`transition-all duration-200 ${isActive ? 'w-4 h-4' : 'w-4 h-4'
+                                        }`} />
+                                </span>
+                                <span className={`text-[10px] font-medium leading-none transition-all ${isActive ? 'font-semibold' : ''
+                                    }`}>
+                                    {tab.shortLabel}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </nav>
         </div>
     );
 }

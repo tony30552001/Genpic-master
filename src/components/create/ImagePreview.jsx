@@ -52,16 +52,32 @@ export default function ImagePreview({
 
     return (
       <>
-        {/* Mobile: 使用 flow layout，圖片自適應高度，不蓋版 */}
-        <div className="w-full flex items-center justify-center p-3 pb-16 lg:hidden">
+        {/* Mobile: flow layout，限制最大高度，圖片不蓋版 */}
+        <div className="w-full flex flex-col items-center gap-3 p-3 lg:hidden">
           <img
             src={generatedImage}
             alt="AI 產生的圖片"
-            className="max-w-full w-full h-auto object-contain rounded-lg animate-in fade-in zoom-in-95 duration-500 shadow-xl"
+            className="max-w-full w-auto max-h-[55vh] object-contain rounded-lg animate-in fade-in zoom-in-95 duration-500 shadow-xl"
             onError={() => setImageError(true)}
             loading="lazy"
             decoding="async"
           />
+          {/* Mobile 操作按鈕：跟在圖片正下方，非 absolute */}
+          <div className="flex flex-wrap justify-center items-center gap-2 pb-1">
+            <ShareToLineButton
+              imageUrl={generatedImage}
+              user={user}
+              className="[&>button]:h-9 [&>button]:px-3 [&>button]:text-xs [&>button]:rounded-lg [&>button]:shadow-lg"
+            />
+            <button
+              onClick={onDownload}
+              aria-label="下載產生的圖片"
+              className="flex items-center h-9 gap-1.5 text-xs font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 py-2 rounded-lg transition-colors shadow-lg border border-slate-200/50"
+            >
+              <Save className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">下載圖片</span>
+            </button>
+          </div>
         </div>
         {/* Desktop: 保持 absolute 填滿預覽區 */}
         <div className="hidden lg:flex absolute inset-0 w-full h-full overflow-y-auto custom-scrollbar">
@@ -91,18 +107,18 @@ export default function ImagePreview({
 
       {renderContent()}
 
-      {/* 操作按鈕層 */}
+      {/* 桌面版操作按鈕層（absolute 懸浮） */}
       {generatedImage && !imageError && (
-        <div className="absolute bottom-3 right-3 lg:bottom-4 lg:right-4 z-20 flex flex-wrap justify-end items-center gap-2 drop-shadow-md">
+        <div className="hidden lg:flex absolute bottom-4 right-4 z-20 flex-wrap justify-end items-center gap-2 drop-shadow-md">
           <ShareToLineButton
             imageUrl={generatedImage}
             user={user}
-            className="[&>button]:h-9 [&>button]:px-3 [&>button]:text-xs lg:[&>button]:h-10 lg:[&>button]:px-4 lg:[&>button]:text-sm [&>button]:rounded-lg [&>button]:shadow-lg"
+            className="[&>button]:h-10 [&>button]:px-4 [&>button]:text-sm [&>button]:rounded-lg [&>button]:shadow-lg"
           />
           <button
             onClick={onDownload}
             aria-label="下載產生的圖片"
-            className="flex items-center h-9 lg:h-10 gap-1.5 text-xs lg:text-sm font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 lg:px-4 py-2 rounded-lg transition-colors shadow-lg border border-slate-200/50"
+            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-4 py-2 rounded-lg transition-colors shadow-lg border border-slate-200/50"
           >
             <Save className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">下載圖片</span>
