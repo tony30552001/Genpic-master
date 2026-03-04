@@ -1,0 +1,53 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+# Pre-commit: 防止含有機密資訊的檔案被提交至版本控制
+# ─────────────────────────────────────────────────────────────────────────────
+
+EXIT_CODE=0
+
+# 1. 阻擋已知機密檔案
+BLOCKED_FILES=".env .env.local .env.production api/local.settings.json"
+for f in $BLOCKED_FILES; do
+  if git diff --cached --name-only | grep -qF "$f"; then
+    echo "❌ [Security Guard] 拒絕提交：$f 可能包含機密資訊！"
+    echo "   請確認此檔案已在 .gitignore 中，並執行: git rm --cached $f"
+    EXIT_CODE=1
+  fi
+done
+
+# 2. 掃描 staged 內容中是否包含高風險 pattern
+STAGED_DIFF=$(git diff --cached --unified=0 2>/dev/null | grep "^+[^+]")
+
+# Google API Key pattern (AIza...)
+if echo "$STAGED_DIFF" | grep -qE 'AIza[0-9A-Za-z_-]{35}'; then
+  echo "❌ [Security Guard] 偵測到疑似 Google API Key！"
+  EXIT_CODE=1
+fi
+
+# Azure Storage Account Key pattern (長 Base64)
+if echo "$STAGED_DIFF" | grep -qE 'AccountKey=[A-Za-z0-9+/]{80,}={0,2}'; then
+  echo "❌ [Security Guard] 偵測到疑似 Azure Storage Key！"
+  EXIT_CODE=1
+fi
+
+# PostgreSQL 連線字串
+if echo "$STAGED_DIFF" | grep -qE 'postgresql://[^:]+:[^@]+@'; then
+  echo "❌ [Security Guard] 偵測到疑似 PostgreSQL 連線字串（含帳密）！"
+  EXIT_CODE=1
+fi
+
+# AWS Access Key
+if echo "$STAGED_DIFF" | grep -qE 'AKIA[0-9A-Z]{16}'; then
+  echo "❌ [Security Guard] 偵測到疑似 AWS Access Key！"
+  EXIT_CODE=1
+fi
+
+if [ "$EXIT_CODE" -ne 0 ]; then
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  若確認此變更安全（例如測試用假資料），可執行："
+  echo "  git commit --no-verify   ← 跳過此檢查（謹慎使用）"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+fi
+
+exit $EXIT_CODE
