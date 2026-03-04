@@ -4,6 +4,7 @@ const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { getModel } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
+const { isUrlAllowed } = require("../_shared/urlValidator");
 
 /**
  * 文件分析的系統提示詞
@@ -95,6 +96,11 @@ const fetchDocumentAsBase64 = async (documentUrl, fileName) => {
   }
 
   // 非 Blob URL 時用一般 HTTP fetch
+  // SSRF 防護：驗證 URL 是否在白名單內再發起請求
+  if (!isUrlAllowed(documentUrl)) {
+    throw new Error(`不允許的文件 URL，請確認文件來源是否為合法的 Azure Blob Storage`);
+  }
+
   const response = await fetch(documentUrl);
   if (!response.ok) {
     throw new Error(`Document fetch failed: ${response.status}`);

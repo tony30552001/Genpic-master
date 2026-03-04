@@ -1,8 +1,18 @@
 # 🔒 GenPic Master — 靜態安全審查報告 (SAST)
 
 > **審查日期**: 2026-03-02
+> **最後更新**: 2026-03-04 (P0 修復已套用)
 > **審查範圍**: 前端 (React/Vite) + 後端 (Azure Functions Node.js) + 資料庫 (PostgreSQL)
 > **審查方法**: 靜態程式碼分析 + 邏輯推演
+
+> [!NOTE]
+> **2026-03-04 P0 修復紀錄**
+> - ✅ `#1` `.env` 已加入 `.gitignore`，防止金鑰洩漏至版本控制
+> - ✅ `#2` 加入生產環境 Auth 守衛（`isProduction` 檢查），`AUTH_DISABLED` 在生產環境強制忽略
+> - ✅ `#3` 移除 HS256 Token 免簽章驗證，改為直接拒絕，防止身份偽造
+> - ✅ `#4` 建立 `api/_shared/urlValidator.js`，整合至 `generate-images` 與 `analyze-document`，防止 SSRF
+> - ✅ `#10` (部分) `auth.js` 錯誤回應已脫敏；`generate-images` 非過載錯誤已脫敏
+> - ✅ `#15` (部分) Auth debug 日誌改為 `AUTH_DEBUG=true` 才輸出，減少 PII 洩漏
 
 ---
 

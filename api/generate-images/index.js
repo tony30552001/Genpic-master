@@ -2,6 +2,7 @@ const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { getModel } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
+const { isUrlAllowed } = require("../_shared/urlValidator");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -34,6 +35,12 @@ module.exports = async function (context, req) {
     const parts = [{ text: textPrompt }];
 
     if (imageUrl) {
+      // SSRF 防護：驗證 imageUrl 是否在允許的白名單內
+      if (!isUrlAllowed(imageUrl)) {
+        context.res = error("提供的圖片 URL 不在允許範圍內", "bad_request", 400);
+        return;
+      }
+
       try {
         const imageResponse = await fetch(imageUrl);
         if (!imageResponse.ok) throw new Error("Failed to fetch image");
@@ -135,7 +142,9 @@ module.exports = async function (context, req) {
         503
       );
     } else {
-      context.res = error("生成失敗: " + err.message, "generation_failed", 502);
+      // 非過載錯誤：回傳通用訊息，避免洩漏內部錯誤細節
+      context.log.error("Image generation failed (non-overload):", err.message);
+      context.res = error("圖片生成失敗，請稍後重試", "generation_failed", 502);
     }
   }
 };

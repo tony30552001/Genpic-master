@@ -6,7 +6,22 @@ const { error } = require("./http");
 const tenantId = process.env.AZURE_TENANT_ID;
 const microsoftClientId = process.env.AZURE_CLIENT_ID;
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
-const authDisabled = process.env.AUTH_DISABLED === "true";
+
+// 判斷是否為生產環境（Azure Functions 生產環境會自動注入 WEBSITE_SITE_NAME）
+const isProduction =
+  process.env.AZURE_FUNCTIONS_ENVIRONMENT === "Production" ||
+  process.env.NODE_ENV === "production" ||
+  !!process.env.WEBSITE_SITE_NAME;
+
+// 生產環境中強制忽略 AUTH_DISABLED，防止配置錯誤導致旁路
+const authDisabled = process.env.AUTH_DISABLED === "true" && !isProduction;
+
+if (process.env.AUTH_DISABLED === "true" && isProduction) {
+  console.error("[Auth CRITICAL] AUTH_DISABLED=true detected in production environment! Ignoring — authentication will be enforced.");
+}
+
+// debug 日誌開關（需明確設定 AUTH_DEBUG=true 才會輸出敏感 debug 訊息）
+const isDebug = process.env.AUTH_DEBUG === "true";
 
 // Microsoft JWKS Client
 const msJwksUri = tenantId
@@ -59,32 +74,16 @@ const verifyMicrosoftToken = (token) =>
       return;
     }
 
-    // 處理 Azure App Service / SWA 內部 Token (HS256, 無 kid)
-    // 這類 Token 通常是由 Easy Auth 注入，且我們已經在 requireAuth 透過 x-ms-client-principal 嘗試處理過
-    // 如果流程跑到這裡，表示 x-ms-client-principal 可能遺失，但 Token 還在
-    // 由於我們無法拿到 Azure 的內部密鑰來驗證 HS256，這裡做一個權宜之計：
-    // 如果是在 Azure 環境內 (有特定環境變數)，且 Token 看起來合理，則信任其內容 (僅限特定 issuer)
+    // 安全修復 #3: HS256 Token 若無 kid（無法驗證簽章），一律拒絕。
+    // 攻擊者可手工偽造任意 HS256 JWT，若不驗證簽章則身份完全不可信。
+    // Azure SWA/Easy Auth 的正確身份來源是 x-ms-client-principal header（已在 requireAuth 優先處理），
+    // 若流程到達此處表示 SWA header 不存在，應直接拒絕而非信任未驗證的 Token payload。
     if (decodedToken.header.alg === "HS256" && !decodedToken.header.kid) {
-      console.warn("[Auth Warning] HS256 Token detected. Skipping signature verification for internal token.");
-
-      const payload = decodedToken.payload || {};
-      // 嘗試從多個常見欄位中獲取 Email
-      const email = payload.preferred_username || payload.upn || payload.email || payload.unique_name;
-      const displayName = payload.name || payload.preferred_username || payload.unique_name || "Azure User";
-
-      // 嘗試找尋任何可用的唯一識別碼: email -> sub -> oid -> meaningful displayName
-      const identifier = email || payload.sub || payload.oid || (displayName !== "Azure User" ? displayName : null);
-
-      if (!identifier) {
-        console.error("[Auth Error] Could not extract identifier from HS256 token payload. Available keys:", Object.keys(payload));
-      }
-
-      resolve({
-        displayName,
-        email: identifier,
-        userDetails: identifier, // Add userDetails for identity resolution compatibility
-        authType: "microsoft-internal",
-      });
+      reject(new Error(
+        "HS256 tokens without a verifiable signing key are not accepted. " +
+        "Please authenticate via a supported identity provider (Microsoft Entra ID or Google) " +
+        "or ensure the x-ms-client-principal header is present for Azure SWA requests."
+      ));
       return;
     }
 
@@ -183,12 +182,14 @@ const requireAuth = async (context, req) => {
 
   const token = parseBearer(req);
 
-  // Debug 日誌：記錄所有收到的 headers（排除敏感資訊）
-  console.log("[Auth Debug] Request headers:", {
-    hasAuth: !!req.headers?.authorization,
-    authLength: req.headers?.authorization?.length,
-    allHeaders: Object.keys(req.headers || {}).join(", ")
-  });
+  // Debug 日誌：僅在 AUTH_DEBUG=true 時輸出（防止 header 資訊洩漏至日誌系統）
+  if (isDebug) {
+    console.log("[Auth Debug] Request headers:", {
+      hasAuth: !!req.headers?.authorization,
+      hasCustomToken: !!req.headers?.["x-auth-token"],
+      hasSwaHeader: !!req.headers?.["x-ms-client-principal"],
+    });
+  }
 
   if (!token) {
     context.res = error("缺少 Bearer Token", "unauthorized", 401);
@@ -202,37 +203,39 @@ const requireAuth = async (context, req) => {
 
     const iss = decodedRaw.iss || "";
 
-    // Debug 日誌
-    console.log("[Auth Debug] Token issuer:", iss);
-    console.log("[Auth Debug] Token subject:", decodedRaw.sub);
+    // Debug 日誌（僅 AUTH_DEBUG=true 時輸出，防止 issuer/subject PII 洩漏）
+    if (isDebug) {
+      console.log("[Auth Debug] Token issuer:", iss);
+      console.log("[Auth Debug] Token subject (truncated):", decodedRaw.sub?.substring(0, 8) + "...");
+    }
 
     let user;
 
     if (iss.includes("google.com")) {
-      // Google Token
-      console.log("[Auth Debug] Verifying Google token...");
+      // Google Token — 使用 google-auth-library 做完整簽章驗證
+      if (isDebug) console.log("[Auth Debug] Routing to Google verifier...");
       user = await verifyGoogleToken(token);
     } else if (iss.includes("microsoftonline.com") || iss.includes("sts.windows.net")) {
-      // Microsoft Token
+      // Microsoft Token — 使用 JWKS 做 RS256 簽章驗證
       if (!tenantId || !microsoftClientId) throw new Error("Microsoft Auth Config Missing");
-      console.log("[Auth Debug] Verifying Microsoft token...");
+      if (isDebug) console.log("[Auth Debug] Routing to Microsoft verifier...");
       user = await verifyMicrosoftToken(token);
     } else if (isAzureInternalToken(iss)) {
       // Azure SWA 或 App Service 可能會注入自己的 Token
       console.log("[Auth Warning] Azure internal token detected. Issuer:", iss);
-      // 嘗試將其視為 Microsoft 體系的 Token 進行後續驗證，
-      // 或者如果之後 verifyMicrosoftToken 失敗，它仍會進入 catch 並報錯。
-      // 這裡我們先移除直接 throw，給予驗證機會。
+      // Azure 內部 Token：嘗試 Microsoft RS256 驗證流程
+      if (isDebug) console.log("[Auth Debug] Routing Azure internal token to Microsoft verifier...");
       user = await verifyMicrosoftToken(token);
     } else {
       throw new Error(`Unsupported token issuer: ${iss}`);
     }
 
-    console.log("[Auth Debug] Auth success:", user.email);
+    if (isDebug) console.log("[Auth Debug] Auth success for user type:", user.authType);
     return { user };
   } catch (err) {
-    console.error("Auth Error:", err.message);
-    context.res = error("Token 驗證失敗: " + err.message, "unauthorized", 401);
+    // 記錄完整錯誤供日誌系統追蹤，但不回傳 err.message 給客戶端（防止資訊洩漏）
+    console.error("[Auth] Token verification failed:", err.message);
+    context.res = error("身份驗證失敗，請重新登入", "unauthorized", 401);
     return null;
   }
 };

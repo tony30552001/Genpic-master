@@ -1,3 +1,8 @@
+# Environment variables (contains secrets — NEVER commit)
+.env
+.env.local
+.env.*.local
+
 # Logs
 logs
 *.log
@@ -13,6 +18,7 @@ dist-ssr
 *.local
 local.settings.json
 api/local.settings.json
+api/*.settings.*.json
 
 # Editor directories and files
 .vscode/*
