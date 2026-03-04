@@ -1,18 +1,34 @@
 # 🔒 GenPic Master — 靜態安全審查報告 (SAST)
 
 > **審查日期**: 2026-03-02
-> **最後更新**: 2026-03-04 (P0 修復已套用)
+> **最後更新**: 2026-03-04 (P0 修復已套用 + Git 歷史清洗完成)
 > **審查範圍**: 前端 (React/Vite) + 後端 (Azure Functions Node.js) + 資料庫 (PostgreSQL)
 > **審查方法**: 靜態程式碼分析 + 邏輯推演
 
 > [!NOTE]
 > **2026-03-04 P0 修復紀錄**
 > - ✅ `#1` `.env` 已加入 `.gitignore`，防止金鑰洩漏至版本控制
+> - ✅ `#1` Git 歷史已清洗（`git filter-branch` + `git gc --prune=now --aggressive` + force push）
+> - ✅ `#1` 加入 pre-commit hook（`.husky/pre-commit`），自動阻擋機密檔案與高風險 pattern 被提交
+> - ⚠️ `#1` **金鑰輪換待人工完成**（見下方輪換清單）
 > - ✅ `#2` 加入生產環境 Auth 守衛（`isProduction` 檢查），`AUTH_DISABLED` 在生產環境強制忽略
 > - ✅ `#3` 移除 HS256 Token 免簽章驗證，改為直接拒絕，防止身份偽造
 > - ✅ `#4` 建立 `api/_shared/urlValidator.js`，整合至 `generate-images` 與 `analyze-document`，防止 SSRF
 > - ✅ `#10` (部分) `auth.js` 錯誤回應已脫敏；`generate-images` 非過載錯誤已脫敏
 > - ✅ `#15` (部分) Auth debug 日誌改為 `AUTH_DEBUG=true` 才輸出，減少 PII 洩漏
+
+> [!CAUTION]
+> **⚠️ 金鑰輪換清單（人工操作，今天完成）**
+>
+> | 金鑰 | 輪換位置 | 完成？ |
+> |------|---------|-------|
+> | Azure Storage Account Key | Azure Portal → Storage Account → Access keys → Rotate | ☐ |
+> | PostgreSQL 密碼 | Azure Portal → PostgreSQL Flexible Server → Reset password | ☐ |
+> | Google API Key (Gemini) | Google Cloud Console → APIs & Services → Credentials | ☐ |
+> | LINE Channel Secret / Access Token | LINE Developers Console → Channel Settings | ☐ |
+> | MSAL Client Secret（若有） | Azure AD App Registrations → Certificates & secrets | ☐ |
+>
+> 輪換後，**同步更新** Azure Functions 的應用程式設定與本機 `api/local.settings.json`。
 
 ---
 
