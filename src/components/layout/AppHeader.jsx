@@ -10,7 +10,7 @@ export default function AppHeader({ user, onLogin, onLogout }) {
             <Layout className="w-6 h-6" />
             Pixora 智繪
           </h1>
-          <p className="text-xs text-blue-100 mt-1 opacity-80">
+          <p className="text-xs text-primary-foreground/70 mt-1">
             Powered by Gemini & Imagen
           </p>
         </div>
@@ -28,7 +28,7 @@ export default function AppHeader({ user, onLogin, onLogout }) {
                   <LogOut className="w-2.5 h-2.5" /> 登出
                 </button>
               </div>
-              <div className="w-9 h-9 rounded-full bg-blue-200 flex items-center justify-center text-sm font-bold text-blue-700 border-2 border-white/30 overflow-hidden shadow-inner">
+              <div className="w-9 h-9 rounded-full bg-primary-foreground/20 flex items-center justify-center text-sm font-bold text-primary-foreground border-2 border-white/30 overflow-hidden shadow-inner">
                 {user.photoURL ? (
                   <img
                     src={user.photoURL}
@@ -43,7 +43,7 @@ export default function AppHeader({ user, onLogin, onLogout }) {
           ) : (
             <button
               onClick={onLogin}
-              className="bg-white text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              className="bg-card text-primary hover:bg-primary/10 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all duration-150 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 border border-primary/20"
               title="使用公司帳號登入以同步紀錄"
             >
               <LogIn className="w-4 h-4" /> 登入

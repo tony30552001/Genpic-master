@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Bookmark, CheckSquare, Filter, Loader2, Search, Trash2, X } from "lucide-react";
 import StyleCard from "./StyleCard";
+import { Input } from "@/components/ui/input";
 
 export default function StyleLibrary({
   savedStyles,
@@ -110,21 +111,21 @@ export default function StyleLibrary({
       <div className="space-y-3">
         {/* 搜尋列 */}
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-          <input
+          <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-3 pointer-events-none" />
+          <Input
             type="text"
             placeholder="搜尋風格名稱、描述或標籤..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-10 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all shadow-sm"
+            className="pl-10 pr-10"
           />
           {isSearching && (
-            <Loader2 className="w-4 h-4 text-blue-500 absolute right-3.5 top-3 animate-spin" />
+            <Loader2 className="w-4 h-4 text-primary absolute right-3.5 top-3 animate-spin" />
           )}
           {searchQuery && !isSearching && (
             <button
               onClick={() => onSearchChange("")}
-              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+              className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -135,12 +136,12 @@ export default function StyleLibrary({
         {allTags.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-xs font-medium text-slate-500">標籤篩選</span>
+              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">標籤篩選</span>
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="ml-auto text-[11px] text-blue-500 hover:text-blue-700 transition-colors"
+                  className="ml-auto text-[11px] text-primary hover:text-primary/70 transition-colors"
                 >
                   清除篩選
                 </button>
@@ -154,16 +155,16 @@ export default function StyleLibrary({
                     key={tag}
                     onClick={() => toggleTag(tag)}
                     className={`
-                      inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all duration-200
+                      inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all duration-150
                       ${isActive
-                        ? "bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-500/25"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/25"
+                        : "bg-background text-foreground border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5"
                       }
                     `}
                   >
                     <span>#{tag}</span>
                     <span
-                      className={`text-[10px] ${isActive ? "text-blue-200" : "text-slate-400"
+                      className={`text-[10px] ${isActive ? "text-primary-foreground/60" : "text-muted-foreground"
                         }`}
                     >
                       {count}
@@ -174,7 +175,7 @@ export default function StyleLibrary({
               {hasMoreTags && (
                 <button
                   onClick={() => setShowAllTags(!showAllTags)}
-                  className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 transition-colors"
+                  className="text-xs text-primary hover:text-primary/70 px-2 py-1 transition-colors"
                 >
                   {showAllTags ? "收合" : `+${allTags.length - 12} 更多`}
                 </button>
@@ -185,16 +186,16 @@ export default function StyleLibrary({
       </div>
 
       {isSelectionMode && (
-        <div className="flex items-center justify-between bg-blue-50/80 border border-blue-100 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
+        <div className="flex items-center justify-between bg-primary/5 border border-primary/20 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={filtered.length > 0 && selectedIds.size === filtered.length}
                 onChange={selectAll}
-                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                className="w-4 h-4 rounded border-border text-primary focus:ring-ring cursor-pointer"
               />
-              <span className="text-sm font-medium text-blue-900">
+              <span className="text-sm font-medium text-foreground">
                 已選取 {selectedIds.size} 個風格
               </span>
             </div>
@@ -202,7 +203,7 @@ export default function StyleLibrary({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsSelectionMode(false)}
-              className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-background border border-border rounded-lg shadow-sm hover:bg-muted/50 transition-colors"
             >
               取消
             </button>
@@ -221,9 +222,9 @@ export default function StyleLibrary({
       {/* 結果計數與操作列 */}
       <div className="flex items-center justify-between px-1">
         {hasActiveFilters ? (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>
-              找到 <strong className="text-slate-700">{filtered.length}</strong> 個風格
+              找到 <strong className="text-foreground">{filtered.length}</strong> 個風格
             </span>
             {selectedTags.length > 0 && (
               <div className="flex items-center gap-1">
@@ -231,7 +232,7 @@ export default function StyleLibrary({
                 {selectedTags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-0.5 text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md"
+                    className="inline-flex items-center gap-0.5 text-primary bg-primary/5 px-1.5 py-0.5 rounded-md"
                   >
                     #{tag}
                     <button
@@ -246,13 +247,13 @@ export default function StyleLibrary({
             )}
           </div>
         ) : (
-          <div className="text-xs text-slate-500">共 {savedStyles.length} 個風格</div>
+          <div className="text-xs text-muted-foreground">共 {savedStyles.length} 個風格</div>
         )}
 
         {!isSelectionMode && savedStyles.length > 0 && (
           <button
             onClick={toggleSelectionMode}
-            className="text-xs font-medium text-slate-500 hover:text-blue-600 flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
+            className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted transition-colors"
           >
             <CheckSquare className="w-3.5 h-3.5" />
             批次管理
@@ -262,15 +263,15 @@ export default function StyleLibrary({
 
       {/* Grid 顯示 */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-slate-400 flex flex-col items-center gap-3">
-          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
-            <Bookmark className="w-7 h-7 text-slate-300" />
+        <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-3">
+          <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
+            <Bookmark className="w-7 h-7 text-muted-foreground/40" />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">
+            <p className="text-sm font-medium text-muted-foreground">
               {hasActiveFilters ? "找不到符合的風格" : "尚未收藏任何風格"}
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-muted-foreground/70 mt-1">
               {hasActiveFilters
                 ? "嘗試調整搜尋條件或清除篩選"
                 : "分析圖片風格後即可儲存到此處"}
@@ -279,7 +280,7 @@ export default function StyleLibrary({
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="text-xs text-blue-500 hover:text-blue-700 mt-1 transition-colors"
+              className="text-xs text-primary hover:text-primary/70 mt-1 transition-colors"
             >
               清除所有篩選
             </button>

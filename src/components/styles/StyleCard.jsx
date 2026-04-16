@@ -25,14 +25,14 @@ export default function StyleCard({
 
   return (
     <div
-      className={`group relative bg-white border rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col ${isSelected
-          ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md transform scale-[0.98]"
-          : "border-slate-200 hover:shadow-lg hover:border-blue-200"
+      className={`group relative bg-card border rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col ${isSelected
+          ? "border-primary ring-2 ring-primary/20 shadow-md transform scale-[0.98]"
+          : "border-border hover:shadow-lg hover:border-primary/30"
         }`}
       onClick={handleClick}
     >
       {/* 預覽圖區域 */}
-      <div className="relative aspect-[4/3] bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden">
+      <div className="relative aspect-[4/3] bg-muted overflow-hidden">
         {hasPreview ? (
           <img
             src={style.previewUrl}
@@ -43,8 +43,8 @@ export default function StyleCard({
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center">
-              <ImageIcon className="w-8 h-8 text-slate-200 mx-auto mb-1" />
-              <span className="text-[10px] text-slate-300">無預覽</span>
+              <ImageIcon className="w-8 h-8 text-muted-foreground/30 mx-auto mb-1" />
+              <span className="text-[10px] text-muted-foreground/40">無預覽</span>
             </div>
           </div>
         )}
@@ -52,16 +52,16 @@ export default function StyleCard({
         {/* 選擇模式下的 Checkbox 遮罩 */}
         {isSelectionMode && (
           <div
-            className={`absolute inset-0 transition-colors flex items-start justify-end p-2 ${isSelected ? "bg-blue-500/20" : "bg-black/0 hover:bg-black/5"
+            className={`absolute inset-0 transition-colors flex items-start justify-end p-2 ${isSelected ? "bg-primary/20" : "bg-black/0 hover:bg-black/5"
               }`}
           >
             <div
               className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected
-                  ? "bg-blue-500 border-blue-500"
-                  : "bg-white/80 border-slate-300"
+                  ? "bg-primary border-primary"
+                  : "bg-card/80 border-muted-foreground/40"
                 }`}
             >
-              {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}
+              {isSelected && <div className="w-2 h-2 bg-primary-foreground rounded-full" />}
             </div>
           </div>
         )}
@@ -74,7 +74,7 @@ export default function StyleCard({
                 e.stopPropagation();
                 onApply(style);
               }}
-              className="bg-white/90 backdrop-blur-sm text-slate-700 hover:bg-blue-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-lg flex items-center gap-1"
+              className="bg-background/90 backdrop-blur-sm text-foreground hover:bg-primary hover:text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 shadow-lg flex items-center gap-1"
             >
               <Copy className="w-3 h-3" /> 套用
             </button>
@@ -83,7 +83,7 @@ export default function StyleCard({
                 e.stopPropagation();
                 onDelete(style.id, e);
               }}
-              className="bg-white/90 backdrop-blur-sm text-slate-700 hover:bg-red-500 hover:text-white p-1.5 rounded-lg transition-all shadow-lg"
+              className="bg-background/90 backdrop-blur-sm text-foreground hover:bg-destructive hover:text-destructive-foreground p-1.5 rounded-lg transition-all duration-150 shadow-lg"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -94,13 +94,13 @@ export default function StyleCard({
       {/* 資訊區 */}
       <div className="flex-1 p-3 flex flex-col gap-2">
         {/* 標題 */}
-        <h4 className="font-semibold text-slate-700 text-sm leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors">
+        <h4 className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors duration-150">
           {style.name}
         </h4>
 
         {/* 描述 */}
         {style.description && (
-          <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
             {style.description}
           </p>
         )}
@@ -113,16 +113,16 @@ export default function StyleCard({
               return (
                 <button
                   key={i}
-                  disabled={isSelectionMode} // 選擇模式下停用標籤點擊
+                  disabled={isSelectionMode}
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleTag?.(tag);
                   }}
                   className={`
-                    text-[10px] px-1.5 py-0.5 rounded-full transition-all
+                    text-[10px] px-1.5 py-0.5 rounded-full transition-all duration-150
                     ${isActive
-                      ? "bg-blue-100 text-blue-600 border border-blue-200"
-                      : "bg-slate-50 text-slate-500 border border-slate-100 hover:border-blue-200 hover:text-blue-600 hover:bg-blue-50"
+                      ? "bg-primary/10 text-primary border border-primary/20"
+                      : "bg-muted/50 text-muted-foreground border border-border hover:border-primary/30 hover:text-primary hover:bg-primary/5"
                     }
                   `}
                 >
@@ -131,7 +131,7 @@ export default function StyleCard({
               );
             })}
             {style.tags.length > 4 && (
-              <span className="text-[10px] text-slate-400 px-1 py-0.5">
+              <span className="text-[10px] text-muted-foreground/60 px-1 py-0.5">
                 +{style.tags.length - 4}
               </span>
             )}

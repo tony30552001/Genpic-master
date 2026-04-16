@@ -1,5 +1,7 @@
 import React from "react";
 import { Upload, Palette, Wand2, Tag, Save, Loader2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function StyleAnalyzer({
   referencePreview,
@@ -23,8 +25,8 @@ export default function StyleAnalyzer({
   const showProgress = isUploading || uploadProgress > 0;
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-slate-800 font-semibold">
-        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
+      <div className="flex items-center gap-2 text-foreground font-semibold">
+        <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs">
           1
         </div>
         上傳風格範例圖
@@ -39,8 +41,8 @@ export default function StyleAnalyzer({
         />
         <div
           className={`border-2 border-dashed rounded-xl p-4 transition-all text-center ${referencePreview
-              ? "border-blue-300 bg-blue-50"
-              : "border-slate-300 hover:border-blue-300 hover:bg-slate-50"
+              ? "border-primary/40 bg-primary/5"
+              : "border-border hover:border-primary/40 hover:bg-muted/30"
             }`}
         >
           {referencePreview ? (
@@ -64,7 +66,7 @@ export default function StyleAnalyzer({
               </button>
             </div>
           ) : (
-            <div className="py-8 flex flex-col items-center text-slate-400">
+            <div className="py-8 flex flex-col items-center text-muted-foreground">
               <Upload className="w-8 h-8 mb-2" />
               <span className="text-sm">點擊上傳或拖曳圖片</span>
               <span className="text-xs mt-1">支援 JPG, PNG</span>
@@ -75,22 +77,22 @@ export default function StyleAnalyzer({
 
       {showProgress && (
         <div className="space-y-2">
-          <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
             <div
-              className="h-full bg-blue-500 transition-all"
+              className="h-full bg-primary transition-all"
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             {isUploading ? "上傳中..." : "上傳完成"} {uploadProgress}%
           </div>
         </div>
       )}
 
-      <button
+      <Button
         onClick={onAnalyze}
         disabled={!referencePreview || isAnalyzing || isUploading}
-        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-sm"
+        className="w-full"
       >
         {isAnalyzing ? (
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -102,20 +104,20 @@ export default function StyleAnalyzer({
           : isAnalyzing
             ? "正在全方位分析..."
             : "解析風格與內容"}
-      </button>
+      </Button>
 
       {isAnalyzing && analysisPhase && (
-        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-blue-900">
+              <p className="text-sm font-medium text-foreground">
                 {analysisPhase}
               </p>
-              <div className="mt-2 h-1.5 w-full bg-blue-200 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: analysisPhase.includes("儲存") ? "90%" : analysisPhase.includes("解析") ? "60%" : "30%" }} />
+              <div className="mt-2 h-1.5 w-full bg-primary/20 rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: analysisPhase.includes("儲存") ? "90%" : analysisPhase.includes("解析") ? "60%" : "30%" }} />
               </div>
             </div>
           </div>
@@ -123,22 +125,22 @@ export default function StyleAnalyzer({
       )}
 
       {analyzedStyle && (
-        <div className="bg-white border border-blue-100 rounded-xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 relative">
+        <div className="bg-card border border-primary/10 rounded-xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 relative">
           <div className="flex items-start justify-between">
-            <h3 className="font-bold text-blue-900 text-sm flex items-center gap-2">
+            <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
               <Wand2 className="w-4 h-4" />
               {analysisResultData?.style_name || "風格分析結果"}
             </h3>
             <button
               onClick={onClearStyle}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-muted-foreground hover:text-foreground transition-colors"
               title="清除風格"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="text-xs leading-relaxed text-slate-600 bg-blue-50/50 p-3 rounded-lg border border-blue-50">
+          <div className="text-xs leading-relaxed text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border/50">
             {analysisResultData?.style_description_zh || analyzedStyle}
           </div>
 
@@ -147,7 +149,7 @@ export default function StyleAnalyzer({
               {analysisResultData.suggested_tags.map((tag, i) => (
                 <span
                   key={i}
-                  className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1"
+                  className="text-[10px] px-2 py-0.5 bg-muted text-muted-foreground rounded-full flex items-center gap-1"
                 >
                   <Tag className="w-2.5 h-2.5" /> {tag}
                 </span>
@@ -155,19 +157,20 @@ export default function StyleAnalyzer({
             </div>
           )}
 
-          <div className="pt-2 border-t border-slate-100 space-y-2">
+          <div className="pt-2 border-t border-border/50 space-y-2">
             <div className="flex gap-2">
-              <input
+              <Input
                 type="text"
                 value={newStyleName}
                 onChange={(e) => onStyleNameChange(e.target.value)}
                 placeholder="為此風格命名..."
-                className="flex-1 text-xs border border-slate-200 rounded px-2 py-1.5 focus:border-blue-500 outline-none"
+                className="flex-1 text-xs h-8"
               />
-              <button
+              <Button
                 onClick={onSaveStyle}
                 disabled={isSavingStyle}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                size="sm"
+                className="h-8 px-3"
               >
                 {isSavingStyle ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -175,14 +178,14 @@ export default function StyleAnalyzer({
                   <Save className="w-3 h-3" />
                 )}
                 收藏
-              </button>
+              </Button>
             </div>
-            <input
+            <Input
               type="text"
               value={newStyleTags}
               onChange={(e) => onStyleTagsChange(e.target.value)}
               placeholder="標籤 (以逗號分隔)..."
-              className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:border-blue-500 outline-none"
+              className="w-full text-xs h-8"
             />
           </div>
         </div>

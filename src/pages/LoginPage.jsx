@@ -20,31 +20,31 @@ export default function LoginPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] relative overflow-hidden">
-            {/* 裝飾性背景元素 */}
-            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100/50 rounded-full blur-[120px] pointer-events-none" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100/50 rounded-full blur-[120px] pointer-events-none" />
+        <div
+            className="min-h-screen flex items-center justify-center bg-muted/30 relative overflow-hidden"
+            style={{ backgroundImage: 'radial-gradient(hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+        >
 
-            <Card className="w-full max-w-md shadow-2xl border-white/40 bg-white/80 backdrop-blur-xl relative z-10 transition-all hover:shadow-blue-200/50">
+            <Card className="w-full max-w-md shadow-xl border-border/60 bg-card relative z-10 transition-shadow duration-300 hover:shadow-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
                 <CardHeader className="space-y-2 text-center pb-8">
-                    <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 mb-4 transform -rotate-3 hover:rotate-0 transition-transform duration-300">
-                        <LogIn className="w-8 h-8 text-white" />
+                    <div className="mx-auto w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 mb-4 transition-transform duration-300 hover:scale-105">
+                        <LogIn className="w-8 h-8 text-primary-foreground" />
                     </div>
-                    <CardTitle className="text-3xl font-bold tracking-tight text-slate-900">歡迎回到 Pixora</CardTitle>
-                    <CardDescription className="text-slate-500 font-medium">請選擇您的登入方式</CardDescription>
+                    <CardTitle className="text-3xl font-bold tracking-tight text-foreground">歡迎回到 Pixora</CardTitle>
+                    <CardDescription className="text-muted-foreground font-medium">請選擇您的登入方式</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                     {/* 登入過期提示 */}
                     {authExpired && (
-                        <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-800">
-                            <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
                             <AlertDescription>
                                 您的登入已過期，請重新登入以繼續使用
                             </AlertDescription>
@@ -54,7 +54,7 @@ export default function LoginPage() {
                     {/* Microsoft Login */}
                     <Button
                         variant="outline"
-                        className="w-full h-12 text-base font-semibold border-slate-200 hover:bg-slate-50 hover:border-slate-300 gap-3 transition-all active:scale-[0.98]"
+                        className="w-full h-12 text-base font-semibold gap-3 transition-all duration-150 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={handleMicrosoftLogin}
                     >
                         <svg className="w-5 h-5" viewBox="0 0 23 23">
@@ -69,10 +69,10 @@ export default function LoginPage() {
 
                     <div className="relative">
                         <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t border-slate-200" />
+                            <span className="w-full border-t border-border" />
                         </div>
                         <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-white/0 px-2 text-slate-400 font-medium backdrop-blur-sm">或</span>
+                            <span className="bg-card px-2 text-muted-foreground font-medium">或</span>
                         </div>
                     </div>
 
@@ -90,15 +90,14 @@ export default function LoginPage() {
                         </div>
                     </div>
 
-                    <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-center gap-2 text-slate-400 text-xs font-medium">
+                    <div className="pt-6 mt-6 border-t border-border flex items-center justify-center gap-2 text-muted-foreground text-xs font-medium">
                         <ShieldCheck className="w-4 h-4" />
                         <span>您的隱私與安全受 SSO 協定保護</span>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* 底部文字 */}
-            <p className="absolute bottom-8 left-0 right-0 text-center text-slate-400 text-sm">
+            <p className="absolute bottom-8 left-0 right-0 text-center text-muted-foreground text-sm">
                 &copy; 2026 Pixora. All rights reserved.
             </p>
         </div>

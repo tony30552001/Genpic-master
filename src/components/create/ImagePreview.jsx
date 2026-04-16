@@ -17,12 +17,12 @@ export default function ImagePreview({
       <Skeleton className="w-[85%] aspect-video max-h-[85%] rounded-xl opacity-60 relative overflow-hidden flex flex-col items-center justify-center gap-4">
         <div className="relative z-10 flex flex-col items-center justify-center gap-3 backdrop-blur-sm bg-white/40 p-6 rounded-2xl border border-white/50 shadow-sm" aria-live="polite">
           <div className="relative">
-            <div className="w-12 h-12 rounded-full border-[3px] border-blue-100 border-t-blue-500 animate-spin" />
-            <Wand2 className="w-5 h-5 text-blue-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+            <div className="w-12 h-12 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin" />
+            <Wand2 className="w-5 h-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
           </div>
           <div className="flex flex-col items-center text-center">
-            <p className="text-sm font-semibold tracking-wide text-blue-900/80 mb-0.5 animate-pulse">正在為您繪製構想...</p>
-            <p className="text-[11px] text-blue-900/50">大約需要 5-10 秒鐘</p>
+            <p className="text-sm font-semibold tracking-wide text-foreground/80 mb-0.5 animate-pulse">正在為您繪製構想...</p>
+            <p className="text-[11px] text-foreground/50">大約需要 5-10 秒鐘</p>
           </div>
         </div>
       </Skeleton>
@@ -46,7 +46,7 @@ export default function ImagePreview({
   const renderImageState = () => {
     if (imageError) {
       return (
-        <div className="flex flex-col items-center gap-3 text-red-400 py-12">
+        <div className="flex flex-col items-center gap-3 text-destructive py-12">
           <ImageIcon className="w-12 h-12 opacity-50" />
           <p className="text-sm font-medium">圖片載入失敗，請嘗試重新下載或重新產生。</p>
         </div>
@@ -75,7 +75,7 @@ export default function ImagePreview({
             <button
               onClick={onDownload}
               aria-label="下載產生的圖片"
-              className="flex items-center h-9 gap-1.5 text-xs font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-3 py-2 rounded-lg transition-colors shadow-lg border border-slate-200/50"
+              className="flex items-center h-9 gap-1.5 text-xs font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-3 py-2 rounded-lg transition-colors shadow-lg border border-border/50"
             >
               <Save className="w-4 h-4 shrink-0" />
               <span className="whitespace-nowrap">下載圖片</span>
@@ -106,7 +106,7 @@ export default function ImagePreview({
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-full h-auto lg:h-full lg:min-h-[500px] bg-slate-50/50 rounded-xl overflow-hidden group border border-slate-200/50">
+    <div className="relative flex flex-col items-center justify-center w-full h-auto lg:h-full lg:min-h-[500px] bg-muted/30 rounded-xl overflow-hidden group border border-border/40">
 
       {renderContent()}
 
@@ -121,7 +121,7 @@ export default function ImagePreview({
           <button
             onClick={onDownload}
             aria-label="下載產生的圖片"
-            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-white/90 backdrop-blur-sm hover:bg-white text-slate-700 px-4 py-2 rounded-lg transition-colors shadow-lg border border-slate-200/50"
+            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-lg border border-border/50"
           >
             <Save className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">下載圖片</span>
