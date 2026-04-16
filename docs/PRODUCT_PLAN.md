@@ -34,6 +34,9 @@
 | 單張圖片生成 | ✅ 可用 | Firebase Vertex AI SDK → Imagen 3 |
 | Microsoft SSO 登入 | ✅ 可用 | Firebase Auth + OAuthProvider |
 | 生成歷史記錄 | ✅ 可用 | Firestore + Base64 圖片 (壓縮至 JPEG 0.6) |
+| 文件分析（分鏡模式） | ✅ 可用 | Azure Function + Gemini → 場景JSON → AI圖片生成 |
+| 文件分析（簡報模式） | ✅ 可用 | Gemini → bullet_points / speaker_notes → pptxgenjs 匯出 .pptx |
+| 大綱文字輸入 | ✅ 可用 | 貼上大綱分頁 → 暫存 .txt 上傳 → 自動套用簡報模式 |
 
 ### 主要技術債
 
