@@ -10,6 +10,9 @@ const normalizeTags = (raw) => {
   return [];
 };
 
+const safeString = (v, fallback = "") =>
+  v == null ? fallback : typeof v === "string" ? v : String(v);
+
 export default function useImageGeneration() {
   const [analyzedStyle, setAnalyzedStyle] = useState("");
   const [analysisResultData, setAnalysisResultData] = useState(null);
@@ -37,6 +40,10 @@ export default function useImageGeneration() {
       setAnalysisPhase("儲存分析結果...");
       const normalized = {
         ...result,
+        style_prompt: safeString(result.style_prompt),
+        style_description_zh: safeString(result.style_description_zh),
+        image_content: safeString(result.image_content),
+        style_name: safeString(result.style_name),
         suggested_tags: normalizeTags(result.suggested_tags),
       };
       setAnalyzedStyle(normalized.style_prompt || "");

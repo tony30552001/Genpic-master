@@ -170,9 +170,9 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const analyzeImageStyle = async () => {
         try {
             const analysisResult = await analyzeStyle({ referencePreview, imageUrl: referenceBlobSasUrl });
-            setUserScript(analysisResult.image_content || '');
+            setUserScript(typeof analysisResult.image_content === 'string' ? analysisResult.image_content : String(analysisResult.image_content || ''));
             const tags = Array.isArray(analysisResult.suggested_tags) ? analysisResult.suggested_tags : [];
-            const autoStyleName = analysisResult.style_name || tags[0] || '未命名風格';
+            const autoStyleName = String(analysisResult.style_name || tags[0] || '未命名風格');
             const shouldSetName = !isStyleNameTouched;
             const shouldSetTags = !isStyleTagsTouched;
             const finalStyleName = shouldSetName ? autoStyleName : newStyleName.trim();

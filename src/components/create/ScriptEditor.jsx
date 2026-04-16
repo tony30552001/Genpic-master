@@ -489,11 +489,11 @@ export default function ScriptEditor({
               <div className="rounded-xl p-3 space-y-2 animate-in fade-in slide-in-from-top-2 border border-border bg-muted/40">
                 <h3 className="font-semibold text-foreground text-xs flex items-center gap-1.5">
                   <Wand2 className="w-3.5 h-3.5 text-primary" />
-                  {analysisResultData?.style_name || "風格分析結果"}
+                  {String(analysisResultData?.style_name || "風格分析結果")}
                 </h3>
 
                 <div className="text-[10px] leading-relaxed text-muted-foreground bg-background p-2 rounded-lg border border-border/60">
-                  {analysisResultData?.style_description_zh || analyzedStyle}
+                  {String(analysisResultData?.style_description_zh || analyzedStyle || "")}
                 </div>
 
                 {Array.isArray(analysisResultData?.suggested_tags) && (

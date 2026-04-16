@@ -13,6 +13,17 @@ const normalizeTags = (raw) => {
   return [];
 };
 
+const safeString = (v, fallback = "") =>
+  v == null ? fallback : typeof v === "string" ? v : String(v);
+
+const sanitizeAnalysisResult = (data) => ({
+  style_prompt: safeString(data.style_prompt),
+  style_description_zh: safeString(data.style_description_zh),
+  image_content: safeString(data.image_content),
+  suggested_tags: normalizeTags(data.suggested_tags),
+  // 保留任何其他 Gemini 可能額外回傳的欄位，但不影響渲染
+});
+
 
 const STYLE_ANALYSIS_PROMPT = `請擔任專業視覺分析師。請分析這張圖片並回傳一個 JSON 物件，包含以下欄位：
 1. "style_prompt": (英文) 詳細描述圖片的視覺風格、藝術流派、配色方案、光影與材質、構圖特徵。這將用於生成類似風格圖片的 Image Gen Prommpt。
@@ -81,9 +92,10 @@ module.exports = async function (context, req) {
       }
     );
 
-    const data = parseGeminiResponse(result);
-    const tags = normalizeTags(data.suggested_tags);
-    const styleName = data.style_name?.trim() || tags[0] || "未命名風格";
+    const raw = parseGeminiResponse(result);
+    const sanitized = sanitizeAnalysisResult(raw);
+    const tags = sanitized.suggested_tags;
+    const styleName = safeString(raw.style_name).trim() || tags[0] || "未命名風格";
 
     const identity = await resolveIdentity(auth.user);
     if (!identity.userId) {
@@ -95,8 +107,7 @@ module.exports = async function (context, req) {
     }
 
     context.res = ok({
-      ...data,
-      suggested_tags: tags,
+      ...sanitized,
       style_name: styleName,
       styleId: null,
     });
