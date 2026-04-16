@@ -1,11 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import "./editorjs.css";
-import EditorJS from "@editorjs/editorjs";
-import Header from "@editorjs/header";
-import List from "@editorjs/list";
-import Delimiter from "@editorjs/delimiter";
-import Marker from "@editorjs/marker";
-import InlineCode from "@editorjs/inline-code";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Palette,
   PenLine,
@@ -20,13 +13,14 @@ import {
   Save,
   LayoutTemplate,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
 
 /**
- * ScriptEditor — 整合 Editor.js 的內容編輯器
- * 支援區塊式編輯、風格庫快速選取
+ * ScriptEditor — 內容描述編輯器
+ * 支援 AI 智能優化、風格庫快速選取、內容參考圖片
  */
 export default function ScriptEditor({
   userScript,
@@ -34,17 +28,14 @@ export default function ScriptEditor({
   onFocus,
   onBlur,
 
-  // 新增：風格庫相關 props
   savedStyles = [],
   analyzedStyle,
   onApplyStyle,
   onClearStyle,
-  // 新增：內容參考圖相關 props
   contentImagePreview,
   onContentImageUpload,
   onClearContentImage,
   isUploadingContent,
-  // 風格分析 Props
   isAnalyzing,
   analysisPhase,
   analysisResultData,
@@ -55,161 +46,23 @@ export default function ScriptEditor({
   onStyleNameChange,
   onStyleTagsChange,
   onSaveStyle,
-  // 範本相關 Props
   onSaveTemplate,
   analyzedStyleForTemplate,
-
-  // 新增：雙語 Prompt 處理
   onOptimizedPromptEnChange,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
 
-  const editorRef = useRef(null);
-  const holderRef = useRef(null);
-  const isInitializing = useRef(false);
-  const skipNextChange = useRef(false);
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [styleSearch, setStyleSearch] = useState("");
   const [selectedStyleId, setSelectedStyleId] = useState(null);
   const [selectedStyleInfo, setSelectedStyleInfo] = useState(null);
-  const [charCount, setCharCount] = useState(userScript?.length || 0);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [suggestionData, setSuggestionData] = useState(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
 
-  // 將 Editor.js blocks 轉換為純文字
-  const blocksToText = useCallback((blocks) => {
-    return blocks
-      .map((block) => {
-        switch (block.type) {
-          case "header":
-            return block.data?.text || "";
-          case "paragraph":
-            return (block.data?.text || "").replace(/<[^>]+>/g, "");
-          case "list": {
-            const items = block.data?.items || [];
-            return items
-              .map((item) => {
-                const text = typeof item === "string" ? item : item?.content || "";
-                return `• ${text.replace(/<[^>]+>/g, "")}`;
-              })
-              .join("\n");
-          }
-          case "delimiter":
-            return "---";
-          default:
-            return block.data?.text || "";
-        }
-      })
-      .filter(Boolean)
-      .join("\n\n");
-  }, []);
+  const charCount = userScript?.length || 0;
 
-  // 將純文字轉換為 Editor.js blocks
-  const textToBlocks = useCallback((text) => {
-    if (!text || !text.trim()) return [];
-
-    const paragraphs = text.split(/\n\n+/);
-    return paragraphs.map((p) => ({
-      type: "paragraph",
-      data: { text: p.replace(/\n/g, "<br>") },
-    }));
-  }, []);
-
-  // 初始化 Editor.js
-  useEffect(() => {
-    if (!holderRef.current || isInitializing.current) return;
-    isInitializing.current = true;
-
-    const initEditor = async () => {
-      // 如果已有 instance，先銷毀
-      if (editorRef.current) {
-        try {
-          await editorRef.current.destroy();
-        } catch {
-          // ignore
-        }
-        editorRef.current = null;
-      }
-
-      const editor = new EditorJS({
-        holder: holderRef.current,
-        placeholder: "描述你想生成的畫面內容...\n可用 / 選擇區塊類型，或直接打字",
-        autofocus: false,
-        minHeight: 120,
-        tools: {
-          header: {
-            class: Header,
-            inlineToolbar: true,
-            config: {
-              placeholder: "標題",
-              levels: [2, 3],
-              defaultLevel: 2,
-            },
-          },
-          list: {
-            class: List,
-            inlineToolbar: true,
-          },
-          delimiter: Delimiter,
-          marker: {
-            class: Marker,
-            shortcut: "CMD+SHIFT+M",
-          },
-          inlineCode: {
-            class: InlineCode,
-            shortcut: "CMD+SHIFT+C",
-          },
-        },
-        data: {
-          blocks: userScript ? textToBlocks(userScript) : [],
-        },
-        onChange: async (api) => {
-          if (skipNextChange.current) {
-            skipNextChange.current = false;
-            return;
-          }
-          try {
-            const data = await api.saver.save();
-            const text = blocksToText(data.blocks);
-            setCharCount(text.length);
-            onUserScriptChange(text);
-
-            // 如果使用者手動修改了文字，則清除原本 AI 產生的英文 Prompt
-            // 如此一來，後端就會退回使用手動的中文來生成圖片
-            if (onOptimizedPromptEnChange) {
-              onOptimizedPromptEnChange("");
-            }
-          } catch {
-            // ignore save errors during transitions
-          }
-        },
-        onReady: () => {
-          isInitializing.current = false;
-        },
-      });
-
-      editorRef.current = editor;
-    };
-
-    initEditor();
-
-    return () => {
-      if (editorRef.current) {
-        try {
-          editorRef.current.destroy();
-        } catch {
-          // ignore
-        }
-        editorRef.current = null;
-      }
-      isInitializing.current = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 篩選風格
   const filteredStyles = savedStyles.filter((style) => {
     const q = styleSearch.toLowerCase();
     return (
@@ -219,7 +72,14 @@ export default function ScriptEditor({
     );
   });
 
-  // 套用風格（不跳頁）
+  const handleChange = useCallback((e) => {
+    const text = e.target.value;
+    onUserScriptChange(text);
+    if (onOptimizedPromptEnChange) {
+      onOptimizedPromptEnChange("");
+    }
+  }, [onUserScriptChange, onOptimizedPromptEnChange]);
+
   const handleApplyStyle = (style) => {
     setSelectedStyleId(style.id);
     setSelectedStyleInfo({ name: style.name, tags: style.tags, previewUrl: style.previewUrl });
@@ -227,14 +87,12 @@ export default function ScriptEditor({
     setShowStylePicker(false);
   };
 
-  // 清除風格
   const handleClearStyle = () => {
     setSelectedStyleId(null);
     setSelectedStyleInfo(null);
     onClearStyle?.();
   };
 
-  // AI 智能優化 — 呼叫 API 取得建議，不直接替換
   const handleSmartOptimize = async () => {
     if (!userScript || !userScript.trim()) return;
     setIsOptimizing(true);
@@ -246,7 +104,6 @@ export default function ScriptEditor({
       });
 
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
-        // 儲存建議資料，顯示預覽面板
         setSuggestionData({
           originalText: userScript,
           optimizedText: result.optimizedPromptZh || result.optimizedPrompt,
@@ -262,28 +119,16 @@ export default function ScriptEditor({
     }
   };
 
-  // 接受優化建議
-  const handleAcceptSuggestion = async () => {
+  const handleAcceptSuggestion = () => {
     if (!suggestionData) return;
     const newText = suggestionData.optimizedText;
-
-    // 更新 Editor.js 內容
-    if (editorRef.current) {
-      const newBlocks = textToBlocks(newText);
-      await editorRef.current.render({ blocks: newBlocks });
-    }
-
-    // 更新上層狀態
     onUserScriptChange(newText);
     if (onOptimizedPromptEnChange) {
       onOptimizedPromptEnChange(suggestionData.optimizedTextEn);
     }
-
-    setCharCount(newText.length);
     setSuggestionData(null);
   };
 
-  // 拒絕優化建議
   const handleRejectSuggestion = () => {
     setSuggestionData(null);
   };
@@ -364,18 +209,15 @@ export default function ScriptEditor({
         />
       )}
 
-      {/* ── Editor.js 主要輸入區 ── */}
-      <div
-        className="min-h-[200px] md:min-h-[300px] rounded-xl"
+      {/* ── 文字輸入區 ── */}
+      <Textarea
+        value={userScript || ""}
+        onChange={handleChange}
         onFocus={onFocus}
         onBlur={onBlur}
-      >
-        <div
-          ref={holderRef}
-          id="editorjs-holder"
-          className="editorjs-container py-3 pl-4 md:pl-24"
-        />
-      </div>
+        placeholder={"描述你想生成的畫面內容...\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
+        className="min-h-[200px] md:min-h-[280px] resize-none text-sm leading-relaxed"
+      />
 
       {/* 字數統計 */}
       <div className="text-xs text-muted-foreground text-right px-1">
@@ -401,7 +243,7 @@ export default function ScriptEditor({
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
               <button
                 onClick={onClearContentImage}
-                className="p-1.5 bg-white text-slate-500 hover:text-red-500 rounded-full shadow-sm transition-colors"
+                className="p-1.5 bg-card text-muted-foreground hover:text-destructive rounded-full shadow-sm transition-colors"
                 title="移除參考圖片"
               >
                 <X className="w-4 h-4" />
@@ -463,7 +305,6 @@ export default function ScriptEditor({
         {/* 風格分析與結果顯示區 */}
         {contentImagePreview && (
           <div className="mt-1 space-y-2">
-            {/* 分析按鈕 */}
             {!analyzedStyle && !analysisResultData && (
               <button
                 onClick={onAnalyze}
@@ -484,7 +325,6 @@ export default function ScriptEditor({
               </button>
             )}
 
-            {/* 分析結果卡片 */}
             {(analyzedStyle || analysisResultData) && (
               <div className="rounded-xl p-3 space-y-2 animate-in fade-in slide-in-from-top-2 border border-border bg-muted/40">
                 <h3 className="font-semibold text-foreground text-xs flex items-center gap-1.5">
