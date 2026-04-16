@@ -22,6 +22,9 @@ import {
   ZoomIn,
   ZoomOut,
   BookOpen,
+  Presentation,
+  List,
+  Mic,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -460,6 +463,20 @@ function SceneModal({
                       )}
                     </div>
                   )}
+
+                  {/* 講者備注（簡報模式） */}
+                  {scene.speaker_notes && (
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                        <Mic className="h-3 w-3" /> 講者備注
+                      </p>
+                      <div className="p-3 rounded-lg bg-blue-50/80 dark:bg-blue-950/20 border border-blue-200/40 dark:border-blue-800/30">
+                        <p className="text-xs text-blue-900/80 dark:text-blue-200/80 leading-relaxed whitespace-pre-wrap">
+                          {scene.speaker_notes}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -520,6 +537,7 @@ export default function DocumentScenes({
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingPptx, setIsExportingPptx] = useState(false);
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -694,6 +712,119 @@ export default function DocumentScenes({
     }
   };
 
+  /**
+   * 使用 pptxgenjs 將場景匯出為可編輯的 PowerPoint 簡報
+   * - 每個已生成的場景對應一張投影片
+   * - 有 bullet_points 時顯示項目符號；否則 fallback 到 scene_description
+   * - 圖片以 base64 嵌入（避免 SAS token 過期）
+   * - speaker_notes 寫入投影片備注區
+   */
+  const exportToPptx = async () => {
+    const generatedScenes = scenes.filter((s) => s.generatedImage);
+    if (generatedScenes.length === 0) return;
+
+    setIsExportingPptx(true);
+    try {
+      const module = await import("pptxgenjs");
+      const PptxGenJS = module.default || module;
+      const pptx = new PptxGenJS();
+
+      pptx.layout = "LAYOUT_16x9"; // 10 x 5.625 inches
+      pptx.title = title || "Presentation";
+      pptx.subject = summary || "";
+      pptx.author = "Pixora 智繪";
+
+      const C_TITLE = "1E293B";
+      const C_BODY = "475569";
+      const C_ACCENT = "6366F1";
+
+      // Fetch image as base64 using canvas (avoids SAS token expiry issues)
+      const fetchBase64 = async (url) => {
+        try {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = url;
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          canvas.getContext("2d").drawImage(img, 0, 0);
+          return canvas.toDataURL("image/png");
+        } catch {
+          return null;
+        }
+      };
+
+      // Fetch all images in parallel to reduce total export time
+      const imageBase64List = await Promise.all(
+        generatedScenes.map((scene) => fetchBase64(scene.generatedImage))
+      );
+      const failedImages = imageBase64List.filter((b) => b === null).length;
+
+      for (let i = 0; i < generatedScenes.length; i++) {
+        const scene = generatedScenes[i];
+        const imageBase64 = imageBase64List[i];
+        const slide = pptx.addSlide();
+
+        // Scene number badge (small circle top-left)
+        slide.addText(`${scene.scene_number}`, {
+          x: 0.2, y: 0.15, w: 0.38, h: 0.38,
+          fontSize: 10, bold: true, color: "FFFFFF",
+          fill: { color: C_ACCENT },
+          align: "center", valign: "middle",
+          rectRadius: 0.05,
+        });
+
+        // Slide title
+        slide.addText(scene.scene_title || "", {
+          x: 0.68, y: 0.1, w: 5.7, h: 0.6,
+          fontSize: 20, bold: true, color: C_TITLE,
+          valign: "middle",
+        });
+
+        // Bullet points (or scene_description fallback)
+        const bullets = Array.isArray(scene.bullet_points) && scene.bullet_points.length > 0
+          ? scene.bullet_points
+          : [scene.scene_description || ""].filter(Boolean);
+
+        slide.addText(
+          bullets.map((text) => ({
+            text,
+            options: { bullet: { type: "bullet" }, paraSpaceAfter: 6, color: C_BODY },
+          })),
+          { x: 0.3, y: 0.85, w: 5.5, h: 4.35, fontSize: 13, valign: "top", lineSpacingMultiple: 1.4, wrap: true }
+        );
+
+        // AI-generated image on the right
+        if (imageBase64) {
+          slide.addImage({ data: imageBase64, x: 6.0, y: 0.8, w: 3.75, h: 4.45 });
+        }
+
+        // Speaker notes
+        if (scene.speaker_notes) {
+          slide.addNotes(scene.speaker_notes);
+        }
+      }
+
+      const safeTitle = (title || "presentation")
+        .replace(/[^\w\u4e00-\u9fff\s-]/g, "")
+        .trim() || "presentation";
+      await pptx.writeFile({ fileName: `${safeTitle}-${Date.now()}.pptx` });
+
+      if (failedImages > 0) {
+        alert(`PPTX 已匯出，但 ${failedImages} 張圖片因網路或權限問題未能嵌入。投影片內容完整，建議手動補充圖片。`);
+      }
+    } catch (err) {
+      console.error("PPTX export failed:", err);
+      alert("PPTX 匯出失敗，請稍後再試。");
+    } finally {
+      setIsExportingPptx(false);
+    }
+  };
+
   // 打開 modal 時使用最新的 scene 資料
   const openModal = (index) => {
     setModalScene({ scene: scenes[index], index });
@@ -740,19 +871,34 @@ export default function DocumentScenes({
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {generatedCount > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={exportToPdf}
-                    disabled={isGenerating || isExportingPdf}
-                    className="text-xs h-8 gap-1"
-                  >
-                    {isExportingPdf ? (
-                      <><Loader2 className="h-3 w-3 animate-spin" /> 匯出中...</>
-                    ) : (
-                      <><FileDown className="h-3 w-3" /> 匯出 PDF</>
-                    )}
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportToPdf}
+                      disabled={isGenerating || isExportingPdf || isExportingPptx}
+                      className="text-xs h-8 gap-1"
+                    >
+                      {isExportingPdf ? (
+                        <><Loader2 className="h-3 w-3 animate-spin" /> 匯出中...</>
+                      ) : (
+                        <><FileDown className="h-3 w-3" /> 匯出 PDF</>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportToPptx}
+                      disabled={isGenerating || isExportingPdf || isExportingPptx}
+                      className="text-xs h-8 gap-1"
+                    >
+                      {isExportingPptx ? (
+                        <><Loader2 className="h-3 w-3 animate-spin" /> 匯出中...</>
+                      ) : (
+                        <><Presentation className="h-3 w-3" /> 匯出 PPTX</>
+                      )}
+                    </Button>
+                  </>
                 )}
                 <Button variant="outline" size="sm" onClick={onClear} disabled={isGenerating} className="text-xs h-8">
                   清除分析
@@ -1011,6 +1157,23 @@ export default function DocumentScenes({
                   <CardContent className="flex-1 p-3 min-h-0">
                     <p className="text-[11px] text-muted-foreground mb-0.5 font-medium">場景描述</p>
                     <p className="text-xs text-foreground leading-relaxed line-clamp-3">{scene.scene_description}</p>
+
+                    {/* 重點項目（簡報模式） */}
+                    {Array.isArray(scene.bullet_points) && scene.bullet_points.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-[11px] text-muted-foreground mb-0.5 font-medium flex items-center gap-1">
+                          <List className="h-3 w-3" /> 重點項目
+                        </p>
+                        <ul className="space-y-0.5">
+                          {scene.bullet_points.slice(0, 3).map((point, i) => (
+                            <li key={i} className="text-[10px] text-foreground flex items-start gap-1.5">
+                              <span className="text-primary shrink-0 mt-0.5">•</span>
+                              <span className="line-clamp-1">{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     <p className="text-[11px] text-muted-foreground mt-2 mb-0.5 font-medium">Prompt</p>
                     <p className="text-[10px] text-muted-foreground bg-muted/60 p-2 rounded font-mono line-clamp-2">

@@ -15,10 +15,12 @@ export default function useDocumentAnalysis() {
   const [error, setError] = useState(null);
 
   /**
-   * 分析文件並提取分鏡腳本
+   * 分析文件並提取分鏡腳本或簡報投影片
    * @param {File} file - 上傳的文件物件
+   * @param {number|'auto'} sceneCount - 場景/投影片數量
+   * @param {'storyboard'|'presentation'} mode - 分析模式
    */
-  const analyzeDocumentFromFile = useCallback(async (file, sceneCount) => {
+  const analyzeDocumentFromFile = useCallback(async (file, sceneCount, mode = 'storyboard') => {
     if (!file) {
       throw new Error("請先選擇文件。");
     }
@@ -54,6 +56,7 @@ export default function useDocumentAnalysis() {
         fileName: file.name,
         contentType: file.type || getMimeTypeFromExt(fileExtension),
         sceneCount: sceneCount || 'auto',
+        mode,
       };
 
       // 統一走 Blob Storage 上傳（避免 Azure SWA 請求大小限制）

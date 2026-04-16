@@ -17,16 +17,18 @@ export const generateFilename = async ({ userScript }) =>
   apiPost(`${API_BASE_URL}/generate-filename`, { userScript });
 
 /**
- * 分析文件內容並提取分鏡腳本
+ * 分析文件內容並提取分鏡腳本或簡報投影片
  * @param {Object} params
  * @param {string} params.documentUrl - 文件在 Blob Storage 的 URL
  * @param {string} params.fileName - 檔案名稱
  * @param {string} params.contentType - MIME 類型
  * @param {string} params.base64Content - Base64 編碼的文件內容（可選）
+ * @param {number|'auto'} params.sceneCount - 場景/投影片數量
+ * @param {'storyboard'|'presentation'} params.mode - 分析模式
  * @returns {Promise<Object>} 包含 title, summary, scenes, characters 的分析結果
  */
-export const analyzeDocument = async ({ documentUrl, fileName, contentType, base64Content, sceneCount }) =>
-  apiPost(`${API_BASE_URL}/analyze-document`, { documentUrl, fileName, contentType, base64Content, sceneCount });
+export const analyzeDocument = async ({ documentUrl, fileName, contentType, base64Content, sceneCount, mode }) =>
+  apiPost(`${API_BASE_URL}/analyze-document`, { documentUrl, fileName, contentType, base64Content, sceneCount, mode });
 
 /**
  * AI 優化單一場景的標題、描述和英文 Prompt

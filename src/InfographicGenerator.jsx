@@ -287,10 +287,10 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         document.body.removeChild(link);
     };
 
-    const handleAnalyzeDocument = async (file, sceneCount) => {
+    const handleAnalyzeDocument = async (file, sceneCount, mode) => {
         try {
             setErrorMsg('');
-            const result = await analyzeDocument(file, sceneCount);
+            const result = await analyzeDocument(file, sceneCount, mode);
             return result;
         } catch (err) {
             console.error("Document Analysis Failed:", err);
