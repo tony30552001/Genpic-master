@@ -142,7 +142,7 @@ export default function StyleAnalyzer({
             {analysisResultData?.style_description_zh || analyzedStyle}
           </div>
 
-          {analysisResultData?.suggested_tags && (
+          {Array.isArray(analysisResultData?.suggested_tags) && (
             <div className="flex flex-wrap gap-1">
               {analysisResultData.suggested_tags.map((tag, i) => (
                 <span

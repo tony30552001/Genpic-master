@@ -2,6 +2,14 @@ import { useCallback, useState } from "react";
 
 import { analyzeStyle, generateImage, generateFilename } from "../services/aiService";
 
+const normalizeTags = (raw) => {
+  if (Array.isArray(raw)) return raw.map((t) => String(t).trim()).filter(Boolean);
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.split(/[,，]/).map((t) => t.trim()).filter(Boolean);
+  }
+  return [];
+};
+
 export default function useImageGeneration() {
   const [analyzedStyle, setAnalyzedStyle] = useState("");
   const [analysisResultData, setAnalysisResultData] = useState(null);
@@ -27,10 +35,14 @@ export default function useImageGeneration() {
       });
 
       setAnalysisPhase("儲存分析結果...");
-      setAnalyzedStyle(result.style_prompt || "");
-      setAnalysisResultData(result);
+      const normalized = {
+        ...result,
+        suggested_tags: normalizeTags(result.suggested_tags),
+      };
+      setAnalyzedStyle(normalized.style_prompt || "");
+      setAnalysisResultData(normalized);
       setAnalysisPhase("");
-      return result;
+      return normalized;
     } finally {
       setIsAnalyzing(false);
     }

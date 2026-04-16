@@ -469,7 +469,7 @@ export default function ScriptEditor({
                   {analysisResultData?.style_description_zh || analyzedStyle}
                 </div>
 
-                {analysisResultData?.suggested_tags && (
+                {Array.isArray(analysisResultData?.suggested_tags) && (
                   <div className="flex flex-wrap gap-1">
                     {analysisResultData.suggested_tags.map((tag, i) => (
                       <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1">

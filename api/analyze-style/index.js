@@ -1,9 +1,17 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel } = require("../_shared/gemini");
+const { getModel, parseGeminiResponse } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
+
+const normalizeTags = (raw) => {
+  if (Array.isArray(raw)) return raw.map((t) => String(t).trim()).filter(Boolean);
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.split(/[,，]/).map((t) => t.trim()).filter(Boolean);
+  }
+  return [];
+};
 
 
 const STYLE_ANALYSIS_PROMPT = `請擔任專業視覺分析師。請分析這張圖片並回傳一個 JSON 物件，包含以下欄位：
@@ -73,26 +81,9 @@ module.exports = async function (context, req) {
       }
     );
 
-    const parts =
-      result?.candidates?.[0]?.content?.parts ||
-      result?.response?.candidates?.[0]?.content?.parts ||
-      [];
-    let responseText = result?.text || result?.response?.text || "";
-    if (!responseText && parts.length > 0) {
-      responseText = parts.map((part) => part.text).filter(Boolean).join("\n");
-    }
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("解析 JSON 失敗");
-      }
-      data = JSON.parse(jsonMatch[0]);
-    }
-    const tags = Array.isArray(data.suggested_tags) ? data.suggested_tags : [];
-    const styleName = tags[0] || "未命名風格";
+    const data = parseGeminiResponse(result);
+    const tags = normalizeTags(data.suggested_tags);
+    const styleName = data.style_name?.trim() || tags[0] || "未命名風格";
 
     const identity = await resolveIdentity(auth.user);
     if (!identity.userId) {
@@ -105,6 +96,8 @@ module.exports = async function (context, req) {
 
     context.res = ok({
       ...data,
+      suggested_tags: tags,
+      style_name: styleName,
       styleId: null,
     });
   } catch (err) {
