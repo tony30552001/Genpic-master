@@ -9,7 +9,6 @@ import InlineCode from "@editorjs/inline-code";
 import {
   Palette,
   PenLine,
-  Sparkles,
   X,
   ChevronDown,
   ChevronUp,
@@ -18,7 +17,6 @@ import {
   Image,
   Loader2,
   Wand2,
-  Tag,
   Save,
   LayoutTemplate,
 } from "lucide-react";
@@ -292,20 +290,19 @@ export default function ScriptEditor({
 
   return (
     <div className="space-y-3">
-      {/* 標題與風格選取 */}
+      {/* ── 標題列 ── */}
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-            <PenLine className="w-4 h-4 text-blue-500" />
+        <div className="space-y-0.5">
+          <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <PenLine className="w-4 h-4 text-primary" />
             內容描述
           </label>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             描述你想生成的畫面，包含人物、場景、動作和氛圍
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 存為範本按鈕 */}
           {onSaveTemplate && (
             <button
               onClick={() => setShowSaveTemplate(!showSaveTemplate)}
@@ -313,8 +310,8 @@ export default function ScriptEditor({
               className={`
                 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
                 ${!userScript?.trim()
-                  ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                  : 'bg-primary text-white border-transparent shadow-sm hover:shadow-md hover:bg-primary/90'
+                  ? 'bg-muted text-muted-foreground/40 border-border cursor-not-allowed'
+                  : 'bg-primary text-primary-foreground border-transparent shadow-sm hover:bg-primary/90'
                 }
               `}
               title="將當前內容與風格存為可重複使用的範本"
@@ -323,15 +320,14 @@ export default function ScriptEditor({
               存為範本
             </button>
           )}
-          {/* AI 智能優化按鈕 */}
           <button
             onClick={handleSmartOptimize}
             disabled={isOptimizing || !userScript?.trim()}
             className={`
               flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
               ${!userScript?.trim()
-                ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                : 'bg-violet-500 text-white border-transparent shadow-sm hover:shadow-md hover:bg-violet-600'
+                ? 'bg-muted text-muted-foreground/40 border-border cursor-not-allowed'
+                : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/15'
               }
             `}
             title="使用 AI 自動豐富畫面細節與提示詞"
@@ -352,21 +348,55 @@ export default function ScriptEditor({
           userScript={userScript}
           stylePrompt={analyzedStyleForTemplate || analyzedStyle || ''}
           styleId={selectedStyleId}
-          onSave={async (data) => {
-            await onSaveTemplate(data);
-          }}
+          onSave={async (data) => { await onSaveTemplate(data); }}
           onClose={() => setShowSaveTemplate(false)}
         />
       )}
 
-      {/* 內容參考圖片區塊 */}
+      {/* AI 優化建議面板 */}
+      {suggestionData && (
+        <PromptSuggestionPanel
+          originalText={suggestionData.originalText}
+          optimizedText={suggestionData.optimizedText}
+          explanation={suggestionData.explanation}
+          onAccept={handleAcceptSuggestion}
+          onReject={handleRejectSuggestion}
+        />
+      )}
+
+      {/* ── Editor.js 主要輸入區 ── */}
+      <div
+        className="min-h-[200px] md:min-h-[300px] rounded-xl"
+        onFocus={onFocus}
+        onBlur={onBlur}
+      >
+        <div
+          ref={holderRef}
+          id="editorjs-holder"
+          className="editorjs-container py-3 pl-4 md:pl-24"
+        />
+      </div>
+
+      {/* 字數統計 */}
+      <div className="text-xs text-muted-foreground text-right px-1">
+        {charCount} 字
+      </div>
+
+      {/* ── 風格設定 分隔 ── */}
+      <div className="flex items-center gap-2 pt-1">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest px-1">風格設定</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* 內容參考圖片 + 風格分析 */}
       <div className="space-y-2">
         {contentImagePreview ? (
-          <div className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+          <div className="relative group rounded-xl overflow-hidden border border-border bg-muted/30">
             <img
               src={contentImagePreview}
               alt="Content Reference"
-              className="w-full h-48 object-contain bg-slate-100/50"
+              className="w-full h-48 object-contain bg-muted/20"
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
               <button
@@ -397,8 +427,8 @@ export default function ScriptEditor({
             className={`
               relative group flex items-center gap-3 px-4 py-3 rounded-xl border-dashed border-2 cursor-pointer transition-all
               ${isDraging
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/40 hover:bg-muted/40'
               }
             `}
           >
@@ -411,19 +441,19 @@ export default function ScriptEditor({
             />
             <div className={`
               w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors
-              ${isUploadingContent ? 'bg-slate-100' : 'bg-blue-50 text-blue-500 group-hover:bg-blue-100 group-hover:text-blue-600'}
+              ${isUploadingContent ? 'bg-muted' : 'bg-primary/8 text-primary group-hover:bg-primary/12'}
             `}>
               {isUploadingContent ? (
-                <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-muted-foreground/30 border-t-primary rounded-full animate-spin" />
               ) : (
                 <Image className="w-5 h-5" />
               )}
             </div>
             <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-slate-700 group-hover:text-blue-700 transition-colors">
+              <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                 上傳內容參考圖片
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 作為生成內容的視覺參考 (支援 JPG, PNG)
               </p>
             </div>
@@ -432,17 +462,17 @@ export default function ScriptEditor({
 
         {/* 風格分析與結果顯示區 */}
         {contentImagePreview && (
-          <div className="mt-2 space-y-3">
+          <div className="mt-1 space-y-2">
             {/* 分析按鈕 */}
             {!analyzedStyle && !analysisResultData && (
               <button
                 onClick={onAnalyze}
                 disabled={isAnalyzing || isUploadingContent}
-                className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 border border-blue-200"
+                className="w-full py-2 bg-primary/5 hover:bg-primary/10 text-primary rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 border border-primary/15"
               >
                 {isAnalyzing ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <div className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
                     {analysisPhase || "正在分析風格..."}
                   </>
                 ) : (
@@ -454,45 +484,41 @@ export default function ScriptEditor({
               </button>
             )}
 
-            {/* 分析結果卡片 (從 StyleAnalyzer 移植) */}
+            {/* 分析結果卡片 */}
             {(analyzedStyle || analysisResultData) && (
-              <div className="bg-white border border-blue-100 rounded-xl p-3 shadow-sm space-y-2 animate-in fade-in slide-in-from-top-2 relative">
-                <div className="flex items-start justify-between">
-                  <h3 className="font-bold text-blue-900 text-xs flex items-center gap-1.5">
-                    <Wand2 className="w-3.5 h-3.5" />
-                    {analysisResultData?.style_name || "風格分析結果"}
-                  </h3>
-                  {/* 清除風格按鈕不需要在這裡，因為上方已經有清除個別風格的按鈕，或者是清除圖片時已經清除了 */}
-                </div>
+              <div className="rounded-xl p-3 space-y-2 animate-in fade-in slide-in-from-top-2 border border-border bg-muted/40">
+                <h3 className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                  <Wand2 className="w-3.5 h-3.5 text-primary" />
+                  {analysisResultData?.style_name || "風格分析結果"}
+                </h3>
 
-                <div className="text-[10px] leading-relaxed text-slate-600 bg-blue-50/50 p-2 rounded-lg border border-blue-50">
+                <div className="text-[10px] leading-relaxed text-muted-foreground bg-background p-2 rounded-lg border border-border/60">
                   {analysisResultData?.style_description_zh || analyzedStyle}
                 </div>
 
                 {Array.isArray(analysisResultData?.suggested_tags) && (
                   <div className="flex flex-wrap gap-1">
                     {analysisResultData.suggested_tags.map((tag, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1">
-                        <Tag className="w-2.5 h-2.5" /> {tag}
+                      <span key={i} className="text-[10px] px-2 py-0.5 bg-primary/8 text-primary/80 rounded-full">
+                        {tag}
                       </span>
                     ))}
                   </div>
                 )}
 
-                {/* 儲存風格介面 */}
-                <div className="pt-2 border-t border-slate-100 space-y-2">
+                <div className="pt-1.5 border-t border-border space-y-1.5">
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={newStyleName || ''}
                       onChange={(e) => onStyleNameChange && onStyleNameChange(e.target.value)}
                       placeholder="為此風格命名..."
-                      className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 focus:border-blue-500 outline-none"
+                      className="flex-1 text-xs border border-input rounded px-2 py-1 focus:border-primary outline-none bg-background"
                     />
                     <button
                       onClick={onSaveStyle}
                       disabled={isSavingStyle}
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
                     >
                       {isSavingStyle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                       收藏
@@ -503,7 +529,7 @@ export default function ScriptEditor({
                     value={newStyleTags || ''}
                     onChange={(e) => onStyleTagsChange && onStyleTagsChange(e.target.value)}
                     placeholder="標籤 (以逗號分隔)..."
-                    className="w-full text-xs border border-slate-200 rounded px-2 py-1 focus:border-blue-500 outline-none"
+                    className="w-full text-xs border border-input rounded px-2 py-1 focus:border-primary outline-none bg-background"
                   />
                 </div>
               </div>
@@ -512,21 +538,21 @@ export default function ScriptEditor({
         )}
       </div>
 
-      {/* 目前套用的風格 */}
+      {/* 已套用的風格 */}
       {(analyzedStyle || selectedStyleInfo) && (
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-primary/5 border border-primary/10 rounded-lg">
           {selectedStyleInfo?.previewUrl && (
-            <img src={selectedStyleInfo.previewUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0 border border-blue-200" />
+            <img src={selectedStyleInfo.previewUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0 border border-primary/20" />
           )}
-          <Palette className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+          <Palette className="w-3.5 h-3.5 text-primary shrink-0" />
           <div className="flex-1 min-w-0">
-            <span className="text-xs font-medium text-blue-700 line-clamp-1">
+            <span className="text-xs font-medium text-primary/80 line-clamp-1">
               {selectedStyleInfo?.name || '已套用風格'}
             </span>
             {selectedStyleInfo?.tags?.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {selectedStyleInfo.tags.slice(0, 4).map((tag, i) => (
-                  <span key={i} className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-600 rounded-full">
+                  <span key={i} className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary/70 rounded-full">
                     #{tag}
                   </span>
                 ))}
@@ -535,7 +561,7 @@ export default function ScriptEditor({
           </div>
           <button
             onClick={handleClearStyle}
-            className="p-1 hover:bg-blue-100 text-blue-400 hover:text-blue-600 rounded-full transition-colors"
+            className="p-1 hover:bg-primary/10 text-primary/50 hover:text-primary rounded-full transition-colors"
             title="移除風格"
           >
             <X className="w-3.5 h-3.5" />
@@ -548,12 +574,12 @@ export default function ScriptEditor({
         <div className="relative">
           <button
             onClick={() => setShowStylePicker(!showStylePicker)}
-            className="flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 px-3 py-2 rounded-lg transition-all w-full justify-between"
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-primary bg-muted/50 hover:bg-primary/5 border border-border hover:border-primary/20 px-3 py-2 rounded-lg transition-all w-full justify-between"
           >
             <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
+              <Palette className="w-3.5 h-3.5" />
               從風格庫選擇風格
-              <span className="text-slate-400">({savedStyles.length})</span>
+              <span className="text-muted-foreground/60">({savedStyles.length})</span>
             </span>
             {showStylePicker ? (
               <ChevronUp className="w-3.5 h-3.5" />
@@ -562,28 +588,25 @@ export default function ScriptEditor({
             )}
           </button>
 
-          {/* 風格選取下拉面板 */}
           {showStylePicker && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-[320px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-              {/* 搜尋 */}
-              <div className="sticky top-0 bg-white border-b border-slate-100 px-3 py-2">
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-xl shadow-xl overflow-hidden max-h-[320px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="sticky top-0 bg-popover border-b border-border px-3 py-2">
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                  <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-2" />
                   <input
                     type="text"
                     placeholder="搜尋風格..."
                     value={styleSearch}
                     onChange={(e) => setStyleSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:border-blue-400 focus:ring-1 focus:ring-blue-400/30 outline-none"
+                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none bg-background"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
               </div>
 
-              {/* 風格列表 */}
               <div className="overflow-y-auto flex-1 py-1">
                 {filteredStyles.length === 0 ? (
-                  <div className="text-center py-6 text-xs text-slate-400">
+                  <div className="text-center py-6 text-xs text-muted-foreground">
                     找不到符合的風格
                   </div>
                 ) : (
@@ -591,29 +614,27 @@ export default function ScriptEditor({
                     <button
                       key={style.id}
                       onClick={() => handleApplyStyle(style)}
-                      className={`w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors flex items-start gap-3 ${selectedStyleId === style.id ? "bg-blue-50" : ""
-                        }`}
+                      className={`w-full text-left px-3 py-2.5 hover:bg-primary/5 transition-colors flex items-start gap-3 ${selectedStyleId === style.id ? "bg-primary/5" : ""}`}
                     >
-                      {/* 縮圖 */}
                       {style.previewUrl ? (
                         <img
                           src={style.previewUrl}
                           alt=""
-                          className="w-10 h-10 rounded-md object-cover shrink-0 border border-slate-200"
+                          className="w-10 h-10 rounded-md object-cover shrink-0 border border-border"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-md bg-slate-100 shrink-0 flex items-center justify-center">
-                          <Palette className="w-4 h-4 text-slate-300" />
+                        <div className="w-10 h-10 rounded-md bg-muted shrink-0 flex items-center justify-center">
+                          <Palette className="w-4 h-4 text-muted-foreground/40" />
                         </div>
                       )}
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-medium text-slate-700 truncate">
+                          <span className="text-xs font-medium text-foreground truncate">
                             {style.name}
                           </span>
                           {selectedStyleId === style.id && (
-                            <Check className="w-3 h-3 text-blue-500 shrink-0" />
+                            <Check className="w-3 h-3 text-primary shrink-0" />
                           )}
                         </div>
                         {style.tags && style.tags.length > 0 && (
@@ -621,7 +642,7 @@ export default function ScriptEditor({
                             {style.tags.slice(0, 3).map((tag, i) => (
                               <span
                                 key={i}
-                                className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full"
+                                className="text-[10px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded-full"
                               >
                                 #{tag}
                               </span>
@@ -638,34 +659,6 @@ export default function ScriptEditor({
         </div>
       )}
 
-      {/* AI 優化建議面板 */}
-      {suggestionData && (
-        <PromptSuggestionPanel
-          originalText={suggestionData.originalText}
-          optimizedText={suggestionData.optimizedText}
-          explanation={suggestionData.explanation}
-          onAccept={handleAcceptSuggestion}
-          onReject={handleRejectSuggestion}
-        />
-      )}
-
-      {/* Editor.js 容器 — 乾淨無邊框排版 */}
-      <div
-        className="min-h-[240px] md:min-h-[360px] rounded-xl"
-        onFocus={onFocus}
-        onBlur={onBlur}
-      >
-        <div
-          ref={holderRef}
-          id="editorjs-holder"
-          className="editorjs-container py-3 pl-4 md:pl-24"
-        />
-      </div>
-
-      {/* 字數統計 */}
-      <div className="text-xs text-slate-400 text-right px-1">
-        {charCount} 字
-      </div>
     </div>
   );
 }

@@ -51,7 +51,7 @@ export default function GenerateBar({
                             title={ratio.label}
                         >
                             <ratio.icon className="w-3.5 h-3.5" />
-                            <span className="hidden xl:inline">{ratio.id}</span>
+                            <span className="hidden lg:inline">{ratio.id}</span>
                         </button>
                     ))}
                 </div>

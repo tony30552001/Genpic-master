@@ -31,11 +31,14 @@ export default function ImagePreview({
 
   // 狀態 2：空白初始畫面
   const renderEmptyState = () => (
-    <div className="flex flex-col items-center gap-3 text-slate-400 py-12">
-      <div className="w-20 h-20 bg-slate-200/60 rounded-2xl flex items-center justify-center">
-        <ImageIcon className="w-8 h-8 text-slate-300" />
+    <div className="flex flex-col items-center gap-4 text-center py-12 px-6">
+      <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center">
+        <Wand2 className="w-9 h-9 text-primary/60" />
       </div>
-      <p className="text-sm text-slate-400">請在左側面板上傳參考圖並輸入內容</p>
+      <div className="space-y-1.5">
+        <p className="text-base font-semibold text-foreground">描述你的想法，AI 為你繪製</p>
+        <p className="text-xs text-muted-foreground">在左側輸入內容描述，選擇風格後按「生成」</p>
+      </div>
     </div>
   );
 
