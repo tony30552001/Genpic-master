@@ -216,7 +216,7 @@ export default function ScriptEditor({
         onFocus={onFocus}
         onBlur={onBlur}
         placeholder={"描述你想生成的畫面內容...\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
-        className="min-h-[200px] md:min-h-[280px] resize-none text-sm leading-relaxed"
+        className="min-h-[80px] md:min-h-[100px] resize-y text-sm leading-relaxed"
       />
 
       {/* 字數統計 */}

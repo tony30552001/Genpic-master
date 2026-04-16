@@ -518,7 +518,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-5 gap-0 lg:gap-6 px-4 lg:px-8 py-3 overflow-y-auto lg:overflow-hidden custom-scrollbar">
 
                                 {/* Left: Controls (takes 3/5 on large screens) */}
-                                <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pr-1">
+                                <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pl-px pr-1">
                                     <ScriptEditor
                                         userScript={userScript}
                                         onUserScriptChange={setUserScript}
