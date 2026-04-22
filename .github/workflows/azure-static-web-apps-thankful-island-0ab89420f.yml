@@ -46,6 +46,8 @@ jobs:
           VITE_AUTH_BYPASS: "false"
           VITE_API_BASE_URL: "/api"
           VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
+          VITE_GPT_IMAGE_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_ENDPOINT }}
+          VITE_GPT_IMAGE_API_KEY: ${{ secrets.VITE_GPT_IMAGE_API_KEY }}
       
       # 安裝 API 依賴
       - name: Install API Dependencies
@@ -105,6 +107,8 @@ jobs:
           VITE_AUTH_BYPASS: "false"
           VITE_API_BASE_URL: "/api"
           VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
+          VITE_GPT_IMAGE_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_ENDPOINT }}
+          VITE_GPT_IMAGE_API_KEY: ${{ secrets.VITE_GPT_IMAGE_API_KEY }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
