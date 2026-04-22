@@ -54,19 +54,17 @@ export async function generateImageGpt({ prompt, aspectRatio = "1:1" }) {
       model: "gpt-image-2",
       size,
       n: 1,
-      output_format: "png",
-      output_compression: 100,
     }),
   });
 
   if (!response.ok) {
     const text = await response.text();
-    let message = `GPT Image 2 請求失敗: ${response.status}`;
+    let message = `GPT Image 2 請求失敗 (${response.status})`;
     try {
       const json = JSON.parse(text);
       message = json?.error?.message || json?.message || message;
     } catch {
-      message = text || message;
+      if (text) message = text;
     }
     throw new Error(message);
   }
@@ -74,9 +72,10 @@ export async function generateImageGpt({ prompt, aspectRatio = "1:1" }) {
   const data = await response.json();
 
   const b64 = data?.data?.[0]?.b64_json;
-  if (!b64) {
-    throw new Error("GPT Image 2 回傳格式異常：缺少 b64_json 資料。");
+  const url = data?.data?.[0]?.url;
+  if (!b64 && !url) {
+    throw new Error("GPT Image 2 回傳格式異常：缺少圖片資料。");
   }
 
-  return { imageUrl: `data:image/png;base64,${b64}` };
+  return { imageUrl: b64 ? `data:image/png;base64,${b64}` : url };
 }
