@@ -1,11 +1,16 @@
 import { API_BASE_URL } from "../config";
 import { apiPost } from "./apiClient";
+import { generateImageGpt } from "./gptImageService";
 
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
 
-export const generateImage = async ({ prompt, aspectRatio, imageSize, imageUrl }) =>
-  apiPost(`${API_BASE_URL}/generate-images`, { prompt, aspectRatio, imageSize, imageUrl });
+export const generateImage = async ({ prompt, aspectRatio, imageSize, imageUrl, model }) => {
+  if (model === "gpt-image-2") {
+    return generateImageGpt({ prompt, aspectRatio });
+  }
+  return apiPost(`${API_BASE_URL}/generate-images`, { prompt, aspectRatio, imageSize, imageUrl });
+};
 
 export const embedText = async ({ text }) =>
   apiPost(`${API_BASE_URL}/embeddings`, { text });

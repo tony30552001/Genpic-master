@@ -53,6 +53,9 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [imageLanguage, setImageLanguage] = useState(() => {
         try { return localStorage.getItem('genpic_image_language') || 'en'; } catch { return 'en'; }
     });
+    const [imageModel, setImageModel] = useState(() => {
+        try { return localStorage.getItem('genpic_image_model') || 'gpt-image-2'; } catch { return 'gpt-image-2'; }
+    });
 
     // 風格設定相關
     const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -245,6 +248,11 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         try { localStorage.setItem('genpic_image_language', lang); } catch { /* ignore */ }
     };
 
+    const handleModelChange = (model) => {
+        setImageModel(model);
+        try { localStorage.setItem('genpic_image_model', model); } catch { /* ignore */ }
+    };
+
     const generateInfographic = async () => {
         try {
             // 如果存在 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的中文 userScript
@@ -256,7 +264,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 aspectRatio,
                 imageSize,
                 imageLanguage,
-                contentImageUrl: contentBlobSasUrl
+                contentImageUrl: contentBlobSasUrl,
+                model: imageModel
             });
             await saveHistoryItem({ imageUrl, userScript, stylePrompt: analyzedStyle, fullPrompt: finalPrompt, styleId: analysisResultData?.styleId || null });
             setErrorMsg('');
@@ -314,6 +323,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 aspectRatio,
                 imageSize,
                 imageLanguage,
+                model: imageModel,
                 updatePreview: false
             });
 
@@ -583,6 +593,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             onAspectRatioChange={setAspectRatio}
                             imageSize={imageSize}
                             onImageSizeChange={setImageSize}
+                            imageModel={imageModel}
                             isGenerating={isGenerating}
                             onGenerate={
                                 activeTab === 'document' && documentResult
@@ -663,6 +674,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                         <SettingsPanel
                             imageLanguage={imageLanguage}
                             onImageLanguageChange={handleLanguageChange}
+                            imageModel={imageModel}
+                            onImageModelChange={handleModelChange}
                             user={user}
                         />
                     </div>

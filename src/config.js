@@ -16,3 +16,20 @@ export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 // 3. API 設定 (Azure Functions Gateway)
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+
+// 4. GPT-Image-2 設定 (Azure AI Foundry)
+export const GPT_IMAGE_ENDPOINT = import.meta.env.VITE_GPT_IMAGE_ENDPOINT || "";
+export const GPT_IMAGE_API_KEY = import.meta.env.VITE_GPT_IMAGE_API_KEY || "";
+
+// 5. 圖片生成模型選項
+export const IMAGE_MODEL_OPTIONS = [
+    {
+        id: "gpt-image-2",
+        label: "GPT Image 2",
+        description: "OpenAI 最新圖片生成模型，支援高品質影像與精確文字渲染。",
+        sizes: ["1024x1024", "1024x1536", "1536x1024"],
+        supportsSizeMapping: true,
+    },
+];
+
+export const DEFAULT_IMAGE_MODEL = "gpt-image-2";

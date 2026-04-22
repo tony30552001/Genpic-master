@@ -3,6 +3,7 @@ import { Monitor, Layout, Square, Smartphone, Wand2, Loader2 } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { IMAGE_MODEL_OPTIONS } from "@/config";
 
 const ASPECT_RATIOS = [
     { id: "16:9", label: "16:9 簡報", icon: Monitor },
@@ -17,6 +18,14 @@ const IMAGE_SIZES = [
     { id: "4K", label: "4K" },
 ];
 
+// gpt-image-2 的 aspectRatio → 像素尺寸映射（僅顯示用）
+const GPT_IMAGE_SIZE_LABELS = {
+    "16:9": "1536×1024",
+    "4:3": "1536×1024",
+    "1:1": "1024×1024",
+    "9:16": "1024×1536",
+};
+
 /**
  * 固定底部的生成控制列
  * 包含比例選擇、解析度選擇和主要的 CTA 生成按鈕
@@ -26,12 +35,16 @@ export default function GenerateBar({
     onAspectRatioChange,
     imageSize,
     onImageSizeChange,
+    imageModel,
     isGenerating,
     onGenerate,
     buttonText,
     isGeneratingText,
     disabled = false,
 }) {
+    const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
+    const showResolutionPicker = !modelConfig?.supportsSizeMapping;
+
     return (
         <div className="shrink-0 border-t border-border bg-card px-4 py-3 space-y-3">
             {/* Aspect Ratio & Resolution Row */}
@@ -58,24 +71,31 @@ export default function GenerateBar({
 
                 <Separator orientation="vertical" className="h-6" />
 
-                {/* Resolution */}
-                <div className="flex gap-1">
-                    {IMAGE_SIZES.map((size) => (
-                        <button
-                            key={size.id}
-                            onClick={() => onImageSizeChange(size.id)}
-                            className={cn(
-                                "px-2.5 py-1.5 rounded-md text-xs transition-all",
-                                imageSize === size.id
-                                    ? "bg-background text-primary font-semibold shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )}
-                            title={size.label}
-                        >
-                            {size.label}
-                        </button>
-                    ))}
-                </div>
+                {showResolutionPicker ? (
+                    /* 非 gpt-image-2：傳統 1K/2K/4K 解析度選擇 */
+                    <div className="flex gap-1">
+                        {IMAGE_SIZES.map((size) => (
+                            <button
+                                key={size.id}
+                                onClick={() => onImageSizeChange(size.id)}
+                                className={cn(
+                                    "px-2.5 py-1.5 rounded-md text-xs transition-all",
+                                    imageSize === size.id
+                                        ? "bg-background text-primary font-semibold shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                )}
+                                title={size.label}
+                            >
+                                {size.label}
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    /* gpt-image-2：顯示自動映射的像素尺寸 */
+                    <div className="px-2.5 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/50">
+                        {GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024"}
+                    </div>
+                )}
             </div>
 
             {/* Generate CTA */}

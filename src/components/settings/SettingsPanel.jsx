@@ -6,11 +6,13 @@ import {
     Info,
     Check,
     MessageSquare,
+    Cpu,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import LineSettings from "./LineSettings";
 import useLineConfig from "../../hooks/useLineConfig";
+import { IMAGE_MODEL_OPTIONS } from "../../config";
 
 const LANGUAGE_OPTIONS = [
     {
@@ -82,8 +84,9 @@ const LANGUAGE_OPTIONS = [
  * 設定面板 — 全域語系選擇
  * 控制生成圖片中文字的語言
  */
-export default function SettingsPanel({ imageLanguage, onImageLanguageChange, user }) {
+export default function SettingsPanel({ imageLanguage, onImageLanguageChange, imageModel, onImageModelChange, user }) {
     const currentLang = LANGUAGE_OPTIONS.find((l) => l.id === imageLanguage) || LANGUAGE_OPTIONS[0];
+    const currentModel = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel) || IMAGE_MODEL_OPTIONS[0];
     const lineConfigHook = useLineConfig({ user });
 
     return (
@@ -101,7 +104,102 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, us
 
             {/* 雙欄佈局 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                {/* 左欄：語系設定 */}
+                {/* 左欄：模型選擇 + LINE 整合 */}
+                <div className="space-y-6">
+                    <Card className="border-border/60">
+                        <CardContent className="p-5 space-y-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                    <Cpu className="w-4 h-4 text-primary" />
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-sm text-foreground">圖片生成模型</h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        選擇 AI 生成圖片使用的模型
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* 目前選擇 */}
+                            <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
+                                <Cpu className="w-4 h-4 text-primary" />
+                                <span className="text-sm font-medium text-foreground">{currentModel.label}</span>
+                                <Badge variant="outline" className="text-[10px] ml-auto">
+                                    目前選擇
+                                </Badge>
+                            </div>
+
+                            {/* 模型選項列表 */}
+                            <div className="grid grid-cols-1 gap-2">
+                                {IMAGE_MODEL_OPTIONS.map((model) => {
+                                    const isSelected = imageModel === model.id;
+                                    return (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => onImageModelChange(model.id)}
+                                            className={`text-left p-3 rounded-xl border-2 transition-all duration-200 group ${isSelected
+                                                ? "border-primary bg-primary/5 shadow-sm"
+                                                : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Cpu className={`w-4 h-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                                                <span className={`text-xs font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                                    {model.label}
+                                                </span>
+                                                {isSelected && (
+                                                    <Check className="w-3.5 h-3.5 text-primary ml-auto" />
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-relaxed ml-6">
+                                                {model.description}
+                                            </p>
+                                            <div className="flex gap-1 mt-1.5 ml-6">
+                                                {model.sizes.map((size) => (
+                                                    <Badge key={size} variant="secondary" className="text-[9px] px-1.5 py-0">
+                                                        {size}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* 說明 */}
+                            <div className="flex items-start gap-2 px-3 py-2.5 bg-muted/50 rounded-lg border border-border/30">
+                                <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                                <div className="text-xs text-muted-foreground space-y-1">
+                                    <p>
+                                        <strong>模型設定影響：</strong>
+                                    </p>
+                                    <ul className="list-disc list-inside space-y-0.5 ml-1">
+                                        <li>不同模型支援的圖片尺寸與品質不同</li>
+                                        <li>GPT Image 2 自動依據比例映射最佳尺寸</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* LINE 整合 */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-[#06C755]/10 flex items-center justify-center">
+                                <MessageSquare className="w-4 h-4 text-[#06C755]" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-sm text-foreground">LINE 整合</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    連結 LINE 官方帳號或使用 LIFF 分享圖片
+                                </p>
+                            </div>
+                        </div>
+                        <LineSettings useLineConfigHook={lineConfigHook} />
+                    </div>
+                </div>
+
+                {/* 右欄：語系設定 */}
                 <Card className="border-border/60">
                     <CardContent className="p-5 space-y-4">
                         {/* 區塊標題 */}
@@ -172,22 +270,6 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, us
                         </div>
                     </CardContent>
                 </Card>
-
-                {/* 右欄：LINE 整合 */}
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-[#06C755]/10 flex items-center justify-center">
-                            <MessageSquare className="w-4 h-4 text-[#06C755]" />
-                        </div>
-                        <div>
-                            <h3 className="font-semibold text-sm text-foreground">LINE 整合</h3>
-                            <p className="text-xs text-muted-foreground">
-                                連結 LINE 官方帳號或使用 LIFF 分享圖片
-                            </p>
-                        </div>
-                    </div>
-                    <LineSettings useLineConfigHook={lineConfigHook} />
-                </div>
             </div>
         </div>
     );
