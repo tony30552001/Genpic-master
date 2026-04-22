@@ -18,7 +18,7 @@ export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 // 4. GPT-Image-2 設定 (Azure AI Foundry)
-export const GPT_IMAGE_ENDPOINT = import.meta.env.VITE_GPT_IMAGE_ENDPOINT || "";
+export const GPT_IMAGE_ENDPOINT = import.meta.env.VITE_GPT_IMAGE_ENDPOINT || "https://uems-ai-foundry-resource.services.ai.azure.com/openai/v1/images/generations";
 export const GPT_IMAGE_API_KEY = import.meta.env.VITE_GPT_IMAGE_API_KEY || "";
 
 // 5. 圖片生成模型選項
