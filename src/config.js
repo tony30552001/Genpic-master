@@ -32,7 +32,7 @@ export const IMAGE_MODEL_OPTIONS = [
     },
     {
         id: "gemini-imagen",
-        label: "Gemini Imagen",
+        label: "Nano Banana 2",
         description: "Google Gemini & Imagen 圖片生成模型，透過後端 API Gateway 呼叫。",
         sizes: ["1K", "2K", "4K"],
         supportsSizeMapping: false,
