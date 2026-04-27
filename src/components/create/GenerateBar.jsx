@@ -38,12 +38,17 @@ export default function GenerateBar({
     imageModel,
     isGenerating,
     onGenerate,
+    onCancelGeneration,
+    generationStatus,
     buttonText,
     isGeneratingText,
     disabled = false,
 }) {
     const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
     const showResolutionPicker = !modelConfig?.supportsSizeMapping;
+    const generationLabel = generationStatus
+        ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
+        : isGeneratingText || "AI 生成中...";
 
     return (
         <div className="shrink-0 border-t border-border bg-card px-4 py-3 space-y-3">
@@ -98,27 +103,60 @@ export default function GenerateBar({
                 )}
             </div>
 
+            {isGenerating && generationStatus && (
+                <div className="space-y-2 rounded-lg border border-border/60 bg-muted/35 px-3 py-2" aria-live="polite">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="font-medium text-foreground">{generationStatus.label}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                            已等待 {generationStatus.elapsedLabel}
+                        </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                            className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                            style={{ width: `${generationStatus.progress}%` }}
+                        />
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                        {generationStatus.helperText}
+                    </p>
+                </div>
+            )}
+
             {/* Generate CTA */}
-            <Button
-                onClick={onGenerate}
-                disabled={disabled || isGenerating}
-                size="lg"
-                className={cn(
-                    "w-full font-bold text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98]",
-                    "bg-primary hover:bg-primary/90 text-primary-foreground",
-                    "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+            <div className="flex gap-2">
+                <Button
+                    onClick={onGenerate}
+                    disabled={disabled || isGenerating}
+                    size="lg"
+                    className={cn(
+                        "flex-1 font-bold text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98]",
+                        "bg-primary hover:bg-primary/90 text-primary-foreground",
+                        "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                    )}
+                >
+                    {isGenerating ? (
+                        <span className="flex items-center gap-2">
+                            <Loader2 className="w-5 h-5 animate-spin" /> {generationLabel}
+                        </span>
+                    ) : (
+                        <span className="flex items-center gap-2">
+                            <Wand2 className="w-5 h-5" /> {buttonText || "開始生成圖片"}
+                        </span>
+                    )}
+                </Button>
+                {isGenerating && onCancelGeneration && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="lg"
+                        onClick={onCancelGeneration}
+                        className="shrink-0 px-4"
+                    >
+                        取消
+                    </Button>
                 )}
-            >
-                {isGenerating ? (
-                    <span className="flex items-center gap-2">
-                        <Loader2 className="w-5 h-5 animate-spin" /> {isGeneratingText || "AI 生成中..."}
-                    </span>
-                ) : (
-                    <span className="flex items-center gap-2">
-                        <Wand2 className="w-5 h-5" /> {buttonText || "開始生成圖片"}
-                    </span>
-                )}
-            </Button>
+            </div>
         </div>
     );
 }

@@ -33,9 +33,10 @@ const getAuthHeader = async () => {
  * @param {Object} params
  * @param {string} params.prompt - 圖片描述 prompt
  * @param {string} params.aspectRatio - 比例 (1:1, 16:9, 4:3, 9:16)
+ * @param {AbortSignal} [params.signal] - 用於取消前端等待中的生成請求
  * @returns {Promise<{imageUrl: string}>} 統一回傳格式
  */
-export async function generateImageGpt({ prompt, aspectRatio = "1:1" }) {
+export async function generateImageGpt({ prompt, aspectRatio = "1:1", signal } = {}) {
   if (!GPT_IMAGE_ENDPOINT) {
     throw new Error("GPT Image 2 endpoint 尚未設定，請配置 VITE_GPT_IMAGE_ENDPOINT 環境變數。");
   }
@@ -55,6 +56,7 @@ export async function generateImageGpt({ prompt, aspectRatio = "1:1" }) {
       size,
       n: 1,
     }),
+    signal,
   });
 
   if (!response.ok) {

@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { analyzeStyle, generateImage, generateFilename } from "../services/aiService";
+import { getGenerationStatus } from "../utils/generationProgress";
 
 const normalizeTags = (raw) => {
   if (Array.isArray(raw)) return raw.map((t) => String(t).trim()).filter(Boolean);
@@ -13,6 +14,9 @@ const normalizeTags = (raw) => {
 const safeString = (v, fallback = "") =>
   v == null ? fallback : typeof v === "string" ? v : String(v);
 
+const isAbortError = (error) =>
+  error?.name === "AbortError" || error?.code === 20;
+
 export default function useImageGeneration() {
   const [analyzedStyle, setAnalyzedStyle] = useState("");
   const [analysisResultData, setAnalysisResultData] = useState(null);
@@ -21,6 +25,28 @@ export default function useImageGeneration() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [analysisPhase, setAnalysisPhase] = useState(""); // 新增：分析階段狀態
+  const [generationStartedAt, setGenerationStartedAt] = useState(null);
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
+  const [generationModel, setGenerationModel] = useState("gpt-image-2");
+  const abortControllerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isGenerating || !generationStartedAt) return undefined;
+
+    const updateElapsedSeconds = () => {
+      setGenerationElapsedSeconds(Math.floor((Date.now() - generationStartedAt) / 1000));
+    };
+
+    updateElapsedSeconds();
+    const timerId = window.setInterval(updateElapsedSeconds, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [generationStartedAt, isGenerating]);
+
+  const generationStatus = useMemo(
+    () => getGenerationStatus({ elapsedSeconds: generationElapsedSeconds, model: generationModel }),
+    [generationElapsedSeconds, generationModel]
+  );
 
   const runStyleAnalysis = useCallback(async ({ referencePreview, imageUrl }) => {
     if (!referencePreview && !imageUrl) {
@@ -61,9 +87,17 @@ export default function useImageGeneration() {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
 
+      abortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      const startedAt = Date.now();
+
       setIsGenerating(true);
-      // 一開始先重置檔名
+      setGenerationStartedAt(startedAt);
+      setGenerationElapsedSeconds(0);
+      setGenerationModel(model || "default");
       setGeneratedFilename("");
+      if (updatePreview) setGeneratedImage(null);
 
       try {
         // 同步發起檔名產生的 Request（不去 await 阻擋主流程，放到背景執行）
@@ -108,18 +142,34 @@ export default function useImageGeneration() {
           imageSize,
           imageUrl: contentImageUrl,
           model,
+          signal: abortController.signal,
         });
 
         if (updatePreview) {
           setGeneratedImage(result.imageUrl);
         }
         return { imageUrl: result.imageUrl, finalPrompt, filenamePromise };
+      } catch (err) {
+        if (isAbortError(err)) {
+          const abortError = new Error("已取消本次生成等待。若服務端已開始處理，可能仍會消耗請求。");
+          abortError.name = "AbortError";
+          throw abortError;
+        }
+        throw err;
       } finally {
-        setIsGenerating(false);
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
+          setIsGenerating(false);
+          setGenerationStartedAt(null);
+        }
       }
     },
     []
   );
+
+  const cancelGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   const clearStyle = useCallback(() => {
     setAnalyzedStyle("");
@@ -134,8 +184,10 @@ export default function useImageGeneration() {
     isAnalyzing,
     isGenerating,
     analysisPhase,
+    generationStatus,
     analyzeStyle: runStyleAnalysis,
     generateImage: runGeneration,
+    cancelGeneration,
     clearStyle,
     setAnalyzedStyle,
     setAnalysisResultData,

@@ -47,6 +47,19 @@ describe("gptImageService", () => {
     expect(result.imageUrl).toBe("data:image/png;base64,AAAA");
   });
 
+  it("passes AbortSignal to fetch", async () => {
+    const mockResponse = {
+      ok: true,
+      json: () => Promise.resolve({ data: [{ b64_json: "AAAA" }] }),
+    };
+    const controller = new AbortController();
+    global.fetch = vi.fn(() => Promise.resolve(mockResponse));
+
+    await generateImageGpt({ prompt: "a red fox", aspectRatio: "1:1", signal: controller.signal });
+
+    expect(global.fetch.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
   it("maps 16:9 to 1536x1024", async () => {
     const mockResponse = {
       ok: true,
@@ -99,13 +112,13 @@ describe("gptImageService", () => {
     await expect(generateImageGpt({ prompt: "test" })).rejects.toThrow("Rate limit exceeded");
   });
 
-  it("throws on missing b64_json in response", async () => {
+  it("throws on missing image data in response", async () => {
     const mockResponse = {
       ok: true,
       json: () => Promise.resolve({ data: [{}] }),
     };
     global.fetch = vi.fn(() => Promise.resolve(mockResponse));
 
-    await expect(generateImageGpt({ prompt: "test" })).rejects.toThrow("缺少 b64_json");
+    await expect(generateImageGpt({ prompt: "test" })).rejects.toThrow("缺少圖片資料");
   });
 });

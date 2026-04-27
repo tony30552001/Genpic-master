@@ -1,11 +1,24 @@
 import React, { useState } from "react";
 import { Image as ImageIcon, Save, Wand2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import ShareToLineButton from "../share/ShareToLineButton";
+
+const PREVIEW_FRAME_CLASSES = {
+  "16:9": "aspect-video w-[88%]",
+  "4:3": "aspect-[4/3] w-[82%]",
+  "1:1": "aspect-square w-[72%]",
+  "9:16": "aspect-[9/16] h-[76%] max-h-[460px]",
+};
+
+const getPreviewFrameClass = (aspectRatio) =>
+  PREVIEW_FRAME_CLASSES[aspectRatio] || PREVIEW_FRAME_CLASSES["16:9"];
 
 export default function ImagePreview({
   generatedImage,
   isGenerating,
+  aspectRatio = "16:9",
+  generationStatus,
   onDownload,
   user,
 }) {
@@ -13,19 +26,17 @@ export default function ImagePreview({
 
   // 狀態 1：生成中畫面
   const renderGeneratingState = () => (
-    <div className="w-full flex items-center justify-center py-12 lg:py-0 lg:absolute lg:inset-4">
-      <Skeleton className="w-[85%] aspect-video max-h-[85%] rounded-xl opacity-60 relative overflow-hidden flex flex-col items-center justify-center gap-4">
-        <div className="relative z-10 flex flex-col items-center justify-center gap-3 backdrop-blur-sm bg-white/40 p-6 rounded-2xl border border-white/50 shadow-sm" aria-live="polite">
-          <div className="relative">
-            <div className="w-12 h-12 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin" />
-            <Wand2 className="w-5 h-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-          </div>
-          <div className="flex flex-col items-center text-center">
-            <p className="text-sm font-semibold tracking-wide text-foreground/80 mb-0.5 animate-pulse">正在為您繪製構想...</p>
-            <p className="text-[11px] text-foreground/50">大約需要 5-10 秒鐘</p>
-          </div>
-        </div>
-      </Skeleton>
+    <div className="w-full flex flex-col items-center justify-center gap-3 py-12 px-6 lg:absolute lg:inset-0 lg:py-0">
+      <Skeleton
+        className={cn(
+          "max-w-[92%] max-h-[82%] rounded-xl border border-border/40 bg-muted/80 shadow-sm",
+          getPreviewFrameClass(aspectRatio)
+        )}
+        aria-hidden="true"
+      />
+      <p className="sr-only" aria-live="polite">
+        {generationStatus?.label || "正在生成圖片"}
+      </p>
     </div>
   );
 
@@ -100,13 +111,13 @@ export default function ImagePreview({
   };
 
   const renderContent = () => {
-    if (generatedImage) return renderImageState();
     if (isGenerating) return renderGeneratingState();
+    if (generatedImage) return renderImageState();
     return renderEmptyState();
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-full h-auto lg:h-full lg:min-h-[500px] bg-muted/30 rounded-xl overflow-hidden group border border-border/40">
+    <div className="relative flex flex-col items-center justify-center w-full h-auto lg:h-full lg:min-h-[500px] overflow-hidden group bg-muted/30 rounded-xl border border-border/40 lg:bg-transparent lg:border-0 lg:rounded-none">
 
       {renderContent()}
 
@@ -116,12 +127,12 @@ export default function ImagePreview({
           <ShareToLineButton
             imageUrl={generatedImage}
             user={user}
-            className="[&>button]:h-10 [&>button]:px-4 [&>button]:text-sm [&>button]:rounded-lg [&>button]:shadow-lg"
+            className="[&>button]:h-10 [&>button]:px-4 [&>button]:text-sm [&>button]:rounded-lg [&>button]:shadow-md"
           />
           <button
             onClick={onDownload}
             aria-label="下載產生的圖片"
-            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-lg border border-border/50"
+            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-md border border-border/50"
           >
             <Save className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">下載圖片</span>

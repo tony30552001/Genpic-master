@@ -87,8 +87,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
     const {
         analyzedStyle, analysisResultData, generatedImage, generatedFilename,
-        isAnalyzing, isGenerating, analysisPhase,
-        analyzeStyle, generateImage, clearStyle,
+        isAnalyzing, isGenerating, analysisPhase, generationStatus,
+        analyzeStyle, generateImage, cancelGeneration, clearStyle,
         setAnalyzedStyle, setAnalysisResultData, setGeneratedImage
     } = useImageGeneration();
 
@@ -271,6 +271,10 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             setErrorMsg('');
             setShowMobilePreview(true); // 手機版：生成後自動顯示預覽
         } catch (err) {
+            if (err.name === 'AbortError') {
+                setErrorMsg(err.message);
+                return;
+            }
             console.error("Image Generation Failed:", err);
             setErrorMsg(`圖片生成失敗: ${err.message || "請確認模型名稱支援圖片生成"}`);
         }
@@ -368,11 +372,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             setErrorMsg(`批次生成失敗: ${err.message}`);
         }
     };
-
-    // --- Status indicators for sub tabs ---
-    const hasStyle = !!analyzedStyle || !!referencePreview;
-    const hasContent = !!userScript;
-    const hasDocument = !!documentResult;
 
     // --- Tab 定義 ---
     const tabs = [
@@ -568,7 +567,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
                                     {/* Decorative grid background */}
                                     <div
-                                        className="absolute inset-0 opacity-[0.03]"
+                                        className={`absolute inset-0 transition-opacity duration-300 ${isGenerating ? 'opacity-0' : 'opacity-[0.03]'}`}
                                         style={{
                                             backgroundImage: 'linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)',
                                             backgroundSize: '24px 24px'
@@ -578,6 +577,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                         <ImagePreview
                                             generatedImage={generatedImage}
                                             isGenerating={isGenerating}
+                                            aspectRatio={aspectRatio}
+                                            generationStatus={generationStatus}
                                             analyzedStyle={analyzedStyle}
                                             onDownload={handleDownload}
                                             user={user}
@@ -595,6 +596,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             onImageSizeChange={setImageSize}
                             imageModel={imageModel}
                             isGenerating={isGenerating}
+                            generationStatus={generationStatus}
+                            onCancelGeneration={activeTab === 'general' ? cancelGeneration : undefined}
                             onGenerate={
                                 activeTab === 'document' && documentResult
                                     ? handleGenerateAllScenes
@@ -708,6 +711,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             <ImagePreview
                                 generatedImage={generatedImage}
                                 isGenerating={isGenerating}
+                                aspectRatio={aspectRatio}
+                                generationStatus={generationStatus}
                                 analyzedStyle={analyzedStyle}
                                 onDownload={handleDownload}
                                 user={user}

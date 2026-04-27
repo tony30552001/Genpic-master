@@ -25,7 +25,7 @@ describe("aiService", () => {
 
   it("generateImage routes to gptImageService when model is gpt-image-2", async () => {
     const result = await generateImage({ prompt: "a red fox", aspectRatio: "1:1", model: "gpt-image-2" });
-    expect(generateImageGpt).toHaveBeenCalledWith({ prompt: "a red fox", aspectRatio: "1:1" });
+    expect(generateImageGpt).toHaveBeenCalledWith({ prompt: "a red fox", aspectRatio: "1:1", signal: undefined });
     expect(result).toEqual({ imageUrl: "data:image/png;base64,FAKE" });
   });
 
