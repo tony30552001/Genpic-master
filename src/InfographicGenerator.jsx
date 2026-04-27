@@ -16,7 +16,6 @@ import { DEFAULT_IMAGE_MODEL } from './config';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 
 
 import ScriptEditor from './components/create/ScriptEditor';
@@ -28,12 +27,6 @@ import DocumentScenes from './components/create/DocumentScenes';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import TemplateLibrary from './components/templates/TemplateLibrary';
-
-const GENERAL_FLOW_STEPS = [
-    { id: 'content', label: '內容', description: '描述畫面' },
-    { id: 'style', label: '風格/參考', description: '補充素材' },
-    { id: 'generate', label: '生成', description: '確認輸出' },
-];
 
 export default function InfographicGenerator({ initialTab = 'general' }) {
     // --- State Management ---
@@ -536,45 +529,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                         {/* ─── Two-Column Layout (Controls + Preview) for other tabs ─── */}
                         {activeTab === 'general' && (
                             <div className="flex-1 min-h-0 flex flex-col gap-3 bg-muted/25 px-4 py-3 lg:px-8 overflow-y-auto lg:overflow-hidden custom-scrollbar">
-                                <section className="shrink-0 rounded-2xl border border-border bg-card px-4 py-3 shadow-md ring-1 ring-border/40">
-                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                        <div className="space-y-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <h2 className="text-sm font-semibold text-foreground">一般創作工作區</h2>
-                                                <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
-                                                    Guided flow
-                                                </Badge>
-                                            </div>
-                                            <p className="text-xs leading-relaxed text-muted-foreground">
-                                                依序完成內容、參考風格與輸出設定，讓生成前的操作更清楚。
-                                            </p>
-                                        </div>
-
-                                        <ol className="grid grid-cols-3 gap-2 lg:min-w-[360px]" aria-label="一般創作流程">
-                                            {GENERAL_FLOW_STEPS.map((step, index) => (
-                                                <li
-                                                    key={step.id}
-                                                    className="rounded-xl border border-border/80 bg-muted/35 px-3 py-2 shadow-sm"
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                                                            {index + 1}
-                                                        </span>
-                                                        <span className="min-w-0">
-                                                            <span className="block truncate text-xs font-semibold text-foreground">
-                                                                {step.label}
-                                                            </span>
-                                                            <span className="hidden truncate text-xs text-muted-foreground sm:block">
-                                                                {step.description}
-                                                            </span>
-                                                        </span>
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ol>
-                                    </div>
-                                </section>
-
                                 <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-5 lg:gap-6">
                                     {/* Left: Controls (takes 3/5 on large screens) */}
                                     <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pl-px pr-1">
