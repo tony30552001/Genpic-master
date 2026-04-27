@@ -690,17 +690,27 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
             {/* ═══════════ 手機版：生成圖片 Bottom Sheet ═══════════ */}
             {showMobilePreview && generatedImage && (
-                <div className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end" onClick={() => setShowMobilePreview(false)}>
+                <div
+                    className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="mobile-preview-title"
+                >
                     {/* 半透明遮罩 */}
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <button
+                        type="button"
+                        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                        onClick={() => setShowMobilePreview(false)}
+                        aria-label="關閉生成圖片預覽"
+                    />
                     {/* Sheet 主體 */}
                     <div
-                        className="relative z-10 bg-card text-card-foreground rounded-t-2xl shadow-2xl flex flex-col max-h-[85dvh] animate-in slide-in-from-bottom duration-300"
-                        onClick={(e) => e.stopPropagation()}
+                        className="relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-card text-card-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 motion-reduce:animate-none"
+                        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
                     >
                         {/* Sheet Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-                            <span className="text-sm font-semibold text-foreground">生成結果</span>
+                            <h2 id="mobile-preview-title" className="text-sm font-semibold text-foreground">生成結果</h2>
                             <button
                                 type="button"
                                 onClick={() => setShowMobilePreview(false)}
@@ -711,7 +721,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             </button>
                         </div>
                         {/* 圖片內容（可捲動） */}
-                        <div className="flex-1 overflow-y-auto">
+                        <div className="flex-1 overflow-y-auto overscroll-contain">
                             <ImagePreview
                                 generatedImage={generatedImage}
                                 isGenerating={isGenerating}
@@ -730,16 +740,17 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             {generatedImage && !showMobilePreview && !isGenerating && (
                 <button
                     type="button"
-                    className="sm:hidden fixed bottom-[64px] right-4 z-40 flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold px-3 py-2 rounded-full shadow-lg transition-shadow active:scale-95 motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="sm:hidden fixed bottom-[calc(64px+env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg transition-[box-shadow,transform] hover:bg-primary/90 active:scale-95 motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     onClick={() => setShowMobilePreview(true)}
+                    aria-label="查看生成圖片"
                 >
-                    <img src={generatedImage} alt="" width={24} height={24} className="w-6 h-6 rounded-md object-cover border border-primary-foreground/30" />
+                    <img src={generatedImage} alt="" width={24} height={24} decoding="async" className="w-6 h-6 rounded-md object-cover border border-primary-foreground/30" />
                     查看生成圖片
                 </button>
             )}
 
             {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
-            <nav className="sm:hidden shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-40">
+            <nav className="sm:hidden shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-40 pb-[env(safe-area-inset-bottom)]">
                 <div className="flex items-stretch h-16">
                     {tabs.map((tab) => {
                         const isActive = activeTab === tab.id;

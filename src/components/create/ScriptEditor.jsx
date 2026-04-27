@@ -13,6 +13,8 @@ import {
   Save,
   LayoutTemplate,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
@@ -60,8 +62,21 @@ export default function ScriptEditor({
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [suggestionData, setSuggestionData] = useState(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [showAssistTools, setShowAssistTools] = useState(false);
 
   const charCount = userScript?.length || 0;
+  const contentFieldId = "script-editor-content";
+  const contentHelpId = "script-editor-content-help";
+  const assistToolsId = "script-editor-assist-tools";
+  const hasActiveAssistTools = Boolean(
+    contentImagePreview ||
+    analyzedStyle ||
+    analysisResultData ||
+    selectedStyleInfo ||
+    showStylePicker ||
+    showSaveTemplate
+  );
+  const assistToolsOpen = showAssistTools || hasActiveAssistTools;
 
   const filteredStyles = savedStyles.filter((style) => {
     const q = styleSearch.toLowerCase();
@@ -138,45 +153,23 @@ export default function ScriptEditor({
       {/* ── 標題列 ── */}
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <PenLine className="w-4 h-4 text-primary" />
+          <label htmlFor={contentFieldId} className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <PenLine className="w-4 h-4 text-primary" aria-hidden="true" />
             內容描述
           </label>
-          <p className="text-xs text-muted-foreground">
+          <p id={contentHelpId} className="text-xs text-muted-foreground">
             描述你想生成的畫面，包含人物、場景、動作和氛圍
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {onSaveTemplate && (
-            <button
-              type="button"
-              onClick={() => setShowSaveTemplate(!showSaveTemplate)}
-              disabled={!userScript?.trim()}
-              className={`
-                flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-                ${!userScript?.trim()
-                  ? 'bg-muted text-muted-foreground/40 border-border cursor-not-allowed'
-                  : 'bg-primary text-primary-foreground border-transparent shadow-sm hover:bg-primary/90'
-                }
-              `}
-              title="將當前內容與風格存為可重複使用的範本"
-            >
-              <LayoutTemplate className="w-3.5 h-3.5" aria-hidden="true" />
-              存為範本
-            </button>
-          )}
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={handleSmartOptimize}
             disabled={isOptimizing || !userScript?.trim()}
-            className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-              ${!userScript?.trim()
-                ? 'bg-muted text-muted-foreground/40 border-border cursor-not-allowed'
-                : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/15'
-              }
-            `}
+            className="h-8 gap-1.5 rounded-lg border-primary/20 bg-primary/10 px-3 text-xs font-semibold text-primary hover:bg-primary/15"
             title="使用 AI 自動豐富畫面細節與提示詞"
           >
             {isOptimizing ? (
@@ -185,20 +178,9 @@ export default function ScriptEditor({
               <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
             )}
             {isOptimizing ? "優化中…" : "AI 智能優化"}
-          </button>
+          </Button>
         </div>
       </div>
-
-      {/* 存為範本面板 */}
-      {showSaveTemplate && onSaveTemplate && (
-        <SaveTemplateDialog
-          userScript={userScript}
-          stylePrompt={analyzedStyleForTemplate || analyzedStyle || ''}
-          styleId={selectedStyleId}
-          onSave={async (data) => { await onSaveTemplate(data); }}
-          onClose={() => setShowSaveTemplate(false)}
-        />
-      )}
 
       {/* AI 優化建議面板 */}
       {suggestionData && (
@@ -213,10 +195,13 @@ export default function ScriptEditor({
 
       {/* ── 文字輸入區 ── */}
       <Textarea
+        id={contentFieldId}
+        name="generationPrompt"
         value={userScript || ""}
         onChange={handleChange}
         onFocus={onFocus}
         onBlur={onBlur}
+        aria-describedby={contentHelpId}
         placeholder={"描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
         className="min-h-[80px] md:min-h-[100px] resize-y text-sm leading-relaxed"
       />
@@ -226,12 +211,68 @@ export default function ScriptEditor({
         {charCount} 字
       </div>
 
-      {/* ── 風格設定 分隔 ── */}
-      <div className="flex items-center gap-2 pt-1">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest px-1">風格設定</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
+      <section className="rounded-2xl border border-border/70 bg-card/70 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setShowAssistTools((open) => !open)}
+          className="flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-expanded={assistToolsOpen}
+          aria-controls={assistToolsId}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Palette className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold text-foreground">輔助設定</span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                參考圖片、風格分析與風格庫，依需要再展開
+              </span>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            {hasActiveAssistTools && (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                已套用
+              </span>
+            )}
+            {assistToolsOpen ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            )}
+          </span>
+        </button>
+
+        {assistToolsOpen && (
+          <div id={assistToolsId} className="space-y-3 border-t border-border/70 px-3 pb-3 pt-3">
+
+            {onSaveTemplate && (
+              <div className="rounded-xl border border-border bg-background/70 p-2.5">
+                <Button
+                  type="button"
+                  variant={showSaveTemplate ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowSaveTemplate(!showSaveTemplate)}
+                  disabled={!userScript?.trim()}
+                  className="h-8 w-full justify-start gap-1.5 rounded-lg px-3 text-xs font-semibold"
+                  title="將當前內容與風格存為可重複使用的範本"
+                  aria-expanded={showSaveTemplate}
+                >
+                  <LayoutTemplate className="w-3.5 h-3.5" aria-hidden="true" />
+                  存為範本
+                </Button>
+                {showSaveTemplate && (
+                  <div className="mt-2">
+                    <SaveTemplateDialog
+                      userScript={userScript}
+                      stylePrompt={analyzedStyleForTemplate || analyzedStyle || ''}
+                      styleId={selectedStyleId}
+                      onSave={async (data) => { await onSaveTemplate(data); }}
+                      onClose={() => setShowSaveTemplate(false)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
       {/* 內容參考圖片 + 風格分析 */}
       <div className="space-y-2">
@@ -268,36 +309,36 @@ export default function ScriptEditor({
               onChange={onContentImageUpload}
               className="hidden"
             />
-            <button
-              type="button"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setIsDraging(true); }}
-            onDragLeave={() => setIsDraging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDraging(false);
-              const file = e.dataTransfer.files[0];
-              if (file && onContentImageUpload) {
-                onContentImageUpload({ target: { files: [file] } });
-              }
-            }}
-            className={`
-              relative group flex w-full items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-              ${isDraging
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:border-primary/40 hover:bg-muted/40'
-              }
-            `}
-            aria-label="上傳內容參考圖片"
-          >
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDraging(true); }}
+                onDragLeave={() => setIsDraging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraging(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file && onContentImageUpload) {
+                    onContentImageUpload({ target: { files: [file] } });
+                  }
+                }}
+                className={`
+                  relative group flex w-full items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+                  ${isDraging
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/40 hover:bg-muted/40'
+                  }
+                `}
+                aria-label="上傳內容參考圖片"
+              >
             <div className={`
               w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors
-              ${isUploadingContent ? 'bg-muted' : 'bg-primary/8 text-primary group-hover:bg-primary/12'}
+              ${isUploadingContent ? 'bg-muted' : 'bg-primary/10 text-primary group-hover:bg-primary/15'}
             `}>
               {isUploadingContent ? (
-                <div className="w-5 h-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary motion-reduce:animate-none" />
+                <div className="w-5 h-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary motion-reduce:animate-none" aria-hidden="true" />
               ) : (
-                <Image className="w-5 h-5" />
+                <Image className="w-5 h-5" aria-hidden="true" />
               )}
             </div>
             <div className="flex-1 text-left">
@@ -317,18 +358,19 @@ export default function ScriptEditor({
           <div className="mt-1 space-y-2">
             {!analyzedStyle && !analysisResultData && (
               <button
+                type="button"
                 onClick={onAnalyze}
                 disabled={isAnalyzing || isUploadingContent}
-                className="w-full py-2 bg-primary/5 hover:bg-primary/10 text-primary rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 border border-primary/15"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/15 bg-primary/5 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
               >
                 {isAnalyzing ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                    <div className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin motion-reduce:animate-none" aria-hidden="true" />
                     {analysisPhase || "正在分析風格…"}
                   </>
                 ) : (
                   <>
-                    <Wand2 className="w-3.5 h-3.5" />
+                    <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
                     分析此圖片風格
                   </>
                 )}
@@ -338,7 +380,7 @@ export default function ScriptEditor({
             {(analyzedStyle || analysisResultData) && (
               <div className="rounded-xl p-3 space-y-2 animate-in fade-in slide-in-from-top-2 border border-border bg-muted/40">
                 <h3 className="font-semibold text-foreground text-xs flex items-center gap-1.5">
-                  <Wand2 className="w-3.5 h-3.5 text-primary" />
+                  <Wand2 className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
                   {String(analysisResultData?.style_name || "風格分析結果")}
                 </h3>
 
@@ -349,7 +391,7 @@ export default function ScriptEditor({
                 {Array.isArray(analysisResultData?.suggested_tags) && (
                   <div className="flex flex-wrap gap-1">
                     {analysisResultData.suggested_tags.map((tag, i) => (
-                      <span key={i} className="text-[10px] px-2 py-0.5 bg-primary/8 text-primary/80 rounded-full">
+                      <span key={i} className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary/80 rounded-full">
                         {tag}
                       </span>
                     ))}
@@ -358,13 +400,13 @@ export default function ScriptEditor({
 
                 <div className="pt-1.5 border-t border-border space-y-1.5">
                   <div className="flex gap-2">
-                <input
+                <Input
                   type="text"
                   value={newStyleName || ''}
                   onChange={(e) => onStyleNameChange && onStyleNameChange(e.target.value)}
                   placeholder="為此風格命名…"
                   aria-label="風格名稱"
-                  className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="h-8 flex-1 text-xs"
                 />
                 <button
                   type="button"
@@ -376,13 +418,13 @@ export default function ScriptEditor({
                   收藏
                 </button>
               </div>
-              <input
+              <Input
                 type="text"
                 value={newStyleTags || ''}
                 onChange={(e) => onStyleTagsChange && onStyleTagsChange(e.target.value)}
                 placeholder="標籤 (以逗號分隔)…"
                 aria-label="風格標籤"
-                className="w-full rounded border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="h-8 w-full text-xs"
               />
                 </div>
               </div>
@@ -405,7 +447,7 @@ export default function ScriptEditor({
               className="w-8 h-8 rounded-md object-cover shrink-0 border border-primary/20"
             />
           )}
-          <Palette className="w-3.5 h-3.5 text-primary shrink-0" />
+          <Palette className="w-3.5 h-3.5 text-primary shrink-0" aria-hidden="true" />
           <div className="flex-1 min-w-0">
             <span className="text-xs font-medium text-primary/80 line-clamp-1">
               {selectedStyleInfo?.name || '已套用風格'}
@@ -442,14 +484,14 @@ export default function ScriptEditor({
             aria-expanded={showStylePicker}
           >
             <span className="flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5" />
+              <Palette className="w-3.5 h-3.5" aria-hidden="true" />
               從風格庫選擇風格
               <span className="text-muted-foreground/60">({savedStyles.length})</span>
             </span>
             {showStylePicker ? (
-              <ChevronUp className="w-3.5 h-3.5" />
+              <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
             ) : (
-              <ChevronDown className="w-3.5 h-3.5" />
+              <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
             )}
           </button>
 
@@ -457,14 +499,14 @@ export default function ScriptEditor({
             <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-xl shadow-xl overflow-hidden max-h-[320px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="sticky top-0 bg-popover border-b border-border px-3 py-2">
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-2" />
-                    <input
+                  <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-2" aria-hidden="true" />
+                    <Input
                       type="text"
                       placeholder="搜尋風格…"
                       aria-label="搜尋風格"
                       value={styleSearch}
                       onChange={(e) => setStyleSearch(e.target.value)}
-                      className="w-full rounded-lg border border-input bg-background py-1.5 pl-8 pr-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="h-8 w-full rounded-lg py-1.5 pl-8 pr-3 text-xs"
                       onClick={(e) => e.stopPropagation()}
                     />
                 </div>
@@ -494,7 +536,7 @@ export default function ScriptEditor({
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-md bg-muted shrink-0 flex items-center justify-center">
-                          <Palette className="w-4 h-4 text-muted-foreground/40" />
+                          <Palette className="w-4 h-4 text-muted-foreground/40" aria-hidden="true" />
                         </div>
                       )}
 
@@ -504,7 +546,7 @@ export default function ScriptEditor({
                             {style.name}
                           </span>
                           {selectedStyleId === style.id && (
-                            <Check className="w-3 h-3 text-primary shrink-0" />
+                            <Check className="w-3 h-3 text-primary shrink-0" aria-hidden="true" />
                           )}
                         </div>
                         {style.tags && style.tags.length > 0 && (
@@ -528,6 +570,9 @@ export default function ScriptEditor({
           )}
         </div>
       )}
+          </div>
+        )}
+      </section>
 
     </div>
   );
