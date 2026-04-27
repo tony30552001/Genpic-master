@@ -46,13 +46,36 @@ export default function GenerateBar({
 }) {
     const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
     const showResolutionPicker = !modelConfig?.supportsSizeMapping;
+    const selectedRatio = ASPECT_RATIOS.find((ratio) => ratio.id === aspectRatio);
+    const selectedSizeLabel = showResolutionPicker
+        ? imageSize
+        : GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024";
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
         : isGeneratingText || "AI 生成中…";
 
     return (
         <div className="shrink-0 border-t border-border bg-card px-4 py-3 space-y-3">
-            {/* Aspect Ratio & Resolution Row */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">輸出設定</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                        {modelConfig?.label || "自訂模型"} · {selectedRatio?.label || aspectRatio} · {selectedSizeLabel}
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground" aria-label="目前輸出設定">
+                    <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                        {modelConfig?.label || "自訂模型"}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                        {aspectRatio}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                        {selectedSizeLabel}
+                    </span>
+                </div>
+            </div>
+
             <div className="flex items-center gap-3">
                 {/* Aspect Ratios */}
                 <div className="flex gap-1 p-1 bg-muted rounded-lg flex-1">

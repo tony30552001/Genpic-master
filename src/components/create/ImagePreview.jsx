@@ -11,8 +11,18 @@ const PREVIEW_FRAME_CLASSES = {
   "9:16": "aspect-[9/16] h-[76%] max-h-[460px]",
 };
 
+const EMPTY_FRAME_CLASSES = {
+  "16:9": "aspect-video w-44",
+  "4:3": "aspect-[4/3] w-40",
+  "1:1": "aspect-square w-36",
+  "9:16": "aspect-[9/16] h-44",
+};
+
 const getPreviewFrameClass = (aspectRatio) =>
   PREVIEW_FRAME_CLASSES[aspectRatio] || PREVIEW_FRAME_CLASSES["16:9"];
+
+const getEmptyFrameClass = (aspectRatio) =>
+  EMPTY_FRAME_CLASSES[aspectRatio] || EMPTY_FRAME_CLASSES["16:9"];
 
 export default function ImagePreview({
   generatedImage,
@@ -42,13 +52,32 @@ export default function ImagePreview({
 
   // 狀態 2：空白初始畫面
   const renderEmptyState = () => (
-    <div className="flex flex-col items-center gap-4 text-center py-12 px-6">
-      <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center">
-        <Wand2 className="w-9 h-9 text-primary/60" aria-hidden="true" />
+    <div className="flex w-full flex-col items-center gap-4 px-6 py-10 text-center">
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-xl border border-dashed border-border bg-background shadow-sm",
+          getEmptyFrameClass(aspectRatio)
+        )}
+        aria-hidden="true"
+      >
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            backgroundImage: "linear-gradient(hsl(var(--muted-foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--muted-foreground)) 1px, transparent 1px)",
+            backgroundSize: "18px 18px",
+          }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+            <Wand2 className="h-6 w-6 text-primary/65" aria-hidden="true" />
+          </div>
+        </div>
       </div>
       <div className="space-y-1.5">
-        <p className="text-base font-semibold text-foreground">描述你的想法，AI 為你繪製</p>
-        <p className="text-xs text-muted-foreground">在左側輸入內容描述，選擇風格後按「生成」</p>
+        <p className="text-base font-semibold text-foreground">預覽區已準備好</p>
+        <p className="text-xs text-muted-foreground">
+          目前比例為 {aspectRatio}。完成內容與風格設定後，生成結果會出現在這裡。
+        </p>
       </div>
     </div>
   );
@@ -122,7 +151,7 @@ export default function ImagePreview({
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-full h-auto lg:h-full lg:min-h-[500px] overflow-hidden group bg-muted/30 rounded-xl border border-border/40 lg:bg-transparent lg:border-0 lg:rounded-none">
+    <div className="relative flex flex-col items-center justify-center w-full h-auto min-h-[260px] lg:h-full lg:min-h-[500px] overflow-hidden group bg-muted/30 rounded-xl border border-border/40 lg:bg-transparent lg:border-0 lg:rounded-none">
 
       {renderContent()}
 
