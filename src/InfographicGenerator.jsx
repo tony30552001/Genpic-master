@@ -12,6 +12,7 @@ import useImageGeneration from './hooks/useImageGeneration';
 import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import { requestBlobSas } from './services/storageService';
+import { DEFAULT_IMAGE_MODEL } from './config';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -54,7 +55,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         try { return localStorage.getItem('genpic_image_language') || 'en'; } catch { return 'en'; }
     });
     const [imageModel, setImageModel] = useState(() => {
-        try { return localStorage.getItem('genpic_image_model') || 'gpt-image-2'; } catch { return 'gpt-image-2'; }
+        try { return localStorage.getItem('genpic_image_model') || DEFAULT_IMAGE_MODEL; } catch { return DEFAULT_IMAGE_MODEL; }
     });
 
     // 風格設定相關

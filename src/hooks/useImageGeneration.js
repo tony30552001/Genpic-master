@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { analyzeStyle, generateImage, generateFilename } from "../services/aiService";
 import { getGenerationStatus } from "../utils/generationProgress";
+import { DEFAULT_IMAGE_MODEL } from "../config";
 
 const normalizeTags = (raw) => {
   if (Array.isArray(raw)) return raw.map((t) => String(t).trim()).filter(Boolean);
@@ -27,7 +28,7 @@ export default function useImageGeneration() {
   const [analysisPhase, setAnalysisPhase] = useState(""); // 新增：分析階段狀態
   const [generationStartedAt, setGenerationStartedAt] = useState(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
-  const [generationModel, setGenerationModel] = useState("gpt-image-2");
+  const [generationModel, setGenerationModel] = useState(DEFAULT_IMAGE_MODEL);
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
@@ -95,7 +96,7 @@ export default function useImageGeneration() {
       setIsGenerating(true);
       setGenerationStartedAt(startedAt);
       setGenerationElapsedSeconds(0);
-      setGenerationModel(model || "default");
+      setGenerationModel(model || DEFAULT_IMAGE_MODEL);
       setGeneratedFilename("");
       if (updatePreview) setGeneratedImage(null);
 

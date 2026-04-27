@@ -1,3 +1,5 @@
+import { DEFAULT_IMAGE_MODEL } from "../config";
+
 const GPT_IMAGE_2_PHASES = [
   {
     maxSeconds: 3,
@@ -94,7 +96,7 @@ export const formatElapsedSeconds = (seconds = 0) => {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 };
 
-export const getGenerationStatus = ({ elapsedSeconds = 0, model = "gpt-image-2" } = {}) => {
+export const getGenerationStatus = ({ elapsedSeconds = 0, model = DEFAULT_IMAGE_MODEL } = {}) => {
   const safeElapsed = Math.max(0, Math.floor(elapsedSeconds));
   const phases = model === "gpt-image-2" ? GPT_IMAGE_2_PHASES : DEFAULT_PHASES;
   let elapsedBeforePhase = 0;

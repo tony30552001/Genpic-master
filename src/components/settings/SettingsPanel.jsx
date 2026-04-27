@@ -1,18 +1,15 @@
 import React from "react";
 import {
-    Globe,
     Languages,
-    Image as ImageIcon,
-    Info,
     Check,
-    MessageSquare,
     Cpu,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import LineSettings from "./LineSettings";
 import useLineConfig from "../../hooks/useLineConfig";
-import { IMAGE_MODEL_OPTIONS } from "../../config";
+import { DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from "../../config";
 
 const LANGUAGE_OPTIONS = [
     {
@@ -80,87 +77,99 @@ const LANGUAGE_OPTIONS = [
     },
 ];
 
-const LINE_BRAND_COLOR = "#06C755";
+const findImageModel = (modelId) =>
+    IMAGE_MODEL_OPTIONS.find((model) => model.id === modelId)
+    || IMAGE_MODEL_OPTIONS.find((model) => model.id === DEFAULT_IMAGE_MODEL)
+    || IMAGE_MODEL_OPTIONS[0];
 
 /**
- * 設定面板 — 全域語系選擇
- * 控制生成圖片中文字的語言
+ * 設定面板 — 全域生成偏好與整合設定
  */
 export default function SettingsPanel({ imageLanguage, onImageLanguageChange, imageModel, onImageModelChange, user }) {
     const currentLang = LANGUAGE_OPTIONS.find((l) => l.id === imageLanguage) || LANGUAGE_OPTIONS[0];
-    const currentModel = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel) || IMAGE_MODEL_OPTIONS[0];
+    const currentModel = findImageModel(imageModel);
     const lineConfigHook = useLineConfig({ user });
 
     return (
-        <div className="max-w-6xl mx-auto py-6 px-4 space-y-5">
-            {/* 標題 */}
-            <div className="space-y-1">
-                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                    <Globe className="w-5 h-5 text-primary" />
-                    生成設定
+        <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 lg:py-8">
+            <div className="max-w-3xl space-y-2">
+                <Badge variant="outline" className="w-fit text-[11px]">
+                    Settings
+                </Badge>
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                    生成與整合設定
                 </h2>
-                <p className="text-sm text-muted-foreground">
-                    配置全域的圖片生成偏好設定
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                    管理全域圖片生成偏好、輸出語系與分享整合。預設模型已調整為 Nano Banana 2；既有使用者的模型選擇會保留。
                 </p>
             </div>
 
-            {/* 雙欄佈局 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                {/* 左欄：模型選擇 + LINE 整合 */}
-                <div className="space-y-6">
-                    <Card className="border-border/60">
-                        <CardContent className="p-5 space-y-4">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                    <Cpu className="w-4 h-4 text-primary" />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <Card className="border-border/60 lg:col-span-2">
+                    <CardContent className="space-y-6 p-5 sm:p-6">
+                        <section className="space-y-4" aria-labelledby="image-model-heading">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                        <Cpu className="h-4 w-4" aria-hidden="true" />
+                                    </span>
+                                    <div>
+                                        <h3 id="image-model-heading" className="text-base font-semibold text-foreground">
+                                            生成偏好
+                                        </h3>
+                                        <p className="text-sm leading-relaxed text-muted-foreground">
+                                            選擇預設圖片模型與輸出文字語系。
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-semibold text-sm text-foreground">圖片生成模型</h3>
-                                    <p className="text-xs text-muted-foreground">
-                                        選擇 AI 生成圖片使用的模型
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* 目前選擇 */}
-                            <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
-                                <Cpu className="w-4 h-4 text-primary" />
-                                <span className="text-sm font-medium text-foreground">{currentModel.label}</span>
-                                <Badge variant="outline" className="text-[10px] ml-auto">
-                                    目前選擇
+                                <Badge variant="secondary" className="w-fit text-[11px]">
+                                    目前模型：{currentModel.label}
                                 </Badge>
                             </div>
 
-                            {/* 模型選項列表 */}
-                            <div className="grid grid-cols-1 gap-2">
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2" role="group" aria-label="圖片生成模型">
                                 {IMAGE_MODEL_OPTIONS.map((model) => {
-                                    const isSelected = imageModel === model.id;
+                                    const isSelected = currentModel.id === model.id;
+                                    const isDefault = model.id === DEFAULT_IMAGE_MODEL;
+
                                     return (
                                         <button
                                             type="button"
                                             key={model.id}
                                             onClick={() => onImageModelChange(model.id)}
                                             aria-pressed={isSelected}
-                                            className={`text-left p-3 rounded-xl border-2 transition-colors duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
-                                                ? "border-primary bg-primary/5 shadow-sm"
-                                                : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
-                                                }`}
+                                            className={cn(
+                                                "min-h-[132px] rounded-2xl border p-4 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                                isSelected
+                                                    ? "border-primary bg-primary/5 shadow-sm"
+                                                    : "border-border/60 hover:border-primary/40 hover:bg-muted/40"
+                                            )}
                                         >
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <Cpu className={`w-4 h-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
-                                                <span className={`text-xs font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
-                                                    {model.label}
-                                                </span>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="space-y-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className={cn("text-sm font-semibold", isSelected ? "text-primary" : "text-foreground")}>
+                                                            {model.label}
+                                                        </span>
+                                                        {isDefault && (
+                                                            <Badge variant="outline" className="text-[10px]">
+                                                                預設
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs leading-relaxed text-muted-foreground">
+                                                        {model.description}
+                                                    </p>
+                                                </div>
                                                 {isSelected && (
-                                                    <Check className="w-3.5 h-3.5 text-primary ml-auto" />
+                                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                                    </span>
                                                 )}
                                             </div>
-                                            <p className="text-[10px] text-muted-foreground leading-relaxed ml-6">
-                                                {model.description}
-                                            </p>
-                                            <div className="flex gap-1 mt-1.5 ml-6">
+                                            <div className="mt-3 flex flex-wrap gap-1.5">
                                                 {model.sizes.map((size) => (
-                                                    <Badge key={size} variant="secondary" className="text-[9px] px-1.5 py-0">
+                                                    <Badge key={size} variant="secondary" className="text-[10px]">
                                                         {size}
                                                     </Badge>
                                                 ))}
@@ -170,116 +179,86 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                 })}
                             </div>
 
-                            {/* 說明 */}
-                            <div className="flex items-start gap-2 px-3 py-2.5 bg-muted/50 rounded-lg border border-border/30">
-                                <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                                <div className="text-xs text-muted-foreground space-y-1">
-                                    <p>
-                                        <strong>模型設定影響：</strong>
-                                    </p>
-                                    <ul className="list-disc list-inside space-y-0.5 ml-1">
-                                        <li>不同模型支援的圖片尺寸與品質不同</li>
-                                        <li>GPT Image 2 自動依據比例映射最佳尺寸</li>
-                                    </ul>
+                            <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                                Nano Banana 2 可手動選擇 1K / 2K / 4K；GPT Image 2 會依圖片比例自動映射最佳像素尺寸。
+                            </p>
+                        </section>
+
+                        <section className="space-y-4 border-t border-border/60 pt-5" aria-labelledby="image-language-heading">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                        <Languages className="h-4 w-4" aria-hidden="true" />
+                                    </span>
+                                    <div>
+                                        <h3 id="image-language-heading" className="text-base font-semibold text-foreground">
+                                            圖片文字語系
+                                        </h3>
+                                        <p className="text-sm leading-relaxed text-muted-foreground">
+                                            決定生成圖片中標題、標籤與說明文字的語言。
+                                        </p>
+                                    </div>
                                 </div>
+                                <Badge variant="secondary" className="w-fit text-[11px]">
+                                    目前語系：{currentLang.label}
+                                </Badge>
                             </div>
-                        </CardContent>
-                    </Card>
 
-                    {/* LINE 整合 */}
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${LINE_BRAND_COLOR}1A` }}>
-                                <MessageSquare className="w-4 h-4" style={{ color: LINE_BRAND_COLOR }} />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-sm text-foreground">LINE 整合</h3>
-                                <p className="text-xs text-muted-foreground">
-                                    連結 LINE 官方帳號或使用 LIFF 分享圖片
-                                </p>
-                            </div>
-                        </div>
-                        <LineSettings useLineConfigHook={lineConfigHook} />
-                    </div>
-                </div>
+                            <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="group" aria-label="圖片文字語系">
+                                {LANGUAGE_OPTIONS.map((lang) => {
+                                    const isSelected = currentLang.id === lang.id;
 
-                {/* 右欄：語系設定 */}
-                <Card className="border-border/60">
-                    <CardContent className="p-5 space-y-4">
-                        {/* 區塊標題 */}
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <Languages className="w-4 h-4 text-primary" />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-sm text-foreground">圖片文字語系</h3>
-                                <p className="text-xs text-muted-foreground">
-                                    決定 AI 生成圖片中顯示文字的語言
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* 目前選擇 */}
-                        <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
-                            <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-primary/10 px-1.5 text-xs font-semibold text-primary">
-                                {currentLang.code}
-                            </span>
-                            <span className="text-sm font-medium text-foreground">{currentLang.label}</span>
-                            <Badge variant="outline" className="text-[10px] ml-auto">
-                                目前選擇
-                            </Badge>
-                        </div>
-
-                        {/* 語系選項列表 */}
-                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
-                            {LANGUAGE_OPTIONS.map((lang) => {
-                                const isSelected = imageLanguage === lang.id;
-                                return (
+                                    return (
                                         <button
                                             type="button"
                                             key={lang.id}
                                             onClick={() => onImageLanguageChange(lang.id)}
                                             aria-pressed={isSelected}
-                                            className={`text-left p-2.5 rounded-xl border-2 transition-colors duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
-                                                ? "border-primary bg-primary/5 shadow-sm"
-                                                : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-2 mb-0.5">
-                                            <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
-                                                {lang.code}
-                                            </span>
-                                            <span className={`text-xs font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
-                                                {lang.label}
-                                            </span>
-                                            {isSelected && (
-                                                <Check className="w-3.5 h-3.5 text-primary ml-auto" />
+                                            className={cn(
+                                                "min-h-[76px] rounded-xl border p-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                                isSelected
+                                                    ? "border-primary bg-primary/5 shadow-sm"
+                                                    : "border-border/60 hover:border-primary/40 hover:bg-muted/40"
                                             )}
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-1">
-                                            {lang.description}
-                                        </p>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        {/* 說明 */}
-                        <div className="flex items-start gap-2 px-3 py-2.5 bg-muted/50 rounded-lg border border-border/30">
-                            <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                            <div className="text-xs text-muted-foreground space-y-1">
-                                <p>
-                                    <strong>語系設定影響：</strong>
-                                </p>
-                                <ul className="list-disc list-inside space-y-0.5 ml-1">
-                                    <li>AI 生成圖片中出現的文字標題和說明會使用所選語言</li>
-                                    <li>Prompt 會自動附加語言指令，引導 AI 使用對應語言產出</li>
-                                    <li>選擇「無文字」模式會指示 AI 不在圖片中放置任何文字</li>
-                                </ul>
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn(
+                                                    "flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-[11px] font-semibold",
+                                                    isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                                                )}>
+                                                    {lang.code}
+                                                </span>
+                                                <span className={cn("text-xs font-semibold", isSelected ? "text-primary" : "text-foreground")}>
+                                                    {lang.label}
+                                                </span>
+                                                {isSelected && (
+                                                    <Check className="ml-auto h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                                                )}
+                                            </div>
+                                            <p className="mt-1.5 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
+                                                {lang.description}
+                                            </p>
+                                        </button>
+                                    );
+                                })}
                             </div>
-                        </div>
+
+                            <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                                Prompt 會自動附加語言指令；選擇「無文字」會要求模型避免輸出任何文字、標籤或標題。
+                            </p>
+                        </section>
                     </CardContent>
                 </Card>
+
+                <aside className="space-y-3">
+                    <div className="space-y-1">
+                        <h3 className="text-base font-semibold text-foreground">分享與整合</h3>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                            綁定 LINE 官方帳號後，可在分享流程中直接推送圖片。
+                        </p>
+                    </div>
+                    <LineSettings useLineConfigHook={lineConfigHook} />
+                </aside>
             </div>
         </div>
     );

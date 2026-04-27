@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_IMAGE_MODEL } from "../../config";
 import { formatElapsedSeconds, getGenerationStatus } from "../generationProgress";
 
 describe("generationProgress", () => {
@@ -24,5 +25,10 @@ describe("generationProgress", () => {
 
     expect(status.waitLevel).toBe("slow");
     expect(status.helperText).toContain("文字");
+  });
+
+  it("defaults progress timing to the configured default image model", () => {
+    expect(DEFAULT_IMAGE_MODEL).toBe("gemini-imagen");
+    expect(getGenerationStatus({ elapsedSeconds: 12 }).phase).toBe("composing");
   });
 });

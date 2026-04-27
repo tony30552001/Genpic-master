@@ -24,19 +24,19 @@ export const GPT_IMAGE_API_KEY = import.meta.env.VITE_GPT_IMAGE_API_KEY || "";
 // 5. 圖片生成模型選項
 export const IMAGE_MODEL_OPTIONS = [
     {
-        id: "gpt-image-2",
-        label: "GPT Image 2",
-        description: "OpenAI 最新圖片生成模型，支援高品質影像與精確文字渲染。",
-        sizes: ["1024x1024", "1024x1536", "1536x1024"],
-        supportsSizeMapping: true,
-    },
-    {
         id: "gemini-imagen",
         label: "Nano Banana 2",
         description: "Google Gemini & Imagen 圖片生成模型，透過後端 API Gateway 呼叫。",
         sizes: ["1K", "2K", "4K"],
         supportsSizeMapping: false,
     },
+    {
+        id: "gpt-image-2",
+        label: "GPT Image 2",
+        description: "OpenAI 最新圖片生成模型，支援高品質影像與精確文字渲染。",
+        sizes: ["1024x1024", "1024x1536", "1536x1024"],
+        supportsSizeMapping: true,
+    },
 ];
 
-export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
+export const DEFAULT_IMAGE_MODEL = "gemini-imagen";
