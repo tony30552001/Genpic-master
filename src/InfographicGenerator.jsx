@@ -413,9 +413,11 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     <nav className="hidden sm:flex items-center gap-1 bg-white/10 backdrop-blur-sm rounded-lg p-1">
                         {tabs.map((tab) => (
                             <button
+                                type="button"
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id
+                                aria-pressed={activeTab === tab.id}
+                                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${activeTab === tab.id
                                     ? 'bg-white text-primary shadow-sm'
                                     : 'text-white/80 hover:text-white hover:bg-white/10'
                                     }`}
@@ -436,18 +438,19 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 </div>
                                 <div className="w-8 h-8 rounded-full bg-white/20 border border-white/30 overflow-hidden flex items-center justify-center">
                                     {user.photoURL ? (
-                                        <img src={user.photoURL} alt="User Avatar" className="w-full h-full object-cover" />
+                                        <img src={user.photoURL} alt="使用者頭像" width={32} height={32} className="w-full h-full object-cover" />
                                     ) : (
                                         <User className="w-4 h-4" />
                                     )}
                                 </div>
                                 <Button
                                     variant="ghost"
-                                    size="icon"
-                                    onClick={handleLogout}
-                                    className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all"
-                                    title="登出系統"
-                                >
+                                     size="icon"
+                                     onClick={handleLogout}
+                                     className="h-10 w-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                                     title="登出系統"
+                                     aria-label="登出系統"
+                                 >
                                     <LogOut className="w-4 h-4" />
                                 </Button>
                             </div>
@@ -484,9 +487,9 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                     </div>
                                 )}
                                 {warningMsg && (
-                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-yellow-300 bg-yellow-50">
-                                        <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0" />
-                                        <span className="text-sm text-yellow-700">{warningMsg}</span>
+                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-warning/50 bg-warning/10">
+                                        <AlertCircle className="h-4 w-4 text-warning shrink-0" />
+                                        <span className="text-sm text-foreground">{warningMsg}</span>
                                     </div>
                                 )}
                             </div>
@@ -610,8 +613,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             }
                             isGeneratingText={
                                 activeTab === 'document' && documentResult
-                                    ? "批次生成中..."
-                                    : "AI 生成中..."
+                                    ? "批次生成中…"
+                                    : "AI 生成中…"
                             }
                             disabled={
                                 (activeTab === 'document' && (!scenes || scenes.length === 0)) ||
@@ -692,18 +695,19 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
                     {/* Sheet 主體 */}
                     <div
-                        className="relative z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[85dvh] animate-in slide-in-from-bottom duration-300"
+                        className="relative z-10 bg-card text-card-foreground rounded-t-2xl shadow-2xl flex flex-col max-h-[85dvh] animate-in slide-in-from-bottom duration-300"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Sheet Header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
-                            <span className="text-sm font-semibold text-slate-700">生成結果</span>
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+                            <span className="text-sm font-semibold text-foreground">生成結果</span>
                             <button
+                                type="button"
                                 onClick={() => setShowMobilePreview(false)}
-                                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                                className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 aria-label="關閉預覽"
                             >
-                                <X className="w-4 h-4" />
+                                <X className="w-4 h-4" aria-hidden="true" />
                             </button>
                         </div>
                         {/* 圖片內容（可捲動） */}
@@ -725,38 +729,41 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             {/* 手機版：圖片已生成時，顯示底部快速預覽入口按鈕 */}
             {generatedImage && !showMobilePreview && !isGenerating && (
                 <button
-                    className="sm:hidden fixed bottom-[64px] right-4 z-40 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg transition-all active:scale-95"
+                    type="button"
+                    className="sm:hidden fixed bottom-[64px] right-4 z-40 flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold px-3 py-2 rounded-full shadow-lg transition-shadow active:scale-95 motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     onClick={() => setShowMobilePreview(true)}
                 >
-                    <img src={generatedImage} alt="" className="w-6 h-6 rounded-md object-cover border border-white/30" />
+                    <img src={generatedImage} alt="" width={24} height={24} className="w-6 h-6 rounded-md object-cover border border-primary-foreground/30" />
                     查看生成圖片
                 </button>
             )}
 
             {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
-            <nav className="sm:hidden shrink-0 bg-white border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-40">
+            <nav className="sm:hidden shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-40">
                 <div className="flex items-stretch h-16">
                     {tabs.map((tab) => {
                         const isActive = activeTab === tab.id;
                         return (
                             <button
+                                type="button"
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 relative ${isActive
-                                    ? 'text-blue-600'
-                                    : 'text-slate-400 hover:text-slate-600'
+                                aria-pressed={isActive}
+                                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isActive
+                                    ? 'text-primary'
+                                    : 'text-muted-foreground hover:text-foreground'
                                     }`}
                             >
                                 {/* 活躍指示器 */}
                                 {isActive && (
-                                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-blue-500" />
+                                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-primary" />
                                 )}
-                                <span className={`flex items-center justify-center w-6 h-6 rounded-lg transition-all duration-200 ${isActive ? 'bg-blue-50' : ''
+                                <span className={`flex items-center justify-center w-6 h-6 rounded-lg transition-colors duration-200 ${isActive ? 'bg-primary/10' : ''
                                     }`}>
-                                    <tab.icon className={`transition-all duration-200 ${isActive ? 'w-4 h-4' : 'w-4 h-4'
+                                    <tab.icon className={`transition-colors duration-200 ${isActive ? 'w-4 h-4' : 'w-4 h-4'
                                         }`} />
                                 </span>
-                                <span className={`text-[10px] font-medium leading-none transition-all ${isActive ? 'font-semibold' : ''
+                                <span className={`text-[10px] font-medium leading-none transition-colors ${isActive ? 'font-semibold' : ''
                                     }`}>
                                     {tab.shortLabel}
                                 </span>

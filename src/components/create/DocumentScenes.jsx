@@ -260,7 +260,7 @@ function SceneModal({
               disabled={isOptimizing || isEditing}
             >
               {isOptimizing ? (
-                <><Loader2 className="h-3 w-3 animate-spin" /> 優化中...</>
+                <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 優化中…</>
               ) : (
                 <><Sparkles className="h-3 w-3" /> AI 優化</>
               )}
@@ -311,21 +311,21 @@ function SceneModal({
             {/* 左：預覽圖 */}
             <div className="relative aspect-[4/3] md:aspect-auto bg-muted/20 border-b md:border-b-0 md:border-r border-border/30 flex items-center justify-center overflow-hidden">
               {isThisGenerating ? (
-                <div className="absolute inset-0 p-4 flex flex-col items-center justify-center">
-                  <Skeleton className="absolute inset-4 rounded-xl opacity-50" />
-                  <div className="relative z-10 flex flex-col items-center justify-center gap-2 text-primary bg-background/60 px-4 py-3 rounded-xl backdrop-blur-sm shadow-sm border border-primary/10">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-                      <Wand2 className="w-4 h-4 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                    </div>
-                    <p className="text-xs font-medium animate-pulse">圖片生成中...</p>
-                  </div>
+                <div className="absolute inset-0 p-4" aria-live="polite">
+                  <Skeleton className="h-full w-full rounded-xl" />
+                  <p className="absolute inset-x-0 bottom-6 text-center text-xs font-medium text-muted-foreground">
+                    圖片生成中…
+                  </p>
                 </div>
               ) : sceneImage ? (
                 <div className="relative w-full h-full group">
                   <img
                     src={sceneImage}
-                    alt={`Scene ${scene.scene_number}`}
+                    alt={`場景 ${scene.scene_number} 生成圖片`}
+                    width={640}
+                    height={480}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-contain p-2 cursor-zoom-in"
                     onClick={() => setLightboxSrc(sceneImage)}
                   />
@@ -470,8 +470,8 @@ function SceneModal({
                       <p className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
                         <Mic className="h-3 w-3" /> 講者備注
                       </p>
-                      <div className="p-3 rounded-lg bg-blue-50/80 dark:bg-blue-950/20 border border-blue-200/40 dark:border-blue-800/30">
-                        <p className="text-xs text-blue-900/80 dark:text-blue-200/80 leading-relaxed whitespace-pre-wrap">
+                      <div className="p-3 rounded-lg bg-info/10 border border-info/20">
+                        <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
                           {scene.speaker_notes}
                         </p>
                       </div>
@@ -493,7 +493,7 @@ function SceneModal({
             disabled={isGenerating}
           >
             {isThisGenerating ? (
-              <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> 生成中...</>
+              <><Loader2 className="h-3 w-3 mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
             ) : sceneImage ? (
               <><Wand2 className="h-3 w-3 mr-1" /> 重新生成</>
             ) : (
@@ -880,7 +880,7 @@ export default function DocumentScenes({
                       className="text-xs h-8 gap-1"
                     >
                       {isExportingPdf ? (
-                        <><Loader2 className="h-3 w-3 animate-spin" /> 匯出中...</>
+                        <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
                       ) : (
                         <><FileDown className="h-3 w-3" /> 匯出 PDF</>
                       )}
@@ -893,7 +893,7 @@ export default function DocumentScenes({
                       className="text-xs h-8 gap-1"
                     >
                       {isExportingPptx ? (
-                        <><Loader2 className="h-3 w-3 animate-spin" /> 匯出中...</>
+                        <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
                       ) : (
                         <><Presentation className="h-3 w-3" /> 匯出 PPTX</>
                       )}
@@ -943,7 +943,7 @@ export default function DocumentScenes({
             <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
               <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
               <p className="text-xs text-foreground truncate flex-1">
-                {analyzedStyle.length > 80 ? analyzedStyle.slice(0, 80) + "..." : analyzedStyle}
+                {analyzedStyle.length > 80 ? analyzedStyle.slice(0, 80) + "…" : analyzedStyle}
               </p>
               <Button
                 variant="ghost"
@@ -1004,12 +1004,14 @@ export default function DocumentScenes({
                       const isActive = analyzedStyle === style.prompt;
                       return (
                         <button
+                          type="button"
                           key={style.id}
                           onClick={() => {
                             onApplyStyle?.(style);
                             setShowStylePicker(false);
                           }}
-                          className={`group/style relative flex flex-col rounded-lg border overflow-hidden text-left transition-all duration-200 ${isActive
+                          aria-pressed={isActive}
+                          className={`group/style relative flex flex-col rounded-lg border overflow-hidden text-left transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isActive
                             ? "border-primary ring-2 ring-primary/20 shadow-md"
                             : "border-border/60 hover:border-primary/40 hover:shadow-md"
                             }`}
@@ -1020,7 +1022,11 @@ export default function DocumentScenes({
                               <img
                                 src={style.previewUrl}
                                 alt={style.name}
-                                className="w-full h-full object-cover group-hover/style:scale-105 transition-transform duration-300"
+                                width={320}
+                                height={240}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover group-hover/style:scale-[1.02] transition-transform duration-300 motion-reduce:transform-none"
                                 onError={(e) => { e.target.style.display = 'none'; }}
                               />
                             ) : (
@@ -1091,8 +1097,17 @@ export default function DocumentScenes({
                 className="snap-start shrink-0 w-[280px] sm:w-[300px] md:w-[320px] flex flex-col"
               >
                 <Card
-                  className="flex flex-col h-full overflow-hidden transition-all hover:shadow-lg border-border/60 group cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`開啟場景 ${scene.scene_number}：${scene.scene_title}`}
+                  className="flex flex-col h-full overflow-hidden transition-shadow hover:shadow-lg border-border/60 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   onClick={() => openModal(index)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openModal(index);
+                    }
+                  }}
                 >
                   {/* 卡片標題 */}
                   <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 bg-muted/30 border-b border-border/40">
@@ -1108,9 +1123,10 @@ export default function DocumentScenes({
                     <div className="flex items-center gap-0.5 shrink-0">
                       <Button
                         variant="ghost" size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-10 w-10 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
                         onClick={(e) => { e.stopPropagation(); onRemoveScene(index); }}
                         title="刪除場景"
+                        aria-label={`刪除場景 ${scene.scene_number}`}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -1120,27 +1136,33 @@ export default function DocumentScenes({
                   {/* 預覽圖 */}
                   <div className="shrink-0 relative aspect-video bg-muted/20 border-b border-border/30 overflow-hidden w-full">
                     {isThisGenerating ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center p-3">
-                        <Skeleton className="absolute inset-3 rounded-lg opacity-60" />
-                        <div className="relative z-10 flex flex-col items-center justify-center gap-2 text-primary bg-background/70 px-4 py-3 rounded-xl backdrop-blur-md shadow-sm border border-primary/10">
-                          <div className="relative">
-                            <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-                            <Wand2 className="w-3.5 h-3.5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                          </div>
-                          <p className="text-[10px] font-medium animate-pulse">圖片生成中...</p>
-                        </div>
+                      <div className="absolute inset-0 p-3" aria-live="polite">
+                        <Skeleton className="h-full w-full rounded-lg" />
+                        <p className="absolute inset-x-0 bottom-4 text-center text-[10px] font-medium text-muted-foreground">
+                          圖片生成中…
+                        </p>
                       </div>
                     ) : sceneImage ? (
                       <div className="relative w-full h-full group/img">
-                        <img src={sceneImage} alt={`Scene ${scene.scene_number}`} className="w-full h-full object-cover" />
+                        <img
+                          src={sceneImage}
+                          alt={`場景 ${scene.scene_number} 生成圖片`}
+                          width={640}
+                          height={360}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover"
+                        />
                         {/* 卡片上的放大按鈕 */}
                         <button
-                          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-black/70"
+                          type="button"
+                          className="absolute top-2 right-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover/img:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={(e) => {
                             e.stopPropagation();
                             setLightboxSrc(sceneImage);
                           }}
                           title="放大圖片"
+                          aria-label={`放大場景 ${scene.scene_number} 圖片`}
                         >
                           <ZoomIn className="h-3.5 w-3.5" />
                         </button>
@@ -1203,7 +1225,7 @@ export default function DocumentScenes({
                       disabled={isGenerating}
                     >
                       {isThisGenerating ? (
-                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> 生成中...</>
+                        <><Loader2 className="h-3 w-3 mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
                       ) : sceneImage ? (
                         <><Wand2 className="h-3 w-3 mr-1" /> 重新生成</>
                       ) : (

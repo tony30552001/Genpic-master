@@ -8,7 +8,7 @@
  * - Enable/disable or remove the binding
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
     CheckCircle,
     ChevronDown,
@@ -29,15 +29,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 // ─── Small reusable field component ───────────────────────────────────────
-function Field({ label, hint, children }) {
+function Field({ id, label, hint, children }) {
     return (
         <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">{label}</label>
+            <label htmlFor={id} className="text-sm font-medium text-foreground">{label}</label>
             {children}
             {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
         </div>
     );
 }
+
+const LINE_BRAND_COLOR = "#06C755";
 
 // ─── Main component ────────────────────────────────────────────────────────
 export default function LineSettings({ useLineConfigHook }) {
@@ -51,7 +53,7 @@ export default function LineSettings({ useLineConfigHook }) {
         verifyToken,
     } = useLineConfigHook;
 
-    const [showForm, setShowForm] = useState(!isBound);
+    const [showForm, setShowForm] = useState(false);
     const [showToken, setShowToken] = useState(false);
     const [form, setForm] = useState({
         channelAccessToken: "",
@@ -63,19 +65,6 @@ export default function LineSettings({ useLineConfigHook }) {
     const [verifyState, setVerifyState] = useState(null); // null | "verifying" | { valid, channelName, message }
     const [toast, setToast] = useState(null);
     const [showIdHelp, setShowIdHelp] = useState(false);
-
-    // ── 問題4修復：當 config 載入後同步到 form state ──
-    useEffect(() => {
-        if (config && isBound) {
-            setForm({
-                channelAccessToken: "********",
-                channelSecret: config.channelSecret ? "********" : "",
-                channelName: config.channelName || "",
-                targetId: config.targetId || "",
-                targetType: config.targetType || "group",
-            });
-        }
-    }, [config, isBound]);
 
     const showToast = (message, type = "success") => {
         setToast({ message, type });
@@ -131,8 +120,8 @@ export default function LineSettings({ useLineConfigHook }) {
                 {/* ── Section Header ──────────────────────────────────────── */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-[#06C755]/10 flex items-center justify-center">
-                            <MessageSquare className="w-4 h-4 text-[#06C755]" />
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${LINE_BRAND_COLOR}1A` }}>
+                            <MessageSquare className="w-4 h-4" style={{ color: LINE_BRAND_COLOR }} aria-hidden="true" />
                         </div>
                         <div>
                             <h3 className="font-semibold text-sm text-foreground">LINE 官方帳號</h3>
@@ -142,7 +131,7 @@ export default function LineSettings({ useLineConfigHook }) {
                         </div>
                     </div>
                     {isBound && (
-                        <Badge className="bg-[#06C755]/10 text-[#06C755] border-[#06C755]/20">
+                        <Badge style={{ backgroundColor: `${LINE_BRAND_COLOR}1A`, borderColor: `${LINE_BRAND_COLOR}33`, color: LINE_BRAND_COLOR }}>
                             已綁定
                         </Badge>
                     )}
@@ -157,8 +146,8 @@ export default function LineSettings({ useLineConfigHook }) {
 
                 {!isLoading && isBound && !showForm && (
                     <div className="space-y-3">
-                        <div className="flex items-start gap-3 p-3 bg-[#06C755]/5 border border-[#06C755]/20 rounded-lg">
-                            <CheckCircle className="w-4 h-4 text-[#06C755] shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-3 p-3 rounded-lg" style={{ backgroundColor: `${LINE_BRAND_COLOR}0D`, border: `1px solid ${LINE_BRAND_COLOR}33` }}>
+                            <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: LINE_BRAND_COLOR }} aria-hidden="true" />
                             <div className="text-sm space-y-0.5 min-w-0">
                                 <p className="font-medium text-foreground">
                                     {config.channelName || "LINE 官方帳號"}
@@ -190,15 +179,16 @@ export default function LineSettings({ useLineConfigHook }) {
                             >
                                 修改設定
                             </Button>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                                disabled={isSaving}
-                                onClick={handleDelete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
+                             <Button
+                                 size="sm"
+                                 variant="ghost"
+                                 className="text-destructive hover:text-destructive"
+                                 disabled={isSaving}
+                                 onClick={handleDelete}
+                                 aria-label="解除 LINE 官方帳號綁定"
+                             >
+                                <Trash2 className="w-4 h-4" aria-hidden="true" />
+                             </Button>
                         </div>
                     </div>
                 )}
@@ -208,11 +198,14 @@ export default function LineSettings({ useLineConfigHook }) {
                     <div className="space-y-4">
                         {/* Token input */}
                         <Field
+                            id="line-channel-access-token"
                             label="Channel Access Token"
                             hint="在 LINE Developers Console → Messaging API → Channel access token 取得"
                         >
                             <div className="relative">
                                 <input
+                                    id="line-channel-access-token"
+                                    name="line-channel-access-token"
                                     type={showToken ? "text" : "password"}
                                     value={form.channelAccessToken}
                                     onChange={(e) => {
@@ -220,31 +213,34 @@ export default function LineSettings({ useLineConfigHook }) {
                                         setVerifyState(null);
                                     }}
                                     placeholder="貼上 Channel Access Token…"
-                                    className="w-full px-3 py-2 pr-10 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    className="w-full px-3 py-2 pr-10 text-sm rounded-lg border border-border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 />
                                 <button
                                     type="button"
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                     onClick={() => setShowToken((p) => !p)}
+                                    aria-label={showToken ? "隱藏 Channel Access Token" : "顯示 Channel Access Token"}
                                 >
-                                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    {showToken ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                                 </button>
                             </div>
                             {/* Verify feedback */}
                             {verifyState === "verifying" && (
                                 <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                                    <Loader2 className="w-3 h-3 animate-spin" /> 驗證中…
+                                    <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" aria-hidden="true" /> 驗證中…
                                 </span>
                             )}
                             {verifyState && verifyState !== "verifying" && (
                                 <span
-                                    className={`flex items-center gap-1 text-xs mt-1 ${verifyState.valid ? "text-green-600" : "text-destructive"
+                                    className={`flex items-center gap-1 text-xs mt-1 ${verifyState.valid ? "text-success" : "text-destructive"
                                         }`}
                                 >
                                     {verifyState.valid ? (
-                                        <CheckCircle className="w-3 h-3" />
+                                        <CheckCircle className="w-3 h-3" aria-hidden="true" />
                                     ) : (
-                                        <XCircle className="w-3 h-3" />
+                                        <XCircle className="w-3 h-3" aria-hidden="true" />
                                     )}
                                     {verifyState.valid
                                         ? `驗證成功：${verifyState.channelName}`
@@ -258,42 +254,53 @@ export default function LineSettings({ useLineConfigHook }) {
                                 disabled={!form.channelAccessToken.trim() || form.channelAccessToken === "********" || verifyState === "verifying"}
                                 onClick={handleVerify}
                             >
-                                <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                                <ShieldCheck className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
                                 驗證 Token
                             </Button>
                         </Field>
 
                         {/* Channel Secret (optional) */}
                         <Field
+                            id="line-channel-secret"
                             label="Channel Secret（可選）"
                             hint="用於 Webhook 簽名驗證，非必填"
                         >
                             <input
+                                id="line-channel-secret"
+                                name="line-channel-secret"
                                 type="password"
                                 value={form.channelSecret}
                                 onChange={(e) => setForm((p) => ({ ...p, channelSecret: e.target.value }))}
                                 placeholder="Channel Secret（選填）"
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
+                                autoComplete="off"
+                                spellCheck={false}
+                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
                         </Field>
 
                         {/* Default Target ID */}
                         <Field
+                            id="line-target-id"
                             label="預設目標 ID"
                             hint="群組 ID 或使用者 ID，留空則每次發送時使用 LIFF 選擇"
                         >
                             <div className="flex gap-2">
                                 <input
+                                    id="line-target-id"
+                                    name="line-target-id"
                                     type="text"
                                     value={form.targetId}
                                     onChange={(e) => setForm((p) => ({ ...p, targetId: e.target.value }))}
-                                    placeholder="C... (群組) 或 U... (使用者)"
-                                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
+                                    placeholder="C… (群組) 或 U… (使用者)"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 />
                                 <select
+                                    aria-label="目標類型"
                                     value={form.targetType}
                                     onChange={(e) => setForm((p) => ({ ...p, targetType: e.target.value }))}
-                                    className="px-2 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                                    className="px-2 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                     <option value="group">群組</option>
                                     <option value="user">使用者</option>
@@ -304,9 +311,10 @@ export default function LineSettings({ useLineConfigHook }) {
                             <button
                                 type="button"
                                 onClick={() => setShowIdHelp((p) => !p)}
-                                className="flex items-center gap-1 text-xs text-primary hover:underline mt-1.5"
+                                className="flex items-center gap-1 rounded-md text-xs text-primary hover:underline mt-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                aria-expanded={showIdHelp}
                             >
-                                <HelpCircle className="w-3 h-3" />
+                                <HelpCircle className="w-3 h-3" aria-hidden="true" />
                                 {showIdHelp ? "收起說明" : "如何取得 ID？"}
                                 {showIdHelp ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                             </button>
@@ -325,7 +333,7 @@ export default function LineSettings({ useLineConfigHook }) {
                                         <li>透過 Webhook 接收到的事件中，<code className="px-1 py-0.5 bg-muted rounded text-[11px]">source.userId</code> 即為使用者 ID（以 <strong>U</strong> 開頭）</li>
                                     </ol>
                                     <p className="pt-1">
-                                        💡 提示：可在{" "}
+                                        提示：可在{" "}
                                         <a
                                             href="https://developers.line.biz/console/"
                                             target="_blank"
@@ -342,7 +350,7 @@ export default function LineSettings({ useLineConfigHook }) {
 
                         {/* Info box */}
                         <div className="flex items-start gap-2 px-3 py-2.5 bg-muted/50 rounded-lg border border-border/30">
-                            <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
                             <p className="text-xs text-muted-foreground">
                                 Token 將以 AES-256-GCM 加密後存入資料庫，系統不會以明文保存。
                             </p>
@@ -354,12 +362,12 @@ export default function LineSettings({ useLineConfigHook }) {
                                 className="flex-1"
                                 disabled={!form.channelAccessToken.trim() || isSaving}
                                 onClick={handleSave}
-                                style={{ backgroundColor: "#06C755", borderColor: "#06C755", color: "#fff" }}
+                                style={{ backgroundColor: LINE_BRAND_COLOR, borderColor: LINE_BRAND_COLOR, color: "#fff" }}
                             >
                                 {isSaving ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                                 ) : (
-                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    <CheckCircle className="w-4 h-4 mr-2" aria-hidden="true" />
                                 )}
                                 {isSaving ? "儲存中…" : "儲存設定"}
                             </Button>
@@ -378,15 +386,17 @@ export default function LineSettings({ useLineConfigHook }) {
                 {/* ── Toast ──────────────────────────────────────────────── */}
                 {toast && (
                     <div
+                        role="status"
+                        aria-live="polite"
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${toast.type === "error"
                             ? "bg-destructive/10 text-destructive border border-destructive/20"
-                            : "bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+                            : "bg-success/10 text-success border border-success/20"
                             }`}
                     >
                         {toast.type === "error" ? (
-                            <XCircle className="w-4 h-4 shrink-0" />
+                            <XCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
                         ) : (
-                            <CheckCircle className="w-4 h-4 shrink-0" />
+                            <CheckCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
                         )}
                         {toast.message}
                     </div>

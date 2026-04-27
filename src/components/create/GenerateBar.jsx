@@ -48,7 +48,7 @@ export default function GenerateBar({
     const showResolutionPicker = !modelConfig?.supportsSizeMapping;
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
-        : isGeneratingText || "AI 生成中...";
+        : isGeneratingText || "AI 生成中…";
 
     return (
         <div className="shrink-0 border-t border-border bg-card px-4 py-3 space-y-3">
@@ -58,10 +58,13 @@ export default function GenerateBar({
                 <div className="flex gap-1 p-1 bg-muted rounded-lg flex-1">
                     {ASPECT_RATIOS.map((ratio) => (
                         <button
+                            type="button"
                             key={ratio.id}
                             onClick={() => onAspectRatioChange(ratio.id)}
+                            aria-label={`設定圖片比例為 ${ratio.label}`}
+                            aria-pressed={aspectRatio === ratio.id}
                             className={cn(
-                                "flex-1 flex items-center justify-center gap-1 py-1.5 text-xs rounded-md transition-all",
+                                "flex-1 flex items-center justify-center gap-1 rounded-md py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted",
                                 aspectRatio === ratio.id
                                     ? "bg-background text-primary font-semibold shadow-sm"
                                     : "text-muted-foreground hover:text-foreground hover:bg-background/50"
@@ -81,10 +84,13 @@ export default function GenerateBar({
                     <div className="flex gap-1">
                         {IMAGE_SIZES.map((size) => (
                             <button
+                                type="button"
                                 key={size.id}
                                 onClick={() => onImageSizeChange(size.id)}
+                                aria-label={`設定圖片解析度為 ${size.label}`}
+                                aria-pressed={imageSize === size.id}
                                 className={cn(
-                                    "px-2.5 py-1.5 rounded-md text-xs transition-all",
+                                    "rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                                     imageSize === size.id
                                         ? "bg-background text-primary font-semibold shadow-sm"
                                         : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -113,7 +119,7 @@ export default function GenerateBar({
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
-                            className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                            className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
                             style={{ width: `${generationStatus.progress}%` }}
                         />
                     </div>
@@ -130,18 +136,18 @@ export default function GenerateBar({
                     disabled={disabled || isGenerating}
                     size="lg"
                     className={cn(
-                        "flex-1 font-bold text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98]",
+                        "flex-1 text-sm font-bold shadow-md transition-shadow hover:shadow-lg active:scale-[0.98] motion-reduce:transform-none",
                         "bg-primary hover:bg-primary/90 text-primary-foreground",
                         "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                     )}
                 >
                     {isGenerating ? (
                         <span className="flex items-center gap-2">
-                            <Loader2 className="w-5 h-5 animate-spin" /> {generationLabel}
+                            <Loader2 className="w-5 h-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {generationLabel}
                         </span>
                     ) : (
                         <span className="flex items-center gap-2">
-                            <Wand2 className="w-5 h-5" /> {buttonText || "開始生成圖片"}
+                            <Wand2 className="w-5 h-5" aria-hidden="true" /> {buttonText || "開始生成圖片"}
                         </span>
                     )}
                 </Button>

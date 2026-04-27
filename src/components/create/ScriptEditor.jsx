@@ -150,10 +150,11 @@ export default function ScriptEditor({
         <div className="flex items-center gap-2">
           {onSaveTemplate && (
             <button
+              type="button"
               onClick={() => setShowSaveTemplate(!showSaveTemplate)}
               disabled={!userScript?.trim()}
               className={`
-                flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+                flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
                 ${!userScript?.trim()
                   ? 'bg-muted text-muted-foreground/40 border-border cursor-not-allowed'
                   : 'bg-primary text-primary-foreground border-transparent shadow-sm hover:bg-primary/90'
@@ -161,15 +162,16 @@ export default function ScriptEditor({
               `}
               title="將當前內容與風格存為可重複使用的範本"
             >
-              <LayoutTemplate className="w-3.5 h-3.5" />
+              <LayoutTemplate className="w-3.5 h-3.5" aria-hidden="true" />
               存為範本
             </button>
           )}
           <button
+            type="button"
             onClick={handleSmartOptimize}
             disabled={isOptimizing || !userScript?.trim()}
             className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
               ${!userScript?.trim()
                 ? 'bg-muted text-muted-foreground/40 border-border cursor-not-allowed'
                 : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/15'
@@ -178,11 +180,11 @@ export default function ScriptEditor({
             title="使用 AI 自動豐富畫面細節與提示詞"
           >
             {isOptimizing ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
             ) : (
-              <Wand2 className="w-3.5 h-3.5" />
+              <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
             )}
-            {isOptimizing ? "優化中..." : "AI 智能優化"}
+            {isOptimizing ? "優化中…" : "AI 智能優化"}
           </button>
         </div>
       </div>
@@ -215,7 +217,7 @@ export default function ScriptEditor({
         onChange={handleChange}
         onFocus={onFocus}
         onBlur={onBlur}
-        placeholder={"描述你想生成的畫面內容...\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
+        placeholder={"描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
         className="min-h-[80px] md:min-h-[100px] resize-y text-sm leading-relaxed"
       />
 
@@ -238,15 +240,19 @@ export default function ScriptEditor({
             <img
               src={contentImagePreview}
               alt="Content Reference"
+              width={640}
+              height={192}
               className="w-full h-48 object-contain bg-muted/20"
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
               <button
+                type="button"
                 onClick={onClearContentImage}
-                className="p-1.5 bg-card text-muted-foreground hover:text-destructive rounded-full shadow-sm transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-card text-muted-foreground shadow-sm transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 title="移除參考圖片"
+                aria-label="移除參考圖片"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
             <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
@@ -254,7 +260,16 @@ export default function ScriptEditor({
             </div>
           </div>
         ) : (
-          <div
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onContentImageUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
             onClick={() => fileInputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setIsDraging(true); }}
             onDragLeave={() => setIsDraging(false)}
@@ -267,26 +282,20 @@ export default function ScriptEditor({
               }
             }}
             className={`
-              relative group flex items-center gap-3 px-4 py-3 rounded-xl border-dashed border-2 cursor-pointer transition-all
+              relative group flex w-full items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
               ${isDraging
                 ? 'border-primary bg-primary/5'
                 : 'border-border hover:border-primary/40 hover:bg-muted/40'
               }
             `}
+            aria-label="上傳內容參考圖片"
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={onContentImageUpload}
-              className="hidden"
-            />
             <div className={`
               w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors
               ${isUploadingContent ? 'bg-muted' : 'bg-primary/8 text-primary group-hover:bg-primary/12'}
             `}>
               {isUploadingContent ? (
-                <div className="w-5 h-5 border-2 border-muted-foreground/30 border-t-primary rounded-full animate-spin" />
+                <div className="w-5 h-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary motion-reduce:animate-none" />
               ) : (
                 <Image className="w-5 h-5" />
               )}
@@ -299,7 +308,8 @@ export default function ScriptEditor({
                 作為生成內容的視覺參考 (支援 JPG, PNG)
               </p>
             </div>
-          </div>
+            </button>
+          </>
         )}
 
         {/* 風格分析與結果顯示區 */}
@@ -314,7 +324,7 @@ export default function ScriptEditor({
                 {isAnalyzing ? (
                   <>
                     <div className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-                    {analysisPhase || "正在分析風格..."}
+                    {analysisPhase || "正在分析風格…"}
                   </>
                 ) : (
                   <>
@@ -348,29 +358,32 @@ export default function ScriptEditor({
 
                 <div className="pt-1.5 border-t border-border space-y-1.5">
                   <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newStyleName || ''}
-                      onChange={(e) => onStyleNameChange && onStyleNameChange(e.target.value)}
-                      placeholder="為此風格命名..."
-                      className="flex-1 text-xs border border-input rounded px-2 py-1 focus:border-primary outline-none bg-background"
-                    />
-                    <button
-                      onClick={onSaveStyle}
-                      disabled={isSavingStyle}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
-                    >
-                      {isSavingStyle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                      收藏
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={newStyleTags || ''}
-                    onChange={(e) => onStyleTagsChange && onStyleTagsChange(e.target.value)}
-                    placeholder="標籤 (以逗號分隔)..."
-                    className="w-full text-xs border border-input rounded px-2 py-1 focus:border-primary outline-none bg-background"
-                  />
+                <input
+                  type="text"
+                  value={newStyleName || ''}
+                  onChange={(e) => onStyleNameChange && onStyleNameChange(e.target.value)}
+                  placeholder="為此風格命名…"
+                  aria-label="風格名稱"
+                  className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+                <button
+                  type="button"
+                  onClick={onSaveStyle}
+                  disabled={isSavingStyle}
+                  className="flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                >
+                  {isSavingStyle ? <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="w-3 h-3" aria-hidden="true" />}
+                  收藏
+                </button>
+              </div>
+              <input
+                type="text"
+                value={newStyleTags || ''}
+                onChange={(e) => onStyleTagsChange && onStyleTagsChange(e.target.value)}
+                placeholder="標籤 (以逗號分隔)…"
+                aria-label="風格標籤"
+                className="w-full rounded border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
                 </div>
               </div>
             )}
@@ -382,7 +395,15 @@ export default function ScriptEditor({
       {(analyzedStyle || selectedStyleInfo) && (
         <div className="flex items-center gap-2 px-3 py-2.5 bg-primary/5 border border-primary/10 rounded-lg">
           {selectedStyleInfo?.previewUrl && (
-            <img src={selectedStyleInfo.previewUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0 border border-primary/20" />
+            <img
+              src={selectedStyleInfo.previewUrl}
+              alt=""
+              width={32}
+              height={32}
+              loading="lazy"
+              decoding="async"
+              className="w-8 h-8 rounded-md object-cover shrink-0 border border-primary/20"
+            />
           )}
           <Palette className="w-3.5 h-3.5 text-primary shrink-0" />
           <div className="flex-1 min-w-0">
@@ -400,11 +421,13 @@ export default function ScriptEditor({
             )}
           </div>
           <button
+            type="button"
             onClick={handleClearStyle}
-            className="p-1 hover:bg-primary/10 text-primary/50 hover:text-primary rounded-full transition-colors"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-primary/50 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             title="移除風格"
+            aria-label="移除已套用風格"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
       )}
@@ -413,8 +436,10 @@ export default function ScriptEditor({
       {savedStyles.length > 0 && (
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowStylePicker(!showStylePicker)}
-            className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-primary bg-muted/50 hover:bg-primary/5 border border-border hover:border-primary/20 px-3 py-2 rounded-lg transition-all w-full justify-between"
+            className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-expanded={showStylePicker}
           >
             <span className="flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5" />
@@ -433,14 +458,15 @@ export default function ScriptEditor({
               <div className="sticky top-0 bg-popover border-b border-border px-3 py-2">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-2" />
-                  <input
-                    type="text"
-                    placeholder="搜尋風格..."
-                    value={styleSearch}
-                    onChange={(e) => setStyleSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none bg-background"
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                    <input
+                      type="text"
+                      placeholder="搜尋風格…"
+                      aria-label="搜尋風格"
+                      value={styleSearch}
+                      onChange={(e) => setStyleSearch(e.target.value)}
+                      className="w-full rounded-lg border border-input bg-background py-1.5 pl-8 pr-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      onClick={(e) => e.stopPropagation()}
+                    />
                 </div>
               </div>
 
@@ -460,6 +486,10 @@ export default function ScriptEditor({
                         <img
                           src={style.previewUrl}
                           alt=""
+                          width={40}
+                          height={40}
+                          loading="lazy"
+                          decoding="async"
                           className="w-10 h-10 rounded-md object-cover shrink-0 border border-border"
                         />
                       ) : (

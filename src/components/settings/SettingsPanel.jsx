@@ -19,66 +19,68 @@ const LANGUAGE_OPTIONS = [
         id: "en",
         label: "English",
         labelZh: "英文",
-        flag: "🇺🇸",
+        code: "EN",
         description: "Generate images with English text, suitable for international use.",
     },
     {
         id: "zh-TW",
         label: "繁體中文",
         labelZh: "繁體中文",
-        flag: "🇹🇼",
+        code: "繁",
         description: "生成包含繁體中文文字的圖片，適合台灣市場。",
     },
     {
         id: "zh-CN",
         label: "简体中文",
         labelZh: "簡體中文",
-        flag: "🇨🇳",
+        code: "简",
         description: "生成包含简体中文文字的图片，适合中国大陆市场。",
     },
     {
         id: "ja",
         label: "日本語",
         labelZh: "日文",
-        flag: "🇯🇵",
+        code: "日",
         description: "日本語のテキストを含む画像を生成します。",
     },
     {
         id: "ko",
         label: "한국어",
         labelZh: "韓文",
-        flag: "🇰🇷",
+        code: "韓",
         description: "한국어 텍스트가 포함된 이미지를 생성합니다.",
     },
     {
         id: "es",
         label: "Español",
         labelZh: "西班牙文",
-        flag: "🇪🇸",
+        code: "ES",
         description: "Generar imágenes con texto en español.",
     },
     {
         id: "fr",
         label: "Français",
         labelZh: "法文",
-        flag: "🇫🇷",
+        code: "FR",
         description: "Générer des images avec du texte en français.",
     },
     {
         id: "de",
         label: "Deutsch",
         labelZh: "德文",
-        flag: "🇩🇪",
+        code: "DE",
         description: "Bilder mit deutschem Text generieren.",
     },
     {
         id: "none",
         label: "No Text",
         labelZh: "無文字",
-        flag: "🚫",
+        code: "無",
         description: "圖片中不包含任何文字，純圖像模式。",
     },
 ];
+
+const LINE_BRAND_COLOR = "#06C755";
 
 /**
  * 設定面板 — 全域語系選擇
@@ -135,9 +137,11 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                     const isSelected = imageModel === model.id;
                                     return (
                                         <button
+                                            type="button"
                                             key={model.id}
                                             onClick={() => onImageModelChange(model.id)}
-                                            className={`text-left p-3 rounded-xl border-2 transition-all duration-200 group ${isSelected
+                                            aria-pressed={isSelected}
+                                            className={`text-left p-3 rounded-xl border-2 transition-colors duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
                                                 ? "border-primary bg-primary/5 shadow-sm"
                                                 : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
                                                 }`}
@@ -185,8 +189,8 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                     {/* LINE 整合 */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-[#06C755]/10 flex items-center justify-center">
-                                <MessageSquare className="w-4 h-4 text-[#06C755]" />
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${LINE_BRAND_COLOR}1A` }}>
+                                <MessageSquare className="w-4 h-4" style={{ color: LINE_BRAND_COLOR }} />
                             </div>
                             <div>
                                 <h3 className="font-semibold text-sm text-foreground">LINE 整合</h3>
@@ -217,7 +221,9 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
 
                         {/* 目前選擇 */}
                         <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
-                            <span className="text-lg">{currentLang.flag}</span>
+                            <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+                                {currentLang.code}
+                            </span>
                             <span className="text-sm font-medium text-foreground">{currentLang.label}</span>
                             <Badge variant="outline" className="text-[10px] ml-auto">
                                 目前選擇
@@ -229,16 +235,20 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                             {LANGUAGE_OPTIONS.map((lang) => {
                                 const isSelected = imageLanguage === lang.id;
                                 return (
-                                    <button
-                                        key={lang.id}
-                                        onClick={() => onImageLanguageChange(lang.id)}
-                                        className={`text-left p-2.5 rounded-xl border-2 transition-all duration-200 group ${isSelected
-                                            ? "border-primary bg-primary/5 shadow-sm"
-                                            : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <span className="text-base">{lang.flag}</span>
+                                        <button
+                                            type="button"
+                                            key={lang.id}
+                                            onClick={() => onImageLanguageChange(lang.id)}
+                                            aria-pressed={isSelected}
+                                            className={`text-left p-2.5 rounded-xl border-2 transition-colors duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
+                                                ? "border-primary bg-primary/5 shadow-sm"
+                                                : "border-border/40 hover:border-primary/40 hover:bg-muted/50"
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                            <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
+                                                {lang.code}
+                                            </span>
                                             <span className={`text-xs font-medium ${isSelected ? "text-primary" : "text-foreground"}`}>
                                                 {lang.label}
                                             </span>

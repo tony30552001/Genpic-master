@@ -40,7 +40,7 @@ export default function StyleAnalyzer({
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
         />
         <div
-          className={`border-2 border-dashed rounded-xl p-4 transition-all text-center ${referencePreview
+          className={`border-2 border-dashed rounded-xl p-4 transition-colors text-center ${referencePreview
               ? "border-primary/40 bg-primary/5"
               : "border-border hover:border-primary/40 hover:bg-muted/30"
             }`}
@@ -49,7 +49,9 @@ export default function StyleAnalyzer({
             <div className="relative h-32 w-full">
               <img
                 src={referencePreview}
-                alt="Reference"
+                alt="風格參考圖片"
+                width={512}
+                height={128}
                 className="h-full w-full object-contain rounded-md"
               />
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-md pointer-events-none">
@@ -58,11 +60,13 @@ export default function StyleAnalyzer({
                 </span>
               </div>
               <button
+                type="button"
                 onClick={onClearReference}
-                className="absolute -top-2 -right-2 bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-200 rounded-full p-1.5 shadow-md z-20 transition-all transform hover:scale-110"
+                className="absolute -top-2 -right-2 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 title="移除圖片與風格"
+                aria-label="移除圖片與風格"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           ) : (
@@ -79,12 +83,12 @@ export default function StyleAnalyzer({
         <div className="space-y-2">
           <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
             <div
-              className="h-full bg-primary transition-all"
+              className="h-full bg-primary transition-[width] motion-reduce:transition-none"
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
           <div className="text-xs text-muted-foreground">
-            {isUploading ? "上傳中..." : "上傳完成"} {uploadProgress}%
+            {isUploading ? "上傳中…" : "上傳完成"} {uploadProgress}%
           </div>
         </div>
       )}
@@ -95,14 +99,14 @@ export default function StyleAnalyzer({
         className="w-full"
       >
         {isAnalyzing ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         ) : (
-          <Palette className="w-4 h-4" />
+          <Palette className="w-4 h-4" aria-hidden="true" />
         )}
         {isUploading
-          ? "上傳中，請稍候..."
+          ? "上傳中，請稍候…"
           : isAnalyzing
-            ? "正在全方位分析..."
+            ? "正在全方位分析…"
             : "解析風格與內容"}
       </Button>
 
@@ -163,7 +167,7 @@ export default function StyleAnalyzer({
                 type="text"
                 value={newStyleName}
                 onChange={(e) => onStyleNameChange(e.target.value)}
-                placeholder="為此風格命名..."
+                placeholder="為此風格命名…"
                 className="flex-1 text-xs h-8"
               />
               <Button
@@ -173,7 +177,7 @@ export default function StyleAnalyzer({
                 className="h-8 px-3"
               >
                 {isSavingStyle ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" />
                 ) : (
                   <Save className="w-3 h-3" />
                 )}
@@ -184,7 +188,7 @@ export default function StyleAnalyzer({
               type="text"
               value={newStyleTags}
               onChange={(e) => onStyleTagsChange(e.target.value)}
-              placeholder="標籤 (以逗號分隔)..."
+              placeholder="標籤 (以逗號分隔)…"
               className="w-full text-xs h-8"
             />
           </div>

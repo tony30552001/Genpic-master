@@ -44,7 +44,7 @@ export default function ImagePreview({
   const renderEmptyState = () => (
     <div className="flex flex-col items-center gap-4 text-center py-12 px-6">
       <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center">
-        <Wand2 className="w-9 h-9 text-primary/60" />
+        <Wand2 className="w-9 h-9 text-primary/60" aria-hidden="true" />
       </div>
       <div className="space-y-1.5">
         <p className="text-base font-semibold text-foreground">描述你的想法，AI 為你繪製</p>
@@ -71,6 +71,8 @@ export default function ImagePreview({
           <img
             src={generatedImage}
             alt="AI 產生的圖片"
+            width={1536}
+            height={1024}
             className="max-w-full w-auto max-h-[55vh] object-contain rounded-lg animate-in fade-in zoom-in-95 duration-500 shadow-xl"
             onError={() => setImageError(true)}
             loading="lazy"
@@ -84,11 +86,12 @@ export default function ImagePreview({
               className="[&>button]:h-9 [&>button]:px-3 [&>button]:text-xs [&>button]:rounded-lg [&>button]:shadow-lg"
             />
             <button
+              type="button"
               onClick={onDownload}
               aria-label="下載產生的圖片"
-              className="flex items-center h-9 gap-1.5 text-xs font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-3 py-2 rounded-lg transition-colors shadow-lg border border-border/50"
+              className="flex items-center h-10 gap-1.5 text-xs font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-3 py-2 rounded-lg transition-colors shadow-lg border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <Save className="w-4 h-4 shrink-0" />
+              <Save className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span className="whitespace-nowrap">下載圖片</span>
             </button>
           </div>
@@ -99,6 +102,8 @@ export default function ImagePreview({
             <img
               src={generatedImage}
               alt="AI 產生的圖片"
+              width={1536}
+              height={1024}
               className="max-w-[85%] h-auto my-auto object-contain animate-in fade-in zoom-in-95 duration-500 shadow-xl"
               onError={() => setImageError(true)}
               loading="lazy"
@@ -130,11 +135,12 @@ export default function ImagePreview({
             className="[&>button]:h-10 [&>button]:px-4 [&>button]:text-sm [&>button]:rounded-lg [&>button]:shadow-md"
           />
           <button
+            type="button"
             onClick={onDownload}
             aria-label="下載產生的圖片"
-            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-md border border-border/50"
+            className="flex items-center h-10 gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-md border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <Save className="w-4 h-4 shrink-0" />
+            <Save className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="whitespace-nowrap">下載圖片</span>
           </button>
         </div>

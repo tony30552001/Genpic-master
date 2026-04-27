@@ -18,28 +18,28 @@ const ANALYSIS_STEPS_STORYBOARD = [
     id: "upload",
     icon: Upload,
     title: "文件準備",
-    description: "正在讀取並傳送文件...",
+    description: "正在讀取並傳送文件…",
     weight: 10,
   },
   {
     id: "reading",
     icon: FileSearch,
     title: "內容解析",
-    description: "AI 正在閱讀並理解文件內容...",
+    description: "AI 正在閱讀並理解文件內容…",
     weight: 30,
   },
   {
     id: "analyzing",
     icon: Brain,
     title: "智能分析",
-    description: "提取敘事結構、角色和場景...",
+    description: "提取敘事結構、角色和場景…",
     weight: 35,
   },
   {
     id: "generating",
     icon: Clapperboard,
     title: "生成分鏡",
-    description: "組織場景、撰寫視覺 Prompt...",
+    description: "組織場景、撰寫視覺 Prompt…",
     weight: 15,
   },
   {
@@ -56,28 +56,28 @@ const ANALYSIS_STEPS_PRESENTATION = [
     id: "upload",
     icon: Upload,
     title: "文件準備",
-    description: "正在讀取並傳送文件...",
+    description: "正在讀取並傳送文件…",
     weight: 10,
   },
   {
     id: "reading",
     icon: FileSearch,
     title: "內容解析",
-    description: "AI 正在閱讀並理解內容...",
+    description: "AI 正在閱讀並理解內容…",
     weight: 30,
   },
   {
     id: "analyzing",
     icon: Brain,
     title: "規劃投影片",
-    description: "分析大綱結構、配置投影片佈局...",
+    description: "分析大綱結構、配置投影片佈局…",
     weight: 35,
   },
   {
     id: "generating",
     icon: LayoutTemplate,
     title: "設計投影片",
-    description: "生成項目符號、配圖提示詞與講者備注...",
+    description: "生成項目符號、配圖提示詞與講者備注…",
     weight: 15,
   },
   {
@@ -163,7 +163,7 @@ function AnalysisProgress({ analysisPhase, fileName, mode = 'storyboard' }) {
       cancelAnimationFrame(rafId);
       clearInterval(intervalId);
     };
-  }, [currentStepIndex, elapsedSeconds]);
+  }, [currentStepIndex, elapsedSeconds, steps]);
 
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
@@ -189,7 +189,7 @@ function AnalysisProgress({ analysisPhase, fileName, mode = 'storyboard' }) {
         </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-500 ease-out relative"
+            className="h-full rounded-full transition-[width] duration-500 ease-out relative motion-reduce:transition-none"
             style={{
               width: `${simulatedProgress}%`,
               background: "hsl(var(--primary))",
@@ -221,7 +221,7 @@ function AnalysisProgress({ analysisPhase, fileName, mode = 'storyboard' }) {
           return (
             <div
               key={step.id}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-500 ${isCurrent
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-500 ${isCurrent
                 ? "bg-primary/5 border border-primary/20"
                 : isCompleted
                   ? "opacity-70"
@@ -230,8 +230,8 @@ function AnalysisProgress({ analysisPhase, fileName, mode = 'storyboard' }) {
             >
               {/* 圖標 */}
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-500 ${isCompleted
-                  ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors duration-500 ${isCompleted
+                  ? "bg-success/10 text-success"
                   : isCurrent
                     ? "bg-primary/10 text-primary"
                     : "bg-muted text-muted-foreground"
@@ -565,7 +565,7 @@ export default function DocumentUploader({
             id="outline-textarea"
             value={outlineText}
             onChange={(e) => setOutlineText(e.target.value)}
-            placeholder={"貼上或輸入你的簡報大綱，例如：\n\n主題：AI 在醫療產業的應用\n\n一、前言\n- AI 技術快速發展\n- 醫療需求龐大\n\n二、當前挑戰\n- 人力不足\n- 診斷錯誤率\n\n三、AI 解決方案\n- 影像辨識診斷\n- 藥物研發加速\n\n四、成功案例\n...\n\n五、結語"}
+            placeholder={"貼上或輸入你的簡報大綱，例如：\n\n主題：AI 在醫療產業的應用\n\n一、前言\n- AI 技術快速發展\n- 醫療需求龐大\n\n二、當前挑戰\n- 人力不足\n- 診斷錯誤率\n\n三、AI 解決方案\n- 影像辨識診斷\n- 藥物研發加速\n\n四、成功案例\n…\n\n五、結語"}
             className="h-52 resize-none leading-relaxed"
             disabled={disabled}
           />

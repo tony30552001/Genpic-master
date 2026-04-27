@@ -114,7 +114,8 @@ export default function StyleLibrary({
           <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-3 pointer-events-none" />
           <Input
             type="text"
-            placeholder="搜尋風格名稱、描述或標籤..."
+            placeholder="搜尋風格名稱、描述或標籤…"
+            aria-label="搜尋風格"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className="pl-10 pr-10"
@@ -124,10 +125,12 @@ export default function StyleLibrary({
           )}
           {searchQuery && !isSearching && (
             <button
+              type="button"
               onClick={() => onSearchChange("")}
-              className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
+              className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="清除搜尋"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -140,8 +143,9 @@ export default function StyleLibrary({
               <span className="text-xs font-medium text-muted-foreground">標籤篩選</span>
               {hasActiveFilters && (
                 <button
+                  type="button"
                   onClick={clearFilters}
-                  className="ml-auto text-[11px] text-primary hover:text-primary/70 transition-colors"
+                  className="ml-auto rounded-md px-1 text-[11px] text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   清除篩選
                 </button>
@@ -152,10 +156,12 @@ export default function StyleLibrary({
                 const isActive = selectedTags.includes(tag);
                 return (
                   <button
+                    type="button"
                     key={tag}
                     onClick={() => toggleTag(tag)}
+                    aria-pressed={isActive}
                     className={`
-                      inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all duration-150
+                       inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
                       ${isActive
                         ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/25"
                         : "bg-background text-foreground border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5"
@@ -174,8 +180,9 @@ export default function StyleLibrary({
               })}
               {hasMoreTags && (
                 <button
+                  type="button"
                   onClick={() => setShowAllTags(!showAllTags)}
-                  className="text-xs text-primary hover:text-primary/70 px-2 py-1 transition-colors"
+                  className="rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   {showAllTags ? "收合" : `+${allTags.length - 12} 更多`}
                 </button>
@@ -193,6 +200,7 @@ export default function StyleLibrary({
                 type="checkbox"
                 checked={filtered.length > 0 && selectedIds.size === filtered.length}
                 onChange={selectAll}
+                aria-label="選取全部風格"
                 className="w-4 h-4 rounded border-border text-primary focus:ring-ring cursor-pointer"
               />
               <span className="text-sm font-medium text-foreground">
@@ -202,17 +210,19 @@ export default function StyleLibrary({
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setIsSelectionMode(false)}
-              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-background border border-border rounded-lg shadow-sm hover:bg-muted/50 transition-colors"
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-background border border-border rounded-lg shadow-sm hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               取消
             </button>
             <button
+              type="button"
               onClick={handleBatchDelete}
               disabled={selectedIds.size === 0}
-              className="px-3 py-1.5 text-xs text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
               刪除選取項目
             </button>
           </div>
@@ -236,10 +246,12 @@ export default function StyleLibrary({
                   >
                     #{tag}
                     <button
+                      type="button"
                       onClick={() => toggleTag(tag)}
-                      className="hover:text-blue-800 ml-0.5"
+                      className="ml-0.5 rounded-sm transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`移除標籤 ${tag}`}
                     >
-                      <X className="w-2.5 h-2.5" />
+                      <X className="w-2.5 h-2.5" aria-hidden="true" />
                     </button>
                   </span>
                 ))}
@@ -252,10 +264,11 @@ export default function StyleLibrary({
 
         {!isSelectionMode && savedStyles.length > 0 && (
           <button
+            type="button"
             onClick={toggleSelectionMode}
-            className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted transition-colors"
+            className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <CheckSquare className="w-3.5 h-3.5" />
+            <CheckSquare className="w-3.5 h-3.5" aria-hidden="true" />
             批次管理
           </button>
         )}
@@ -265,7 +278,7 @@ export default function StyleLibrary({
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-3">
           <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
-            <Bookmark className="w-7 h-7 text-muted-foreground/40" />
+            <Bookmark className="w-7 h-7 text-muted-foreground/40" aria-hidden="true" />
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">
@@ -279,8 +292,9 @@ export default function StyleLibrary({
           </div>
           {hasActiveFilters && (
             <button
+              type="button"
               onClick={clearFilters}
-              className="text-xs text-primary hover:text-primary/70 mt-1 transition-colors"
+              className="text-xs text-primary hover:text-primary/70 mt-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md px-2 py-1"
             >
               清除所有篩選
             </button>

@@ -5,6 +5,7 @@ import {
     FileText,
     Filter,
     Image as ImageIcon,
+    Palette,
     Search,
     Trash2,
     X,
@@ -29,6 +30,13 @@ function TemplateCard({
         }
     };
 
+    const handleKeyDown = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick(e);
+        }
+    };
+
     // 預覽摘要：截取 userScript 前 80 字
     const scriptPreview = template.userScript
         ? template.userScript.length > 80
@@ -38,9 +46,14 @@ function TemplateCard({
 
     return (
         <div
-            className={`group relative bg-white border rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col ${isSelected
-                ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md transform scale-[0.98]"
-                : "border-slate-200 hover:shadow-lg hover:border-blue-200"
+            role="button"
+            tabIndex={0}
+            aria-pressed={isSelectionMode ? isSelected : undefined}
+            aria-label={isSelectionMode ? "選取此範本" : `套用範本 ${template.name}`}
+            onKeyDown={handleKeyDown}
+            className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-card transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
+                ? "border-primary ring-2 ring-primary/20 shadow-md"
+                : "border-border hover:border-primary/30 hover:shadow-md"
                 }`}
             onClick={handleClick}
         >
@@ -50,14 +63,14 @@ function TemplateCard({
             {/* 選擇模式 Checkbox */}
             {isSelectionMode && (
                 <div className="absolute top-4 right-2 z-10">
-                    <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected
-                            ? "bg-blue-500 border-blue-500"
-                            : "bg-white/80 border-slate-300"
-                            }`}
-                    >
-                        {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}
-                    </div>
+                        <div
+                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected
+                                ? "bg-primary border-primary"
+                                : "bg-card/80 border-muted-foreground/40"
+                                }`}
+                        >
+                            {isSelected && <div className="w-2 h-2 bg-primary-foreground rounded-full" />}
+                        </div>
                 </div>
             )}
 
@@ -65,15 +78,15 @@ function TemplateCard({
             <div className="flex-1 p-4 flex flex-col gap-2.5">
                 {/* Icon + 標題 */}
                 <div className="flex items-start gap-2.5">
-                    <div className="shrink-0 w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                        <FileText className="w-4 h-4 text-blue-500" />
+                    <div className="shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <FileText className="w-4 h-4 text-primary" aria-hidden="true" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-slate-700 text-sm leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors">
+                        <h4 className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors">
                             {template.name}
                         </h4>
                         {template.description && (
-                            <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
                                 {template.description}
                             </p>
                         )}
@@ -82,8 +95,8 @@ function TemplateCard({
 
                 {/* 內容預覽 */}
                 {scriptPreview && (
-                    <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                        <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 whitespace-pre-wrap">
+                    <div className="bg-muted/50 border border-border/60 rounded-lg px-3 py-2">
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 whitespace-pre-wrap">
                             {scriptPreview}
                         </p>
                     </div>
@@ -92,8 +105,9 @@ function TemplateCard({
                 {/* 風格標示 */}
                 {template.stylePrompt && (
                     <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-medium text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">
-                            🎨 含風格設定
+                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            <Palette className="h-3 w-3" aria-hidden="true" />
+                            含風格設定
                         </span>
                     </div>
                 )}
@@ -105,17 +119,19 @@ function TemplateCard({
                             const isActive = selectedTags?.includes(tag);
                             return (
                                 <button
+                                    type="button"
                                     key={i}
                                     disabled={isSelectionMode}
+                                    aria-pressed={isActive}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onToggleTag?.(tag);
                                     }}
                                     className={`
-                    text-[10px] px-1.5 py-0.5 rounded-full transition-all
+                    rounded-full px-1.5 py-0.5 text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
                     ${isActive
-                                            ? "bg-blue-100 text-blue-600 border border-blue-200"
-                                            : "bg-slate-50 text-slate-500 border border-slate-100 hover:border-blue-200 hover:text-blue-600 hover:bg-blue-50"
+                                            ? "bg-primary/10 text-primary border border-primary/20"
+                                            : "bg-muted/50 text-muted-foreground border border-border hover:border-primary/30 hover:text-primary hover:bg-primary/5"
                                         }
                   `}
                                 >
@@ -124,7 +140,7 @@ function TemplateCard({
                             );
                         })}
                         {template.tags.length > 4 && (
-                            <span className="text-[10px] text-slate-400 px-1 py-0.5">
+                            <span className="text-[10px] text-muted-foreground px-1 py-0.5">
                                 +{template.tags.length - 4}
                             </span>
                         )}
@@ -134,24 +150,27 @@ function TemplateCard({
 
             {/* hover 操作按鈕 (僅在非選擇模式下) */}
             {!isSelectionMode && (
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all duration-300 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/0 opacity-0 transition-[background-color,opacity] duration-200 group-hover:bg-black/5 group-hover:opacity-100 group-focus-visible:bg-black/5 group-focus-visible:opacity-100">
                     <button
+                        type="button"
                         onClick={(e) => {
                             e.stopPropagation();
                             onApply(template);
                         }}
-                        className="bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-blue-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-lg flex items-center gap-1"
+                        className="flex h-10 items-center gap-1 rounded-lg bg-background/95 px-3 text-xs font-medium text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                        <Copy className="w-3 h-3" /> 套用
+                        <Copy className="w-3 h-3" aria-hidden="true" /> 套用
                     </button>
                     <button
+                        type="button"
                         onClick={(e) => {
                             e.stopPropagation();
                             onDelete(template.id, e);
                         }}
-                        className="bg-white/95 backdrop-blur-sm text-slate-700 hover:bg-red-500 hover:text-white p-1.5 rounded-lg transition-all shadow-lg"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-background/95 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={`刪除範本 ${template.name}`}
                     >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                 </div>
             )}
@@ -262,20 +281,23 @@ export default function TemplateLibrary({
             {/* 搜尋與篩選 */}
             <div className="space-y-3">
                 <div className="relative">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-3 pointer-events-none" aria-hidden="true" />
                     <input
                         type="text"
-                        placeholder="搜尋範本名稱、描述或內容..."
+                        placeholder="搜尋範本名稱、描述或內容…"
+                        aria-label="搜尋範本"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-10 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all shadow-sm"
+                        className="w-full rounded-xl border border-input bg-background py-2.5 pl-10 pr-10 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     />
                     {searchQuery && (
                         <button
+                            type="button"
                             onClick={() => setSearchQuery("")}
-                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                            className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            aria-label="清除搜尋"
                         >
-                            <X className="w-4 h-4" />
+                            <X className="w-4 h-4" aria-hidden="true" />
                         </button>
                     )}
                 </div>
@@ -283,14 +305,15 @@ export default function TemplateLibrary({
                 {allTags.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center gap-2 px-1">
-                            <Filter className="w-3.5 h-3.5 text-slate-400" />
-                            <span className="text-xs font-medium text-slate-500">
+                            <Filter className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                            <span className="text-xs font-medium text-muted-foreground">
                                 標籤篩選
                             </span>
                             {hasActiveFilters && (
                                 <button
+                                    type="button"
                                     onClick={clearFilters}
-                                    className="ml-auto text-[11px] text-blue-500 hover:text-blue-700 transition-colors"
+                                    className="ml-auto rounded-md px-1 text-[11px] text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 >
                                     清除篩選
                                 </button>
@@ -301,19 +324,21 @@ export default function TemplateLibrary({
                                 const isActive = selectedTags.includes(tag);
                                 return (
                                     <button
+                                        type="button"
                                         key={tag}
                                         onClick={() => toggleTag(tag)}
+                                        aria-pressed={isActive}
                                         className={`
-                      inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all duration-200
+                      inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
                       ${isActive
-                                                ? "bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-500/25"
-                                                : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
+                                                ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20"
+                                                : "bg-background text-foreground border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5"
                                             }
                     `}
                                     >
                                         <span>#{tag}</span>
                                         <span
-                                            className={`text-[10px] ${isActive ? "text-blue-200" : "text-slate-400"
+                                            className={`text-[10px] ${isActive ? "text-primary-foreground/70" : "text-muted-foreground"
                                                 }`}
                                         >
                                             {count}
@@ -323,8 +348,9 @@ export default function TemplateLibrary({
                             })}
                             {hasMoreTags && (
                                 <button
+                                    type="button"
                                     onClick={() => setShowAllTags(!showAllTags)}
-                                    className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 transition-colors"
+                                    className="rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 >
                                     {showAllTags ? "收合" : `+${allTags.length - 12} 更多`}
                                 </button>
@@ -336,7 +362,7 @@ export default function TemplateLibrary({
 
             {/* 批次操作列 */}
             {isSelectionMode && (
-                <div className="flex items-center justify-between bg-blue-50/80 border border-blue-100 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between bg-primary/5 border border-primary/20 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                             <input
@@ -345,26 +371,29 @@ export default function TemplateLibrary({
                                     filtered.length > 0 && selectedIds.size === filtered.length
                                 }
                                 onChange={selectAll}
-                                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                aria-label="選取全部範本"
+                                className="w-4 h-4 rounded border-border text-primary focus:ring-ring cursor-pointer"
                             />
-                            <span className="text-sm font-medium text-blue-900">
+                            <span className="text-sm font-medium text-foreground">
                                 已選取 {selectedIds.size} 個範本
                             </span>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
+                            type="button"
                             onClick={() => setIsSelectionMode(false)}
-                            className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                             取消
                         </button>
                         <button
+                            type="button"
                             onClick={handleBatchDelete}
                             disabled={selectedIds.size === 0}
-                            className="px-3 py-1.5 text-xs text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+                            className="flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-xs text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                             刪除選取項目
                         </button>
                     </div>
@@ -374,10 +403,10 @@ export default function TemplateLibrary({
             {/* 結果計數 */}
             <div className="flex items-center justify-between px-1">
                 {hasActiveFilters ? (
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span>
                             找到{" "}
-                            <strong className="text-slate-700">{filtered.length}</strong>{" "}
+                            <strong className="text-foreground">{filtered.length}</strong>{" "}
                             個範本
                         </span>
                         {selectedTags.length > 0 && (
@@ -386,14 +415,15 @@ export default function TemplateLibrary({
                                 {selectedTags.map((tag) => (
                                     <span
                                         key={tag}
-                                        className="inline-flex items-center gap-0.5 text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md"
+                                        className="inline-flex items-center gap-0.5 text-primary bg-primary/10 px-1.5 py-0.5 rounded-md"
                                     >
                                         #{tag}
                                         <button
                                             onClick={() => toggleTag(tag)}
-                                            className="hover:text-blue-800 ml-0.5"
+                                            className="ml-0.5 rounded-sm transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            aria-label={`移除標籤 ${tag}`}
                                         >
-                                            <X className="w-2.5 h-2.5" />
+                                            <X className="w-2.5 h-2.5" aria-hidden="true" />
                                         </button>
                                     </span>
                                 ))}
@@ -401,17 +431,18 @@ export default function TemplateLibrary({
                         )}
                     </div>
                 ) : (
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted-foreground">
                         共 {templates.length} 個範本
                     </div>
                 )}
 
                 {!isSelectionMode && templates.length > 0 && (
                     <button
+                        type="button"
                         onClick={toggleSelectionMode}
-                        className="text-xs font-medium text-slate-500 hover:text-blue-600 flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                        <CheckSquare className="w-3.5 h-3.5" />
+                        <CheckSquare className="w-3.5 h-3.5" aria-hidden="true" />
                         批次管理
                     </button>
                 )}
@@ -419,15 +450,15 @@ export default function TemplateLibrary({
 
             {/* Grid 顯示 */}
             {filtered.length === 0 ? (
-                <div className="text-center py-16 text-slate-400 flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
-                        <FileText className="w-7 h-7 text-slate-300" />
+                <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-3">
+                    <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
+                        <FileText className="w-7 h-7 text-muted-foreground/40" aria-hidden="true" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-slate-500">
+                        <p className="text-sm font-medium text-muted-foreground">
                             {hasActiveFilters ? "找不到符合的範本" : "尚未儲存任何範本"}
                         </p>
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="text-xs text-muted-foreground/80 mt-1">
                             {hasActiveFilters
                                 ? "嘗試調整搜尋條件或清除篩選"
                                 : "在「製作區」完成設定後，使用「存為範本」即可快速重複使用"}
@@ -435,8 +466,9 @@ export default function TemplateLibrary({
                     </div>
                     {hasActiveFilters && (
                         <button
+                            type="button"
                             onClick={clearFilters}
-                            className="text-xs text-blue-500 hover:text-blue-700 mt-1 transition-colors"
+                            className="mt-1 rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                             清除所有篩選
                         </button>
