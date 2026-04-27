@@ -55,7 +55,7 @@ export default function GenerateBar({
         : isGeneratingText || "AI 生成中…";
 
     return (
-        <div className="shrink-0 border-t border-border bg-card px-4 py-3 space-y-3">
+        <div className="shrink-0 space-y-3 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_24px_hsl(var(--foreground)/0.08)] ring-1 ring-border/40">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <p className="text-xs font-semibold text-foreground">輸出設定</p>
@@ -64,13 +64,13 @@ export default function GenerateBar({
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground" aria-label="目前輸出設定">
-                    <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                    <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
                         {modelConfig?.label || "自訂模型"}
                     </span>
-                    <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                    <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
                         {aspectRatio}
                     </span>
-                    <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                    <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
                         {selectedSizeLabel}
                     </span>
                 </div>
@@ -78,7 +78,7 @@ export default function GenerateBar({
 
             <div className="flex items-center gap-3">
                 {/* Aspect Ratios */}
-                <div className="flex gap-1 p-1 bg-muted rounded-lg flex-1">
+                <div className="flex flex-1 gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner">
                     {ASPECT_RATIOS.map((ratio) => (
                         <button
                             type="button"
@@ -89,8 +89,8 @@ export default function GenerateBar({
                             className={cn(
                                 "flex-1 flex items-center justify-center gap-1 rounded-md py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted",
                                 aspectRatio === ratio.id
-                                    ? "bg-background text-primary font-semibold shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                     ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
+                                     : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
                             )}
                             title={ratio.label}
                         >
@@ -115,8 +115,8 @@ export default function GenerateBar({
                                 className={cn(
                                     "rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                                     imageSize === size.id
-                                        ? "bg-background text-primary font-semibold shadow-sm"
-                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                        ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
+                                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
                                 )}
                                 title={size.label}
                             >
@@ -126,14 +126,14 @@ export default function GenerateBar({
                     </div>
                 ) : (
                     /* gpt-image-2：顯示自動映射的像素尺寸 */
-                    <div className="px-2.5 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/50">
+                    <div className="rounded-md border border-border/70 bg-muted/70 px-2.5 py-1.5 text-xs text-muted-foreground shadow-inner">
                         {GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024"}
                     </div>
                 )}
             </div>
 
             {isGenerating && generationStatus && (
-                <div className="space-y-2 rounded-lg border border-border/60 bg-muted/35 px-3 py-2" aria-live="polite">
+                <div className="space-y-2 rounded-lg border border-border bg-muted/45 px-3 py-2 shadow-inner" aria-live="polite">
                     <div className="flex items-center justify-between gap-3 text-xs">
                         <span className="font-medium text-foreground">{generationStatus.label}</span>
                         <span className="shrink-0 tabular-nums text-muted-foreground">

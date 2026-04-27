@@ -39,7 +39,7 @@ export default function ImagePreview({
     <div className="w-full flex flex-col items-center justify-center gap-3 py-12 px-6 lg:absolute lg:inset-0 lg:py-0">
       <Skeleton
         className={cn(
-          "max-w-[92%] max-h-[82%] rounded-xl border border-border/40 bg-muted/80 shadow-sm",
+           "max-w-[92%] max-h-[82%] rounded-xl border border-border bg-muted/80 shadow-md",
           getPreviewFrameClass(aspectRatio)
         )}
         aria-hidden="true"
@@ -55,7 +55,7 @@ export default function ImagePreview({
     <div className="flex w-full flex-col items-center gap-4 px-6 py-10 text-center">
       <div
         className={cn(
-          "relative overflow-hidden rounded-xl border border-dashed border-border bg-background shadow-sm",
+          "relative overflow-hidden rounded-xl border border-dashed border-border bg-background shadow-md ring-1 ring-border/50",
           getEmptyFrameClass(aspectRatio)
         )}
         aria-hidden="true"
@@ -68,7 +68,7 @@ export default function ImagePreview({
           }}
         />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 shadow-sm">
             <Wand2 className="h-6 w-6 text-primary/65" aria-hidden="true" />
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function ImagePreview({
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-full h-auto min-h-[260px] lg:h-full lg:min-h-[500px] overflow-hidden group bg-muted/30 rounded-xl border border-border/40 lg:bg-transparent lg:border-0 lg:rounded-none">
+    <div className="relative flex flex-col items-center justify-center w-full h-auto min-h-[260px] lg:h-full lg:min-h-[500px] overflow-hidden group rounded-xl border border-border bg-background shadow-sm lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none">
 
       {renderContent()}
 

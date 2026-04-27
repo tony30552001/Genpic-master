@@ -535,8 +535,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
                         {/* ─── Two-Column Layout (Controls + Preview) for other tabs ─── */}
                         {activeTab === 'general' && (
-                            <div className="flex-1 min-h-0 flex flex-col gap-3 px-4 py-3 lg:px-8 overflow-y-auto lg:overflow-hidden custom-scrollbar">
-                                <section className="shrink-0 rounded-2xl border border-border/60 bg-card/85 px-4 py-3 shadow-sm">
+                            <div className="flex-1 min-h-0 flex flex-col gap-3 bg-muted/25 px-4 py-3 lg:px-8 overflow-y-auto lg:overflow-hidden custom-scrollbar">
+                                <section className="shrink-0 rounded-2xl border border-border bg-card px-4 py-3 shadow-md ring-1 ring-border/40">
                                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                         <div className="space-y-1">
                                             <div className="flex flex-wrap items-center gap-2">
@@ -554,7 +554,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                             {GENERAL_FLOW_STEPS.map((step, index) => (
                                                 <li
                                                     key={step.id}
-                                                    className="rounded-xl border border-border bg-background/70 px-3 py-2"
+                                                    className="rounded-xl border border-border/80 bg-muted/35 px-3 py-2 shadow-sm"
                                                 >
                                                     <div className="flex items-center gap-2">
                                                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -612,14 +612,14 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                             analyzedStyleForTemplate={analyzedStyle}
                                         />
 
-                                        <section className="mt-4 overflow-hidden rounded-2xl border border-border/50 bg-muted/35 lg:hidden">
-                                            <div className="border-b border-border/60 px-4 py-3">
+                                        <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40 lg:hidden">
+                                            <div className="border-b border-border bg-muted/30 px-4 py-3">
                                                 <h3 className="text-sm font-semibold text-foreground">預覽與結果</h3>
                                                 <p className="text-xs text-muted-foreground">
                                                     生成前可先確認比例，生成後結果會在此顯示。
                                                 </p>
                                             </div>
-                                            <div className="p-3">
+                                            <div className="bg-background p-3">
                                                 <ImagePreview
                                                     generatedImage={generatedImage}
                                                     isGenerating={isGenerating}
@@ -634,12 +634,12 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                     </div>
 
                                     {/* Right: Preview (takes 2/5 on large screens) */}
-                                    <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative rounded-2xl bg-muted/40 border border-border/50 overflow-hidden">
+                                    <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40">
                                         {/* Decorative grid background */}
                                         <div
-                                            className={`absolute inset-0 transition-opacity duration-300 ${isGenerating ? 'opacity-0' : 'opacity-[0.03]'}`}
+                                            className={`absolute inset-0 bg-muted/35 transition-opacity duration-300 ${isGenerating ? 'opacity-0' : 'opacity-100'}`}
                                             style={{
-                                                backgroundImage: 'linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)',
+                                                backgroundImage: 'linear-gradient(hsl(var(--foreground) / 0.06) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground) / 0.06) 1px, transparent 1px)',
                                                 backgroundSize: '24px 24px'
                                             }}
                                         />

@@ -153,7 +153,7 @@ export default function ScriptEditor({
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-xl border-border/70 bg-card/90 shadow-sm">
+      <Card className="rounded-2xl border-border bg-card shadow-md ring-1 ring-border/40">
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
@@ -172,7 +172,7 @@ export default function ScriptEditor({
               size="sm"
               onClick={handleSmartOptimize}
               disabled={isOptimizing || !userScript?.trim()}
-              className="h-9 shrink-0 gap-1.5 rounded-lg border-primary/20 bg-background text-xs font-semibold text-primary hover:bg-primary/10"
+              className="h-9 shrink-0 gap-1.5 rounded-lg border-primary/30 bg-background text-xs font-semibold text-primary shadow-sm hover:bg-primary/10"
               title="使用 AI 自動豐富畫面細節與提示詞"
             >
               {isOptimizing ? (
@@ -203,7 +203,7 @@ export default function ScriptEditor({
             onBlur={onBlur}
             aria-describedby={contentHelpId}
             placeholder={"描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
-            className="min-h-[112px] resize-y rounded-xl text-sm leading-relaxed md:min-h-[140px]"
+            className="min-h-[112px] resize-y rounded-xl border-input bg-background text-sm leading-relaxed shadow-inner focus-visible:border-primary/50 focus-visible:ring-primary/30 md:min-h-[140px]"
           />
 
           <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
@@ -213,11 +213,11 @@ export default function ScriptEditor({
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl border-border/70 bg-card/80 shadow-sm">
+      <Card className="rounded-2xl border-border bg-card shadow-md ring-1 ring-border/40">
         <button
           type="button"
           onClick={() => setShowAssistTools((open) => !open)}
-          className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-expanded={assistToolsOpen}
           aria-controls={assistToolsId}
         >
@@ -242,8 +242,8 @@ export default function ScriptEditor({
         </button>
 
         {assistToolsOpen && (
-          <CardContent id={assistToolsId} className="space-y-4 border-t border-border/70 p-4">
-            <section className="space-y-3" aria-labelledby="reference-style-title">
+          <CardContent id={assistToolsId} className="space-y-4 border-t border-border bg-background/80 p-4">
+            <section className="space-y-3 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="reference-style-title">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <h3 id="reference-style-title" className="text-xs font-semibold text-foreground">
@@ -261,13 +261,13 @@ export default function ScriptEditor({
               </div>
 
               {contentImagePreview ? (
-                <div className="relative overflow-hidden rounded-xl border border-border bg-muted/30">
+                <div className="relative overflow-hidden rounded-xl border border-border bg-background shadow-sm">
                   <img
                     src={contentImagePreview}
                     alt="內容參考圖片"
                     width={640}
                     height={192}
-                    className="h-48 w-full object-contain bg-muted/20"
+                    className="h-48 w-full object-contain bg-muted/40"
                   />
                   <div className="absolute inset-0 flex items-start justify-end bg-black/0 p-2 opacity-0 transition-colors hover:bg-black/10 hover:opacity-100 focus-within:opacity-100">
                     <button
@@ -307,10 +307,10 @@ export default function ScriptEditor({
                       }
                     }}
                     className={cn(
-                      "group flex w-full items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      "group flex w-full items-center gap-3 rounded-xl border-2 border-dashed bg-background px-4 py-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                       isDraging
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/40 hover:bg-muted/40"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50 hover:bg-primary/5"
                     )}
                     aria-label="上傳內容參考圖片"
                   >
@@ -364,13 +364,13 @@ export default function ScriptEditor({
                   )}
 
                   {(analyzedStyle || analysisResultData) && (
-                    <div className="space-y-3 rounded-xl border border-border bg-muted/35 p-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-3 rounded-xl border border-border bg-background p-3 shadow-sm animate-in fade-in slide-in-from-top-2">
                       <div className="space-y-1">
                         <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                           <Wand2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                           {String(analysisResultData?.style_name || "風格分析結果")}
                         </h3>
-                        <p className="rounded-lg border border-border/60 bg-background p-2 text-xs leading-relaxed text-muted-foreground">
+                        <p className="rounded-lg border border-border/80 bg-muted/40 p-2 text-xs leading-relaxed text-muted-foreground">
                           {String(analysisResultData?.style_description_zh || analyzedStyle || "")}
                         </p>
                       </div>
@@ -425,7 +425,7 @@ export default function ScriptEditor({
               )}
 
               {(analyzedStyle || selectedStyleInfo) && (
-                <div className="flex items-center gap-3 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2.5">
+                <div className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2.5 shadow-sm">
                   {selectedStyleInfo?.previewUrl && (
                     <img
                       src={selectedStyleInfo.previewUrl}
@@ -468,7 +468,7 @@ export default function ScriptEditor({
                   <button
                     type="button"
                     onClick={() => setShowStylePicker(!showStylePicker)}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/80 bg-background px-3 py-2.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     aria-expanded={showStylePicker}
                   >
                     <span className="flex items-center gap-1.5">
@@ -562,7 +562,7 @@ export default function ScriptEditor({
             </section>
 
             {onSaveTemplate && (
-              <section className="space-y-2 rounded-xl border border-border bg-background/70 p-3" aria-labelledby="template-save-title">
+              <section className="space-y-2 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="template-save-title">
                 <div className="flex items-center justify-between gap-3">
                   <div className="space-y-0.5">
                     <h3 id="template-save-title" className="text-xs font-semibold text-foreground">
