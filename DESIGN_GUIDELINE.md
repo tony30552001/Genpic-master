@@ -25,7 +25,7 @@
 |:---|:---|:---|
 | **元件庫** | [shadcn/ui](https://ui.shadcn.com) | Copy-paste 元件，完全擁有原始碼，可自訂 |
 | **Primitive 層** | [Radix UI](https://www.radix-ui.com) | shadcn/ui 底層的無樣式無障礙 primitives |
-| **樣式引擎** | [Tailwind CSS v3](https://tailwindcss.com) | Utility-first CSS，搭配 CSS Variables |
+| **樣式引擎** | [Tailwind CSS v4](https://tailwindcss.com) | Utility-first CSS，透過 `@tailwindcss/vite` 與 CSS-first tokens 設定 |
 | **Variant 管理** | [cva](https://cva.style) (class-variance-authority) | 定義元件的 variant / size 等可選樣式 |
 | **Class 合併** | `cn()` = `clsx` + `tailwind-merge` | 智慧合併 Tailwind class，解決衝突 |
 | **圖標** | [Lucide React](https://lucide.dev) | 一致的 1.5px stroke 風格 |
@@ -134,7 +134,7 @@ import { cn } from "@/lib/utils";
 <html className={isDark ? "dark" : ""}>
 ```
 
-Tailwind 已設定 `darkMode: ["class"]`，所有 shadcn/ui 元件自動響應。
+Tailwind 已透過 `@custom-variant dark (&:where(.dark, .dark *))` 設定 class-based dark mode，所有 shadcn/ui 元件自動響應。
 
 ---
 
@@ -496,7 +496,7 @@ shadcn/ui 未提供 Dropzone，此為自訂元件，但遵循 shadcn 風格：
 ### 8.1 原則
 
 - shadcn/ui 元件（Dialog、Sheet、DropdownMenu）已內建 Radix 進出場動畫
-- 使用 `tailwindcss-animate` 提供的 utility classes
+- 使用 `tailwindcss-animate` 透過 Tailwind v4 `@plugin` 載入的 utility classes
 - 尊重 `prefers-reduced-motion: reduce`
 
 ### 8.2 過渡規範

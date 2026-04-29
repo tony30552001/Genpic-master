@@ -25,15 +25,17 @@ jobs:
       
       # 設定 Node.js 版本
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.22.0'
+          cache: 'pnpm'
       
       # 安裝前端依賴並建置
       - name: Install Dependencies and Build Frontend
         run: |
-          npm ci
-          npm run build
+          corepack enable
+          corepack pnpm@10.33.2 install --frozen-lockfile
+          corepack pnpm@10.33.2 build
         env:
           # HUSKY=0 告知 Husky 在 CI 環境中跳過 git hooks 初始化
           # 參考: https://typicode.github.io/husky/how-to.html#ci-server-and-docker

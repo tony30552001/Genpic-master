@@ -8,10 +8,14 @@ const microsoftClientId = process.env.AZURE_CLIENT_ID;
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
 // 判斷是否為生產環境（Azure Functions 生產環境會自動注入 WEBSITE_SITE_NAME）
+const isExplicitDevelopment = process.env.AZURE_FUNCTIONS_ENVIRONMENT === "Development";
 const isProduction =
-  process.env.AZURE_FUNCTIONS_ENVIRONMENT === "Production" ||
-  process.env.NODE_ENV === "production" ||
-  !!process.env.WEBSITE_SITE_NAME;
+  !isExplicitDevelopment &&
+  (
+    process.env.AZURE_FUNCTIONS_ENVIRONMENT === "Production" ||
+    process.env.NODE_ENV === "production" ||
+    !!process.env.WEBSITE_SITE_NAME
+  );
 
 // 生產環境中強制忽略 AUTH_DISABLED，防止配置錯誤導致旁路
 const authDisabled = process.env.AUTH_DISABLED === "true" && !isProduction;
