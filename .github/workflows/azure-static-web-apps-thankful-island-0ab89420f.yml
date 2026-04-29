@@ -15,14 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     permissions:
-       id-token: write
-       contents: read
+      contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           lfs: false
-      
+
       # 設定 pnpm 與 Node.js 版本
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -34,12 +33,13 @@ jobs:
         with:
           node-version: '22.22.0'
           cache: 'pnpm'
-      
+
       # 安裝前端依賴並建置
       - name: Install Dependencies and Build Frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm build
+          cp staticwebapp.config.json dist/staticwebapp.config.json
         env:
           # HUSKY=0 告知 Husky 在 CI 環境中跳過 git hooks 初始化
           # 參考: https://typicode.github.io/husky/how-to.html#ci-server-and-docker
@@ -54,21 +54,19 @@ jobs:
           VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
           VITE_GPT_IMAGE_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_ENDPOINT }}
           VITE_GPT_IMAGE_API_KEY: ${{ secrets.VITE_GPT_IMAGE_API_KEY }}
-      
+
       # 安裝 API 依賴
       - name: Install API Dependencies
         run: |
-          cd api
-          npm ci
-      
+          npm ci --prefix api
+
       # 驗證 API node_modules
       - name: Verify API Dependencies
         run: |
-          cd api
-          ls -la node_modules/@azure/storage-blob 2>/dev/null || echo "ERROR: @azure/storage-blob not found!"
-          ls -la node_modules/pg 2>/dev/null || echo "ERROR: pg not found!"
-          ls -la node_modules/@google/genai 2>/dev/null || echo "ERROR: @google/genai not found!"
-      
+          ls -la api/node_modules/@azure/storage-blob 2>/dev/null || echo "ERROR: @azure/storage-blob not found!"
+          ls -la api/node_modules/pg 2>/dev/null || echo "ERROR: pg not found!"
+          ls -la api/node_modules/@google/genai 2>/dev/null || echo "ERROR: @google/genai not found!"
+
       # 列出 API 目錄結構（除錯用）
       - name: Debug - List API Structure
         run: |
@@ -79,14 +77,6 @@ jobs:
           echo "=== node_modules exists ==="
           ls -la api/node_modules | head -10
 
-      - name: Get Id Token
-        uses: actions/github-script@v6
-        id: idtoken
-        with:
-           script: |
-               return await core.getIDToken()
-           result-encoding: string
-      
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
@@ -95,22 +85,12 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "/" # App source code path
-          api_location: "api" # Api source code path - optional
-          output_location: "dist" # Built app content directory - optional
-          github_id_token: ${{ steps.idtoken.outputs.result }}
+          app_location: "dist" # Prebuilt app content directory
+          api_location: "api" # API source code path - optional
+          output_location: "" # Empty because app_location already points at dist
+          skip_app_build: true
+          skip_api_build: true
           ###### End of Repository/Build Configurations ######
-        env:
-          VITE_MSAL_CLIENT_ID: ${{ secrets.VITE_MSAL_CLIENT_ID }}
-          VITE_MSAL_TENANT_ID: ${{ secrets.VITE_MSAL_TENANT_ID }}
-          VITE_MSAL_REDIRECT_URI: "https://thankful-island-0ab89420f.1.azurestaticapps.net"
-          VITE_MSAL_SCOPES: "openid,profile,User.Read"
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_AUTH_BYPASS: "false"
-          VITE_API_BASE_URL: "/api"
-          VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
-          VITE_GPT_IMAGE_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_ENDPOINT }}
-          VITE_GPT_IMAGE_API_KEY: ${{ secrets.VITE_GPT_IMAGE_API_KEY }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
@@ -121,4 +101,5 @@ jobs:
         id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_THANKFUL_ISLAND_0AB89420F }}
           action: "close"
