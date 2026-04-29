@@ -23,7 +23,13 @@ jobs:
           submodules: true
           lfs: false
       
-      # 設定 Node.js 版本
+      # 設定 pnpm 與 Node.js 版本
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -33,9 +39,8 @@ jobs:
       # 安裝前端依賴並建置
       - name: Install Dependencies and Build Frontend
         run: |
-          corepack enable
-          corepack pnpm@10.33.2 install --frozen-lockfile
-          corepack pnpm@10.33.2 build
+          pnpm install --frozen-lockfile
+          pnpm build
         env:
           # HUSKY=0 告知 Husky 在 CI 環境中跳過 git hooks 初始化
           # 參考: https://typicode.github.io/husky/how-to.html#ci-server-and-docker
