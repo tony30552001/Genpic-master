@@ -98,7 +98,6 @@ jobs:
           api_location: "api" # API source code path - optional
           output_location: "" # Empty because app_location already points at dist
           skip_app_build: true
-          skip_api_build: true
           github_id_token: ${{ steps.idtoken.outputs.result }}
           ###### End of Repository/Build Configurations ######
 
