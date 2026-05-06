@@ -22,7 +22,7 @@ const corsHeaders = (req) => {
   if (isWildcard) {
     return {
       "Access-Control-Allow-Origin": requestOrigin || "*",
-      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Auth-Token",
     };
   }
@@ -31,7 +31,7 @@ const corsHeaders = (req) => {
   if (ALLOWED_ORIGINS.length === 1) {
     return {
       "Access-Control-Allow-Origin": ALLOWED_ORIGINS[0],
-      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Auth-Token",
       "Vary": "Origin",
     };
@@ -44,7 +44,7 @@ const corsHeaders = (req) => {
 
   return {
     ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
-    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Auth-Token",
     "Vary": "Origin",
   };

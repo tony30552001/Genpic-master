@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { addStyle, deleteStyle, listStyles } from "../services/storageService";
+import { DEFAULT_STYLE_CATEGORY } from "../constants/styleCategories";
+import {
+  addStyle,
+  copyStyle as copyStyleApi,
+  deleteStyle,
+  listStyles,
+  markStyleUsed as markStyleUsedApi,
+  publishStyle as publishStyleApi,
+  unpublishStyle as unpublishStyleApi,
+  updateStyle as updateStyleApi,
+} from "../services/storageService";
+
+const DEFAULT_SCOPE = "mine";
+const DEFAULT_SORT = "updated";
+const SEARCH_DEBOUNCE_MS = 300;
 
 const compressImage = (dataUrl) =>
   new Promise((resolve, reject) => {
@@ -12,7 +26,7 @@ const compressImage = (dataUrl) =>
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
 
-      const maxWidth = 800; // 前端壓縮到最多 800 寬
+      const maxWidth = 800;
       let { width, height } = img;
 
       if (width > maxWidth) {
@@ -24,40 +38,108 @@ const compressImage = (dataUrl) =>
       canvas.height = height;
       ctx.drawImage(img, 0, 0, width, height);
 
-      // 設定輸出格式和品質 (JPEG, 0.6)
-      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.6);
-      resolve(compressedDataUrl);
+      resolve(canvas.toDataURL("image/jpeg", 0.6));
     };
     img.onerror = (err) => reject(err);
   });
+
+const parseTags = (value) =>
+  String(value || "")
+    .split(/[,，]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
 export default function useStyles({ user }) {
   const [savedStyles, setSavedStyles] = useState([]);
   const [newStyleName, setNewStyleName] = useState("");
   const [newStyleTags, setNewStyleTags] = useState("");
+  const [newStyleCategory, setNewStyleCategory] = useState(DEFAULT_STYLE_CATEGORY);
+  const [scope, setScope] = useState(DEFAULT_SCOPE);
+  const [category, setCategory] = useState("");
+  const [sort, setSort] = useState(DEFAULT_SORT);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [isLoadingStyles, setIsLoadingStyles] = useState(false);
   const [isSavingStyle, setIsSavingStyle] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
+  const [styleError, setStyleError] = useState("");
+  const loadSeqRef = useRef(0);
   const searchTimerRef = useRef(null);
-  const searchSeqRef = useRef(0);
+  const isSearching = searchQuery.trim() !== debouncedSearchQuery;
+
+  useEffect(() => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  const refreshStyles = useCallback(async (overrides = {}) => {
+    if (!user) {
+      setSavedStyles([]);
+      return [];
+    }
+
+    const params = {
+      scope,
+      category,
+      sort,
+      q: debouncedSearchQuery,
+      ...overrides,
+    };
+    const seq = loadSeqRef.current + 1;
+    loadSeqRef.current = seq;
+    setIsLoadingStyles(true);
+    setStyleError("");
+
+    try {
+      const styles = await listStyles(params);
+      if (loadSeqRef.current === seq) {
+        setSavedStyles(styles || []);
+      }
+      return styles || [];
+    } catch (err) {
+      if (loadSeqRef.current === seq) {
+        setStyleError(err.message || "風格載入失敗");
+      }
+      throw err;
+    } finally {
+      if (loadSeqRef.current === seq) {
+        setIsLoadingStyles(false);
+      }
+    }
+  }, [user, scope, category, sort, debouncedSearchQuery]);
 
   useEffect(() => {
     if (!user) return undefined;
+
     let cancelled = false;
+    (async () => {
+      try {
+        await refreshStyles();
+      } catch {
+        if (!cancelled) {
+          setSavedStyles([]);
+        }
+      }
+    })();
 
-    const load = async () => {
-      const styles = await listStyles();
-      if (!cancelled) setSavedStyles(styles || []);
-    };
-
-    load();
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, refreshStyles]);
 
   const saveStyle = useCallback(
     async ({ analyzedStyle, analysisResultData, referencePreview }) => {
-      if (!user || !analyzedStyle) return;
+      if (!user || !analyzedStyle) return null;
       if (!newStyleName.trim()) {
         throw new Error("請輸入風格名稱");
       }
@@ -65,123 +147,126 @@ export default function useStyles({ user }) {
       setIsSavingStyle(true);
       try {
         const compressedPreview = await compressImage(referencePreview);
-
-        await addStyle({
-          name: newStyleName,
-          tags: newStyleTags
-            .split(/[,，]/)
-            .map((tag) => tag.trim())
-            .filter(Boolean),
+        const saved = await addStyle({
+          name: newStyleName.trim(),
+          tags: parseTags(newStyleTags),
           prompt: analyzedStyle,
           description: analysisResultData?.style_description_zh || "",
           previewUrl: compressedPreview || "",
+          category: newStyleCategory,
         });
 
-        const styles = await listStyles();
-        setSavedStyles(styles || []);
+        await refreshStyles({ scope: DEFAULT_SCOPE, q: "" });
         setNewStyleName("");
         setNewStyleTags("");
+        setNewStyleCategory(DEFAULT_STYLE_CATEGORY);
+        return saved;
       } finally {
         setIsSavingStyle(false);
       }
     },
-    [user, newStyleName, newStyleTags]
+    [user, newStyleName, newStyleTags, newStyleCategory, refreshStyles]
   );
 
   const removeStyle = useCallback(
     async (styleId) => {
       if (!user) return;
       await deleteStyle(styleId);
-      const styles = await listStyles();
-      setSavedStyles(styles || []);
+      await refreshStyles();
     },
-    [user]
+    [user, refreshStyles]
   );
 
   const removeStyles = useCallback(
     async (styleIds) => {
       if (!user || !styleIds || styleIds.length === 0) return;
-      // 這裡暫時使用 Promise.all 併發刪除，若量大再改為後端批次處理
       await Promise.all(styleIds.map((id) => deleteStyle(id)));
-      const styles = await listStyles();
-      setSavedStyles(styles || []);
+      await refreshStyles();
+    },
+    [user, refreshStyles]
+  );
+
+  const updateStyle = useCallback(
+    async (styleId, data) => {
+      if (!user) return null;
+      const updated = await updateStyleApi(styleId, data);
+      await refreshStyles();
+      return updated;
+    },
+    [user, refreshStyles]
+  );
+
+  const publishStyle = useCallback(
+    async (styleId) => {
+      if (!user) return null;
+      const updated = await publishStyleApi(styleId);
+      await refreshStyles();
+      return updated;
+    },
+    [user, refreshStyles]
+  );
+
+  const unpublishStyle = useCallback(
+    async (styleId) => {
+      if (!user) return null;
+      const updated = await unpublishStyleApi(styleId);
+      await refreshStyles();
+      return updated;
+    },
+    [user, refreshStyles]
+  );
+
+  const copyStyle = useCallback(
+    async (styleId) => {
+      if (!user) return null;
+      const copied = await copyStyleApi(styleId);
+      await refreshStyles();
+      return copied;
+    },
+    [user, refreshStyles]
+  );
+
+  const markStyleUsed = useCallback(
+    async (styleId) => {
+      if (!user || !styleId) return null;
+      return markStyleUsedApi(styleId);
     },
     [user]
   );
 
-  const searchStyles = useCallback(
-    (query) => {
-      if (!user) return;
-      const trimmed = (query || "").trim();
-
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current);
-      }
-
-      if (!trimmed) {
-        const seq = searchSeqRef.current + 1;
-        searchSeqRef.current = seq;
-        setIsSearching(false);
-        (async () => {
-          const styles = await listStyles();
-          if (searchSeqRef.current === seq) {
-            setSavedStyles(styles || []);
-          }
-        })();
-        return;
-      }
-
-      setIsSearching(true);
-
-      searchTimerRef.current = setTimeout(async () => {
-        const seq = searchSeqRef.current + 1;
-        searchSeqRef.current = seq;
-
-        try {
-          // 不再使用 embedding 搜尋，改為客戶端直接過濾或先全撈
-          const styles = await listStyles();
-          if (searchSeqRef.current === seq) {
-            // 在前端對全拿回來的 styles 做簡單關鍵字過濾
-            const filtered = (styles || []).filter((s) => {
-              const textToSearch = [
-                s.name,
-                s.description,
-                ...(s.tags || []),
-              ].join(" ").toLowerCase();
-              return textToSearch.includes(trimmed.toLowerCase());
-            });
-            setSavedStyles(filtered);
-            setIsSearching(false);
-          }
-        } catch {
-          const styles = await listStyles();
-          if (searchSeqRef.current === seq) {
-            setSavedStyles(styles || []);
-            setIsSearching(false);
-          }
-        }
-      }, 300);
-    },
-    [user]
-  );
-
-  useEffect(() => () => {
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current);
-    }
+  const searchStyles = useCallback((query) => {
+    setSearchQuery(query || "");
   }, []);
 
   return {
-    savedStyles,
+    savedStyles: user ? savedStyles : [],
     newStyleName,
     newStyleTags,
+    newStyleCategory,
+    scope,
+    category,
+    sort,
+    searchQuery,
+    isLoadingStyles,
     isSavingStyle,
     isSearching,
+    styleError,
     setNewStyleName,
     setNewStyleTags,
+    setNewStyleCategory,
+    setScope,
+    setCategory,
+    setSort,
+    setSearchQuery,
+    refreshStyles,
     saveStyle,
     deleteStyle: removeStyle,
     deleteStyles: removeStyles,
+    updateStyle,
+    publishStyle,
+    unpublishStyle,
+    copyStyle,
+    markStyleUsed,
     searchStyles,
   };
 }

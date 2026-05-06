@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
@@ -67,15 +67,39 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [, setIsInputFocused] = useState(false);
     const [isStyleNameTouched, setIsStyleNameTouched] = useState(false);
     const [isStyleTagsTouched, setIsStyleTagsTouched] = useState(false);
+    const [appliedStyleId, setAppliedStyleId] = useState(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
-
-    useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
 
     const navigate = useNavigate();
     const { user, handleLogout, isLoading } = useAuth();
     const {
-        savedStyles, newStyleName, newStyleTags, isSavingStyle, isSearching,
-        setNewStyleName, setNewStyleTags, saveStyle, deleteStyle, searchStyles, deleteStyles
+        savedStyles,
+        newStyleName,
+        newStyleTags,
+        newStyleCategory,
+        scope: styleScope,
+        category: styleCategory,
+        sort: styleSort,
+        searchQuery: styleSearchQuery,
+        isLoadingStyles,
+        isSavingStyle,
+        isSearching,
+        styleError,
+        setNewStyleName,
+        setNewStyleTags,
+        setNewStyleCategory,
+        setScope: setStyleScope,
+        setCategory: setStyleCategory,
+        setSort: setStyleSort,
+        setSearchQuery: setStyleSearchQuery,
+        saveStyle,
+        deleteStyle,
+        searchStyles,
+        deleteStyles,
+        publishStyle,
+        unpublishStyle,
+        copyStyle,
+        markStyleUsed,
     } = useStyles({ user });
     const { historyItems, saveHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
     const { templates, saveTemplate, removeTemplate, removeTemplates } = useTemplates({ user });
@@ -140,6 +164,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 setReferenceBlobSasUrl(blobSasUrl);
 
                 setErrorMsg('');
+                setAppliedStyleId(null);
                 setTimeout(() => { setIsUploadingContent(false); setContentUploadProgress(0); }, 1500);
             };
             reader.readAsDataURL(file);
@@ -166,6 +191,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         setReferenceBlobUrl(null);
         setReferenceBlobSasUrl(null);
         clearStyle(); // 清除已分析的風格
+        setAppliedStyleId(null);
 
         // 清除 AI 生成的英文 prompt (如果有的話)
         setOptimizedPromptEn('');
@@ -174,6 +200,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const analyzeImageStyle = async () => {
         try {
             const analysisResult = await analyzeStyle({ referencePreview, imageUrl: referenceBlobSasUrl });
+            setAppliedStyleId(null);
             setUserScript(typeof analysisResult.image_content === 'string' ? analysisResult.image_content : String(analysisResult.image_content || ''));
             const tags = Array.isArray(analysisResult.suggested_tags) ? analysisResult.suggested_tags : [];
             const autoStyleName = String(analysisResult.style_name || tags[0] || '未命名風格');
@@ -206,16 +233,18 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     };
 
     const deleteSavedStyle = async (id, e) => {
-        e.stopPropagation();
+        if (e) e.stopPropagation();
         if (!user || !confirm('確定要刪除此風格收藏嗎？')) return;
         try { await deleteStyle(id); } catch (err) { console.error("Delete style failed:", err); }
     };
 
     const applySavedStyle = (styleData) => {
         setAnalyzedStyle(styleData.prompt);
-        setAnalysisResultData({ style_prompt: styleData.prompt, style_description_zh: styleData.description, suggested_tags: styleData.tags });
+        setAnalysisResultData({ style_prompt: styleData.prompt, style_description_zh: styleData.description, suggested_tags: styleData.tags, styleId: styleData.id });
         setNewStyleName(styleData.name || '');
         setNewStyleTags((styleData.tags || []).join(', '));
+        setNewStyleCategory(styleData.category || 'general');
+        setAppliedStyleId(styleData.id || null);
         setIsStyleNameTouched(true);
         setIsStyleTagsTouched(true);
         // 不再跳頁 — 讓使用者留在目前位置
@@ -223,7 +252,36 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
     const handleStyleNameChange = (value) => { setNewStyleName(value); setIsStyleNameTouched(true); };
     const handleStyleTagsChange = (value) => { setNewStyleTags(value); setIsStyleTagsTouched(true); };
-    const handleClearStyle = () => { clearStyle(); setNewStyleName(''); setNewStyleTags(''); setIsStyleNameTouched(false); setIsStyleTagsTouched(false); };
+    const handleStyleCategoryChange = (value) => { setNewStyleCategory(value); };
+    const handleClearStyle = () => { clearStyle(); setNewStyleName(''); setNewStyleTags(''); setNewStyleCategory('general'); setAppliedStyleId(null); setIsStyleNameTouched(false); setIsStyleTagsTouched(false); };
+
+    const handlePublishStyle = async (id) => {
+        try {
+            await publishStyle(id);
+        } catch (err) {
+            console.error("Publish style failed:", err);
+            setErrorMsg(err.message || "發布風格失敗");
+        }
+    };
+
+    const handleUnpublishStyle = async (id) => {
+        try {
+            await unpublishStyle(id);
+        } catch (err) {
+            console.error("Unpublish style failed:", err);
+            setErrorMsg(err.message || "取消共享風格失敗");
+        }
+    };
+
+    const handleCopyStyle = async (id) => {
+        try {
+            await copyStyle(id);
+            alert("已複製到我的風格庫");
+        } catch (err) {
+            console.error("Copy style failed:", err);
+            setErrorMsg(err.message || "複製風格失敗");
+        }
+    };
 
     // ─── Template Functions ───
     const applyTemplate = (template) => {
@@ -234,6 +292,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         if (template.stylePrompt) {
             setAnalyzedStyle(template.stylePrompt);
             setAnalysisResultData({ style_prompt: template.stylePrompt });
+            setAppliedStyleId(template.styleId || null);
         }
         setActiveTab('general');
     };
@@ -268,7 +327,12 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 contentImageUrl: contentBlobSasUrl,
                 model: imageModel
             });
-            await saveHistoryItem({ imageUrl, userScript, stylePrompt: analyzedStyle, fullPrompt: finalPrompt, styleId: analysisResultData?.styleId || null });
+            await saveHistoryItem({ imageUrl, userScript, stylePrompt: analyzedStyle, fullPrompt: finalPrompt, styleId: appliedStyleId || analysisResultData?.styleId || null });
+            if (appliedStyleId) {
+                markStyleUsed(appliedStyleId).catch((err) => {
+                    console.warn("Style usage tracking failed:", err);
+                });
+            }
             setErrorMsg('');
             setShowMobilePreview(true); // 手機版：生成後自動顯示預覽
         } catch (err) {
@@ -287,6 +351,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         setAnalyzedStyle(item.stylePrompt || '');
         setAnalysisResultData(null);
         setGeneratedImage(item.imageUrl);
+        setAppliedStyleId(item.styleId || null);
         setActiveTab('general');
     };
 
@@ -557,10 +622,12 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                             analysisResultData={analysisResultData}
                                             newStyleName={newStyleName}
                                             newStyleTags={newStyleTags}
+                                            newStyleCategory={newStyleCategory}
                                             isSavingStyle={isSavingStyle}
                                             onAnalyze={analyzeImageStyle}
                                             onStyleNameChange={handleStyleNameChange}
                                             onStyleTagsChange={handleStyleTagsChange}
+                                            onStyleCategoryChange={handleStyleCategoryChange}
                                             onSaveStyle={saveCurrentStyle}
                                             onSaveTemplate={saveTemplate}
                                             analyzedStyleForTemplate={analyzedStyle}
@@ -666,12 +733,24 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                         <div className="max-w-5xl mx-auto">
                             <StyleLibrary
                                 savedStyles={savedStyles}
+                                isLoading={isLoadingStyles}
                                 isSearching={isSearching}
-                                searchQuery={searchQuery}
-                                onSearchChange={(value) => { setSearchQuery(value); searchStyles(value); }}
+                                error={styleError}
+                                searchQuery={styleSearchQuery}
+                                onSearchChange={(value) => { setStyleSearchQuery(value); searchStyles(value); }}
+                                scope={styleScope}
+                                onScopeChange={setStyleScope}
+                                category={styleCategory}
+                                onCategoryChange={setStyleCategory}
+                                sort={styleSort}
+                                onSortChange={setStyleSort}
                                 onApplyStyle={applySavedStyle}
                                 onDeleteStyle={deleteSavedStyle}
                                 onDeleteStyles={deleteStyles}
+                                onPublishStyle={handlePublishStyle}
+                                onUnpublishStyle={handleUnpublishStyle}
+                                onCopyStyle={handleCopyStyle}
+                                onGoCreate={() => setActiveTab('general')}
                             />
                         </div>
                     </div>

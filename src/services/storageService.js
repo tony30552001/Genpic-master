@@ -4,14 +4,43 @@ import { apiDelete, apiGet, apiPost, apiPut } from "./apiClient";
 export const listHistory = async () =>
   apiGet(`${API_BASE_URL}/history`);
 
-export const listStyles = async () =>
-  apiGet(`${API_BASE_URL}/styles`);
+const buildQueryString = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    if (Array.isArray(value)) {
+      if (value.length > 0) query.set(key, value.join(","));
+      return;
+    }
+    query.set(key, String(value));
+  });
+  const text = query.toString();
+  return text ? `?${text}` : "";
+};
+
+export const listStyles = async (params) =>
+  apiGet(`${API_BASE_URL}/styles${buildQueryString(params)}`);
 
 export const addStyle = async (styleData) =>
   apiPost(`${API_BASE_URL}/styles`, styleData);
 
+export const updateStyle = async (styleId, styleData) =>
+  apiPut(`${API_BASE_URL}/styles/${styleId}`, styleData);
+
 export const deleteStyle = async (styleId) =>
   apiDelete(`${API_BASE_URL}/styles/${styleId}`);
+
+export const publishStyle = async (styleId) =>
+  apiPost(`${API_BASE_URL}/styles/${styleId}/publish`);
+
+export const unpublishStyle = async (styleId) =>
+  apiPost(`${API_BASE_URL}/styles/${styleId}/unpublish`);
+
+export const copyStyle = async (styleId) =>
+  apiPost(`${API_BASE_URL}/styles/${styleId}/copy`);
+
+export const markStyleUsed = async (styleId) =>
+  apiPost(`${API_BASE_URL}/styles/${styleId}/use`);
 
 export const addHistoryItem = async (itemData) =>
   apiPost(`${API_BASE_URL}/history`, itemData);

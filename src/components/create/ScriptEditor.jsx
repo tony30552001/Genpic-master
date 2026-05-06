@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
+import { STYLE_CATEGORY_OPTIONS } from "../../constants/styleCategories";
 
 /**
  * ScriptEditor — 內容描述編輯器
@@ -46,10 +47,12 @@ export default function ScriptEditor({
   analysisResultData,
   newStyleName,
   newStyleTags,
+  newStyleCategory,
   isSavingStyle,
   onAnalyze,
   onStyleNameChange,
   onStyleTagsChange,
+  onStyleCategoryChange,
   onSaveStyle,
   onSaveTemplate,
   analyzedStyleForTemplate,
@@ -418,6 +421,24 @@ export default function ScriptEditor({
                           aria-label="風格標籤"
                           className="h-9 w-full text-xs"
                         />
+                        <label className="block space-y-1 text-xs font-medium text-foreground">
+                          <span>用途分類</span>
+                          <select
+                            value={newStyleCategory || "general"}
+                            onChange={(e) => onStyleCategoryChange && onStyleCategoryChange(e.target.value)}
+                            className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs font-normal text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            aria-label="風格用途分類"
+                          >
+                            {STYLE_CATEGORY_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="block text-[11px] font-normal text-muted-foreground">
+                            分類會用於共享風格庫瀏覽，之後仍可調整。
+                          </span>
+                        </label>
                       </div>
                     </div>
                   )}
@@ -537,6 +558,11 @@ export default function ScriptEditor({
                                   <span className="truncate text-xs font-medium text-foreground">
                                     {style.name}
                                   </span>
+                                  {style.visibility === "shared" && (
+                                    <Badge variant="outline" className="border-primary/15 px-1.5 py-0 text-[10px] text-primary">
+                                      共享
+                                    </Badge>
+                                  )}
                                   {selectedStyleId === style.id && (
                                     <Check className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
                                   )}
