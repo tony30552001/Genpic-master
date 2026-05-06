@@ -107,15 +107,17 @@ const handleListStyles = async (context, req, identity) => {
   const sort = ["updated", "newest", "popular", "curated"].includes(req.query?.sort)
     ? req.query.sort
     : "updated";
-  const params = [identity.tenantId, identity.userId];
+  const params = [identity.tenantId];
   const where = ["s.tenant_id = $1"];
 
   if (scope === "mine") {
-    where.push("s.created_by = $2");
+    params.push(identity.userId);
+    where.push(`s.created_by = $${params.length}`);
   } else if (scope === "shared") {
     where.push("s.visibility = 'shared'");
   } else {
-    where.push("(s.created_by = $2 OR s.visibility = 'shared')");
+    params.push(identity.userId);
+    where.push(`(s.created_by = $${params.length} OR s.visibility = 'shared')`);
   }
 
   if (category) {
