@@ -76,9 +76,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         savedStyles,
         newStyleName,
         newStyleTags,
-        newStyleCategory,
         scope: styleScope,
-        category: styleCategory,
         sort: styleSort,
         searchQuery: styleSearchQuery,
         isLoadingStyles,
@@ -87,9 +85,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         styleError,
         setNewStyleName,
         setNewStyleTags,
-        setNewStyleCategory,
         setScope: setStyleScope,
-        setCategory: setStyleCategory,
         setSort: setStyleSort,
         setSearchQuery: setStyleSearchQuery,
         saveStyle,
@@ -243,7 +239,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         setAnalysisResultData({ style_prompt: styleData.prompt, style_description_zh: styleData.description, suggested_tags: styleData.tags, styleId: styleData.id });
         setNewStyleName(styleData.name || '');
         setNewStyleTags((styleData.tags || []).join(', '));
-        setNewStyleCategory(styleData.category || 'general');
         setAppliedStyleId(styleData.id || null);
         setIsStyleNameTouched(true);
         setIsStyleTagsTouched(true);
@@ -252,15 +247,14 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
     const handleStyleNameChange = (value) => { setNewStyleName(value); setIsStyleNameTouched(true); };
     const handleStyleTagsChange = (value) => { setNewStyleTags(value); setIsStyleTagsTouched(true); };
-    const handleStyleCategoryChange = (value) => { setNewStyleCategory(value); };
-    const handleClearStyle = () => { clearStyle(); setNewStyleName(''); setNewStyleTags(''); setNewStyleCategory('general'); setAppliedStyleId(null); setIsStyleNameTouched(false); setIsStyleTagsTouched(false); };
+    const handleClearStyle = () => { clearStyle(); setNewStyleName(''); setNewStyleTags(''); setAppliedStyleId(null); setIsStyleNameTouched(false); setIsStyleTagsTouched(false); };
 
     const handlePublishStyle = async (id) => {
         try {
             await publishStyle(id);
         } catch (err) {
             console.error("Publish style failed:", err);
-            setErrorMsg(err.message || "發布風格失敗");
+            setErrorMsg(err.message || "共享風格失敗");
         }
     };
 
@@ -622,12 +616,10 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                             analysisResultData={analysisResultData}
                                             newStyleName={newStyleName}
                                             newStyleTags={newStyleTags}
-                                            newStyleCategory={newStyleCategory}
                                             isSavingStyle={isSavingStyle}
                                             onAnalyze={analyzeImageStyle}
                                             onStyleNameChange={handleStyleNameChange}
                                             onStyleTagsChange={handleStyleTagsChange}
-                                            onStyleCategoryChange={handleStyleCategoryChange}
                                             onSaveStyle={saveCurrentStyle}
                                             onSaveTemplate={saveTemplate}
                                             analyzedStyleForTemplate={analyzedStyle}
@@ -716,7 +708,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 {/* ─── Templates Tab ─── */}
                 {activeTab === 'templates' && (
                     <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-6 custom-scrollbar">
-                        <div className="max-w-5xl mx-auto">
+                        <div className="mx-auto w-full max-w-[1600px]">
                             <TemplateLibrary
                                 templates={templates}
                                 onApplyTemplate={applyTemplate}
@@ -740,8 +732,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 onSearchChange={(value) => { setStyleSearchQuery(value); searchStyles(value); }}
                                 scope={styleScope}
                                 onScopeChange={setStyleScope}
-                                category={styleCategory}
-                                onCategoryChange={setStyleCategory}
                                 sort={styleSort}
                                 onSortChange={setStyleSort}
                                 onApplyStyle={applySavedStyle}

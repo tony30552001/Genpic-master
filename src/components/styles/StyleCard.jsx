@@ -13,7 +13,6 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getStyleCategoryLabel } from "../../constants/styleCategories";
 
 const formatTimestamp = (value) => {
   if (!value?.seconds) return "";
@@ -39,7 +38,8 @@ export default function StyleCard({
   const [imgError, setImgError] = useState(false);
   const hasPreview = style.previewUrl && !imgError;
   const isShared = style.visibility === "shared";
-  const authorText = style.authorName || style.authorEmail || "未知作者";
+  const authorText = style.authorName || "未知共享人";
+  const primaryTag = style.tags?.[0];
   const dateText = formatTimestamp(style.publishedAt || style.updatedAt || style.createdAt);
   const canCopy = Boolean(onCopy);
   const canPublish = Boolean(onPublish);
@@ -93,9 +93,11 @@ export default function StyleCard({
         )}
 
         <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
-          <Badge variant="secondary" className="bg-background/90 text-[10px] shadow-sm backdrop-blur">
-            {getStyleCategoryLabel(style.category)}
-          </Badge>
+          {primaryTag && (
+            <Badge variant="secondary" className="bg-background/90 text-[10px] shadow-sm backdrop-blur">
+              #{primaryTag}
+            </Badge>
+          )}
           <Badge
             variant="outline"
             className={`border-background/60 bg-background/90 text-[10px] shadow-sm backdrop-blur ${isShared ? "text-primary" : "text-muted-foreground"
@@ -148,7 +150,7 @@ export default function StyleCard({
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           {isShared && (
             <span className="min-w-0 truncate">
-              {authorText}
+              共享人：{authorText}
             </span>
           )}
           {dateText && <span>{dateText}</span>}
@@ -224,7 +226,7 @@ export default function StyleCard({
                 className="h-10 gap-1.5 text-xs"
               >
                 <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                發布
+                共享
               </Button>
             ) : canUnpublish ? (
               <Button

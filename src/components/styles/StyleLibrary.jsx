@@ -13,16 +13,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import StyleCard from "./StyleCard";
-import { STYLE_CATEGORIES } from "../../constants/styleCategories";
 
 const SCOPE_OPTIONS = [
-  { value: "mine", label: "我的風格", description: "私人與已發布的個人風格" },
-  { value: "shared", label: "共享風格", description: "公司內已發布的團隊風格" },
+  { value: "mine", label: "我的風格", description: "私人與已共享的個人風格" },
+  { value: "shared", label: "共享風格", description: "公司內已共享的團隊風格" },
 ];
 
 const SORT_OPTIONS = [
   { value: "updated", label: "最近更新" },
-  { value: "newest", label: "最新發布" },
+  { value: "newest", label: "最新共享" },
   { value: "popular", label: "熱門" },
   { value: "curated", label: "精選優先" },
 ];
@@ -36,8 +35,6 @@ export default function StyleLibrary({
   onSearchChange,
   scope,
   onScopeChange,
-  category,
-  onCategoryChange,
   sort,
   onSortChange,
   onApplyStyle,
@@ -77,7 +74,7 @@ export default function StyleLibrary({
 
   const visibleTags = showAllTags ? allTags : allTags.slice(0, 12);
   const hasMoreTags = allTags.length > 12;
-  const hasActiveFilters = selectedTags.length > 0 || searchQuery || category;
+  const hasActiveFilters = selectedTags.length > 0 || searchQuery;
   const isMineScope = scope === "mine";
 
   const toggleTag = (tag) => {
@@ -89,7 +86,6 @@ export default function StyleLibrary({
   const clearFilters = () => {
     setSelectedTags([]);
     onSearchChange("");
-    onCategoryChange("");
   };
 
   const toggleSelectionMode = () => {
@@ -130,22 +126,22 @@ export default function StyleLibrary({
     ? "找不到符合的風格"
     : isMineScope
       ? "尚未收藏任何風格"
-      : "團隊尚未發布共享風格";
+      : "團隊尚未共享風格";
   const emptyDescription = hasActiveFilters
-    ? "嘗試調整搜尋、分類或標籤條件。"
+        ? "嘗試調整搜尋或標籤分類。"
     : isMineScope
       ? "分析圖片風格後即可儲存到此處。"
-      : "發布你的第一個風格，讓團隊成員可以一起套用。";
+      : "共享你的第一個風格，讓團隊成員可以一起套用。";
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <div className="flex flex-col gap-4">
+    <div className="space-y-6">
+      <section className="rounded-3xl border border-border bg-card p-4 shadow-sm lg:p-5">
+        <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-foreground">風格庫</h2>
               <p className="text-sm text-muted-foreground">
-                管理個人風格，或套用公司內已共享的風格資產。
+                以標籤快速分類與篩選風格，管理個人收藏或套用公司內共享資產。
               </p>
             </div>
 
@@ -218,86 +214,71 @@ export default function StyleLibrary({
             </label>
           </div>
 
-          <div className="flex flex-wrap gap-2" aria-label="用途分類">
-            <button
-              type="button"
-              aria-pressed={!category}
-              onClick={() => onCategoryChange("")}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${!category
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background text-foreground hover:border-primary/40 hover:text-primary"
-                }`}
-            >
-              全部
-            </button>
-            {STYLE_CATEGORIES.map((item) => {
-              const active = category === item.key;
-              return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-1">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              <span className="text-xs font-medium text-muted-foreground">標籤分類</span>
+              {hasActiveFilters && (
                 <button
                   type="button"
-                  key={item.key}
-                  aria-pressed={active}
-                  onClick={() => onCategoryChange(item.key)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-foreground hover:border-primary/40 hover:text-primary"
-                    }`}
-                  title={item.description}
+                  onClick={clearFilters}
+                  className="ml-auto rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  {item.label}
+                  清除篩選
                 </button>
-              );
-            })}
-          </div>
-
-          {allTags.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 px-1">
-                <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                <span className="text-xs font-medium text-muted-foreground">標籤篩選</span>
-                {hasActiveFilters && (
+              )}
+            </div>
+            {allTags.length > 0 ? (
+              <>
+                <div className="flex flex-wrap gap-1.5">
                   <button
                     type="button"
-                    onClick={clearFilters}
-                    className="ml-auto rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    onClick={() => setSelectedTags([])}
+                    aria-pressed={selectedTags.length === 0}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${selectedTags.length === 0
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+                      : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                      }`}
                   >
-                    清除篩選
+                    全部標籤
                   </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {visibleTags.map(({ tag, count }) => {
-                  const active = selectedTags.includes(tag);
-                  return (
+                  {visibleTags.map(({ tag, count }) => {
+                    const active = selectedTags.includes(tag);
+                    return (
+                      <button
+                        type="button"
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        aria-pressed={active}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active
+                          ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+                          : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                          }`}
+                      >
+                        <span>#{tag}</span>
+                        <span className={`text-[10px] ${active ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {hasMoreTags && (
                     <button
                       type="button"
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
-                      aria-pressed={active}
-                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active
-                        ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
-                        : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-                        }`}
+                      onClick={() => setShowAllTags((value) => !value)}
+                      className="rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                      <span>#{tag}</span>
-                      <span className={`text-[10px] ${active ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                        {count}
-                      </span>
+                      {showAllTags ? "收合" : `+${allTags.length - 12} 更多`}
                     </button>
-                  );
-                })}
-                {hasMoreTags && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllTags((value) => !value)}
-                    className="rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    {showAllTags ? "收合" : `+${allTags.length - 12} 更多`}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="rounded-xl border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                尚無標籤；儲存風格時加入標籤後，這裡會自動形成分類。
+              </p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -388,7 +369,7 @@ export default function StyleLibrary({
           ) : null}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {filtered.map((style) => {
             const canManage = isMineScope;
             return (

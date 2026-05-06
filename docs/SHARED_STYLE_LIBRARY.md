@@ -4,14 +4,14 @@
 
 使用者回饋希望能有「共享的風格庫」，讓同一公司或租戶內的成員可以共用已驗證的視覺風格，降低重複分析參考圖與重寫風格 prompt 的成本。
 
-此功能目標是把目前的個人風格收藏，擴展為可分類、可發布、可搜尋、可套用、可複製的團隊共享資產庫。
+此功能目標是把目前的個人風格收藏，擴展為可依標籤分類、可共享、可搜尋、可套用、可複製的團隊共享資產庫。
 
 核心方向：
 
 1. 保留「我的風格」作為個人私有收藏。
 2. 新增「共享風格」作為同租戶內可見的團隊風格庫。
-3. 使用「用途類型」作為主要分類，例如社群貼文、簡報、海報、電商、教育與文件視覺化。
-4. 讓使用者可以將私人風格發布到共享庫，也可以將共享風格複製到自己的風格庫。
+3. 使用使用者實際輸入的 `tags` 作為主要分類，不再以社群貼文、電商、教育等固定用途分類作為主要瀏覽方式。
+4. 讓使用者可以將私人風格共享到共享庫，也可以將共享風格複製到自己的風格庫。
 5. 在創作流程中快速套用共享風格，並保留目前風格分析、儲存、套用與刪除體驗。
 
 ## 已確認產品決策
@@ -20,9 +20,9 @@
 |:---|:---|
 | 共享範圍 | 同一租戶 / 公司內共享 |
 | 預設狀態 | 新儲存的風格預設為私人 |
-| 發布流程 | 使用者手動點擊「發布到共享庫」後才共享 |
-| 分類方式 | 以用途類型作為主要分類，標籤作為輔助篩選 |
-| MVP 功能 | 分類瀏覽、搜尋與標籤篩選、私人 / 共享切換、套用共享風格、複製到我的風格庫、作者 / 建立時間資訊、精選 / 熱門排序 |
+| 共享流程 | 使用者手動點擊「共享」後才進入共享庫 |
+| 分類方式 | 以標籤作為主要分類與篩選，不在 UI 顯示固定用途分類 |
+| MVP 功能 | 標籤分類瀏覽、搜尋、私人 / 共享切換、套用共享風格、複製到我的風格庫、共享人姓名 / 建立時間資訊、精選 / 熱門排序 |
 
 ## 目前狀態
 
@@ -65,33 +65,22 @@
 
 | Scope | 說明 | 主要操作 |
 |:---|:---|:---|
-| 我的風格 | 目前使用者建立或複製保存的風格 | 套用、發布 / 取消發布、編輯分類與標籤、刪除 |
-| 共享風格 | 同租戶內已發布的風格 | 套用、複製到我的風格庫、查看作者與熱門度 |
+| 我的風格 | 目前使用者建立或複製保存的風格 | 套用、共享 / 取消共享、編輯標籤、刪除 |
+| 共享風格 | 同租戶內已共享的風格 | 套用、複製到我的風格庫、查看共享人姓名與熱門度 |
 
 頁面上方建議包含：
 
 1. Scope tabs：`我的風格` / `共享風格`。
-2. 用途分類列：`全部`、`社群貼文`、`簡報`、`海報`、`電商`、`教育`、`文件視覺化`、`品牌識別`、`通用`。
-3. 搜尋欄：搜尋風格名稱、描述、作者、分類與標籤。
-4. 標籤 chips：保留目前標籤篩選能力。
-5. 排序控制：`最近更新`、`最新發布`、`熱門`、`精選`。
+2. 標籤分類列：`全部標籤` 加上目前列表中最常用的 tags。
+3. 搜尋欄：搜尋風格名稱、描述、共享人姓名與標籤。
+4. 標籤 chips：作為主要分類與篩選入口。
+5. 排序控制：`最近更新`、`最新共享`、`熱門`、`精選`。
 
-### 推薦分類
+### 標籤分類
 
-第一版建議使用固定分類常數，避免使用者建立過多相近分類而降低瀏覽效率。
+第一版以 `tags` 作為主要分類來源，避免固定用途分類與實際風格資料不一致。標籤來自風格分析建議與使用者儲存時輸入，例如 `科技感`、`溫暖`、`插畫`、`藍色`、`極簡`、`交通安全`。
 
-| Key | 中文名稱 | 使用情境 |
-|:---|:---|:---|
-| `social` | 社群貼文 | Instagram、Facebook、LINE 圖文、短影音封面 |
-| `presentation` | 簡報 | 企業簡報、提案簡報、內訓投影片 |
-| `poster` | 海報 | 活動主視覺、公告、宣傳海報 |
-| `ecommerce` | 電商 | 商品圖、促銷圖、Banner、商品情境圖 |
-| `education` | 教育 | 教材、學習卡、教學視覺、知識圖解 |
-| `document` | 文件視覺化 | SOP、政策宣導、流程圖解、文件轉分鏡 |
-| `brand` | 品牌識別 | 品牌一致性、企業色、固定視覺語言 |
-| `general` | 通用 | 無特定用途或跨用途風格 |
-
-分類應該是單選主分類；`tags` 則保留為多選輔助資訊，例如 `科技感`、`溫暖`、`插畫`、`藍色`、`極簡`。
+UI 應以目前列表的標籤統計產生 chips，依使用次數排序；點擊標籤後以 AND 條件篩選風格。
 
 ### 風格卡片
 
@@ -100,10 +89,10 @@
 - 預覽圖，若無預覽則顯示一致的空狀態。
 - 風格名稱。
 - 簡短描述。
-- 分類 badge。
+- 主要標籤 badge。
 - 標籤 chips。
-- 作者名稱。
-- 發布時間或建立時間。
+- 共享人姓名；不顯示 email。
+- 共享時間或建立時間。
 - 精選 badge。
 - 套用次數或複製次數。
 - 主要操作：`套用`。
@@ -112,7 +101,7 @@
 我的風格卡片額外顯示：
 
 - 目前狀態：`私人` / `已共享`。
-- `發布到共享庫` 或 `取消共享`。
+- `共享` 或 `取消共享`。
 - 既有刪除與批次管理能力。
 
 ### 空狀態
@@ -120,8 +109,8 @@
 | 狀態 | 文案方向 | 建議操作 |
 |:---|:---|:---|
 | 我的風格為空 | 尚未收藏任何風格 | 引導使用者到一般創作，上傳參考圖並分析風格 |
-| 共享風格為空 | 團隊尚未發布共享風格 | 引導使用者發布第一個共享風格 |
-| 篩選無結果 | 找不到符合條件的風格 | 提供清除搜尋、分類與標籤篩選 |
+| 共享風格為空 | 團隊尚未共享風格 | 引導使用者共享第一個風格 |
+| 篩選無結果 | 找不到符合條件的風格 | 提供清除搜尋與標籤篩選 |
 
 ## 權限與資料規則
 
@@ -130,13 +119,13 @@
 | Visibility | 可見範圍 | 說明 |
 |:---|:---|:---|
 | `private` | 建立者本人 | 新風格預設狀態 |
-| `shared` | 同租戶所有使用者 | 建立者發布後進入共享庫 |
+| `shared` | 同租戶所有使用者 | 建立者共享後進入共享庫 |
 
 ### 授權規則
 
 - 我的風格列表：只能看見 `tenant_id = current tenant` 且 `created_by = current user` 的風格。
 - 共享風格列表：可看見 `tenant_id = current tenant` 且 `visibility = 'shared'` 的風格。
-- 編輯、刪除、發布、取消發布：只允許建立者操作。
+- 編輯、刪除、共享、取消共享：只允許建立者操作。
 - 套用共享風格：同租戶使用者皆可操作。
 - 複製共享風格：同租戶使用者可複製成自己的私人風格。
 - 精選狀態：MVP 可先保留欄位，後續由管理者或內部流程維護。
@@ -193,7 +182,7 @@ ALTER TABLE styles
 ### List styles
 
 ```http
-GET /api/styles?scope=mine|shared|all&category=&q=&tags=&sort=updated|newest|popular|curated
+GET /api/styles?scope=mine|shared|all&q=&tags=&sort=updated|newest|popular|curated
 ```
 
 查詢規則：
@@ -201,8 +190,8 @@ GET /api/styles?scope=mine|shared|all&category=&q=&tags=&sort=updated|newest|pop
 - `scope=mine`：只列出自己的風格。
 - `scope=shared`：列出同租戶共享風格。
 - `scope=all`：可用於內嵌 picker，合併自己的風格與共享風格。
-- `category`：指定用途分類，空值代表全部。
-- `q`：搜尋名稱、描述、作者、分類與標籤。
+- `category`：保留為相容欄位；目前 UI 不使用固定用途分類。
+- `q`：搜尋名稱、描述、共享人姓名與標籤。
 - `tags`：逗號分隔，多標籤篩選。
 - `sort=popular`：依 `usage_count`、`copy_count` 排序。
 - `sort=curated`：優先顯示 `is_curated = true`。
@@ -221,16 +210,14 @@ Payload 建議：
   "prompt": "...",
   "description": "適合企業簡報與報告封面的柔和插畫風格",
   "tags": ["企業", "簡報", "插畫"],
-  "previewUrl": "https://...",
-  "category": "presentation"
+  "previewUrl": "https://..."
 }
 ```
 
 建立規則：
 
 - `visibility` 預設為 `private`。
-- `category` 若未提供，預設為 `general`。
-- 後端需驗證 `category` 是否為允許值。
+- `category` 若未提供，預設為 `general`，但不作為主要 UI 分類。
 
 ### Update style
 
@@ -241,7 +228,7 @@ PUT /api/styles/{id}
 用途：
 
 - 更新名稱、描述、標籤、分類。
-- 可用於切換 `visibility`，但建議發布 / 取消發布使用明確 action endpoint 或明確 action payload，避免誤操作。
+- 可用於切換 `visibility`，但建議共享 / 取消共享使用明確 action endpoint 或明確 action payload，避免誤操作。
 
 ### Publish style
 
@@ -305,10 +292,8 @@ POST /api/styles/{id}/use
   "description": "適合企業簡報與報告封面的柔和插畫風格",
   "tags": ["企業", "簡報", "插畫"],
   "previewUrl": "https://...",
-  "category": "presentation",
   "visibility": "shared",
   "authorName": "Tony Lin",
-  "authorEmail": "tony@example.com",
   "createdAt": { "seconds": 1760000000 },
   "updatedAt": { "seconds": 1760000000 },
   "publishedAt": { "seconds": 1760000000 },
@@ -320,19 +305,14 @@ POST /api/styles/{id}/use
 
 ## 前端實作計畫
 
-### 1. 建立分類常數
+### 1. 標籤分類策略
 
-建議新增或集中管理於：
+主要分類由 style `tags` 動態產生：
 
-- `src\constants\styleCategories.js`
-
-內容包含：
-
-- category key。
-- 中文 label。
-- 描述。
-- icon 對應名稱或 icon component。
-- 排序順序。
+- 統計目前列表所有 tags。
+- 依出現次數排序。
+- 前 12 個標籤預設顯示，其餘收合。
+- 點擊標籤 chips 進行多標籤篩選。
 
 ### 2. 擴充 `storageService`
 
@@ -351,7 +331,6 @@ POST /api/styles/{id}/use
 `useStyles` 建議管理：
 
 - `scope`
-- `category`
 - `sort`
 - `searchQuery`
 - `selectedTags`
@@ -378,11 +357,11 @@ POST /api/styles/{id}/use
 建議拆分或重構：
 
 - `StyleLibrary`
-  - 管理 scope、category、sort 與列表布局。
+  - 管理 scope、sort、標籤分類與列表布局。
 - `StyleLibraryToolbar`
   - 搜尋、scope tabs、排序。
-- `StyleCategoryNav`
-  - 用途分類。
+- `StyleTagNav`
+  - 標籤分類。
 - `StyleCard`
   - 卡片顯示與 actions。
 - `StyleEmptyState`
@@ -392,16 +371,7 @@ POST /api/styles/{id}/use
 
 ### 5. 更新儲存風格流程
 
-在風格分析結果的儲存區新增分類選擇：
-
-- 預設 `general`。
-- 使用下拉或 chip select。
-- 儲存後仍為私人，不自動發布。
-
-文案建議：
-
-- 分類 label：`用途分類`
-- helper text：`分類會用於共享風格庫瀏覽，之後仍可調整。`
+儲存風格時保留「標籤」輸入作為分類來源，不再要求使用者選擇固定用途分類。儲存後仍為私人，不自動共享。
 
 ### 6. 更新套用流程
 
@@ -423,7 +393,7 @@ POST /api/styles/{id}/use
 
 - 所有主要操作按鈕需至少 44px 高或有足夠 hit area。
 - 不可只依賴 hover 顯示操作；手機與鍵盤使用者也必須能操作。
-- Scope tabs 與分類 chips 需使用 `aria-pressed` 或正確 tab semantics。
+- Scope tabs 與標籤 chips 需使用 `aria-pressed` 或正確 tab semantics。
 - 搜尋欄需有明確 `aria-label`。
 - Icon-only button 必須有 `aria-label`。
 - 共享 / 私人狀態不能只用顏色表達，需有文字 badge。
@@ -440,7 +410,7 @@ POST /api/styles/{id}/use
 - `scope=mine` 只回傳自己的風格。
 - `scope=shared` 回傳同租戶共享風格，不回傳其他租戶資料。
 - 建立風格預設為 `private`。
-- 只有建立者可以發布、取消發布、更新與刪除。
+- 只有建立者可以共享、取消共享、更新與刪除。
 - 同租戶使用者可以 copy shared style。
 - copy 後新資料屬於目前使用者且 visibility 為 `private`。
 - sort popular / curated 行為正確。
@@ -450,11 +420,11 @@ POST /api/styles/{id}/use
 需覆蓋：
 
 - Scope 切換。
-- 分類篩選。
+- 標籤分類篩選。
 - 搜尋與標籤篩選。
-- 共享風格顯示作者、分類與熱門度。
+- 共享風格顯示共享人姓名與熱門度，不顯示 email。
 - 我的風格顯示私人 / 已共享狀態。
-- 點擊發布 / 取消發布 / 複製 / 套用時呼叫正確 action。
+- 點擊共享 / 取消共享 / 複製 / 套用時呼叫正確 action。
 - 空狀態文案正確。
 
 ### 驗證命令
@@ -469,9 +439,9 @@ pnpm build
 
 ## 實作順序
 
-1. 定義 style category constants。
+1. 建立標籤分類策略。
 2. 新增 DB migration，擴充 `styles` 資料模型。
-3. 擴充 `api\styles` 查詢、更新、發布、複製與使用統計。
+3. 擴充 `api\styles` 查詢、更新、共享、複製與使用統計。
 4. 更新 `storageService` 與 `useStyles`。
 5. 重構 `StyleLibrary` 與 `StyleCard`。
 6. 串接 `InfographicGenerator` 與 `ScriptEditor` 的儲存、套用、使用統計流程。

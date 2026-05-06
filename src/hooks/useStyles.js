@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { DEFAULT_STYLE_CATEGORY } from "../constants/styleCategories";
 import {
   addStyle,
   copyStyle as copyStyleApi,
@@ -12,6 +11,7 @@ import {
   updateStyle as updateStyleApi,
 } from "../services/storageService";
 
+const DEFAULT_STYLE_CATEGORY = "general";
 const DEFAULT_SCOPE = "mine";
 const DEFAULT_SORT = "updated";
 const SEARCH_DEBOUNCE_MS = 300;
@@ -55,7 +55,6 @@ export default function useStyles({ user }) {
   const [newStyleTags, setNewStyleTags] = useState("");
   const [newStyleCategory, setNewStyleCategory] = useState(DEFAULT_STYLE_CATEGORY);
   const [scope, setScope] = useState(DEFAULT_SCOPE);
-  const [category, setCategory] = useState("");
   const [sort, setSort] = useState(DEFAULT_SORT);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -90,7 +89,6 @@ export default function useStyles({ user }) {
 
     const params = {
       scope,
-      category,
       sort,
       q: debouncedSearchQuery,
       ...overrides,
@@ -116,7 +114,7 @@ export default function useStyles({ user }) {
         setIsLoadingStyles(false);
       }
     }
-  }, [user, scope, category, sort, debouncedSearchQuery]);
+  }, [user, scope, sort, debouncedSearchQuery]);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -244,7 +242,6 @@ export default function useStyles({ user }) {
     newStyleTags,
     newStyleCategory,
     scope,
-    category,
     sort,
     searchQuery,
     isLoadingStyles,
@@ -255,7 +252,6 @@ export default function useStyles({ user }) {
     setNewStyleTags,
     setNewStyleCategory,
     setScope,
-    setCategory,
     setSort,
     setSearchQuery,
     refreshStyles,
