@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback } from "react";
 import { cn } from "@/lib/utils";
 
-const STYLE_DIMENSIONS = [
+export const STYLE_DIMENSIONS = [
   {
     id: "paintStyle",
     label: "畫風",
@@ -45,33 +45,26 @@ const STYLE_DIMENSIONS = [
 ];
 
 /**
- * StylePalette — 8 維度風格屬性調色盤
- * 對齊多奇生圖工坊 UI：平鋪展開、維度標題粗體、清空按鈕在底部。
+ * StylePalette — 8 維度風格屬性調色盤（受控元件）
+ * selected: { dimensionId: string[] }  由父元件管理
+ * onSelectedChange(newSelected): 通知父元件更新
  */
-export default function StylePalette({ onChange }) {
-  const [selected, setSelected] = useState({});
-
+export default function StylePalette({ selected = {}, onSelectedChange }) {
   const toggleTag = useCallback(
     (dimensionId, tag) => {
-      setSelected((prev) => {
-        const dimTags = prev[dimensionId] || [];
-        const isActive = dimTags.includes(tag);
-        const next = isActive
-          ? { ...prev, [dimensionId]: dimTags.filter((t) => t !== tag) }
-          : { ...prev, [dimensionId]: [...dimTags, tag] };
-
-        const allTags = STYLE_DIMENSIONS.flatMap((d) => next[d.id] || []);
-        onChange?.(allTags.length > 0 ? allTags.join("，") : "");
-        return next;
-      });
+      const dimTags = selected[dimensionId] || [];
+      const isActive = dimTags.includes(tag);
+      const next = isActive
+        ? { ...selected, [dimensionId]: dimTags.filter((t) => t !== tag) }
+        : { ...selected, [dimensionId]: [...dimTags, tag] };
+      onSelectedChange?.(next);
     },
-    [onChange]
+    [selected, onSelectedChange]
   );
 
   const handleClear = useCallback(() => {
-    setSelected({});
-    onChange?.("");
-  }, [onChange]);
+    onSelectedChange?.({});
+  }, [onSelectedChange]);
 
   return (
     <div className="space-y-2">
