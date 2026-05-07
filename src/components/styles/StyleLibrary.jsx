@@ -134,8 +134,8 @@ export default function StyleLibrary({
       : "共享你的第一個風格，讓團隊成員可以一起套用。";
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-border bg-card p-4 shadow-sm lg:p-5">
+    <div className="space-y-7">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm lg:p-7">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
@@ -171,7 +171,7 @@ export default function StyleLibrary({
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+          <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Input
@@ -235,7 +235,7 @@ export default function StyleLibrary({
                     type="button"
                     onClick={() => setSelectedTags([])}
                     aria-pressed={selectedTags.length === 0}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${selectedTags.length === 0
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${selectedTags.length === 0
                       ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
                       : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                       }`}
@@ -250,7 +250,7 @@ export default function StyleLibrary({
                         key={tag}
                         onClick={() => toggleTag(tag)}
                         aria-pressed={active}
-                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active
                           ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
                           : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                           }`}
@@ -369,7 +369,7 @@ export default function StyleLibrary({
           ) : null}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6">
           {filtered.map((style) => {
             const canManage = isMineScope;
             return (

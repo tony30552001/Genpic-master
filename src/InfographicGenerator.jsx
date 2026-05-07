@@ -721,8 +721,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
                 {/* ─── Styles Tab ─── */}
                 {activeTab === 'styles' && (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-6 custom-scrollbar">
-                        <div className="max-w-5xl mx-auto">
+                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 2xl:px-12 py-6 custom-scrollbar">
+                        <div className="w-full max-w-[1760px] mx-auto">
                             <StyleLibrary
                                 savedStyles={savedStyles}
                                 isLoading={isLoadingStyles}
@@ -748,8 +748,8 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
                 {/* ─── History Tab ─── */}
                 {activeTab === 'history' && (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-6 custom-scrollbar">
-                        <div className="max-w-5xl mx-auto">
+                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 2xl:px-12 py-6 custom-scrollbar">
+                        <div className="w-full max-w-[1760px] mx-auto">
                             <HistoryPanel
                                 historyItems={historyItems}
                                 savedStyles={savedStyles}
