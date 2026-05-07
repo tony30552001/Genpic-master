@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
-import StylePalette from "./StylePalette";
+import StylePalette, { STYLE_DIMENSIONS } from "./StylePalette";
 import PromptTemplates from "./PromptTemplates";
 
 /**
@@ -71,6 +71,14 @@ export default function ScriptEditor({
   const [suggestionData, setSuggestionData] = useState(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showAssistTools, setShowAssistTools] = useState(false);
+  const [paletteSelected, setPaletteSelected] = useState({});
+
+  // 調色盤 tag 選擇變更時，計算風格字串並通知父元件
+  const handlePaletteChange = useCallback((newSelected) => {
+    setPaletteSelected(newSelected);
+    const allTags = STYLE_DIMENSIONS.flatMap((d) => newSelected[d.id] || []);
+    onPaletteStyleChange?.(allTags.length > 0 ? allTags.join("，") : "");
+  }, [onPaletteStyleChange]);
 
   const charCount = userScript?.length || 0;
   const contentFieldId = "script-editor-content";
@@ -235,15 +243,16 @@ export default function ScriptEditor({
           </div>
 
           <PromptTemplates
-            onFill={(text) => {
+            onFill={(text, palette) => {
               onUserScriptChange(text);
               if (onOptimizedPromptEnChange) onOptimizedPromptEnChange("");
+              if (palette) handlePaletteChange(palette);
             }}
           />
         </CardContent>
       </Card>
 
-      <StylePalette onChange={onPaletteStyleChange} />
+      <StylePalette selected={paletteSelected} onSelectedChange={handlePaletteChange} />
 
       <Card className="rounded-2xl border-border bg-card shadow-md ring-1 ring-border/40">
         <button
