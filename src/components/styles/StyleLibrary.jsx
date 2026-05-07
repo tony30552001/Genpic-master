@@ -10,8 +10,14 @@ import {
   X,
 } from "lucide-react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StyleCard from "./StyleCard";
 
 const SCOPE_OPTIONS = [
@@ -135,9 +141,10 @@ export default function StyleLibrary({
 
   return (
     <div className="space-y-7">
-      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm lg:p-7">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      {/* ── Control Panel ── */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-foreground">風格庫</h2>
               <p className="text-sm text-muted-foreground">
@@ -145,35 +152,33 @@ export default function StyleLibrary({
               </p>
             </div>
 
-            <div className="flex rounded-xl border border-border bg-muted/40 p-1" role="group" aria-label="風格庫範圍">
-              {SCOPE_OPTIONS.map((option) => {
-                const active = scope === option.value;
-                return (
-                  <button
-                    type="button"
-                    key={option.value}
-                    aria-pressed={active}
-                    onClick={() => {
-                      onScopeChange(option.value);
-                      setSelectedIds(new Set());
-                      setIsSelectionMode(false);
-                    }}
-                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active
-                      ? "bg-background text-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
-                      }`}
-                    title={option.description}
-                  >
+            {/* Scope segmented control — shadcn Tabs as segmented control */}
+            <Tabs
+              value={scope}
+              onValueChange={(value) => {
+                onScopeChange(value);
+                setSelectedIds(new Set());
+                setIsSelectionMode(false);
+              }}
+            >
+              <TabsList aria-label="風格庫範圍">
+                {SCOPE_OPTIONS.map((option) => (
+                  <TabsTrigger key={option.value} value={option.value} title={option.description}>
                     {option.label}
-                  </button>
-                );
-              })}
-            </div>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           </div>
+        </CardHeader>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+        <Separator />
+
+        <CardContent className="pt-5 space-y-5">
+          {/* Search + Sort row */}
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Input
                 type="text"
                 placeholder="搜尋風格名稱、描述、作者或標籤…"
@@ -183,160 +188,169 @@ export default function StyleLibrary({
                 className="pl-10 pr-10"
               />
               {isSearching && (
-                <Loader2 className="absolute right-3.5 top-3 h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+                <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
               )}
               {searchQuery && !isSearching && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
                   onClick={() => onSearchChange("")}
-                  className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   aria-label="清除搜尋"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
-                </button>
+                </Button>
               )}
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              排序
-              <select
-                value={sort}
-                onChange={(e) => onSortChange(e.target.value)}
-                className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="風格排序"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="style-sort" className="shrink-0 text-sm text-muted-foreground">
+                排序
+              </Label>
+              <Select value={sort} onValueChange={onSortChange}>
+                <SelectTrigger id="style-sort" className="w-[130px]" aria-label="風格排序">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
+          {/* Tag filter */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
+            <div className="flex items-center gap-2">
               <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               <span className="text-xs font-medium text-muted-foreground">標籤分類</span>
               {hasActiveFilters && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="xs"
                   onClick={clearFilters}
-                  className="ml-auto rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="ml-auto text-primary hover:text-primary/80"
                 >
                   清除篩選
-                </button>
+                </Button>
               )}
             </div>
             {allTags.length > 0 ? (
-              <>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTags([])}
-                    aria-pressed={selectedTags.length === 0}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${selectedTags.length === 0
-                      ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
-                      : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-                      }`}
-                  >
-                    全部標籤
-                  </button>
-                  {visibleTags.map(({ tag, count }) => {
-                    const active = selectedTags.includes(tag);
-                    return (
-                      <button
-                        type="button"
-                        key={tag}
-                        onClick={() => toggleTag(tag)}
-                        aria-pressed={active}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active
-                          ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
-                          : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-                          }`}
-                      >
-                        <span>#{tag}</span>
-                        <span className={`text-[10px] ${active ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  {hasMoreTags && (
-                    <button
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  variant={selectedTags.length === 0 ? "default" : "outline"}
+                  size="xs"
+                  onClick={() => setSelectedTags([])}
+                  aria-pressed={selectedTags.length === 0}
+                  className="rounded-full"
+                >
+                  全部標籤
+                </Button>
+                {visibleTags.map(({ tag, count }) => {
+                  const active = selectedTags.includes(tag);
+                  return (
+                    <Button
                       type="button"
-                      onClick={() => setShowAllTags((value) => !value)}
-                      className="rounded-md px-2 py-1 text-xs text-primary transition-colors hover:text-primary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      key={tag}
+                      variant={active ? "default" : "outline"}
+                      size="xs"
+                      onClick={() => toggleTag(tag)}
+                      aria-pressed={active}
+                      className="rounded-full gap-1"
                     >
-                      {showAllTags ? "收合" : `+${allTags.length - 12} 更多`}
-                    </button>
-                  )}
-                </div>
-              </>
+                      <span>#{tag}</span>
+                      <span className={active ? "text-primary-foreground/70" : "text-muted-foreground"}>
+                        {count}
+                      </span>
+                    </Button>
+                  );
+                })}
+                {hasMoreTags && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setShowAllTags((v) => !v)}
+                    className="rounded-full"
+                  >
+                    {showAllTags ? "收合" : `+${allTags.length - 12} 更多`}
+                  </Button>
+                )}
+              </div>
             ) : (
-              <p className="rounded-xl border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 尚無標籤；儲存風格時加入標籤後，這裡會自動形成分類。
               </p>
             )}
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
+      {/* ── Error Alert ── */}
       {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
-          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
+      {/* ── Batch Selection Banner ── */}
       {isSelectionMode && (
-        <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 animate-in fade-in slide-in-from-top-2 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <input
-              type="checkbox"
-              checked={filtered.length > 0 && selectedIds.size === filtered.length}
-              onChange={selectAll}
-              aria-label="選取全部風格"
-              className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
-            />
-            已選取 {selectedIds.size} 個風格
-          </label>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsSelectionMode(false)}>
-              取消
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={handleBatchDelete}
-              disabled={selectedIds.size === 0}
-              className="gap-1.5"
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              刪除選取項目
-            </Button>
-          </div>
-        </div>
+        <Alert className="border-primary/20 bg-primary/5 text-foreground animate-in fade-in slide-in-from-top-2">
+          <CheckSquare className="h-4 w-4 text-primary" aria-hidden="true" />
+          <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                onChange={selectAll}
+                aria-label="選取全部風格"
+                className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
+              />
+              已選取 {selectedIds.size} 個風格
+            </label>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsSelectionMode(false)}>
+                取消
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleBatchDelete}
+                disabled={selectedIds.size === 0}
+                className="gap-1.5"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                刪除選取項目
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
       )}
 
+      {/* ── Result count + batch toggle ── */}
       <div className="flex items-center justify-between px-1">
-        <div className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {hasActiveFilters ? (
-            <>
-              找到 <strong className="text-foreground">{filtered.length}</strong> 個風格
-            </>
+            <>找到 <strong className="text-foreground">{filtered.length}</strong> 個風格</>
           ) : (
             <>共 {savedStyles.length} 個風格</>
           )}
-        </div>
+        </p>
         {isMineScope && !isSelectionMode && savedStyles.length > 0 && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={toggleSelectionMode}
-            className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-primary"
+            className="gap-1.5 text-muted-foreground hover:text-primary"
           >
             <CheckSquare className="h-3.5 w-3.5" aria-hidden="true" />
             批次管理
@@ -344,14 +358,15 @@ export default function StyleLibrary({
         )}
       </div>
 
+      {/* ── Card Grid ── */}
       {isLoading ? (
-        <div className="flex items-center justify-center rounded-2xl border border-dashed border-border py-16 text-muted-foreground">
+        <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-20 text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           載入風格中…
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center text-muted-foreground">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center text-muted-foreground">
+          <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
             <Bookmark className="h-7 w-7 text-muted-foreground/40" aria-hidden="true" />
           </div>
           <div>
