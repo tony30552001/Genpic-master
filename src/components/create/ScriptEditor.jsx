@@ -58,6 +58,7 @@ export default function ScriptEditor({
   onOptimizedPromptEnChange,
   onPaletteStyleChange,
   onGenerate,
+  paletteStyle = "",
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -122,7 +123,9 @@ export default function ScriptEditor({
     try {
       const result = await optimizePrompt({
         userScript,
-        styleContext: analyzedStyle || selectedStyleInfo?.name || ""
+        styleContext: [analyzedStyle, paletteStyle, selectedStyleInfo?.name]
+          .filter(Boolean)
+          .join("，") || ""
       });
 
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {

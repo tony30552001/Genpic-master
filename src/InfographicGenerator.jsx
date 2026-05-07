@@ -71,6 +71,12 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [paletteStyle, setPaletteStyle] = useState('');
 
+    const handlePaletteStyleChange = (styleStr) => {
+        setPaletteStyle(styleStr);
+        // 調色盤風格改變時，清除舊的 AI 優化英文 prompt（它是在不知道調色盤的情況下優化的）
+        setOptimizedPromptEn('');
+    };
+
     const navigate = useNavigate();
     const { user, handleLogout, isLoading } = useAuth();
     const {
@@ -628,8 +634,9 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                             analyzedStyleForTemplate={analyzedStyle}
 
                                             // 調色盤與快捷鍵
-                                            onPaletteStyleChange={setPaletteStyle}
+                                            onPaletteStyleChange={handlePaletteStyleChange}
                                             onGenerate={generateInfographic}
+                                            paletteStyle={paletteStyle}
                                         />
 
                                         <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40 lg:hidden">
