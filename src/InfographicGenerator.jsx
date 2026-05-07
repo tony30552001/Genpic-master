@@ -69,6 +69,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [isStyleTagsTouched, setIsStyleTagsTouched] = useState(false);
     const [appliedStyleId, setAppliedStyleId] = useState(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
+    const [paletteStyle, setPaletteStyle] = useState('');
 
     const navigate = useNavigate();
     const { user, handleLogout, isLoading } = useAuth();
@@ -311,17 +312,19 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         try {
             // 如果存在 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的中文 userScript
             const finalScriptToUse = optimizedPromptEn || userScript;
+            // 合併風格庫風格與調色盤快選風格
+            const mergedStyle = [analyzedStyle, paletteStyle].filter(Boolean).join('，');
 
             const { imageUrl, finalPrompt } = await generateImage({
                 userScript: finalScriptToUse,
-                analyzedStyle,
+                analyzedStyle: mergedStyle,
                 aspectRatio,
                 imageSize,
                 imageLanguage,
                 contentImageUrl: contentBlobSasUrl,
                 model: imageModel
             });
-            await saveHistoryItem({ imageUrl, userScript, stylePrompt: analyzedStyle, fullPrompt: finalPrompt, styleId: appliedStyleId || analysisResultData?.styleId || null });
+            await saveHistoryItem({ imageUrl, userScript, stylePrompt: mergedStyle, fullPrompt: finalPrompt, styleId: appliedStyleId || analysisResultData?.styleId || null });
             if (appliedStyleId) {
                 markStyleUsed(appliedStyleId).catch((err) => {
                     console.warn("Style usage tracking failed:", err);
@@ -623,6 +626,10 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                             onSaveStyle={saveCurrentStyle}
                                             onSaveTemplate={saveTemplate}
                                             analyzedStyleForTemplate={analyzedStyle}
+
+                                            // 調色盤與快捷鍵
+                                            onPaletteStyleChange={setPaletteStyle}
+                                            onGenerate={generateInfographic}
                                         />
 
                                         <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40 lg:hidden">

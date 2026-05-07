@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
+import StylePalette from "./StylePalette";
+import PromptTemplates from "./PromptTemplates";
 
 /**
  * ScriptEditor — 內容描述編輯器
@@ -54,6 +56,8 @@ export default function ScriptEditor({
   onSaveTemplate,
   analyzedStyleForTemplate,
   onOptimizedPromptEnChange,
+  onPaletteStyleChange,
+  onGenerate,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -201,17 +205,42 @@ export default function ScriptEditor({
             onChange={handleChange}
             onFocus={onFocus}
             onBlur={onBlur}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                onGenerate?.();
+              }
+            }}
             aria-describedby={contentHelpId}
             placeholder={"描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
             className="min-h-[112px] resize-y rounded-xl border-input bg-background text-sm leading-relaxed shadow-inner focus-visible:border-primary/50 focus-visible:ring-primary/30 md:min-h-[140px]"
           />
 
           <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
-            <span>建議先完成內容，再用下方參考與風格補強。</span>
+            <span className="flex items-center gap-3">
+              <span>建議先完成內容，再用下方參考與風格補強。</span>
+              {onGenerate && (
+                <span className="hidden items-center gap-1 sm:flex">
+                  <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">Ctrl</kbd>
+                  <span className="text-[10px]">+</span>
+                  <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">Enter</kbd>
+                  <span className="text-[10px] text-muted-foreground/70">生圖</span>
+                </span>
+              )}
+            </span>
             <span className="shrink-0 tabular-nums">{charCount} 字</span>
           </div>
+
+          <PromptTemplates
+            onFill={(text) => {
+              onUserScriptChange(text);
+              if (onOptimizedPromptEnChange) onOptimizedPromptEnChange("");
+            }}
+          />
         </CardContent>
       </Card>
+
+      <StylePalette onChange={onPaletteStyleChange} />
 
       <Card className="rounded-2xl border-border bg-card shadow-md ring-1 ring-border/40">
         <button
