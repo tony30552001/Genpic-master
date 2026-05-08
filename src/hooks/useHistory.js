@@ -72,19 +72,49 @@ export default function useHistory({ user }) {
   const deleteHistory = useCallback(
     async (itemId) => {
       if (!user) return;
-      await removeHistoryItem(itemId);
-      const items = await listHistory();
-      setHistoryItems(items || []);
+      // Optimistic: remove immediately, restore on failure
+      let removedItem;
+      setHistoryItems((prev) => {
+        removedItem = prev.find((item) => item.id === itemId);
+        return prev.filter((item) => item.id !== itemId);
+      });
+      try {
+        await removeHistoryItem(itemId);
+      } catch (err) {
+        if (removedItem) {
+          setHistoryItems((prev) =>
+            prev.some((item) => item.id === itemId) ? prev : [removedItem, ...prev]
+          );
+        }
+        throw err;
+      }
     },
     [user]
   );
+
   const deleteHistoryItems = useCallback(
     async (itemIds) => {
-      if (!user || !itemIds || itemIds.length === 0) return;
-      // 這裡暫時使用 Promise.all 併發刪除
-      await Promise.all(itemIds.map((id) => removeHistoryItem(id)));
-      const items = await listHistory();
-      setHistoryItems(items || []);
+      if (!user || !itemIds?.length) return;
+      const uniqueIds = Array.from(new Set(itemIds));
+      const idSet = new Set(uniqueIds);
+      // Optimistic: remove all targeted items immediately
+      let removedItems;
+      setHistoryItems((prev) => {
+        removedItems = prev.filter((item) => idSet.has(item.id));
+        return prev.filter((item) => !idSet.has(item.id));
+      });
+      const results = await Promise.allSettled(uniqueIds.map((id) => removeHistoryItem(id)));
+      const failedIds = new Set(
+        results
+          .map((result, i) => (result.status === "rejected" ? uniqueIds[i] : null))
+          .filter(Boolean)
+      );
+      if (failedIds.size > 0) {
+        // Restore only the items that failed to delete
+        const failedItems = (removedItems || []).filter((item) => failedIds.has(item.id));
+        setHistoryItems((prev) => [...failedItems, ...prev]);
+        throw new Error(`${failedIds.size} 筆紀錄刪除失敗`);
+      }
     },
     [user]
   );

@@ -2,6 +2,16 @@ import React, { useState } from "react";
 import { Bookmark, CheckSquare, Search, Trash2, Wand2, X, ArrowRightLeft } from "lucide-react";
 import HistoryCard from "./HistoryCard";
 import ComparisonView from "./ComparisonView";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function HistoryPanel({
   historyItems,
@@ -16,6 +26,9 @@ export default function HistoryPanel({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showComparison, setShowComparison] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const styleMap = (savedStyles || []).reduce((acc, style) => {
     acc[style.id] = style;
@@ -68,10 +81,29 @@ export default function HistoryPanel({
 
   const handleBatchDelete = () => {
     if (selectedIds.size === 0) return;
-    if (confirm(`確定要刪除選取的 ${selectedIds.size} 筆紀錄嗎？`)) {
-      onDeleteItems(Array.from(selectedIds));
+    setShowBatchConfirm(true);
+  };
+
+  const handleConfirmSingleDelete = async () => {
+    if (!pendingDeleteId) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(pendingDeleteId);
+    } finally {
+      setIsDeleting(false);
+      setPendingDeleteId(null);
+    }
+  };
+
+  const handleConfirmBatchDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await onDeleteItems(Array.from(selectedIds));
       setIsSelectionMode(false);
       setSelectedIds(new Set());
+      setShowBatchConfirm(false);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -222,7 +254,7 @@ export default function HistoryPanel({
               item={item}
               style={item.styleId ? styleMap[item.styleId] : null}
               onLoad={onLoad}
-              onDelete={onDelete}
+              onDelete={(id) => setPendingDeleteId(id)}
               isSelectionMode={isSelectionMode}
               isSelected={selectedIds.has(item.id)}
               onToggleSelect={toggleSelect}
@@ -230,6 +262,50 @@ export default function HistoryPanel({
           ))}
         </div>
       )}
+
+      {/* 單筆刪除確認 */}
+      <AlertDialog open={!!pendingDeleteId} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除紀錄</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作無法復原，刪除後將無法找回此生成紀錄。確定要刪除嗎？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmSingleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "刪除中…" : "確認刪除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 批次刪除確認 */}
+      <AlertDialog open={showBatchConfirm} onOpenChange={(open) => { if (!open && !isDeleting) setShowBatchConfirm(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認批次刪除</AlertDialogTitle>
+            <AlertDialogDescription>
+              即將刪除選取的 <strong>{selectedIds.size}</strong> 筆紀錄，此操作無法復原。確定要繼續嗎？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmBatchDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "刪除中…" : `刪除 ${selectedIds.size} 筆`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
