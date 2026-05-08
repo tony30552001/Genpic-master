@@ -1,4 +1,5 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const STYLE_DIMENSIONS = [
@@ -50,6 +51,8 @@ export const STYLE_DIMENSIONS = [
  * onSelectedChange(newSelected): 通知父元件更新
  */
 export default function StylePalette({ selected = {}, onSelectedChange }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   const toggleTag = useCallback(
     (dimensionId, tag) => {
       const dimTags = selected[dimensionId] || [];
@@ -68,9 +71,18 @@ export default function StylePalette({ selected = {}, onSelectedChange }) {
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-foreground">風格調色盤</h3>
+      {/* 標題列 + 摺疊按鈕 */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((v) => !v)}
+        className="flex w-full items-center justify-between text-sm font-semibold text-foreground hover:text-foreground/80 focus-visible:outline-none"
+      >
+        <span>風格調色盤</span>
+        {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+      </button>
 
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-md ring-1 ring-border/40">
+      {!collapsed && (
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-md ring-1 ring-border/40">
         {/* 4 欄 × 2 列維度格線 */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
           {STYLE_DIMENSIONS.map(({ id, label, tags }) => (
@@ -110,7 +122,8 @@ export default function StylePalette({ selected = {}, onSelectedChange }) {
             清空風格
           </button>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
