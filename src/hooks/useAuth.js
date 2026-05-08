@@ -8,7 +8,9 @@ export default function useAuth() {
     handleLogout,
     isAuthenticated,
     isLoading,
-    authExpired
+    authExpired,
+    authExpiredWarning,
+    dismissAuthExpiredWarning,
   } = useAuthContext();
 
   return {
@@ -18,6 +20,8 @@ export default function useAuth() {
     handleLogout,
     isAuthenticated,
     isLoading,
-    authExpired
+    authExpired,
+    authExpiredWarning,
+    dismissAuthExpiredWarning,
   };
 }

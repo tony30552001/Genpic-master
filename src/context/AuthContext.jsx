@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
     const [googleUser, setGoogleUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [authExpired, setAuthExpired] = useState(false);
+    const [authExpiredWarning, setAuthExpiredWarning] = useState(false);
     const [msalInitialized, setMsalInitialized] = useState(false);
 
     // Google Token 過期計時器 ref（提前 2 分鐘偵測過期）
@@ -37,21 +38,15 @@ export const AuthProvider = ({ children }) => {
             const timeUntilExpiry = expiresAtMs - Date.now() - EXPIRY_WARN_BUFFER_MS;
 
             if (timeUntilExpiry <= 0) {
-                // 已過期或即將過期
-                googleLogout();
-                localStorage.removeItem('google_user');
-                setGoogleUser(null);
-                setAuthExpired(true);
+                // 已過期或即將過期：顯示軟警告，讓使用者在原頁面重新登入
+                setAuthExpiredWarning(true);
                 return false;
             }
 
-            // 設定計時器，在過期前 2 分鐘自動觸發重新登入提示
+            // 設定計時器，在過期前 2 分鐘自動觸發重新登入提醒（軟警告，不強制登出）
             expiryTimerRef.current = setTimeout(() => {
                 console.warn('[Auth] Google Token 即將過期，觸發重新登入提醒');
-                googleLogout();
-                localStorage.removeItem('google_user');
-                setGoogleUser(null);
-                setAuthExpired(true);
+                setAuthExpiredWarning(true);
             }, timeUntilExpiry);
 
             console.log(`[Auth] Google Token 過期計時器已設定，${Math.round(timeUntilExpiry / 1000 / 60)} 分鐘後過期`);
@@ -159,7 +154,8 @@ export const AuthProvider = ({ children }) => {
         };
         setGoogleUser(user);
         localStorage.setItem('google_user', JSON.stringify(user));
-        setAuthExpired(false); // 清除過期標記
+        setAuthExpired(false);
+        setAuthExpiredWarning(false); // 清除軟警告
         // 設置新的過期計時器
         setupExpiryTimer(credentialResponse.credential);
     }, [setupExpiryTimer]);
@@ -174,7 +170,33 @@ export const AuthProvider = ({ children }) => {
             await microsoftLogout();
         }
         setAuthExpired(false);
+        setAuthExpiredWarning(false);
     }, [googleUser, clearExpiryTimer]);
+
+    const dismissAuthExpiredWarning = useCallback(() => {
+        setAuthExpiredWarning(false);
+    }, []);
+
+    // Tab 重新 visible 時，主動偵測 Google token 是否已過期
+    useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                const savedUser = localStorage.getItem('google_user');
+                if (savedUser) {
+                    try {
+                        const { idToken } = JSON.parse(savedUser);
+                        if (idToken && isTokenExpired(idToken)) {
+                            setAuthExpiredWarning(true);
+                        }
+                    } catch {
+                        // ignore parse errors
+                    }
+                }
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+    }, [isTokenExpired]);
 
     const user = React.useMemo(() => {
         if (AUTH_BYPASS) {
@@ -206,7 +228,9 @@ export const AuthProvider = ({ children }) => {
     const value = {
         user,
         isLoading,
-        authExpired,  // 新增：讓呼叫端知道認證已過期
+        authExpired,
+        authExpiredWarning,
+        dismissAuthExpiredWarning,
         handleMicrosoftLogin: loginWithMicrosoft,
         handleGoogleLoginSuccess,
         handleLogout,

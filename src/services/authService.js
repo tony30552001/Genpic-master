@@ -1,4 +1,5 @@
 import { jwtDecode } from "jwt-decode";
+import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest, msalInstance } from "./msalClient";
 
 // 提前 5 分鐘判定 Token 過期，避免在請求途中過期
@@ -88,10 +89,21 @@ export const acquireAccessToken = async () => {
       account,
     });
     return result.idToken;
-  } catch (error) {
+  } catch (silentError) {
+    // InteractionRequiredAuthError：refresh token 失效，嘗試 popup 刷新（官方推薦流程）
+    if (silentError instanceof InteractionRequiredAuthError) {
+      try {
+        const result = await msalInstance.acquireTokenPopup({
+          ...loginRequest,
+          account,
+        });
+        return result.idToken;
+      } catch {
+        throw new Error("認證已過期，請重新登入");
+      }
+    }
     // Silent 失敗時，不應自動彈窗，而是讓呼叫者決定如何處理
-    // 通常這表示需要重新導向到登入頁面
-    console.debug('無法靜默取得 Access Token，可能需要重新登入:', error.message);
+    console.debug('無法靜默取得 Access Token，可能需要重新登入:', silentError.message);
     throw new Error("認證已過期，請重新登入");
   }
 };

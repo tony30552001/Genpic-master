@@ -5,6 +5,7 @@ import CreatePage from './pages/CreatePage';
 import StylesPage from './pages/StylesPage';
 import HistoryPage from './pages/HistoryPage';
 import LoginPage from './pages/LoginPage';
+import SessionExpiryBanner from './components/auth/SessionExpiryBanner';
 import useAuth from './hooks/useAuth';
 
 // 保護路由組件
@@ -28,7 +29,12 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return children;
+  return (
+    <>
+      <SessionExpiryBanner />
+      {children}
+    </>
+  );
 }
 
 function App() {
