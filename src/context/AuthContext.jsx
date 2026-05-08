@@ -4,7 +4,7 @@ import { googleLogout } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { loginWithMicrosoft, logout as microsoftLogout } from '../services/authService';
 import { setAuthExpiredHandler } from '../services/apiClient';
-import { AUTH_BYPASS } from '../config';
+import { AUTH_BYPASS, GOOGLE_CLIENT_ID } from '../config';
 
 const AuthContext = createContext(null);
 
@@ -17,17 +17,74 @@ export const AuthProvider = ({ children }) => {
     const [authExpiredWarning, setAuthExpiredWarning] = useState(false);
     const [msalInitialized, setMsalInitialized] = useState(false);
 
-    // Google Token 過期計時器 ref（提前 2 分鐘偵測過期）
     const EXPIRY_WARN_BUFFER_MS = 2 * 60 * 1000;
     const expiryTimerRef = useRef(null);
+    // Stable ref to latest handleGoogleLoginSuccess — avoids circular deps in tryGoogleSilentRefresh
+    const handleGoogleLoginSuccessRef = useRef(null);
 
-    // 清除過期計時器的輔助函式
     const clearExpiryTimer = useCallback(() => {
         if (expiryTimerRef.current) {
             clearTimeout(expiryTimerRef.current);
             expiryTimerRef.current = null;
         }
     }, []);
+
+    // 檢查 Token 是否過期
+    const isTokenExpired = useCallback((token) => {
+        try {
+            const decoded = jwtDecode(token);
+            return decoded.exp < Date.now() / 1000;
+        } catch {
+            return true;
+        }
+    }, []);
+
+    /**
+     * Google One Tap 靜默刷新
+     * 當使用者瀏覽器有活躍 Google session 且只有單一帳號時，
+     * auto_select: true 會在完全無 UI 的情況下自動刷新 token。
+     * 失敗時 resolve(false)，由呼叫端決定是否顯示警告 banner。
+     */
+    const tryGoogleSilentRefresh = useCallback(() => {
+        return new Promise((resolve) => {
+            const googleApi = window.google?.accounts?.id;
+            if (!googleApi || !GOOGLE_CLIENT_ID) { resolve(false); return; }
+
+            let resolved = false;
+            const safeResolve = (val) => {
+                if (!resolved) { resolved = true; resolve(val); }
+            };
+
+            googleApi.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: (response) => {
+                    if (response?.credential) {
+                        console.log('[Auth] Google One Tap 靜默刷新成功');
+                        handleGoogleLoginSuccessRef.current?.(response);
+                        safeResolve(true);
+                    } else {
+                        safeResolve(false);
+                    }
+                },
+                auto_select: true,
+                cancel_on_tap_outside: false,
+            });
+
+            googleApi.prompt((notification) => {
+                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                    console.debug('[Auth] Google One Tap 靜默刷新未執行:',
+                        notification.getNotDisplayedReason?.() ?? notification.getSkippedReason?.());
+                    safeResolve(false);
+                }
+                if (notification.isDismissedMoment?.()) {
+                    safeResolve(false);
+                }
+            });
+
+            // 8 秒超時保護，避免 Promise 永遠懸空
+            setTimeout(() => safeResolve(false), 8000);
+        });
+    }, []); // stable — 僅讀取 ref，不依賴任何 state
 
     // 設置 Google Token 過期計時器
     const setupExpiryTimer = useCallback((token) => {
@@ -38,35 +95,28 @@ export const AuthProvider = ({ children }) => {
             const timeUntilExpiry = expiresAtMs - Date.now() - EXPIRY_WARN_BUFFER_MS;
 
             if (timeUntilExpiry <= 0) {
-                // 已過期或即將過期：顯示軟警告，讓使用者在原頁面重新登入
-                setAuthExpiredWarning(true);
+                // 已過期：嘗試靜默刷新，失敗才顯示警告 banner
+                tryGoogleSilentRefresh().then((ok) => {
+                    if (!ok) setAuthExpiredWarning(true);
+                });
                 return false;
             }
 
-            // 設定計時器，在過期前 2 分鐘自動觸發重新登入提醒（軟警告，不強制登出）
-            expiryTimerRef.current = setTimeout(() => {
-                console.warn('[Auth] Google Token 即將過期，觸發重新登入提醒');
-                setAuthExpiredWarning(true);
+            expiryTimerRef.current = setTimeout(async () => {
+                console.warn('[Auth] Google Token 即將過期，嘗試靜默刷新...');
+                const ok = await tryGoogleSilentRefresh();
+                if (!ok) {
+                    console.warn('[Auth] 靜默刷新失敗，顯示重新登入提示');
+                    setAuthExpiredWarning(true);
+                }
             }, timeUntilExpiry);
 
-            console.log(`[Auth] Google Token 過期計時器已設定，${Math.round(timeUntilExpiry / 1000 / 60)} 分鐘後過期`);
+            console.log(`[Auth] Google Token 過期計時器已設定，${Math.round(timeUntilExpiry / 1000 / 60)} 分鐘後觸發`);
             return true;
         } catch {
             return false;
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [clearExpiryTimer]);
-
-    // 檢查 Token 是否過期的輔助函數
-    const isTokenExpired = useCallback((token) => {
-        try {
-            const decoded = jwtDecode(token);
-            const currentTime = Date.now() / 1000;
-            return decoded.exp < currentTime;
-        } catch {
-            return true;
-        }
-    }, []);
+    }, [clearExpiryTimer, tryGoogleSilentRefresh]);
 
     // 初始化 Google 登入狀態 (從 localStorage) 並設置過期計時器
     useEffect(() => {
@@ -74,34 +124,26 @@ export const AuthProvider = ({ children }) => {
         if (savedUser) {
             try {
                 const user = JSON.parse(savedUser);
-                // 檢查 Token 是否已過期
                 if (isTokenExpired(user.idToken)) {
-                    // Token 已過期，清除登入狀態
                     googleLogout();
                     localStorage.removeItem('google_user');
-                     
                     setAuthExpired(true);
                 } else {
                     setGoogleUser(user);
-                    // 設置自動過期計時器
                     setupExpiryTimer(user.idToken);
                 }
             } catch {
                 localStorage.removeItem('google_user');
             }
         }
-
         return () => clearExpiryTimer();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // 監聽 MSAL 初始化完成
     useEffect(() => {
-        // 等待 MSAL 初始化完成（instance 已準備就緒）
         const checkMsalInit = async () => {
             try {
-                // MSAL 初始化由 main.jsx 處理，這裡等待一個渲染周期
-                // 確保 useIsAuthenticated 已經有正確的初始值
                 await new Promise(resolve => setTimeout(resolve, 0));
                 setMsalInitialized(true);
             } catch (e) {
@@ -112,18 +154,13 @@ export const AuthProvider = ({ children }) => {
         checkMsalInit();
     }, []);
 
-    // 當 Google 或 MSAL 任一載入完成時，設定 isLoading 為 false
     useEffect(() => {
-        if (msalInitialized) {
-             
-            setIsLoading(false);
-        }
+        if (msalInitialized) setIsLoading(false);
     }, [msalInitialized]);
 
     // 設定 Token 過期處理回呼
     useEffect(() => {
         setAuthExpiredHandler(() => {
-            // 清除 Google 登入狀態
             if (googleUser) {
                 googleLogout();
                 setGoogleUser(null);
@@ -141,7 +178,6 @@ export const AuthProvider = ({ children }) => {
         }
     }, [accounts, instance]);
 
-
     const handleGoogleLoginSuccess = useCallback((credentialResponse) => {
         const decoded = jwtDecode(credentialResponse.credential);
         const user = {
@@ -155,13 +191,17 @@ export const AuthProvider = ({ children }) => {
         setGoogleUser(user);
         localStorage.setItem('google_user', JSON.stringify(user));
         setAuthExpired(false);
-        setAuthExpiredWarning(false); // 清除軟警告
-        // 設置新的過期計時器
+        setAuthExpiredWarning(false);
         setupExpiryTimer(credentialResponse.credential);
     }, [setupExpiryTimer]);
 
+    // handleGoogleLoginSuccessRef 保持與最新的 handleGoogleLoginSuccess 同步
+    useEffect(() => {
+        handleGoogleLoginSuccessRef.current = handleGoogleLoginSuccess;
+    }, [handleGoogleLoginSuccess]);
+
     const handleLogout = useCallback(async () => {
-        clearExpiryTimer(); // 清除過期計時器
+        clearExpiryTimer();
         if (googleUser) {
             googleLogout();
             setGoogleUser(null);
@@ -177,26 +217,26 @@ export const AuthProvider = ({ children }) => {
         setAuthExpiredWarning(false);
     }, []);
 
-    // Tab 重新 visible 時，主動偵測 Google token 是否已過期
+    // Tab 重新 visible 時主動偵測 token，嘗試靜默刷新
     useEffect(() => {
-        const onVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                const savedUser = localStorage.getItem('google_user');
-                if (savedUser) {
-                    try {
-                        const { idToken } = JSON.parse(savedUser);
-                        if (idToken && isTokenExpired(idToken)) {
-                            setAuthExpiredWarning(true);
-                        }
-                    } catch {
-                        // ignore parse errors
-                    }
+        const onVisibilityChange = async () => {
+            if (document.visibilityState !== 'visible') return;
+            const savedUser = localStorage.getItem('google_user');
+            if (!savedUser) return;
+            try {
+                const { idToken } = JSON.parse(savedUser);
+                if (idToken && isTokenExpired(idToken)) {
+                    console.warn('[Auth] Tab 回到前景，偵測到 token 已過期，嘗試靜默刷新...');
+                    const ok = await tryGoogleSilentRefresh();
+                    if (!ok) setAuthExpiredWarning(true);
                 }
+            } catch {
+                // ignore parse errors
             }
         };
         document.addEventListener('visibilitychange', onVisibilityChange);
         return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-    }, [isTokenExpired]);
+    }, [isTokenExpired, tryGoogleSilentRefresh]);
 
     const user = React.useMemo(() => {
         if (AUTH_BYPASS) {
@@ -208,9 +248,7 @@ export const AuthProvider = ({ children }) => {
                 authType: 'bypass'
             };
         }
-
         if (googleUser) return googleUser;
-
         if (isMsalAuthenticated && accounts.length > 0) {
             const account = accounts[0];
             return {
@@ -221,7 +259,6 @@ export const AuthProvider = ({ children }) => {
                 authType: 'microsoft'
             };
         }
-
         return null;
     }, [isMsalAuthenticated, accounts, googleUser]);
 
