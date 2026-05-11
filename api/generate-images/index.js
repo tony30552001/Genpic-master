@@ -26,7 +26,7 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3-pro-image-preview";
+    const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
     const model = getModel(modelName);
     const textPrompt = aspectRatio
       ? `${prompt}\nAspect ratio: ${aspectRatio}.`

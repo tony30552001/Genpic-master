@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 import {
-  Upload, X, Wand2, Loader2, Save, Download,
-  Palette, Copy, Scissors, Image as ImageIcon, Monitor, Layout, Square, Smartphone,
+  Upload, X, Wand2, Loader2, Download,
+  Palette, Copy, Scissors, Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,10 +41,16 @@ const TRANSFORM_MODES = [
 ];
 
 const ASPECT_RATIOS = [
-  { id: "1:1", label: "1:1", icon: Square },
-  { id: "16:9", label: "16:9", icon: Monitor },
-  { id: "4:3", label: "4:3", icon: Layout },
-  { id: "9:16", label: "9:16", icon: Smartphone },
+  { id: "1:1",  label: "1:1" },
+  { id: "16:9", label: "16:9" },
+  { id: "9:16", label: "9:16" },
+  { id: "4:3",  label: "4:3" },
+  { id: "3:4",  label: "3:4" },
+  { id: "3:2",  label: "3:2" },
+  { id: "2:3",  label: "2:3" },
+  { id: "5:4",  label: "5:4" },
+  { id: "4:5",  label: "4:5" },
+  { id: "21:9", label: "21:9" },
 ];
 
 export default function ImageTransformPanel({
@@ -254,21 +260,20 @@ export default function ImageTransformPanel({
             {/* Aspect Ratio */}
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">輸出比例</p>
-              <div className="flex gap-1.5">
-                {ASPECT_RATIOS.map(({ id, label, icon: Icon }) => (
+              <div className="flex flex-wrap gap-1.5">
+                {ASPECT_RATIOS.map(({ id, label }) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => onAspectRatioChange(id)}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       aspectRatio === id
                         ? "border-primary bg-primary/8 text-primary"
                         : "border-border bg-background text-muted-foreground hover:border-primary/40"
                     )}
                   >
-                    <Icon className="w-3 h-3 shrink-0" />
-                    <span>{label}</span>
+                    {label}
                   </button>
                 ))}
               </div>

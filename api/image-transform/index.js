@@ -6,19 +6,23 @@ const { isUrlAllowed } = require("../_shared/urlValidator");
 
 /**
  * 依轉換模式建構 Gemini 文字 Prompt
+ * 針對 gemini-3.1-flash-image-preview 的 advanced reasoning 最佳化
  */
 const buildTransformPrompt = (mode, userPrompt) => {
   const base = userPrompt ? userPrompt.trim() : "";
   switch (mode) {
     case "style_transfer":
-      return `Transform the visual style of this image. Apply the following style: ${base || "a fresh artistic style"}. Keep the same subjects, composition, and content, but change the color palette, artistic treatment, and visual style completely.`;
+      return `You are an expert image style transfer artist. Look at this image carefully. Recreate it with a completely different artistic style: ${base || "a fresh artistic style"}. CRITICAL: preserve the exact same subjects, objects, composition layout, and spatial relationships. Only change the visual style, color treatment, brushwork, and artistic rendering. The content must remain identical.`;
+
     case "element_extract":
-      return `Extract the main subjects and key elements from this image. Place them in a new scene or context as described: ${base || "a completely new environment"}. Keep the extracted subjects recognizable but adapt them naturally to the new context.`;
+      return `You are a skilled image compositor. Identify and extract the main foreground subjects from this image — preserve their exact appearance, details, and proportions. Then place them naturally into a completely new scene: ${base || "a new environment"}. Ensure consistent lighting direction, realistic shadows, and natural integration between the extracted subjects and the new environment.`;
+
     case "bg_replace":
-      return `Keep the main foreground subjects and characters in this image exactly as they appear. Replace only the background with: ${base || "a new background"}. The foreground subjects must remain unchanged.`;
+      return `You are a professional photo editor. In this image, keep the foreground subjects (people, objects) EXACTLY as they appear — do NOT alter their appearance, clothing, expressions, or position in any way. Replace ONLY the background with: ${base || "a new background"}. Match the lighting on the foreground subjects to the new background to make the composition look natural and photorealistic.`;
+
     case "reference_gen":
     default:
-      return `Using this image as a visual reference and inspiration, generate a completely new image based on the following description: ${base || "a creative new image inspired by this reference"}. Incorporate similar color palette, mood, and composition style.`;
+      return `Use this image as a visual reference. Analyze its color palette, mood, lighting style, and compositional structure. Generate an entirely new, original image with this description: ${base || "a creative new image inspired by this reference"}. The new image should share the same aesthetic atmosphere and visual quality as the reference, but with completely different content.`;
   }
 };
 
@@ -45,7 +49,7 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3-pro-image-preview";
+    const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
     const model = getModel(modelName);
 
     let base64Data = imageBase64 || null;
