@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { transformImage } from "../services/aiService";
 import { requestBlobSas } from "../services/storageService";
 import { DEFAULT_IMAGE_MODEL } from "../config";
+import { STYLE_DIMENSIONS } from "../components/create/StylePalette";
 
 const INITIAL_MODE = "style_transfer";
 const INITIAL_ASPECT_RATIO = "1:1";
@@ -38,14 +39,15 @@ export default function useImageTransform() {
   // Transform settings
   const [mode, setMode] = useState(INITIAL_MODE);
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState(() => {
-    try {
-      return localStorage.getItem("genpic_image_model") || DEFAULT_IMAGE_MODEL;
-    } catch {
-      return DEFAULT_IMAGE_MODEL;
-    }
-  });
   const [aspectRatio, setAspectRatio] = useState(INITIAL_ASPECT_RATIO);
+
+  // Style palette (StylePalette tags)
+  const [paletteSelected, setPaletteSelected] = useState({});
+
+  // Applied saved style
+  const [appliedStylePrompt, setAppliedStylePrompt] = useState("");
+  const [appliedStyleName, setAppliedStyleName] = useState("");
+  const [appliedStyleId, setAppliedStyleId] = useState(null);
 
   // Result state
   const [result, setResult] = useState(null);
@@ -113,7 +115,7 @@ export default function useImageTransform() {
     setTransformError("");
   }, []);
 
-  const runTransform = useCallback(async () => {
+  const runTransform = useCallback(async ({ model = DEFAULT_IMAGE_MODEL } = {}) => {
     if (!sourcePreview) {
       setTransformError("請先上傳來源圖片。");
       return null;
@@ -126,19 +128,31 @@ export default function useImageTransform() {
     setIsTransforming(true);
     setTransformError("");
 
+    // Build merged prompt: user prompt + palette style tags + applied saved style
+    const paletteStyleStr = STYLE_DIMENSIONS
+      .flatMap((d) => paletteSelected[d.id] || [])
+      .join("，");
+
+    const parts = [
+      prompt.trim(),
+      paletteStyleStr ? `風格：${paletteStyleStr}` : "",
+      appliedStylePrompt.trim(),
+    ].filter(Boolean);
+    const mergedPrompt = parts.join("\n");
+
     try {
       const res = await transformImage({
         imageDataUrl: sourcePreview,
         imageBlobSasUrl: sourceBlobSasUrl,
         mimeType: sourceMimeType,
         mode,
-        prompt,
+        prompt: mergedPrompt,
         aspectRatio,
         model,
         signal: abortController.signal,
       });
       setResult(res.imageUrl);
-      return res.imageUrl;
+      return { imageUrl: res.imageUrl, mergedPrompt };
     } catch (err) {
       if (isAbortError(err)) {
         const abortError = new Error("已取消本次轉換等待。");
@@ -152,7 +166,7 @@ export default function useImageTransform() {
         setIsTransforming(false);
       }
     }
-  }, [sourcePreview, sourceBlobSasUrl, sourceMimeType, mode, prompt, aspectRatio, model]);
+  }, [sourcePreview, sourceBlobSasUrl, sourceMimeType, mode, prompt, aspectRatio, paletteSelected, appliedStylePrompt]);
 
   const cancelTransform = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -176,10 +190,20 @@ export default function useImageTransform() {
     setMode,
     prompt,
     setPrompt,
-    model,
-    setModel,
     aspectRatio,
     setAspectRatio,
+
+    // Style palette
+    paletteSelected,
+    setPaletteSelected,
+
+    // Applied saved style
+    appliedStylePrompt,
+    setAppliedStylePrompt,
+    appliedStyleName,
+    setAppliedStyleName,
+    appliedStyleId,
+    setAppliedStyleId,
 
     // Result
     result,

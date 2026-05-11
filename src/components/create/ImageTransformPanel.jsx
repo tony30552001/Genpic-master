@@ -1,13 +1,16 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   Upload, X, Wand2, Loader2, Download,
-  Palette, Copy, Scissors, Image as ImageIcon,
+  Palette, Copy, Scissors, Image as ImageIcon, ChevronDown, ChevronUp, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { IMAGE_MODEL_OPTIONS } from "@/config";
+import StylePalette from "./StylePalette";
+import PromptTemplates from "./PromptTemplates";
 
 const TRANSFORM_MODES = [
   {
@@ -66,10 +69,22 @@ export default function ImageTransformPanel({
   onModeChange,
   prompt,
   onPromptChange,
-  model,
-  onModelChange,
   aspectRatio,
   onAspectRatioChange,
+
+  // Style palette
+  paletteSelected,
+  onPaletteSelectedChange,
+
+  // Style library
+  savedStyles = [],
+  appliedStyleName,
+  appliedStyleId,
+  onApplyStyle,
+  onClearAppliedStyle,
+
+  // Global model (read-only, from Settings)
+  globalModelLabel,
 
   // Result
   result,
@@ -80,6 +95,7 @@ export default function ImageTransformPanel({
   onDownloadResult,
 }) {
   const fileInputRef = useRef(null);
+  const [showStylePicker, setShowStylePicker] = useState(false);
   const activeModeInfo = TRANSFORM_MODES.find((m) => m.id === mode) || TRANSFORM_MODES[0];
 
   const handleDrop = (e) => {
@@ -213,10 +229,24 @@ export default function ImageTransformPanel({
             </div>
           </section>
 
-          {/* 3. Custom Prompt */}
+          {/* 3. Prompt Templates */}
           <section>
             <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">3</span>
+              風格範本
+            </h2>
+            <PromptTemplates
+              onFill={(text, palette) => {
+                onPromptChange(text);
+                onPaletteSelectedChange(palette || {});
+              }}
+            />
+          </section>
+
+          {/* 4. Custom Prompt */}
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">4</span>
               描述轉換效果
             </h2>
             <Textarea
@@ -228,34 +258,93 @@ export default function ImageTransformPanel({
             />
           </section>
 
-          {/* 4. Model + Aspect Ratio */}
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">4</span>
-              生成設定
+          {/* 5. Style Palette */}
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">5</span>
+              風格調色盤
+            </h2>
+            <StylePalette
+              selected={paletteSelected}
+              onSelectedChange={onPaletteSelectedChange}
+            />
+          </section>
+
+          {/* 6. Style Library */}
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">6</span>
+              風格庫
             </h2>
 
-            {/* Model */}
-            <div>
-              <p className="text-xs text-muted-foreground mb-1.5">AI 模型</p>
-              <div className="flex gap-2">
-                {IMAGE_MODEL_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => onModelChange(opt.id)}
-                    className={cn(
-                      "flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      model === opt.id
-                        ? "border-primary bg-primary/8 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:border-primary/40"
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            {/* Applied style badge */}
+            {appliedStyleName ? (
+              <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="flex-1 text-xs font-medium text-primary truncate">{appliedStyleName}</span>
+                <button
+                  type="button"
+                  onClick={onClearAppliedStyle}
+                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors focus-visible:outline-none"
+                  aria-label="取消套用風格"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowStylePicker((v) => !v)}
+                className="flex w-full items-center gap-2 rounded-lg border border-border/70 bg-muted/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-expanded={showStylePicker}
+              >
+                <Palette className="w-4 h-4 shrink-0 text-muted-foreground" />
+                <span className="flex-1 text-xs font-medium text-foreground">套用已儲存的風格</span>
+                {showStylePicker ? (
+                  <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+                )}
+              </button>
+            )}
+
+            {showStylePicker && !appliedStyleName && (
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border bg-card custom-scrollbar">
+                {savedStyles.length === 0 ? (
+                  <p className="px-3 py-4 text-xs text-muted-foreground text-center">尚無已儲存的風格</p>
+                ) : (
+                  savedStyles.map((style) => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => { onApplyStyle(style); setShowStylePicker(false); }}
+                      className={cn(
+                        "flex w-full items-start gap-2 px-3 py-2.5 text-left text-xs transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        appliedStyleId === style.id && "bg-primary/5"
+                      )}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-foreground truncate">{style.name}</p>
+                        {style.description && (
+                          <p className="text-muted-foreground line-clamp-1 mt-0.5">{style.description}</p>
+                        )}
+                      </div>
+                      {appliedStyleId === style.id && (
+                        <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* 7. Aspect Ratio + Model Info */}
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">7</span>
+              生成設定
+            </h2>
 
             {/* Aspect Ratio */}
             <div>
@@ -278,6 +367,14 @@ export default function ImageTransformPanel({
                 ))}
               </div>
             </div>
+
+            {/* Model info (read-only) */}
+            {globalModelLabel && (
+              <p className="text-xs text-muted-foreground">
+                生成模型：<span className="font-medium text-foreground">{globalModelLabel}</span>
+                <span className="ml-1 text-muted-foreground/70">（可至「設定」頁面變更）</span>
+              </p>
+            )}
           </section>
 
           {/* Error Message */}

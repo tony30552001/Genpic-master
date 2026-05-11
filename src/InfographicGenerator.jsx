@@ -13,7 +13,7 @@ import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import useImageTransform from './hooks/useImageTransform';
 import { requestBlobSas } from './services/storageService';
-import { DEFAULT_IMAGE_MODEL } from './config';
+import { DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from './config';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -130,8 +130,11 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         clearSource: clearTransformSource,
         mode: transformMode, setMode: setTransformMode,
         prompt: transformPrompt, setPrompt: setTransformPrompt,
-        model: transformModel, setModel: setTransformModel,
         aspectRatio: transformAspectRatio, setAspectRatio: setTransformAspectRatio,
+        paletteSelected: transformPaletteSelected, setPaletteSelected: setTransformPaletteSelected,
+        appliedStylePrompt: transformAppliedStylePrompt, setAppliedStylePrompt: setTransformAppliedStylePrompt,
+        appliedStyleName: transformAppliedStyleName, setAppliedStyleName: setTransformAppliedStyleName,
+        appliedStyleId: transformAppliedStyleId, setAppliedStyleId: setTransformAppliedStyleId,
         result: transformResult,
         isTransforming,
         transformError, setTransformError,
@@ -140,12 +143,32 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         clearResult: clearTransformResult,
     } = useImageTransform();
 
+    const handleApplyStyleForTransform = (styleData) => {
+        setTransformAppliedStylePrompt(styleData.prompt || '');
+        setTransformAppliedStyleName(styleData.name || '');
+        setTransformAppliedStyleId(styleData.id || null);
+    };
+
+    const handleClearAppliedStyleForTransform = () => {
+        setTransformAppliedStylePrompt('');
+        setTransformAppliedStyleName('');
+        setTransformAppliedStyleId(null);
+    };
+
     const handleTransform = async () => {
         try {
             setTransformError('');
-            const imageUrl = await runTransform();
-            if (imageUrl) {
-                await saveHistoryItem({ imageUrl, userScript: transformPrompt || `圖片轉換 (${transformMode})`, stylePrompt: '', fullPrompt: transformPrompt });
+            const result = await runTransform({ model: imageModel });
+            if (result?.imageUrl) {
+                await saveHistoryItem({
+                    imageUrl: result.imageUrl,
+                    userScript: transformPrompt || `圖片轉換 (${transformMode})`,
+                    stylePrompt: transformAppliedStyleName || '',
+                    fullPrompt: result.mergedPrompt || transformPrompt,
+                });
+                if (transformAppliedStyleId) {
+                    markStyleUsed(transformAppliedStyleId).catch(() => {});
+                }
             }
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -780,10 +803,16 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             onModeChange={setTransformMode}
                             prompt={transformPrompt}
                             onPromptChange={setTransformPrompt}
-                            model={transformModel}
-                            onModelChange={setTransformModel}
                             aspectRatio={transformAspectRatio}
                             onAspectRatioChange={setTransformAspectRatio}
+                            paletteSelected={transformPaletteSelected}
+                            onPaletteSelectedChange={setTransformPaletteSelected}
+                            savedStyles={savedStyles}
+                            appliedStyleName={transformAppliedStyleName}
+                            appliedStyleId={transformAppliedStyleId}
+                            onApplyStyle={handleApplyStyleForTransform}
+                            onClearAppliedStyle={handleClearAppliedStyleForTransform}
+                            globalModelLabel={IMAGE_MODEL_OPTIONS.find(m => m.id === imageModel)?.label || imageModel}
                             result={transformResult}
                             isTransforming={isTransforming}
                             transformError={transformError}
