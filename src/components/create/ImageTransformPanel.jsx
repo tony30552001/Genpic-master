@@ -7,8 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { IMAGE_MODEL_OPTIONS } from "@/config";
 import StylePalette from "./StylePalette";
 import PromptTemplates from "./PromptTemplates";
 
@@ -55,6 +53,50 @@ const ASPECT_RATIOS = [
   { id: "4:5",  label: "4:5" },
   { id: "21:9", label: "21:9" },
 ];
+
+/** Shared result content (used in both desktop card and mobile section) */
+function ResultContent({ isTransforming, result, onDownloadResult }) {
+  if (isTransforming) {
+    return (
+      <div className="w-full flex flex-col items-center gap-4">
+        <Skeleton className="w-full aspect-square max-w-sm rounded-xl bg-muted/80" />
+        <p className="text-sm text-muted-foreground animate-pulse">AI 正在轉換圖片，請稍候…</p>
+      </div>
+    );
+  }
+  if (result) {
+    return (
+      <div className="w-full flex flex-col items-center gap-4">
+        <img
+          src={result}
+          alt="AI 轉換結果"
+          className="w-full h-auto max-h-[65vh] object-contain rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-500"
+        />
+        <button
+          type="button"
+          onClick={onDownloadResult}
+          className="flex items-center gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-md border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Download className="w-4 h-4 shrink-0" />
+          下載圖片
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center gap-4 text-center px-4">
+      <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/15 flex items-center justify-center shadow-sm">
+        <Wand2 className="w-9 h-9 text-primary/60" />
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-base font-semibold text-foreground">轉換結果會在這裡顯示</p>
+        <p className="text-xs text-muted-foreground max-w-xs">
+          上傳來源圖片，選擇轉換模式並描述效果，點擊「開始 AI 轉換」即可生成。
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function ImageTransformPanel({
   // Source image
@@ -113,11 +155,24 @@ export default function ImageTransformPanel({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-full min-h-0 gap-0">
+    /* Mirror general creation outer wrapper */
+    <div className="h-full min-h-0 flex flex-col bg-muted/25 overflow-y-auto lg:overflow-hidden custom-scrollbar">
 
-      {/* ─── Left Panel: Settings ─── */}
-      <div className="w-full lg:w-[420px] xl:w-[460px] shrink-0 flex flex-col border-r border-border bg-background overflow-y-auto custom-scrollbar">
-        <div className="p-4 lg:p-6 space-y-5">
+      {/* Error Message (top, full-width) */}
+      {transformError && (
+        <div className="shrink-0 px-4 lg:px-8 pt-3">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
+            {transformError}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Main content: 3/5 controls + 2/5 result (mirrors general creation) ─── */}
+      <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-5 lg:gap-6 px-4 py-3 lg:px-8">
+
+        {/* ─── Left: Controls (col-span-3) ─── */}
+        <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pl-px pr-1">
+          <div className="space-y-5">
 
           {/* 1. Source Image Upload */}
           <section>
@@ -377,18 +432,11 @@ export default function ImageTransformPanel({
             )}
           </section>
 
-          {/* Error Message */}
-          {transformError && (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
-              {transformError}
-            </div>
-          )}
-
           {/* Generate Button */}
           <Button
             onClick={isTransforming ? onCancelTransform : onTransform}
             disabled={!sourcePreview || isUploadingSource}
-            className="w-full gap-2"
+            className="w-full gap-2 mb-4"
             variant={isTransforming ? "outline" : "default"}
           >
             {isTransforming ? (
@@ -404,46 +452,36 @@ export default function ImageTransformPanel({
             )}
           </Button>
         </div>
+
+        {/* ─── Mobile result (below controls, hidden on lg+) ─── */}
+        <div className="lg:hidden mt-2 mb-4 overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40">
+          <ResultContent
+            isTransforming={isTransforming}
+            result={result}
+            onDownloadResult={onDownloadResult}
+          />
+        </div>
       </div>
 
-      {/* ─── Right Panel: Result Preview ─── */}
-      <div className="flex-1 min-w-0 flex flex-col items-center justify-center bg-muted/20 relative p-4 lg:p-8">
-        {isTransforming ? (
-          <div className="w-full max-w-xl flex flex-col items-center gap-4">
-            <Skeleton className="w-full aspect-square max-w-sm rounded-xl bg-muted/80" />
-            <p className="text-sm text-muted-foreground animate-pulse">AI 正在轉換圖片，請稍候…</p>
-          </div>
-        ) : result ? (
-          <div className="w-full max-w-2xl flex flex-col items-center gap-4">
-            <img
-              src={result}
-              alt="AI 轉換結果"
-              className="w-full h-auto max-h-[65vh] object-contain rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-500"
+        {/* ─── Right: Result Preview (col-span-2, desktop only) ─── */}
+        <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40">
+          {/* Decorative dot grid background */}
+          <div
+            className={`absolute inset-0 bg-muted/35 transition-opacity duration-300 ${isTransforming || result ? 'opacity-0' : 'opacity-100'}`}
+            style={{
+              backgroundImage: 'linear-gradient(hsl(var(--foreground) / 0.06) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground) / 0.06) 1px, transparent 1px)',
+              backgroundSize: '24px 24px'
+            }}
+          />
+          <div className="relative z-10 w-full h-full flex items-center justify-center p-6">
+            <ResultContent
+              isTransforming={isTransforming}
+              result={result}
+              onDownloadResult={onDownloadResult}
             />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onDownloadResult}
-                className="flex items-center gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-md border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Download className="w-4 h-4 shrink-0" />
-                下載圖片
-              </button>
-            </div>
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-4 text-center px-4">
-            <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/15 flex items-center justify-center shadow-sm">
-              <Wand2 className="w-9 h-9 text-primary/60" />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-base font-semibold text-foreground">轉換結果會在這裡顯示</p>
-              <p className="text-xs text-muted-foreground max-w-xs">
-                上傳來源圖片，選擇轉換模式並描述效果，點擊「開始 AI 轉換」即可生成。
-              </p>
-            </div>
-          </div>
-        )}
+        </div>
+
       </div>
     </div>
   );
