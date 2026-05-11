@@ -21,6 +21,11 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 export const GPT_IMAGE_ENDPOINT = import.meta.env.VITE_GPT_IMAGE_ENDPOINT || "";
 export const GPT_IMAGE_API_KEY = import.meta.env.VITE_GPT_IMAGE_API_KEY || "";
 
+// GPT-Image-2 圖片編輯端點（若未設定，自動從生成端點推導）
+const _gptEditEnv = import.meta.env.VITE_GPT_IMAGE_EDIT_ENDPOINT || "";
+export const GPT_IMAGE_EDIT_ENDPOINT = _gptEditEnv ||
+  (GPT_IMAGE_ENDPOINT ? GPT_IMAGE_ENDPOINT.replace(/\/images\/generations([^/]*)$/, "/images/edits$1") : "");
+
 // 5. 圖片生成模型選項
 export const IMAGE_MODEL_OPTIONS = [
     {

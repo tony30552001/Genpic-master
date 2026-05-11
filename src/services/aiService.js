@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "../config";
 import { apiPost } from "./apiClient";
-import { generateImageGpt } from "./gptImageService";
+import { generateImageGpt, editImageGpt } from "./gptImageService";
 
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
@@ -48,3 +48,44 @@ export const analyzeDocument = async ({ documentUrl, fileName, contentType, base
  */
 export const optimizeScene = async ({ scene_title, scene_description, visual_prompt, mood, key_elements, styleContext }) =>
   apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext });
+
+/**
+ * AI 圖片轉換 — 支援 Gemini（後端）和 GPT-Image-2（前端 edit API）
+ * @param {Object} params
+ * @param {string} params.imageDataUrl - 來源圖片 base64 data URL
+ * @param {string} [params.imageBlobSasUrl] - 來源圖片 Blob SAS URL（Gemini 路徑優先使用）
+ * @param {string} params.mimeType - 圖片 MIME 類型
+ * @param {'style_transfer'|'reference_gen'|'element_extract'|'bg_replace'} params.mode - 轉換模式
+ * @param {string} params.prompt - 使用者自訂描述
+ * @param {string} [params.aspectRatio] - 圖片比例
+ * @param {string} [params.imageSize] - 圖片尺寸（Gemini）
+ * @param {'gemini-imagen'|'gpt-image-2'} params.model - AI 模型
+ * @param {AbortSignal} [params.signal]
+ * @returns {Promise<{imageUrl: string}>}
+ */
+export const transformImage = async ({
+  imageDataUrl,
+  imageBlobSasUrl,
+  mimeType,
+  mode,
+  prompt,
+  aspectRatio,
+  imageSize,
+  model,
+  signal,
+}) => {
+  if (model === "gpt-image-2") {
+    return editImageGpt({ imageDataUrl, prompt, aspectRatio, signal });
+  }
+  // Gemini：透過後端 Azure Function
+  const imageBase64 = imageDataUrl ? imageDataUrl.split(",")[1] : null;
+  return apiPost(`${API_BASE_URL}/image-transform`, {
+    imageBase64,
+    imageUrl: imageBlobSasUrl || null,
+    mimeType,
+    mode,
+    prompt,
+    aspectRatio,
+    imageSize,
+  });
+};

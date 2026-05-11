@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X
+    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -11,6 +11,7 @@ import useHistory from './hooks/useHistory';
 import useImageGeneration from './hooks/useImageGeneration';
 import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
+import useImageTransform from './hooks/useImageTransform';
 import { requestBlobSas } from './services/storageService';
 import { DEFAULT_IMAGE_MODEL } from './config';
 
@@ -27,6 +28,7 @@ import DocumentScenes from './components/create/DocumentScenes';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import TemplateLibrary from './components/templates/TemplateLibrary';
+import ImageTransformPanel from './components/create/ImageTransformPanel';
 
 export default function InfographicGenerator({ initialTab = 'general' }) {
     // --- State Management ---
@@ -119,6 +121,51 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         analyzeStyle, generateImage, cancelGeneration, clearStyle,
         setAnalyzedStyle, setAnalysisResultData, setGeneratedImage
     } = useImageGeneration();
+
+    const {
+        sourcePreview: transformSourcePreview,
+        isUploadingSource: isUploadingTransformSource,
+        sourceUploadProgress: transformSourceUploadProgress,
+        handleSourceImageUpload: handleTransformSourceUpload,
+        clearSource: clearTransformSource,
+        mode: transformMode, setMode: setTransformMode,
+        prompt: transformPrompt, setPrompt: setTransformPrompt,
+        model: transformModel, setModel: setTransformModel,
+        aspectRatio: transformAspectRatio, setAspectRatio: setTransformAspectRatio,
+        result: transformResult,
+        isTransforming,
+        transformError, setTransformError,
+        runTransform,
+        cancelTransform,
+        clearResult: clearTransformResult,
+    } = useImageTransform();
+
+    const handleTransform = async () => {
+        try {
+            setTransformError('');
+            const imageUrl = await runTransform();
+            if (imageUrl) {
+                await saveHistoryItem({ imageUrl, userScript: transformPrompt || `圖片轉換 (${transformMode})`, stylePrompt: '', fullPrompt: transformPrompt });
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                setTransformError(err.message);
+                return;
+            }
+            console.error('Image transform failed:', err);
+            setTransformError(`轉換失敗: ${err.message || '請稍後再試'}`);
+        }
+    };
+
+    const handleDownloadTransformResult = () => {
+        if (!transformResult) return;
+        const link = document.createElement('a');
+        link.href = transformResult;
+        link.download = `pixora-transform-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     // --- Core Logic Functions ---
 
@@ -446,6 +493,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const tabs = [
         { id: 'general', label: '一般創作', shortLabel: '創作', icon: Wand2 },
         { id: 'document', label: '文件分析', shortLabel: '文件', icon: FileText },
+        { id: 'image-transform', label: '圖片轉換', shortLabel: '轉換', icon: ImagePlay },
         { id: 'templates', label: '範本', shortLabel: '範本', icon: LayoutTemplate },
         { id: 'styles', label: '風格庫', shortLabel: '風格', icon: Bookmark },
         { id: 'history', label: '紀錄', shortLabel: '紀錄', icon: History },
@@ -715,6 +763,33 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 (activeTab === 'document' && (!scenes || scenes.length === 0)) ||
                                 (activeTab === 'general' && !userScript && !contentImagePreview)
                             }
+                        />
+                    </div>
+                )}
+
+                {/* ─── Image Transform Tab ─── */}
+                {activeTab === 'image-transform' && (
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        <ImageTransformPanel
+                            sourcePreview={transformSourcePreview}
+                            isUploadingSource={isUploadingTransformSource}
+                            sourceUploadProgress={transformSourceUploadProgress}
+                            onSourceImageUpload={handleTransformSourceUpload}
+                            onClearSource={clearTransformSource}
+                            mode={transformMode}
+                            onModeChange={setTransformMode}
+                            prompt={transformPrompt}
+                            onPromptChange={setTransformPrompt}
+                            model={transformModel}
+                            onModelChange={setTransformModel}
+                            aspectRatio={transformAspectRatio}
+                            onAspectRatioChange={setTransformAspectRatio}
+                            result={transformResult}
+                            isTransforming={isTransforming}
+                            transformError={transformError}
+                            onTransform={handleTransform}
+                            onCancelTransform={cancelTransform}
+                            onDownloadResult={handleDownloadTransformResult}
                         />
                     </div>
                 )}

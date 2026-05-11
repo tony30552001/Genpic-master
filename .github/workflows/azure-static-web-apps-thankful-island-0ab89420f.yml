@@ -55,6 +55,7 @@ jobs:
           VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
           VITE_GPT_IMAGE_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_ENDPOINT }}
           VITE_GPT_IMAGE_API_KEY: ${{ secrets.VITE_GPT_IMAGE_API_KEY }}
+          VITE_GPT_IMAGE_EDIT_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_EDIT_ENDPOINT }}
 
       # 安裝 API 依賴
       - name: Install API Dependencies
