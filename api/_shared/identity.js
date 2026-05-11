@@ -17,7 +17,8 @@ const getDefaultTenant = async () => {
 const getUserIdentity = (user) => {
   if (!user) return null;
   const email = user.preferred_username || user.upn || user.email || user.userDetails;
-  const displayName = user.name || email;
+  // auth.js returns `displayName`; some token paths expose `name` — check both
+  const displayName = user.displayName || user.name || email;
   return email ? { email, displayName } : null;
 };
 
@@ -30,7 +31,17 @@ const getOrCreateUser = async (tenantId, user) => {
     [tenantId, identity.email]
   );
 
-  if (existing.rows.length > 0) return existing.rows[0].id;
+  if (existing.rows.length > 0) {
+    const userId = existing.rows[0].id;
+    // Refresh display_name whenever we have a real name (not just an email fallback)
+    if (identity.displayName && identity.displayName !== identity.email) {
+      query(
+        "UPDATE users SET display_name = $1 WHERE id = $2",
+        [identity.displayName, userId]
+      ).catch(() => {});
+    }
+    return userId;
+  }
 
   const created = await query(
     "INSERT INTO users (tenant_id, email, display_name) VALUES ($1, $2, $3) RETURNING id",

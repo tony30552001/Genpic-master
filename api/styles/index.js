@@ -46,6 +46,7 @@ const mapStyle = (row) => ({
   category: row.category || DEFAULT_CATEGORY,
   visibility: row.visibility || DEFAULT_VISIBILITY,
   authorName: row.author_name || null,
+  authorEmail: row.author_email || null,
   createdAt: timestamp(row.created_at),
   updatedAt: timestamp(row.updated_at || row.created_at),
   publishedAt: timestamp(row.published_at),

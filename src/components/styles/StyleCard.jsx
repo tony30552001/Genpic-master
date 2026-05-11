@@ -40,7 +40,12 @@ export default function StyleCard({
   const [imgError, setImgError] = useState(false);
   const hasPreview = style.previewUrl && !imgError;
   const isShared = style.visibility === "shared";
-  const authorText = style.authorName || "未知共享人";
+  // Prefer display name; fall back to email only if name looks like an email itself
+  const isEmailLike = (s) => typeof s === "string" && s.includes("@");
+  const authorText =
+    (style.authorName && !isEmailLike(style.authorName))
+      ? style.authorName
+      : style.authorEmail || style.authorName || "未知共享人";
   const primaryTag = style.tags?.[0];
   const dateText = formatTimestamp(style.publishedAt || style.updatedAt || style.createdAt);
   const canCopy = Boolean(onCopy);
