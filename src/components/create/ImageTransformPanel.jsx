@@ -1,14 +1,16 @@
 import React, { useRef, useState } from "react";
 import {
   Upload, X, Wand2, Loader2, Download,
-  Palette, Copy, Scissors, Image as ImageIcon, ChevronDown, ChevronUp, Check,
+  Palette, Copy, Scissors, Image as ImageIcon, ChevronDown, ChevronUp, Check, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import StylePalette from "./StylePalette";
+import { optimizePrompt } from "@/services/aiService";
+import StylePalette, { STYLE_DIMENSIONS } from "./StylePalette";
 import PromptTemplates from "./PromptTemplates";
+import PromptSuggestionPanel from "./PromptSuggestionPanel";
 
 const TRANSFORM_MODES = [
   {
@@ -138,7 +140,35 @@ export default function ImageTransformPanel({
 }) {
   const fileInputRef = useRef(null);
   const [showStylePicker, setShowStylePicker] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [suggestionData, setSuggestionData] = useState(null);
   const activeModeInfo = TRANSFORM_MODES.find((m) => m.id === mode) || TRANSFORM_MODES[0];
+
+  const handleSmartOptimize = async () => {
+    if (!prompt?.trim()) return;
+    setIsOptimizing(true);
+    setSuggestionData(null);
+    try {
+      const paletteTagsStr = STYLE_DIMENSIONS
+        .flatMap((d) => paletteSelected?.[d.id] || [])
+        .join("，");
+      const styleContext = [activeModeInfo.label, paletteTagsStr, appliedStyleName]
+        .filter(Boolean)
+        .join("，");
+      const result = await optimizePrompt({ userScript: prompt, styleContext });
+      if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
+        setSuggestionData({
+          originalText: prompt,
+          optimizedText: result.optimizedPromptZh || result.optimizedPrompt,
+          explanation: result.explanation || "",
+        });
+      }
+    } catch (err) {
+      console.error("Transform prompt optimize failed:", err);
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -300,17 +330,46 @@ export default function ImageTransformPanel({
 
           {/* 4. Custom Prompt */}
           <section>
-            <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">4</span>
-              描述轉換效果
-            </h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">4</span>
+                描述轉換效果
+              </h2>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSmartOptimize}
+                disabled={isOptimizing || !prompt?.trim()}
+                className="h-8 shrink-0 gap-1.5 rounded-lg border-primary/30 bg-background text-xs font-semibold text-primary shadow-sm hover:bg-primary/10"
+                title="使用 AI 自動豐富描述細節與提示詞"
+              >
+                {isOptimizing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {isOptimizing ? "優化中…" : "AI 智能優化"}
+              </Button>
+            </div>
             <Textarea
               value={prompt}
-              onChange={(e) => onPromptChange(e.target.value)}
+              onChange={(e) => { onPromptChange(e.target.value); setSuggestionData(null); }}
               placeholder={activeModeInfo.placeholder}
               rows={3}
               className="resize-none text-sm"
             />
+            {suggestionData && (
+              <div className="mt-2">
+                <PromptSuggestionPanel
+                  originalText={suggestionData.originalText}
+                  optimizedText={suggestionData.optimizedText}
+                  explanation={suggestionData.explanation}
+                  onAccept={() => { onPromptChange(suggestionData.optimizedText); setSuggestionData(null); }}
+                  onReject={() => setSuggestionData(null)}
+                />
+              </div>
+            )}
           </section>
 
           {/* 5. Style Palette */}
