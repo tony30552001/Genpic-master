@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>圖片轉換功能說明 — Pixora 智繪</title>
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-light: #EEF2FF;
+      --primary-mid: #C7D2FE;
+      --text: #1c1917;
+      --text-muted: #78716c;
+      --border: #e7e5e4;
+      --bg: #fafaf9;
+      --card: #ffffff;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ─── Header ─── */
+    .hero {
+      background: linear-gradient(135deg, #4F46E5 0%, #6D28D9 100%);
+      color: white;
+      padding: 64px 24px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 48px);
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      font-size: clamp(14px, 2vw, 18px);
+      opacity: 0.85;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    /* ─── Layout ─── */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    section { margin-bottom: 56px; }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2 .section-icon {
+      width: 36px; height: 36px;
+      background: var(--primary-light);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ─── Mode Cards ─── */
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+    }
+    .mode-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+    .mode-card:hover { box-shadow: 0 4px 24px rgba(79,70,229,0.10); }
+    .mode-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--primary);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .mode-card:hover::before { opacity: 1; }
+    .mode-emoji {
+      font-size: 32px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .mode-card h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .mode-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .mode-card .example {
+      margin-top: 12px;
+      padding: 8px 12px;
+      background: var(--primary-light);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--primary);
+      font-style: italic;
+    }
+
+    /* ─── Steps ─── */
+    .steps { display: flex; flex-direction: column; gap: 20px; }
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 36px; height: 36px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-body h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .step-body p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .step-body .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .tag {
+      display: inline-block;
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid var(--primary-mid);
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ─── Model Comparison ─── */
+    .model-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: var(--card);
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .model-table th {
+      background: var(--primary);
+      color: white;
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .model-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    .model-table tr:last-child td { border-bottom: none; }
+    .model-table tr:nth-child(even) td { background: var(--bg); }
+    .check { color: #16a34a; font-weight: 700; }
+    .cross { color: #dc2626; }
+    .model-name {
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-indigo { background: var(--primary); }
+    .dot-green { background: #16a34a; }
+
+    /* ─── Architecture ─── */
+    .arch-box {
+      background: #1e1b4b;
+      color: #e0e7ff;
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      font-family: 'Consolas', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+    .arch-box .comment { color: #818cf8; }
+    .arch-box .keyword { color: #a5b4fc; font-weight: 600; }
+    .arch-box .value { color: #6ee7b7; }
+    .arch-box .arrow { color: #f9a8d4; }
+
+    /* ─── Note box ─── */
+    .note {
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-size: 13px;
+      color: #92400e;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .note-icon { font-size: 18px; flex-shrink: 0; }
+
+    .tip {
+      background: var(--primary-light);
+      border: 1px solid var(--primary-mid);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-size: 13px;
+      color: #3730a3;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; }
+
+    /* ─── UI Preview mockup ─── */
+    .ui-mockup {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+    }
+    .mockup-header {
+      background: var(--primary);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mockup-header span {
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .mockup-dot-row { display: flex; gap: 5px; }
+    .mockup-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .mockup-body {
+      display: flex;
+      min-height: 320px;
+    }
+    .mockup-left {
+      width: 42%;
+      padding: 20px;
+      border-right: 1px solid var(--border);
+      background: white;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .mockup-right {
+      flex: 1;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      padding: 20px;
+    }
+    .mockup-upload {
+      border: 2px dashed var(--primary-mid);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      background: var(--primary-light);
+      font-size: 12px;
+      color: var(--primary);
+    }
+    .mockup-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .mockup-mode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .mockup-mode-btn {
+      border: 1px solid var(--primary-mid);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .mockup-mode-btn.inactive {
+      border-color: var(--border);
+      color: var(--text-muted);
+      background: white;
+    }
+    .mockup-prompt {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: white;
+      min-height: 48px;
+    }
+    .mockup-btn {
+      background: var(--primary);
+      color: white;
+      border-radius: 8px;
+      padding: 8px 0;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      width: 100%;
+    }
+    .mockup-result {
+      width: 160px; height: 120px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 50%, #818cf8 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      box-shadow: 0 4px 16px rgba(79,70,229,0.25);
+    }
+    .mockup-result-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      background: #1e1b4b;
+      color: #a5b4fc;
+      text-align: center;
+      padding: 28px 24px;
+      font-size: 13px;
+    }
+    footer strong { color: white; }
+
+    @media (max-width: 600px) {
+      .mockup-body { flex-direction: column; }
+      .mockup-left { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+      .mode-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════ Hero ═══════ -->
+<div class="hero">
+  <div class="hero-badge">✨ 全新功能</div>
+  <h1>🖼 圖片轉換</h1>
+  <p>上傳任意圖片，透過 AI 改變風格、提取元素、替換背景，一鍵生成全新圖像。</p>
+</div>
+
+<div class="container">
+
+  <!-- ═══════ UI Mockup ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">🎛</span>
+      介面總覽
+    </h2>
+    <div class="ui-mockup">
+      <div class="mockup-header">
+        <div class="mockup-dot-row">
+          <div class="mockup-dot" style="background:#ff5f57"></div>
+          <div class="mockup-dot" style="background:#febc2e"></div>
+          <div class="mockup-dot" style="background:#28c840"></div>
+        </div>
+        <span>Pixora 智繪 — 圖片轉換</span>
+      </div>
+      <div class="mockup-body">
+        <!-- Left: Controls -->
+        <div class="mockup-left">
+          <div>
+            <div class="mockup-section-label">① 上傳來源圖片</div>
+            <div class="mockup-upload" style="margin-top:6px">
+              📁 點擊上傳或拖曳圖片<br>
+              <span style="font-size:10px;opacity:0.7">JPG、PNG（最大 10MB）</span>
+            </div>
+          </div>
+          <div>
+            <div class="mockup-section-label">② 選擇轉換模式</div>
+            <div class="mockup-mode-grid" style="margin-top:6px">
+              <div class="mockup-mode-btn">🎨 風格轉換</div>
+              <div class="mockup-mode-btn inactive">🖼 以圖生圖</div>
+              <div class="mockup-mode-btn inactive">✂️ 元素提取</div>
+              <div class="mockup-mode-btn inactive">🌄 背景替換</div>
+            </div>
+          </div>
+          <div>
+            <div class="mockup-section-label">③ 描述轉換效果</div>
+            <div class="mockup-prompt" style="margin-top:6px">
+              日式水彩插畫風格，柔和色調…
+            </div>
+          </div>
+          <div>
+            <div class="mockup-section-label">④ 生成設定</div>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <div style="flex:1;border:1px solid var(--primary-mid);border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;color:var(--primary);background:var(--primary-light);text-align:center">Gemini</div>
+              <div style="flex:1;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text-muted);text-align:center">GPT Image 2</div>
+            </div>
+          </div>
+          <div class="mockup-btn">✨ 開始 AI 轉換</div>
+        </div>
+        <!-- Right: Result -->
+        <div class="mockup-right">
+          <div class="mockup-result">🎨</div>
+          <div class="mockup-result-label">轉換結果預覽</div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <div style="border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--text-muted);cursor:pointer">⬇ 下載圖片</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ Modes ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">🔄</span>
+      四種 AI 轉換模式
+    </h2>
+    <div class="mode-grid">
+
+      <div class="mode-card">
+        <span class="mode-emoji">🎨</span>
+        <h3>風格轉換</h3>
+        <p>保留圖片的構圖與主體內容，套用全新的藝術畫風，如水彩、動漫、油畫、素描等。</p>
+        <div class="example">「日式水彩插畫風格，柔和暖色調」</div>
+      </div>
+
+      <div class="mode-card">
+        <span class="mode-emoji">🖼</span>
+        <h3>以圖生圖</h3>
+        <p>以上傳的圖片作為視覺參考，結合文字描述生成一張風格相近但全新的圖片。</p>
+        <div class="example">「同樣的場景，但改為冬天雪景，冷藍色調」</div>
+      </div>
+
+      <div class="mode-card">
+        <span class="mode-emoji">✂️</span>
+        <h3>元素提取</h3>
+        <p>自動辨識並提取圖片中的主要人物或物件，將其放置到全新場景或背景中。</p>
+        <div class="example">「將角色放置在宇宙星空的背景中，科幻氛圍」</div>
+      </div>
+
+      <div class="mode-card">
+        <span class="mode-emoji">🌄</span>
+        <h3>背景替換</h3>
+        <p>智慧偵測並保留前景主體，精確替換圖片背景為任意描述的場景。</p>
+        <div class="example">「換成日落海邊，橙紅色天空與反光沙灘」</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════ Steps ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">📋</span>
+      使用步驟
+    </h2>
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>切換到「圖片轉換」頁籤</h3>
+          <p>在頂部導航列點擊「圖片轉換」（🖼），進入圖片轉換工作區。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>上傳來源圖片</h3>
+          <p>點擊上傳區或將圖片拖曳到虛線框內。支援 JPG、PNG 格式，大小上限 10MB。圖片上傳後可即時預覽。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>選擇轉換模式</h3>
+          <p>從 4 個模式卡片中選擇您想要的效果。不同模式的 Prompt 輸入提示也會隨之改變。</p>
+          <div class="tag-row">
+            <span class="tag">🎨 風格轉換</span>
+            <span class="tag">🖼 以圖生圖</span>
+            <span class="tag">✂️ 元素提取</span>
+            <span class="tag">🌄 背景替換</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>輸入描述（自訂 Prompt）</h3>
+          <p>在文字框中描述您期望的效果。系統會依照選擇的模式提供對應的範例提示，可作為參考。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h3>選擇 AI 模型與輸出比例</h3>
+          <p>選擇想使用的 AI 模型（Gemini Imagen 或 GPT Image 2）以及輸出圖片的寬高比例（1:1、16:9、4:3、9:16）。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <h3>點擊「開始 AI 轉換」</h3>
+          <p>系統開始進行 AI 圖片轉換。轉換期間可隨時點擊取消。完成後結果圖片會顯示在右側預覽區，可直接下載。轉換記錄也會自動存入歷史紀錄。</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════ Model Comparison ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">🤖</span>
+      AI 模型比較
+    </h2>
+    <table class="model-table">
+      <thead>
+        <tr>
+          <th>項目</th>
+          <th><span class="model-name"><span class="dot dot-indigo"></span> Gemini Imagen</span></th>
+          <th><span class="model-name"><span class="dot dot-green"></span> GPT Image 2</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>呼叫方式</td>
+          <td>透過後端 Azure Function</td>
+          <td>前端直接呼叫 Azure AI Foundry</td>
+        </tr>
+        <tr>
+          <td>模型識別碼</td>
+          <td><code>gemini-imagen</code></td>
+          <td><code>gpt-image-2</code></td>
+        </tr>
+        <tr>
+          <td>API 類型</td>
+          <td>文字 + 圖片 Prompt 輸入</td>
+          <td>images/edits（multipart/form-data）</td>
+        </tr>
+        <tr>
+          <td>所需環境變數</td>
+          <td><code>GOOGLE_API_KEY</code>（後端）</td>
+          <td><code>VITE_GPT_IMAGE_EDIT_ENDPOINT</code>（或自動推導）</td>
+        </tr>
+        <tr>
+          <td>需要前端 API Key</td>
+          <td><span class="cross">✗ 不需要</span></td>
+          <td><span class="check">✓ 需要（可選）</span></td>
+        </tr>
+        <tr>
+          <td>支援取消操作</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>輸出格式</td>
+          <td>Base64 data URL</td>
+          <td>Base64 data URL 或圖片 URL</td>
+        </tr>
+        <tr>
+          <td>伺服器過載重試</td>
+          <td><span class="check">✓ 自動重試（最多 2 次）</span></td>
+          <td><span class="cross">✗ 單次請求</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ═══════ Architecture ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">⚙️</span>
+      技術架構
+    </h2>
+    <div class="arch-box">
+<span class="comment">// ─── 呼叫流程 ───────────────────────────────────────</span>
+
+使用者上傳圖片
+  <span class="arrow">↓</span>  requestBlobSas() <span class="comment">// 取得 Azure Blob SAS token</span>
+  <span class="arrow">↓</span>  上傳至 Azure Blob Storage
+
+選擇模式 + 輸入 Prompt
+  <span class="arrow">↓</span>  aiService.<span class="keyword">transformImage</span>()
+
+<span class="comment">// ─── 依 model 分岔 ─────────────────────────────────</span>
+
+<span class="keyword">if</span> (model === <span class="value">"gemini-imagen"</span>) {
+  <span class="arrow">→</span>  POST /api/image-transform  <span class="comment">// Azure Function</span>
+     <span class="arrow">→</span>  Gemini generateContent(image + prompt)
+     <span class="arrow">→</span>  回傳 base64 imageUrl
+}
+
+<span class="keyword">if</span> (model === <span class="value">"gpt-image-2"</span>) {
+  <span class="arrow">→</span>  editImageGpt()              <span class="comment">// 前端直接呼叫</span>
+     <span class="arrow">→</span>  POST {GPT_IMAGE_EDIT_ENDPOINT}
+          multipart: { image, prompt, size }
+     <span class="arrow">→</span>  回傳 base64 imageUrl
+}
+
+結果顯示於右側預覽區
+  <span class="arrow">↓</span>  saveHistoryItem()  <span class="comment">// 自動存入歷史紀錄</span>
+    </div>
+  </section>
+
+  <!-- ═══════ Prompt 策略 ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">💡</span>
+      各模式的 AI Prompt 策略（後端自動組裝）
+    </h2>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:18px;">🎨</span> 風格轉換
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.6;font-family:monospace;background:var(--bg);padding:10px 12px;border-radius:6px;">
+          Transform the visual style of this image. Apply the following style: <em>{使用者 Prompt}</em>. Keep the same subjects, composition, and content, but change the color palette, artistic treatment, and visual style completely.
+        </div>
+      </div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:18px;">🖼</span> 以圖生圖
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.6;font-family:monospace;background:var(--bg);padding:10px 12px;border-radius:6px;">
+          Using this image as a visual reference and inspiration, generate a completely new image based on the following description: <em>{使用者 Prompt}</em>. Incorporate similar color palette, mood, and composition style.
+        </div>
+      </div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:18px;">✂️</span> 元素提取
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.6;font-family:monospace;background:var(--bg);padding:10px 12px;border-radius:6px;">
+          Extract the main subjects and key elements from this image. Place them in a new scene or context as described: <em>{使用者 Prompt}</em>. Keep the extracted subjects recognizable but adapt them naturally to the new context.
+        </div>
+      </div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:18px;">🌄</span> 背景替換
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.6;font-family:monospace;background:var(--bg);padding:10px 12px;border-radius:6px;">
+          Keep the main foreground subjects and characters in this image exactly as they appear. Replace only the background with: <em>{使用者 Prompt}</em>. The foreground subjects must remain unchanged.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════ Env Setup ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">🔑</span>
+      環境變數設定
+    </h2>
+
+    <div class="note" style="margin-bottom:16px;">
+      <span class="note-icon">⚠️</span>
+      <div>
+        <strong>GPT Image 2 圖片編輯</strong>需要設定編輯端點。若已設定生成端點（<code>VITE_GPT_IMAGE_ENDPOINT</code>），系統會<strong>自動推導</strong>編輯端點（將 <code>/images/generations</code> 替換為 <code>/images/edits</code>）。
+      </div>
+    </div>
+
+    <table class="model-table">
+      <thead>
+        <tr>
+          <th>環境變數</th>
+          <th>位置</th>
+          <th>說明</th>
+          <th>必要性</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>GOOGLE_API_KEY</code></td>
+          <td>後端（Azure Functions 設定）</td>
+          <td>Gemini API 金鑰，Gemini 模式必須</td>
+          <td><span class="check">必要（Gemini）</span></td>
+        </tr>
+        <tr>
+          <td><code>VITE_GPT_IMAGE_ENDPOINT</code></td>
+          <td>前端（GitHub Secrets）</td>
+          <td>GPT-Image-2 生成端點，已存在</td>
+          <td>已有</td>
+        </tr>
+        <tr>
+          <td><code>VITE_GPT_IMAGE_EDIT_ENDPOINT</code></td>
+          <td>前端（GitHub Secrets）</td>
+          <td>GPT-Image-2 編輯端點，若不設定則自動推導</td>
+          <td>選填</td>
+        </tr>
+        <tr>
+          <td><code>VITE_GPT_IMAGE_API_KEY</code></td>
+          <td>前端（GitHub Secrets）</td>
+          <td>GPT-Image-2 API 金鑰，已存在</td>
+          <td>已有</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="tip" style="margin-top:16px;">
+      <span class="tip-icon">💡</span>
+      <div>
+        修改 <code>VITE_*</code> 環境變數後，必須重新觸發 CI/CD（重跑 GitHub Actions workflow）才能生效，因為這些變數在 <strong>build 時</strong>注入，不是 runtime。
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ Files Changed ═══════ -->
+  <section>
+    <h2>
+      <span class="section-icon">📁</span>
+      異動檔案清單
+    </h2>
+    <table class="model-table">
+      <thead>
+        <tr>
+          <th>操作</th>
+          <th>檔案路徑</th>
+          <th>說明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">新建</span></td>
+          <td><code>api/image-transform/function.json</code></td>
+          <td>Azure Function HTTP 綁定設定</td>
+        </tr>
+        <tr>
+          <td><span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">新建</span></td>
+          <td><code>api/image-transform/index.js</code></td>
+          <td>Gemini 圖片轉換後端 Function（含模式 Prompt 策略、重試機制）</td>
+        </tr>
+        <tr>
+          <td><span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">新建</span></td>
+          <td><code>src/hooks/useImageTransform.js</code></td>
+          <td>React hook：管理上傳、設定、轉換執行與取消</td>
+        </tr>
+        <tr>
+          <td><span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">新建</span></td>
+          <td><code>src/components/create/ImageTransformPanel.jsx</code></td>
+          <td>圖片轉換 UI 元件（完整左右欄佈局）</td>
+        </tr>
+        <tr>
+          <td><span style="background:#fef9c3;color:#a16207;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">修改</span></td>
+          <td><code>src/services/gptImageService.js</code></td>
+          <td>新增 <code>editImageGpt()</code> 函式</td>
+        </tr>
+        <tr>
+          <td><span style="background:#fef9c3;color:#a16207;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">修改</span></td>
+          <td><code>src/services/aiService.js</code></td>
+          <td>新增 <code>transformImage()</code> 統一入口</td>
+        </tr>
+        <tr>
+          <td><span style="background:#fef9c3;color:#a16207;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">修改</span></td>
+          <td><code>src/config.js</code></td>
+          <td>新增 <code>GPT_IMAGE_EDIT_ENDPOINT</code> 設定（含自動推導邏輯）</td>
+        </tr>
+        <tr>
+          <td><span style="background:#fef9c3;color:#a16207;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">修改</span></td>
+          <td><code>src/InfographicGenerator.jsx</code></td>
+          <td>整合新 Tab、Hook 連接、歷史紀錄儲存</td>
+        </tr>
+        <tr>
+          <td><span style="background:#fef9c3;color:#a16207;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;">修改</span></td>
+          <td><code>.github/workflows/azure-static-web-apps-*.yml</code></td>
+          <td>CI/CD 加入 <code>VITE_GPT_IMAGE_EDIT_ENDPOINT</code> 環境變數</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+</div>
+
+<!-- ═══════ Footer ═══════ -->
+<footer>
+  <strong>Pixora 智繪</strong> · 圖片轉換功能說明文件 · 2026-05-11
+</footer>
+
+</body>
+</html>
