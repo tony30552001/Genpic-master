@@ -47,6 +47,8 @@ Database
 
 **Auth**: Dual provider — Microsoft MSAL (Entra ID) for enterprise users + Google OAuth for personal users. Both share `AuthContext.jsx`. `acquireAccessToken` in `authService.js` tries Google token first, then MSAL silent, then MSAL popup fallback.
 
+**`identity.js` field precedence (critical):** `auth.js` always returns `{ displayName, email }` — **not** `{ name, email }`. When reading user identity in `api/_shared/identity.js`, always prefer `user.displayName || user.name || email`. Never use `user.name` alone (it is always `undefined`). `getOrCreateUser` must also **UPDATE** `display_name` on every login (not only on INSERT) so existing users with email stored as display name get corrected automatically.
+
 **Image models**:
 - `gemini-imagen` ("Nano Banana 2") — default, via Azure Functions API gateway  
 - `gpt-image-2` ("GPT Image 2") — Azure AI Foundry endpoint, direct from frontend
@@ -72,6 +74,7 @@ UI is built on **shadcn/ui** (copy-paste components in `src/components/ui/`) + *
 **Before every push:**
 1. Run `corepack pnpm build` — catches import/export errors before CI
 2. If only deleting lines and the pre-commit hook rejects, verify there are no unintended regressions, then you may use `git commit --no-verify` with an explanation in the commit message
+3. **Backend SQL safety check:** After modifying any Azure Function, run `node --check api/<function>/index.js` AND visually verify that every SQL query's `$N` placeholder count matches the length of the params array. A mismatch causes a runtime 500 that `node --check` will NOT catch.
 
 **Pre-commit hook (Husky):** Runs lint + type-check. For delete-only commits, Husky may produce a false-positive failure. Only bypass with `--no-verify` after confirming the staged diff is intentional.
 
