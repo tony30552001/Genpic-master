@@ -68,6 +68,7 @@ UI is built on **shadcn/ui** (copy-paste components in `src/components/ui/`) + *
 - Primary color: indigo-600 (`#4F46E5`). Icons: Lucide React (1.5px stroke).
 - Add shadcn/ui components via `npx shadcn@latest add <component>` — do not hand-write Radix UI primitives directly
 - Target: desktop 1920×1080 as primary viewport; ensure no wasted side margins
+- **New full-page tab panels must mirror the general creation layout.** Before implementing any new tab UI, read `InfographicGenerator.jsx` for the existing layout pattern. The canonical 2-panel layout is `lg:grid lg:grid-cols-5 lg:gap-6 px-4 py-3 lg:px-8` with controls at `lg:col-span-3` (60%) and preview at `lg:col-span-2` (40%). Do not use fixed-width panels (e.g., `w-[420px]`).
 
 ## Key Conventions
 
@@ -84,4 +85,4 @@ UI is built on **shadcn/ui** (copy-paste components in `src/components/ui/`) + *
 
 **Controlled components in `src/components/create/`:** `StylePalette` and `PromptTemplates` are controlled — state lives in `ScriptEditor.jsx`. When refactoring these, ensure named exports (`STYLE_DIMENSIONS`, etc.) stay in sync with all importers. Build verify is mandatory after any export change.
 
-**Auto-push:** When user says "幫我 push" or "push", always run `git push origin main` after committing. If user ends a request with "做完後 push" or similar, push is part of the task.
+**Auto-push:** After completing any task that involves a commit, **always push immediately** (`git push origin main`) without waiting to be asked. Do not wait for the user to say "幫我 push". If user ends a request with "做完後 push" or similar, push is already implied.
