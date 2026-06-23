@@ -1,4 +1,4 @@
-import { GPT_IMAGE_ENDPOINT, GPT_IMAGE_API_KEY, GPT_IMAGE_EDIT_ENDPOINT } from "../config";
+import { GPT_IMAGE_ENDPOINT, GPT_IMAGE_API_KEY, GPT_IMAGE_EDIT_ENDPOINT, GPT_IMAGE_DEPLOYMENT } from "../config";
 import { acquireAccessToken } from "./authService";
 import { AUTH_BYPASS } from "../config";
 
@@ -10,7 +10,7 @@ const ASPECT_RATIO_TO_SIZE = {
   "1:1":  "1024x1024",
   "16:9": "1536x1024",
   "9:16": "1024x1536",
-  "4:3":  "1365x1024",
+  "4:3":  "1360x1024",
   "3:4":  "768x1024",
   "3:2":  "1536x1024",
   "2:3":  "1024x1536",
@@ -23,16 +23,27 @@ const ASPECT_RATIO_TO_SIZE = {
  * 取得 Authorization header
  * 優先使用 API Key，否則使用 MSAL token
  */
-const getAuthHeader = async () => {
+const isAzureOpenAiEndpoint = (endpoint) => {
+  try {
+    const { hostname } = new URL(endpoint);
+    return hostname.endsWith(".openai.azure.com") || hostname.endsWith(".cognitiveservices.azure.com");
+  } catch {
+    return false;
+  }
+};
+
+const getAuthHeaders = async (endpoint) => {
   if (GPT_IMAGE_API_KEY) {
-    return `Bearer ${GPT_IMAGE_API_KEY}`;
+    return isAzureOpenAiEndpoint(endpoint)
+      ? { "api-key": GPT_IMAGE_API_KEY }
+      : { Authorization: `Bearer ${GPT_IMAGE_API_KEY}` };
   }
   if (!AUTH_BYPASS) {
     const token = await acquireAccessToken();
     if (!token) throw new Error("登入已過期，請重新登入");
-    return `Bearer ${token}`;
+    return { Authorization: `Bearer ${token}` };
   }
-  return "";
+  return {};
 };
 
 /**
@@ -49,17 +60,17 @@ export async function generateImageGpt({ prompt, aspectRatio = "1:1", signal } =
   }
 
   const size = ASPECT_RATIO_TO_SIZE[aspectRatio] || "1024x1024";
-  const authHeader = await getAuthHeader();
+  const authHeaders = await getAuthHeaders(GPT_IMAGE_ENDPOINT);
 
   const response = await fetch(GPT_IMAGE_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(authHeader ? { Authorization: authHeader } : {}),
+      ...authHeaders,
     },
     body: JSON.stringify({
       prompt,
-      model: "gpt-image-2",
+      model: GPT_IMAGE_DEPLOYMENT,
       size,
       n: 1,
     }),
@@ -104,7 +115,8 @@ export async function editImageGpt({ imageDataUrl, prompt, aspectRatio = "1:1", 
   }
 
   const size = ASPECT_RATIO_TO_SIZE[aspectRatio] || "1024x1024";
-  const authHeader = await getAuthHeader();
+  const authHeaders = await getAuthHeaders(GPT_IMAGE_EDIT_ENDPOINT);
+  const imageFieldName = isAzureOpenAiEndpoint(GPT_IMAGE_EDIT_ENDPOINT) ? "image[]" : "image";
 
   // 將 base64 data URL 轉換為 Blob
   const [header, base64Data] = imageDataUrl.split(",");
@@ -118,18 +130,17 @@ export async function editImageGpt({ imageDataUrl, prompt, aspectRatio = "1:1", 
   const imageBlob = new Blob([bytes], { type: mimeType });
 
   const formData = new FormData();
-  formData.append("image", imageBlob, "source.png");
+  formData.append(imageFieldName, imageBlob, "source.png");
   formData.append("prompt", prompt);
+  formData.append("model", GPT_IMAGE_DEPLOYMENT);
   formData.append("size", size);
   formData.append("n", "1");
 
-  const headers = {};
-  if (authHeader) headers["Authorization"] = authHeader;
   // Content-Type 不手動設定，讓瀏覽器自動加入 multipart boundary
 
   const response = await fetch(GPT_IMAGE_EDIT_ENDPOINT, {
     method: "POST",
-    headers,
+    headers: authHeaders,
     body: formData,
     signal,
   });

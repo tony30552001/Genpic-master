@@ -20,11 +20,36 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 // 4. GPT-Image-2 設定 (Azure AI Foundry)
 export const GPT_IMAGE_ENDPOINT = import.meta.env.VITE_GPT_IMAGE_ENDPOINT || "";
 export const GPT_IMAGE_API_KEY = import.meta.env.VITE_GPT_IMAGE_API_KEY || "";
+export const GPT_IMAGE_DEPLOYMENT = import.meta.env.VITE_GPT_IMAGE_DEPLOYMENT || "gpt-image-2";
 
 // GPT-Image-2 圖片編輯端點（若未設定，自動從生成端點推導）
 const _gptEditEnv = import.meta.env.VITE_GPT_IMAGE_EDIT_ENDPOINT || "";
-export const GPT_IMAGE_EDIT_ENDPOINT = _gptEditEnv ||
-  (GPT_IMAGE_ENDPOINT ? GPT_IMAGE_ENDPOINT.replace(/\/images\/generations([^/]*)$/, "/images/edits$1") : "");
+export const deriveGptImageEditEndpoint = (endpoint, deployment = GPT_IMAGE_DEPLOYMENT) => {
+  if (!endpoint) return "";
+
+  try {
+    const url = new URL(endpoint);
+    const isAzureOpenAi =
+      url.hostname.endsWith(".openai.azure.com") ||
+      url.hostname.endsWith(".cognitiveservices.azure.com");
+
+    if (!isAzureOpenAi) {
+      return endpoint.replace(/\/images\/generations([^/]*)$/, "/images/edits$1");
+    }
+
+    const apiVersion = url.searchParams.get("api-version") || "2025-04-01";
+    if (!/^\/openai\/deployments\/[^/]+\/images\/edits\/?$/i.test(url.pathname)) {
+      url.pathname = `/openai/deployments/${encodeURIComponent(deployment)}/images/edits`;
+    }
+    url.search = "";
+    url.searchParams.set("api-version", apiVersion);
+    return url.toString();
+  } catch {
+    return endpoint.replace(/\/images\/generations([^/]*)$/, "/images/edits$1");
+  }
+};
+
+export const GPT_IMAGE_EDIT_ENDPOINT = deriveGptImageEditEndpoint(_gptEditEnv || GPT_IMAGE_ENDPOINT);
 
 // 5. 圖片生成模型選項
 export const IMAGE_MODEL_OPTIONS = [

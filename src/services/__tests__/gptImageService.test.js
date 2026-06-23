@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../config", () => ({
   GPT_IMAGE_ENDPOINT: "https://test.azure.com/openai/v1/images/generations",
   GPT_IMAGE_API_KEY: "test-api-key",
+  GPT_IMAGE_EDIT_ENDPOINT: "https://image-resource.openai.azure.com/openai/deployments/gpt-image-2/images/edits?api-version=2025-04-01",
+  GPT_IMAGE_DEPLOYMENT: "gpt-image-2",
   AUTH_BYPASS: false,
 }));
 
@@ -12,7 +14,7 @@ vi.mock("../authService", () => ({
   acquireAccessToken: vi.fn(() => Promise.resolve("mock-token")),
 }));
 
-import { generateImageGpt } from "../gptImageService";
+import { generateImageGpt, editImageGpt } from "../gptImageService";
 
 describe("gptImageService", () => {
   beforeEach(() => {
@@ -84,6 +86,51 @@ describe("gptImageService", () => {
 
     const body = JSON.parse(global.fetch.mock.calls[0][1].body);
     expect(body.size).toBe("1024x1536");
+  });
+
+  it("maps 4:3 to dimensions divisible by 16", async () => {
+    const mockResponse = {
+      ok: true,
+      json: () => Promise.resolve({ data: [{ b64_json: "DDDD" }] }),
+    };
+    global.fetch = vi.fn(() => Promise.resolve(mockResponse));
+
+    await generateImageGpt({ prompt: "classic layout", aspectRatio: "4:3" });
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.size).toBe("1360x1024");
+  });
+
+  it("calls Azure edit endpoint with deployment multipart payload", async () => {
+    const mockResponse = {
+      ok: true,
+      json: () => Promise.resolve({ data: [{ b64_json: "EEEE" }] }),
+    };
+    global.fetch = vi.fn(() => Promise.resolve(mockResponse));
+
+    const result = await editImageGpt({
+      imageDataUrl: "data:image/png;base64,AAAA",
+      prompt: "convert to watercolor",
+      aspectRatio: "4:3",
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://image-resource.openai.azure.com/openai/deployments/gpt-image-2/images/edits?api-version=2025-04-01",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "api-key": "test-api-key",
+        }),
+      })
+    );
+
+    const body = global.fetch.mock.calls[0][1].body;
+    expect(body.get("prompt")).toBe("convert to watercolor");
+    expect(body.get("model")).toBe("gpt-image-2");
+    expect(body.get("size")).toBe("1360x1024");
+    expect(body.get("n")).toBe("1");
+    expect(body.get("image[]")).toBeTruthy();
+    expect(result.imageUrl).toBe("data:image/png;base64,EEEE");
   });
 
   it("throws on missing endpoint", async () => {
