@@ -177,13 +177,6 @@ const requireAuth = async (context, req) => {
     };
   }
 
-  // 優先檢查 Azure SWA 注入的 Client Principal Header
-  const swaUser = parseSWAHeader(req);
-  if (swaUser) {
-    console.log("[Auth Debug] SWA Header detected:", swaUser.email);
-    return { user: swaUser };
-  }
-
   const token = parseBearer(req);
 
   // Debug 日誌：僅在 AUTH_DEBUG=true 時輸出（防止 header 資訊洩漏至日誌系統）
@@ -196,6 +189,14 @@ const requireAuth = async (context, req) => {
   }
 
   if (!token) {
+    // Azure SWA/Easy Auth fallback. Prefer the app-issued token when present,
+    // because persisted data is keyed by the identity resolved from that token.
+    const swaUser = parseSWAHeader(req);
+    if (swaUser) {
+      console.log("[Auth Debug] SWA Header detected:", swaUser.email);
+      return { user: swaUser };
+    }
+
     context.res = error("缺少 Bearer Token", "unauthorized", 401);
     return null;
   }
