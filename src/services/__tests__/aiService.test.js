@@ -4,12 +4,7 @@ vi.mock("../apiClient", () => ({
   apiPost: vi.fn(() => Promise.resolve({ ok: true })),
 }));
 
-vi.mock("../gptImageService", () => ({
-  generateImageGpt: vi.fn(() => Promise.resolve({ imageUrl: "data:image/png;base64,FAKE" })),
-}));
-
 import { apiPost } from "../apiClient";
-import { generateImageGpt } from "../gptImageService";
 import { analyzeStyle, generateImage } from "../aiService";
 
 describe("aiService", () => {
@@ -23,10 +18,20 @@ describe("aiService", () => {
     expect(apiPost).toHaveBeenCalled();
   });
 
-  it("generateImage routes to gptImageService when model is gpt-image-2", async () => {
+  it("routes every image generation through the backend policy gateway", async () => {
     const result = await generateImage({ prompt: "a red fox", aspectRatio: "1:1", model: "gpt-image-2" });
-    expect(generateImageGpt).toHaveBeenCalledWith({ prompt: "a red fox", aspectRatio: "1:1", signal: undefined });
-    expect(result).toEqual({ imageUrl: "data:image/png;base64,FAKE" });
+    expect(apiPost).toHaveBeenCalledWith(
+      "/api/generate-images",
+      {
+        prompt: "a red fox",
+        aspectRatio: "1:1",
+        imageSize: undefined,
+        imageUrl: undefined,
+        model: "gpt-image-2",
+      },
+      { signal: undefined }
+    );
+    expect(result).toEqual({ ok: true });
   });
 
   it("generateImage uses apiPost for unknown model", async () => {

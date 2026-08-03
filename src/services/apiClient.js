@@ -47,7 +47,11 @@ const buildHeaders = async (options) => {
 
 const parseResponse = async (response) => {
   if (!response.ok) {
-    const text = await response.text();
+    const text = typeof response.text === "function"
+      ? await response.text()
+      : typeof response.json === "function"
+        ? JSON.stringify(await response.json())
+        : "";
     let message = `Request failed: ${response.status}`;
     try {
       const json = JSON.parse(text);
@@ -59,6 +63,10 @@ const parseResponse = async (response) => {
   }
 
   if (response.status === 204) return null;
+
+  if (typeof response.text !== "function") {
+    return typeof response.json === "function" ? response.json() : null;
+  }
 
   const text = await response.text();
   if (!text) return null;
@@ -104,6 +112,9 @@ const requestWithRetry = async (url, baseOptions, options) => {
       ...options,
     });
   } catch (error) {
+    if (error?.name === "AbortError") {
+      throw error;
+    }
     // 當 authExpired 時，onAuthExpiredCallback() 已經在 buildHeaders 中被觸發
     if (error.message.includes("請重新登入") || error.message.includes("無法取得認證資訊")) {
       // 拋出 AuthExpiredError，讓呼叫端能正確 catch 並重置 UI 狀態
@@ -132,7 +143,10 @@ const requestWithRetry = async (url, baseOptions, options) => {
         ...retryOptions,
       });
       return parseResponse(retryResponse);
-    } catch {
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw error;
+      }
       // 重試失敗，觸發登出
       // buildHeaders 如果出現錯誤，在上一層自己就會處理了，但這裡是 fetch 拋出 
       if (onAuthExpiredCallback) {

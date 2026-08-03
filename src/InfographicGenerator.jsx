@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay
+    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay, ShieldCheck
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -56,9 +56,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [imageLanguage, setImageLanguage] = useState(() => {
         try { return localStorage.getItem('genpic_image_language') || 'en'; } catch { return 'en'; }
     });
-    const [imageModel, setImageModel] = useState(() => {
-        try { return localStorage.getItem('genpic_image_model') || DEFAULT_IMAGE_MODEL; } catch { return DEFAULT_IMAGE_MODEL; }
-    });
 
     // 風格設定相關
     const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -80,7 +77,9 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     };
 
     const navigate = useNavigate();
-    const { user, handleLogout, isLoading } = useAuth();
+    const { user, profile, isAdmin, handleLogout, isLoading } = useAuth();
+    const modelPolicy = profile?.modelPolicy || null;
+    const imageModel = modelPolicy?.defaultModel || DEFAULT_IMAGE_MODEL;
     const {
         savedStyles,
         newStyleName,
@@ -132,7 +131,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         prompt: transformPrompt, setPrompt: setTransformPrompt,
         aspectRatio: transformAspectRatio, setAspectRatio: setTransformAspectRatio,
         paletteSelected: transformPaletteSelected, setPaletteSelected: setTransformPaletteSelected,
-        appliedStylePrompt: transformAppliedStylePrompt, setAppliedStylePrompt: setTransformAppliedStylePrompt,
+        setAppliedStylePrompt: setTransformAppliedStylePrompt,
         appliedStyleName: transformAppliedStyleName, setAppliedStyleName: setTransformAppliedStyleName,
         appliedStyleId: transformAppliedStyleId, setAppliedStyleId: setTransformAppliedStyleId,
         result: transformResult,
@@ -140,7 +139,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         transformError, setTransformError,
         runTransform,
         cancelTransform,
-        clearResult: clearTransformResult,
     } = useImageTransform();
 
     const handleApplyStyleForTransform = (styleData) => {
@@ -165,6 +163,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     userScript: transformPrompt || `圖片轉換 (${transformMode})`,
                     stylePrompt: transformAppliedStyleName || '',
                     fullPrompt: result.mergedPrompt || transformPrompt,
+                    model: result.model || imageModel,
                 });
                 if (transformAppliedStyleId) {
                     markStyleUsed(transformAppliedStyleId).catch(() => {});
@@ -379,11 +378,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         try { localStorage.setItem('genpic_image_language', lang); } catch { /* ignore */ }
     };
 
-    const handleModelChange = (model) => {
-        setImageModel(model);
-        try { localStorage.setItem('genpic_image_model', model); } catch { /* ignore */ }
-    };
-
     const generateInfographic = async () => {
         try {
             // 如果存在 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的中文 userScript
@@ -391,7 +385,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             // 合併風格庫風格與調色盤快選風格
             const mergedStyle = [analyzedStyle, paletteStyle].filter(Boolean).join('，');
 
-            const { imageUrl, finalPrompt } = await generateImage({
+            const { imageUrl, finalPrompt, model } = await generateImage({
                 userScript: finalScriptToUse,
                 analyzedStyle: mergedStyle,
                 aspectRatio,
@@ -400,7 +394,14 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 contentImageUrl: contentBlobSasUrl,
                 model: imageModel
             });
-            await saveHistoryItem({ imageUrl, userScript, stylePrompt: mergedStyle, fullPrompt: finalPrompt, styleId: appliedStyleId || analysisResultData?.styleId || null });
+            await saveHistoryItem({
+                imageUrl,
+                userScript,
+                stylePrompt: mergedStyle,
+                fullPrompt: finalPrompt,
+                styleId: appliedStyleId || analysisResultData?.styleId || null,
+                model: model || imageModel,
+            });
             if (appliedStyleId) {
                 markStyleUsed(appliedStyleId).catch((err) => {
                     console.warn("Style usage tracking failed:", err);
@@ -490,6 +491,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                 userScript: scene.scene_description,
                 stylePrompt: analyzedStyle,
                 fullPrompt: result.finalPrompt,
+                model: result.model || imageModel,
                 sceneNumber: scene.scene_number,
                 documentTitle: documentResult?.title
             });
@@ -570,6 +572,18 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
                     {/* User Controls */}
                     <div className="flex items-center gap-3">
+                        {isAdmin && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate("/admin")}
+                                className="hidden gap-1.5 text-white/90 hover:bg-white/10 hover:text-white sm:flex"
+                                title="開啟管理中心"
+                            >
+                                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                                管理中心
+                            </Button>
+                        )}
                         {user && (
                             <div className="flex items-center gap-3 pl-3 border-l border-white/20">
                                 <div className="flex flex-col items-end hidden md:flex">
@@ -890,7 +904,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             imageLanguage={imageLanguage}
                             onImageLanguageChange={handleLanguageChange}
                             imageModel={imageModel}
-                            onImageModelChange={handleModelChange}
+                            modelPolicy={modelPolicy}
                             user={user}
                         />
                     </div>
@@ -995,4 +1009,3 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         </div>
     );
 }
-

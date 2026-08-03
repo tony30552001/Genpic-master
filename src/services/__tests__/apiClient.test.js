@@ -49,7 +49,7 @@ describe("apiClient", () => {
         method: "POST",
         body: JSON.stringify({ name: "Style" }),
         headers: expect.objectContaining({
-          Authorization: "Bearer token",
+          "X-Auth-Token": "token",
         }),
       })
     );

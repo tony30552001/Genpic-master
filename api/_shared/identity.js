@@ -1,5 +1,12 @@
 const { query } = require("./db");
 
+const configuredAdminEmails = new Set(
+  String(process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+);
+
 const getDefaultTenant = async () => {
   const result = await query(
     "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1"
@@ -25,35 +32,59 @@ const getUserIdentity = (user) => {
 const getOrCreateUser = async (tenantId, user) => {
   const identity = getUserIdentity(user);
   if (!identity) return null;
+  const isConfiguredAdmin = configuredAdminEmails.has(identity.email.toLowerCase());
 
   const existing = await query(
-    "SELECT id FROM users WHERE tenant_id = $1 AND email = $2 LIMIT 1",
+    "SELECT id, role FROM users WHERE tenant_id = $1 AND email = $2 LIMIT 1",
     [tenantId, identity.email]
   );
 
   if (existing.rows.length > 0) {
-    const userId = existing.rows[0].id;
-    // Refresh display_name whenever we have a real name (not just an email fallback)
-    if (identity.displayName && identity.displayName !== identity.email) {
-      query(
-        "UPDATE users SET display_name = $1 WHERE id = $2",
-        [identity.displayName, userId]
-      ).catch(() => {});
+    const existingUser = existing.rows[0];
+    const updates = [];
+    const params = [];
+
+    if (identity.displayName) {
+      params.push(identity.displayName);
+      updates.push(`display_name = $${params.length}`);
     }
-    return userId;
+    if (isConfiguredAdmin && existingUser.role !== "admin") {
+      params.push("admin");
+      updates.push(`role = $${params.length}`);
+    }
+
+    if (updates.length > 0) {
+      params.push(existingUser.id);
+      await query(
+        `UPDATE users SET ${updates.join(", ")} WHERE id = $${params.length}`,
+        params
+      );
+    }
+
+    return {
+      id: existingUser.id,
+      role: isConfiguredAdmin ? "admin" : existingUser.role,
+    };
   }
 
   const created = await query(
-    "INSERT INTO users (tenant_id, email, display_name) VALUES ($1, $2, $3) RETURNING id",
-    [tenantId, identity.email, identity.displayName]
+    "INSERT INTO users (tenant_id, email, display_name, role) VALUES ($1, $2, $3, $4) RETURNING id, role",
+    [tenantId, identity.email, identity.displayName, isConfiguredAdmin ? "admin" : "viewer"]
   );
-  return created.rows[0].id;
+  return created.rows[0];
 };
 
 const resolveIdentity = async (user) => {
   const tenantId = await getDefaultTenant();
-  const userId = await getOrCreateUser(tenantId, user);
-  return { tenantId, userId };
+  const identity = getUserIdentity(user);
+  const databaseUser = await getOrCreateUser(tenantId, user);
+  return {
+    tenantId,
+    userId: databaseUser?.id || null,
+    role: databaseUser?.role || null,
+    email: identity?.email || null,
+    displayName: identity?.displayName || null,
+  };
 };
 
 module.exports = { resolveIdentity };

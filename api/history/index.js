@@ -3,6 +3,7 @@ const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
+const { ensureModelPolicy } = require("../_shared/modelPolicy");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -29,7 +30,7 @@ module.exports = async function (context, req) {
 
   if (method === "GET") {
     const result = await query(
-      "SELECT id, image_url, prompt, user_script, style_prompt, style_id, created_at FROM history WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC",
+      "SELECT id, image_url, prompt, user_script, style_prompt, model, style_id, created_at FROM history WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC",
       [identity.tenantId, identity.userId]
     );
     const items = result.rows.map((row) => ({
@@ -38,6 +39,7 @@ module.exports = async function (context, req) {
       fullPrompt: row.prompt,
       userScript: row.user_script,
       stylePrompt: row.style_prompt,
+      model: row.model,
       styleId: row.style_id,
       createdAt: { seconds: Math.floor(new Date(row.created_at).getTime() / 1000) },
     }));
@@ -47,8 +49,9 @@ module.exports = async function (context, req) {
 
   if (method === "POST") {
     const payload = req.body || {};
+    const modelPolicy = await ensureModelPolicy(identity.tenantId);
     const result = await query(
-      "INSERT INTO history (tenant_id, user_id, prompt, image_url, user_script, style_prompt, style_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, image_url, prompt, user_script, style_prompt, style_id, created_at",
+      "INSERT INTO history (tenant_id, user_id, prompt, image_url, user_script, style_prompt, model, style_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, image_url, prompt, user_script, style_prompt, model, style_id, created_at",
       [
         identity.tenantId,
         identity.userId,
@@ -56,6 +59,7 @@ module.exports = async function (context, req) {
         payload.imageUrl,
         payload.userScript || null,
         payload.stylePrompt || null,
+        modelPolicy.defaultModel,
         payload.styleId || null,
       ]
     );
@@ -67,6 +71,7 @@ module.exports = async function (context, req) {
         fullPrompt: row.prompt,
         userScript: row.user_script,
         stylePrompt: row.style_prompt,
+        model: row.model,
         styleId: row.style_id,
         createdAt: { seconds: Math.floor(new Date(row.created_at).getTime() / 1000) },
       },

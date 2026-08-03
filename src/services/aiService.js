@@ -1,15 +1,15 @@
 import { API_BASE_URL } from "../config";
 import { apiPost } from "./apiClient";
-import { generateImageGpt, editImageGpt } from "./gptImageService";
 
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
 
 export const generateImage = async ({ prompt, aspectRatio, imageSize, imageUrl, model, signal }) => {
-  if (model === "gpt-image-2") {
-    return generateImageGpt({ prompt, aspectRatio, signal });
-  }
-  return apiPost(`${API_BASE_URL}/generate-images`, { prompt, aspectRatio, imageSize, imageUrl });
+  return apiPost(
+    `${API_BASE_URL}/generate-images`,
+    { prompt, aspectRatio, imageSize, imageUrl, model },
+    { signal }
+  );
 };
 
 export const embedText = async ({ text }) =>
@@ -74,18 +74,19 @@ export const transformImage = async ({
   model,
   signal,
 }) => {
-  if (model === "gpt-image-2") {
-    return editImageGpt({ imageDataUrl, prompt, aspectRatio, signal });
-  }
-  // Gemini：透過後端 Azure Function
   const imageBase64 = imageDataUrl ? imageDataUrl.split(",")[1] : null;
-  return apiPost(`${API_BASE_URL}/image-transform`, {
-    imageBase64,
-    imageUrl: imageBlobSasUrl || null,
-    mimeType,
-    mode,
-    prompt,
-    aspectRatio,
-    imageSize,
-  });
+  return apiPost(
+    `${API_BASE_URL}/image-transform`,
+    {
+      imageBase64,
+      imageUrl: imageBlobSasUrl || null,
+      mimeType,
+      mode,
+      prompt,
+      aspectRatio,
+      imageSize,
+      model,
+    },
+    { signal }
+  );
 };

@@ -3,6 +3,10 @@ import { useAuthContext } from "../context/AuthContext";
 export default function useAuth() {
   const {
     user,
+    profile,
+    isAdmin,
+    isProfileLoading,
+    profileError,
     handleMicrosoftLogin,
     handleGoogleLoginSuccess,
     handleLogout,
@@ -15,6 +19,10 @@ export default function useAuth() {
 
   return {
     user,
+    profile,
+    isAdmin,
+    isProfileLoading,
+    profileError,
     handleMicrosoftLogin,
     handleGoogleLoginSuccess,
     handleLogout,

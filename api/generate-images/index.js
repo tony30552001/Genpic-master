@@ -3,6 +3,9 @@ const { requireAuth } = require("../_shared/auth");
 const { getModel } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
+const { resolveIdentity } = require("../_shared/identity");
+const { ensureModelPolicy } = require("../_shared/modelPolicy");
+const { generateGptImage } = require("../_shared/gptImage");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -19,6 +22,14 @@ module.exports = async function (context, req) {
     return;
   }
 
+  const identity = await resolveIdentity(auth.user);
+  if (!identity.userId) {
+    context.res = error("無法辨識使用者", "unauthorized", 401);
+    return;
+  }
+
+  const modelPolicy = await ensureModelPolicy(identity.tenantId);
+  const selectedModel = modelPolicy.defaultModel;
   const { prompt, aspectRatio, imageSize, imageUrl } = req.body || {};
   if (!prompt) {
     context.res = error("缺少 prompt", "bad_request", 400);
@@ -26,6 +37,17 @@ module.exports = async function (context, req) {
   }
 
   try {
+    if (selectedModel === "gpt-image-2") {
+      const result = await generateGptImage({ prompt, aspectRatio });
+      context.res = ok({
+        ...result,
+        aspectRatio: aspectRatio || "1:1",
+        prompt,
+        model: selectedModel,
+      });
+      return;
+    }
+
     const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
     const model = getModel(modelName);
     const textPrompt = aspectRatio
@@ -127,6 +149,7 @@ module.exports = async function (context, req) {
       imageUrl: `data:${mimeType};base64,${base64Image}`,
       aspectRatio: aspectRatio || "16:9",
       prompt: textPrompt,
+      model: selectedModel,
     });
   } catch (err) {
     context.log.error("Image generation failed:", err);

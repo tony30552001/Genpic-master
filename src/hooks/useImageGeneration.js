@@ -149,7 +149,12 @@ export default function useImageGeneration() {
         if (updatePreview) {
           setGeneratedImage(result.imageUrl);
         }
-        return { imageUrl: result.imageUrl, finalPrompt, filenamePromise };
+        return {
+          imageUrl: result.imageUrl,
+          finalPrompt,
+          filenamePromise,
+          model: result.model || model || DEFAULT_IMAGE_MODEL,
+        };
       } catch (err) {
         if (isAbortError(err)) {
           const abortError = new Error("已取消本次生成等待。若服務端已開始處理，可能仍會消耗請求。");

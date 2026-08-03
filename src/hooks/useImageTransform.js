@@ -152,7 +152,11 @@ export default function useImageTransform() {
         signal: abortController.signal,
       });
       setResult(res.imageUrl);
-      return { imageUrl: res.imageUrl, mergedPrompt };
+      return {
+        imageUrl: res.imageUrl,
+        mergedPrompt,
+        model: res.model || model || DEFAULT_IMAGE_MODEL,
+      };
     } catch (err) {
       if (isAbortError(err)) {
         const abortError = new Error("已取消本次轉換等待。");

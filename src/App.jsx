@@ -4,6 +4,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import CreatePage from './pages/CreatePage';
 import StylesPage from './pages/StylesPage';
 import HistoryPage from './pages/HistoryPage';
+import AdminPage from './pages/AdminPage';
 import LoginPage from './pages/LoginPage';
 import SessionExpiryBanner from './components/auth/SessionExpiryBanner';
 import useAuth from './hooks/useAuth';
@@ -37,6 +38,38 @@ function ProtectedRoute({ children }) {
   );
 }
 
+function ProtectedAdminRoute({ children }) {
+  const { isAuthenticated, isLoading, isAdmin, isProfileLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading || (isAuthenticated && isProfileLoading)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div
+          className="h-12 w-12 animate-spin rounded-full border-2 border-muted border-t-primary motion-reduce:animate-none"
+          aria-label="載入中"
+          role="status"
+        />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <>
+      <SessionExpiryBanner />
+      {children}
+    </>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -60,6 +93,12 @@ function App() {
             <ProtectedRoute>
               <HistoryPage />
             </ProtectedRoute>
+          } />
+
+          <Route path="/admin" element={
+            <ProtectedAdminRoute>
+              <AdminPage />
+            </ProtectedAdminRoute>
           } />
         </Routes>
       </BrowserRouter>

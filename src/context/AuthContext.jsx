@@ -4,20 +4,49 @@ import { googleLogout } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { loginWithMicrosoft, logout as microsoftLogout } from '../services/authService';
 import { setAuthExpiredHandler } from '../services/apiClient';
+import { getCurrentUserProfile } from '../services/adminService';
 import { AUTH_BYPASS, GOOGLE_CLIENT_ID } from '../config';
 
 const AuthContext = createContext(null);
+const EXPIRY_WARN_BUFFER_MS = 2 * 60 * 1000;
+
+const readStoredGoogleSession = () => {
+    if (typeof localStorage === 'undefined') {
+        return { user: null, expired: false };
+    }
+
+    const savedUser = localStorage.getItem('google_user');
+    if (!savedUser) return { user: null, expired: false };
+
+    try {
+        const user = JSON.parse(savedUser);
+        try {
+            const decoded = jwtDecode(user.idToken);
+            return {
+                user: decoded.exp < Date.now() / 1000 ? null : user,
+                expired: decoded.exp < Date.now() / 1000,
+            };
+        } catch {
+            return { user: null, expired: true };
+        }
+    } catch {
+        return { user: null, expired: false };
+    }
+};
 
 export const AuthProvider = ({ children }) => {
     const { instance, accounts } = useMsal();
     const isMsalAuthenticated = useIsAuthenticated();
-    const [googleUser, setGoogleUser] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [authExpired, setAuthExpired] = useState(false);
+    const [initialGoogleSession] = useState(readStoredGoogleSession);
+    const [googleUser, setGoogleUser] = useState(initialGoogleSession.user);
+    const [authExpired, setAuthExpired] = useState(initialGoogleSession.expired);
     const [authExpiredWarning, setAuthExpiredWarning] = useState(false);
     const [msalInitialized, setMsalInitialized] = useState(false);
+    const [profile, setProfile] = useState(null);
+    const [isProfileLoading, setIsProfileLoading] = useState(false);
+    const [profileError, setProfileError] = useState("");
 
-    const EXPIRY_WARN_BUFFER_MS = 2 * 60 * 1000;
+    const isLoading = !msalInitialized;
     const expiryTimerRef = useRef(null);
     // Stable ref to latest handleGoogleLoginSuccess — avoids circular deps in tryGoogleSilentRefresh
     const handleGoogleLoginSuccessRef = useRef(null);
@@ -118,7 +147,7 @@ export const AuthProvider = ({ children }) => {
         }
     }, [clearExpiryTimer, tryGoogleSilentRefresh]);
 
-    // 初始化 Google 登入狀態 (從 localStorage) 並設置過期計時器
+    // 驗證儲存的 Google 登入狀態並設置過期計時器
     useEffect(() => {
         const savedUser = localStorage.getItem('google_user');
         if (savedUser) {
@@ -127,9 +156,7 @@ export const AuthProvider = ({ children }) => {
                 if (isTokenExpired(user.idToken)) {
                     googleLogout();
                     localStorage.removeItem('google_user');
-                    setAuthExpired(true);
                 } else {
-                    setGoogleUser(user);
                     setupExpiryTimer(user.idToken);
                 }
             } catch {
@@ -137,8 +164,7 @@ export const AuthProvider = ({ children }) => {
             }
         }
         return () => clearExpiryTimer();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [clearExpiryTimer, isTokenExpired, setupExpiryTimer]);
 
     // 監聽 MSAL 初始化完成
     useEffect(() => {
@@ -153,10 +179,6 @@ export const AuthProvider = ({ children }) => {
         };
         checkMsalInit();
     }, []);
-
-    useEffect(() => {
-        if (msalInitialized) setIsLoading(false);
-    }, [msalInitialized]);
 
     // 設定 Token 過期處理回呼
     useEffect(() => {
@@ -262,8 +284,52 @@ export const AuthProvider = ({ children }) => {
         return null;
     }, [isMsalAuthenticated, accounts, googleUser]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadProfile = async () => {
+            await Promise.resolve();
+            if (cancelled) return;
+
+            if (!user || isLoading) {
+                setProfile(null);
+                setProfileError("");
+                setIsProfileLoading(false);
+                return;
+            }
+
+            setIsProfileLoading(true);
+            setProfileError("");
+            try {
+                const data = await getCurrentUserProfile();
+                if (cancelled) return;
+                setProfile(
+                    data?.user
+                        ? { ...data.user, modelPolicy: data.modelPolicy || null }
+                        : null
+                );
+            } catch (error) {
+                if (cancelled) return;
+                setProfile(null);
+                setProfileError(error.message || "無法載入使用者設定");
+            } finally {
+                if (!cancelled) setIsProfileLoading(false);
+            }
+        };
+
+        loadProfile();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user, isLoading]);
+
     const value = {
         user,
+        profile,
+        isAdmin: profile?.role === "admin",
+        isProfileLoading,
+        profileError,
         isLoading,
         authExpired,
         authExpiredWarning,

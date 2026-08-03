@@ -3,6 +3,9 @@ const { requireAuth } = require("../_shared/auth");
 const { getModel } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
+const { resolveIdentity } = require("../_shared/identity");
+const { ensureModelPolicy } = require("../_shared/modelPolicy");
+const { editGptImage } = require("../_shared/gptImage");
 
 /**
  * 依轉換模式建構 Gemini 文字 Prompt
@@ -41,6 +44,14 @@ module.exports = async function (context, req) {
     return;
   }
 
+  const identity = await resolveIdentity(auth.user);
+  if (!identity.userId) {
+    context.res = error("無法辨識使用者", "unauthorized", 401);
+    return;
+  }
+
+  const modelPolicy = await ensureModelPolicy(identity.tenantId);
+  const selectedModel = modelPolicy.defaultModel;
   const { imageBase64, mimeType, imageUrl, mode, prompt, aspectRatio, imageSize } = req.body || {};
 
   if (!imageBase64 && !imageUrl) {
@@ -49,6 +60,38 @@ module.exports = async function (context, req) {
   }
 
   try {
+    const textPrompt = buildTransformPrompt(mode, prompt);
+
+    if (selectedModel === "gpt-image-2") {
+      let sourceBase64 = imageBase64 || null;
+      let sourceMimeType = mimeType || "image/jpeg";
+
+      if (!sourceBase64 && imageUrl) {
+        if (!isUrlAllowed(imageUrl)) {
+          context.res = error("提供的圖片 URL 不在允許範圍內", "bad_request", 400);
+          return;
+        }
+        const imageResponse = await fetch(imageUrl);
+        if (!imageResponse.ok) throw new Error("Failed to fetch source image");
+        sourceBase64 = Buffer.from(await imageResponse.arrayBuffer()).toString("base64");
+        sourceMimeType = imageResponse.headers.get("content-type") || sourceMimeType;
+      }
+
+      const result = await editGptImage({
+        imageBase64: sourceBase64,
+        mimeType: sourceMimeType,
+        prompt: textPrompt,
+        aspectRatio,
+      });
+      context.res = ok({
+        ...result,
+        mode,
+        aspectRatio: aspectRatio || "1:1",
+        model: selectedModel,
+      });
+      return;
+    }
+
     const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
     const model = getModel(modelName);
 
@@ -68,7 +111,6 @@ module.exports = async function (context, req) {
       imageMimeType = imageResponse.headers.get("content-type") || imageMimeType;
     }
 
-    const textPrompt = buildTransformPrompt(mode, prompt);
     const fullPrompt = aspectRatio
       ? `${textPrompt}\nAspect ratio: ${aspectRatio}.`
       : textPrompt;
@@ -138,6 +180,7 @@ module.exports = async function (context, req) {
       imageUrl: `data:${outputMimeType};base64,${base64Image}`,
       mode,
       aspectRatio: aspectRatio || "16:9",
+      model: selectedModel,
     });
   } catch (err) {
     context.log.error("Image transform failed:", err);
