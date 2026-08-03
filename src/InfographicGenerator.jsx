@@ -13,7 +13,7 @@ import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import useImageTransform from './hooks/useImageTransform';
 import { requestBlobSas } from './services/storageService';
-import { DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from './config';
+import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from './config';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
     // 全域設定
     const [imageLanguage, setImageLanguage] = useState(() => {
-        try { return localStorage.getItem('genpic_image_language') || 'en'; } catch { return 'en'; }
+        try { return localStorage.getItem('genpic_image_language') || DEFAULT_IMAGE_LANGUAGE; } catch { return DEFAULT_IMAGE_LANGUAGE; }
     });
 
     // 風格設定相關

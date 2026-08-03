@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import LineSettings from "./LineSettings";
 import useLineConfig from "../../hooks/useLineConfig";
-import { DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from "../../config";
+import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from "../../config";
 
 const LANGUAGE_OPTIONS = [
     {
@@ -86,9 +86,9 @@ const findImageModel = (modelId) =>
  * 設定面板 — 全域生成偏好與整合設定
  */
 export default function SettingsPanel({ imageLanguage, onImageLanguageChange, imageModel, modelPolicy, user }) {
-    const currentLang = LANGUAGE_OPTIONS.find((l) => l.id === imageLanguage) || LANGUAGE_OPTIONS[0];
+    const currentLang = LANGUAGE_OPTIONS.find((l) => l.id === imageLanguage)
+        || LANGUAGE_OPTIONS.find((l) => l.id === DEFAULT_IMAGE_LANGUAGE);
     const currentModel = findImageModel(modelPolicy?.defaultModel || imageModel);
-    const allowedModels = modelPolicy?.allowedModels || [currentModel.id];
     const lineConfigHook = useLineConfig({ user });
 
     return (
@@ -128,7 +128,7 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                 </Badge>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div className="max-w-md">
                                 <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
                                     <div className="flex items-center gap-2">
                                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -142,16 +142,6 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                     <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                                         {currentModel.description}
                                     </p>
-                                </div>
-                                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                                    <p className="text-xs font-semibold text-foreground">系統開放模型</p>
-                                    <div className="mt-3 flex flex-wrap gap-1.5">
-                                        {allowedModels.map((modelId) => (
-                                            <Badge key={modelId} variant="secondary" className="text-[10px]">
-                                                {findImageModel(modelId).label}
-                                            </Badge>
-                                        ))}
-                                    </div>
                                 </div>
                             </div>
 

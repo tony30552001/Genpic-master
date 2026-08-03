@@ -70,3 +70,4 @@ export const IMAGE_MODEL_OPTIONS = [
 ];
 
 export const DEFAULT_IMAGE_MODEL = "gemini-imagen";
+export const DEFAULT_IMAGE_LANGUAGE = "zh-TW";
