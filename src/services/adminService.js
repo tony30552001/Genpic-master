@@ -1,6 +1,8 @@
 import { API_BASE_URL } from "../config";
 import { apiDelete, apiGet, apiPut } from "./apiClient";
 
+const ADMIN_API_BASE = `${API_BASE_URL}/management`;
+
 const buildQueryString = (params = {}) => {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -15,22 +17,22 @@ export const getCurrentUserProfile = async () =>
   apiGet(`${API_BASE_URL}/me`);
 
 export const getAdminModelSettings = async () =>
-  apiGet(`${API_BASE_URL}/admin/settings`);
+  apiGet(`${ADMIN_API_BASE}/settings`);
 
 export const listAdminUsers = async () =>
-  apiGet(`${API_BASE_URL}/admin/users`);
+  apiGet(`${ADMIN_API_BASE}/users`);
 
 export const listAdminHistory = async (userId) =>
-  apiGet(`${API_BASE_URL}/admin/history${buildQueryString({ userId })}`);
+  apiGet(`${ADMIN_API_BASE}/history${buildQueryString({ userId })}`);
 
 export const listAdminStyles = async (userId) =>
-  apiGet(`${API_BASE_URL}/admin/styles${buildQueryString({ userId })}`);
+  apiGet(`${ADMIN_API_BASE}/styles${buildQueryString({ userId })}`);
 
 export const updateAdminUserRole = async (userId, role) =>
-  apiPut(`${API_BASE_URL}/admin/users/${userId}`, { role });
+  apiPut(`${ADMIN_API_BASE}/users/${userId}`, { role });
 
 export const updateAdminModelSettings = async (settings) =>
-  apiPut(`${API_BASE_URL}/admin/settings`, settings);
+  apiPut(`${ADMIN_API_BASE}/settings`, settings);
 
 export const deleteAdminStyle = async (styleId) =>
-  apiDelete(`${API_BASE_URL}/admin/styles/${styleId}`);
+  apiDelete(`${ADMIN_API_BASE}/styles/${styleId}`);

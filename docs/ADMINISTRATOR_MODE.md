@@ -20,9 +20,9 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 ## 管理 API
 
 - `GET /api/me`：取得目前使用者角色與模型政策。
-- `GET /api/admin/users`：使用者清單與生成／風格統計。
-- `GET /api/admin/history`：租戶生成紀錄，可用 `userId` 篩選。
-- `GET /api/admin/styles`：租戶風格庫，可用 `userId` 篩選。
-- `GET|PUT /api/admin/settings`：讀寫模型政策。
-- `PUT /api/admin/users/{id}`：調整使用者角色。
-- `DELETE /api/admin/styles/{id}`：刪除租戶風格並解除歷史紀錄關聯。
+- `GET /api/management/users`：使用者清單與生成／風格統計。
+- `GET /api/management/history`：租戶生成紀錄，可用 `userId` 篩選。
+- `GET /api/management/styles`：租戶風格庫，可用 `userId` 篩選。
+- `GET|PUT /api/management/settings`：讀寫模型政策。
+- `PUT /api/management/users/{id}`：調整使用者角色。
+- `DELETE /api/management/styles/{id}`：刪除租戶風格並解除歷史紀錄關聯。

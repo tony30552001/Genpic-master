@@ -1,0 +1,40 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../config", () => ({
+  API_BASE_URL: "/api",
+}));
+
+vi.mock("../apiClient", () => ({
+  apiDelete: vi.fn(() => Promise.resolve(null)),
+  apiGet: vi.fn(() => Promise.resolve([])),
+  apiPut: vi.fn(() => Promise.resolve({})),
+}));
+
+import { apiGet, apiPut } from "../apiClient";
+import {
+  getAdminModelSettings,
+  listAdminUsers,
+  updateAdminModelSettings,
+} from "../adminService";
+
+describe("adminService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("uses the non-reserved management API route", async () => {
+    await getAdminModelSettings();
+    await listAdminUsers();
+    await updateAdminModelSettings({
+      allowedModels: ["gemini-imagen", "gpt-image-2"],
+      defaultModel: "gpt-image-2",
+    });
+
+    expect(apiGet).toHaveBeenNthCalledWith(1, "/api/management/settings");
+    expect(apiGet).toHaveBeenNthCalledWith(2, "/api/management/users");
+    expect(apiPut).toHaveBeenCalledWith("/api/management/settings", {
+      allowedModels: ["gemini-imagen", "gpt-image-2"],
+      defaultModel: "gpt-image-2",
+    });
+  });
+});
