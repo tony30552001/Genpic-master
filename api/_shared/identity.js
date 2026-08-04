@@ -1,9 +1,14 @@
 const { query } = require("./db");
 
+const normalizeEmail = (value) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized || null;
+};
+
 const configuredAdminEmails = new Set(
   String(process.env.ADMIN_EMAILS || "")
     .split(",")
-    .map((email) => email.trim().toLowerCase())
+    .map(normalizeEmail)
     .filter(Boolean)
 );
 
@@ -23,7 +28,15 @@ const getDefaultTenant = async () => {
 
 const getUserIdentity = (user) => {
   if (!user) return null;
-  const email = user.preferred_username || user.upn || user.email || user.userDetails;
+  const email =
+    [
+      user.preferred_username,
+      user.upn,
+      user.email,
+      user.userDetails,
+    ]
+      .map(normalizeEmail)
+      .find(Boolean) || null;
   // auth.js returns `displayName`; some token paths expose `name` — check both
   const displayName = user.displayName || user.name || email;
   return email ? { email, displayName } : null;
@@ -32,44 +45,25 @@ const getUserIdentity = (user) => {
 const getOrCreateUser = async (tenantId, user) => {
   const identity = getUserIdentity(user);
   if (!identity) return null;
-  const isConfiguredAdmin = configuredAdminEmails.has(identity.email.toLowerCase());
-
-  const existing = await query(
-    "SELECT id, role FROM users WHERE tenant_id = $1 AND email = $2 LIMIT 1",
-    [tenantId, identity.email]
-  );
-
-  if (existing.rows.length > 0) {
-    const existingUser = existing.rows[0];
-    const updates = [];
-    const params = [];
-
-    if (identity.displayName) {
-      params.push(identity.displayName);
-      updates.push(`display_name = $${params.length}`);
-    }
-    if (isConfiguredAdmin && existingUser.role !== "admin") {
-      params.push("admin");
-      updates.push(`role = $${params.length}`);
-    }
-
-    if (updates.length > 0) {
-      params.push(existingUser.id);
-      await query(
-        `UPDATE users SET ${updates.join(", ")} WHERE id = $${params.length}`,
-        params
-      );
-    }
-
-    return {
-      id: existingUser.id,
-      role: isConfiguredAdmin ? "admin" : existingUser.role,
-    };
-  }
-
+  const isConfiguredAdmin = configuredAdminEmails.has(identity.email);
   const created = await query(
-    "INSERT INTO users (tenant_id, email, display_name, role) VALUES ($1, $2, $3, $4) RETURNING id, role",
-    [tenantId, identity.email, identity.displayName, isConfiguredAdmin ? "admin" : "viewer"]
+    `INSERT INTO users (tenant_id, email, display_name, role)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (tenant_id, (lower(trim(email))))
+     DO UPDATE SET
+       email = EXCLUDED.email,
+       display_name = EXCLUDED.display_name,
+       role = CASE
+         WHEN EXCLUDED.role = 'admin' THEN 'admin'
+         ELSE users.role
+       END
+     RETURNING id, role`,
+    [
+      tenantId,
+      identity.email,
+      identity.displayName,
+      isConfiguredAdmin ? "admin" : "viewer",
+    ]
   );
   return created.rows[0];
 };
