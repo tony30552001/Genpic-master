@@ -15,6 +15,19 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
    - `services.ai.azure.com` 端點使用 `api-key` header；只設定前端 `VITE_GPT_IMAGE_*` 不會讓 `/api/generate-images` 取得後端設定。
 4. 重新登入後，管理員可從 `/admin` 開啟管理中心。
 
+## AI 智能優化模型
+
+圖片生成頁面的「AI 智能優化」使用 Azure OpenAI Responses API。請在
+Azure Functions runtime 設定以下變數，不要使用 `VITE_*` 前端變數：
+
+- `AZURE_OPENAI_ENDPOINT=https://<resource>.services.ai.azure.com/openai/v1`
+- `AZURE_OPENAI_API_KEY=<Azure OpenAI API Key>`
+- `AZURE_OPENAI_DEPLOYMENT=gpt-5.6-luna`
+
+`AZURE_OPENAI_API_KEY` 未設定時，後端會共用 `GPT_IMAGE_API_KEY`，方便與
+同一個 Azure AI Foundry 資源整合。`optimize-scene` 文件／分鏡功能仍使用
+Gemini 設定。
+
 ## 模型政策
 
 模型政策儲存在 `tenant_model_settings`。管理員設定的 `default_model` 會由後端套用到一般創作、文件批次生成與圖片轉換；前端不再提供個人模型選擇器。`allowed_models` 目前支援 `gemini-imagen` 與 `gpt-image-2`，且預設模型必須包含在開放清單中。

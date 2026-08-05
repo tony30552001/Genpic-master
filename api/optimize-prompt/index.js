@@ -1,6 +1,6 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel, parseGeminiResponse } = require("../_shared/gemini");
+const { generateJsonCompletion } = require("../_shared/azureOpenAI");
 const { rateLimit } = require("../_shared/rateLimit");
 
 const OPTIMIZE_PROMPT_SYSTEM_MESSAGE = `
@@ -50,10 +50,6 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // 5. Call Gemini
-        const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-1.5-flash"; // Use faster model for interactive tasks
-        const model = getModel(modelName);
-
         const promptText = `
 User Script: "${userScript}"
 Style Context: "${styleContext || '無特定風格 (General)'}"
@@ -61,31 +57,20 @@ Style Context: "${styleContext || '無特定風格 (General)'}"
 請優化上述描述：
 `;
 
-        const result = await model.generateContent([
-            {
-                role: "user",
-                parts: [{ text: OPTIMIZE_PROMPT_SYSTEM_MESSAGE + "\n" + promptText }]
-            }
-        ], {
-            responseMimeType: "application/json"
+        // 5. Call Azure OpenAI. The deployment is configured at runtime and
+        // defaults to the gpt-5.6-luna deployment requested by this feature.
+        const data = await generateJsonCompletion({
+            systemMessage: OPTIMIZE_PROMPT_SYSTEM_MESSAGE,
+            userMessage: promptText,
         });
 
-        // 6. Parse Result using shared utility
-        let data;
-        try {
-            data = parseGeminiResponse(result);
-            // Fallback for older model formats if it only returns optimizedPrompt
-            if (data && data.optimizedPrompt && (!data.optimizedPromptZh && !data.optimizedPromptEn)) {
-                data.optimizedPromptZh = data.optimizedPrompt;
-                data.optimizedPromptEn = data.optimizedPrompt;
-            }
-        } catch (e) {
-            context.log.error("Failed to parse Gemini response:", e);
-            data = {
-                optimizedPromptZh: userScript,
-                optimizedPromptEn: userScript,
-                explanation: "優化回應解析失敗，請稍後重試。"
-            };
+        if (
+            !data ||
+            typeof data.optimizedPromptZh !== "string" ||
+            typeof data.optimizedPromptEn !== "string" ||
+            typeof data.explanation !== "string"
+        ) {
+            throw new Error("Azure OpenAI 回傳缺少必要的優化欄位");
         }
 
         context.res = ok(data);

@@ -130,6 +130,9 @@
      - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
    - `GEMINI_MODEL_ANALYSIS` = `gemini-1.5-flash`
    - `GEMINI_MODEL_GENERATION` = `gemini-3-pro-image-preview`
+   - `AZURE_OPENAI_ENDPOINT` = `https://<resource>.services.ai.azure.com/openai/v1`
+   - `AZURE_OPENAI_API_KEY` = Key Vault Secret Reference
+   - `AZURE_OPENAI_DEPLOYMENT` = `gpt-5.6-luna`
    - `AUTH_DISABLED` = `false`
    - `CORS_ALLOW_ORIGIN` = `https://<your-swa-domain>`
    - `RATE_LIMIT_PER_MINUTE` = `60`

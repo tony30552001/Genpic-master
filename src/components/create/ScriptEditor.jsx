@@ -68,6 +68,7 @@ export default function ScriptEditor({
   const [selectedStyleId, setSelectedStyleId] = useState(null);
   const [selectedStyleInfo, setSelectedStyleInfo] = useState(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizeError, setOptimizeError] = useState("");
   const [suggestionData, setSuggestionData] = useState(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showAssistTools, setShowAssistTools] = useState(false);
@@ -106,6 +107,7 @@ export default function ScriptEditor({
   const handleChange = useCallback((e) => {
     const text = e.target.value;
     onUserScriptChange(text);
+    setOptimizeError("");
     if (onOptimizedPromptEnChange) {
       onOptimizedPromptEnChange("");
     }
@@ -127,6 +129,7 @@ export default function ScriptEditor({
   const handleSmartOptimize = async () => {
     if (!userScript || !userScript.trim()) return;
     setIsOptimizing(true);
+    setOptimizeError("");
     setSuggestionData(null);
     try {
       const result = await optimizePrompt({
@@ -143,10 +146,12 @@ export default function ScriptEditor({
           optimizedTextEn: result.optimizedPromptEn || result.optimizedPrompt,
           explanation: result.explanation || "",
         });
+      } else {
+        setOptimizeError("AI 未回傳可用的優化內容，請稍後再試。");
       }
     } catch (err) {
       console.error("Smart optimize failed:", err);
-      alert("優化失敗，請稍後再試。");
+      setOptimizeError(err?.message || "優化失敗，請稍後再試。");
     } finally {
       setIsOptimizing(false);
     }
@@ -187,7 +192,7 @@ export default function ScriptEditor({
               size="sm"
               onClick={handleSmartOptimize}
               disabled={isOptimizing || !userScript?.trim()}
-              className="h-9 shrink-0 gap-1.5 rounded-lg border-primary/30 bg-background text-xs font-semibold text-primary shadow-sm hover:bg-primary/10"
+              className="min-h-11 w-full shrink-0 gap-1.5 rounded-lg border-primary/30 bg-background px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/10 touch-manipulation sm:h-9 sm:min-h-0 sm:w-auto"
               title="使用 AI 自動豐富畫面細節與提示詞"
             >
               {isOptimizing ? (
@@ -198,6 +203,16 @@ export default function ScriptEditor({
               {isOptimizing ? "優化中…" : "AI 智能優化"}
             </Button>
           </div>
+
+          {optimizeError && (
+            <div
+              role="alert"
+              aria-live="polite"
+              className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive"
+            >
+              {optimizeError}
+            </div>
+          )}
 
           {suggestionData && (
             <PromptSuggestionPanel

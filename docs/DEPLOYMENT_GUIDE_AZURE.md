@@ -62,6 +62,9 @@
     | `GOOGLE_API_KEY` | `AIzaSy...` (請複製完整 API Key) | Google Gemini API Key |
     | `GEMINI_MODEL_ANALYSIS` | `gemini-3-pro-preview` | 模型名稱 |
     | `GEMINI_MODEL_GENERATION` | `gemini-3-pro-image-preview` | 模型名稱 |
+    | `AZURE_OPENAI_ENDPOINT` | `https://<resource>.services.ai.azure.com/openai/v1` | Azure OpenAI v1 endpoint |
+    | `AZURE_OPENAI_API_KEY` | `<your-azure-openai-key>` | Azure OpenAI API Key |
+    | `AZURE_OPENAI_DEPLOYMENT` | `gpt-5.6-luna` | 智能優化使用的 deployment |
     | `AUTH_DISABLED` | `false` | 正式環境建議設為 false |
     | `CORS_ALLOW_ORIGIN` | `*` | 允許的來源 |
     | `RATE_LIMIT_PER_MINUTE` | `60` |速率限制 |

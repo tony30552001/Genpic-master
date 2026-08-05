@@ -34,10 +34,17 @@ func --version
     "GOOGLE_API_KEY": "<your-gemini-api-key>",
     "GEMINI_MODEL_ANALYSIS": "gemini-1.5-flash",
     "GEMINI_MODEL_GENERATION": "gemini-3-pro-image-preview",
+    "AZURE_OPENAI_ENDPOINT": "https://<resource>.services.ai.azure.com/openai/v1",
+    "AZURE_OPENAI_API_KEY": "<your-azure-openai-key>",
+    "AZURE_OPENAI_DEPLOYMENT": "gpt-5.6-luna",
     "AUTH_DISABLED": "false"
   }
 }
 ```
+
+「AI 智能優化」使用 Azure OpenAI Responses API。以上三個設定只放在
+Functions runtime；不要加上 `VITE_` 前綴，也不要放進前端 `.env`。
+若未設定 `AZURE_OPENAI_API_KEY`，後端會暫時共用 `GPT_IMAGE_API_KEY`。
 
 ---
 

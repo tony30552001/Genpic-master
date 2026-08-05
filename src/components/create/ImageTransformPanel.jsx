@@ -141,12 +141,14 @@ export default function ImageTransformPanel({
   const fileInputRef = useRef(null);
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizeError, setOptimizeError] = useState("");
   const [suggestionData, setSuggestionData] = useState(null);
   const activeModeInfo = TRANSFORM_MODES.find((m) => m.id === mode) || TRANSFORM_MODES[0];
 
   const handleSmartOptimize = async () => {
     if (!prompt?.trim()) return;
     setIsOptimizing(true);
+    setOptimizeError("");
     setSuggestionData(null);
     try {
       const paletteTagsStr = STYLE_DIMENSIONS
@@ -162,9 +164,12 @@ export default function ImageTransformPanel({
           optimizedText: result.optimizedPromptZh || result.optimizedPrompt,
           explanation: result.explanation || "",
         });
+      } else {
+        setOptimizeError("AI 未回傳可用的優化內容，請稍後再試。");
       }
     } catch (err) {
       console.error("Transform prompt optimize failed:", err);
+      setOptimizeError(err?.message || "優化失敗，請稍後再試。");
     } finally {
       setIsOptimizing(false);
     }
@@ -330,7 +335,7 @@ export default function ImageTransformPanel({
 
           {/* 4. Custom Prompt */}
           <section>
-            <div className="flex items-center justify-between mb-2">
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">4</span>
                 描述轉換效果
@@ -341,7 +346,7 @@ export default function ImageTransformPanel({
                 size="sm"
                 onClick={handleSmartOptimize}
                 disabled={isOptimizing || !prompt?.trim()}
-                className="h-8 shrink-0 gap-1.5 rounded-lg border-primary/30 bg-background text-xs font-semibold text-primary shadow-sm hover:bg-primary/10"
+                className="min-h-11 w-full shrink-0 gap-1.5 rounded-lg border-primary/30 bg-background px-4 text-xs font-semibold text-primary shadow-sm hover:bg-primary/10 touch-manipulation sm:h-8 sm:min-h-0 sm:w-auto"
                 title="使用 AI 自動豐富描述細節與提示詞"
               >
                 {isOptimizing ? (
@@ -352,12 +357,21 @@ export default function ImageTransformPanel({
                 {isOptimizing ? "優化中…" : "AI 智能優化"}
               </Button>
             </div>
+            {optimizeError && (
+              <div
+                role="alert"
+                aria-live="polite"
+                className="mb-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive"
+              >
+                {optimizeError}
+              </div>
+            )}
             <Textarea
               value={prompt}
-              onChange={(e) => { onPromptChange(e.target.value); setSuggestionData(null); }}
+              onChange={(e) => { onPromptChange(e.target.value); setSuggestionData(null); setOptimizeError(""); }}
               placeholder={activeModeInfo.placeholder}
               rows={3}
-              className="resize-none text-sm"
+              className="min-h-28 resize-none text-sm leading-relaxed"
             />
             {suggestionData && (
               <div className="mt-2">
@@ -470,7 +484,7 @@ export default function ImageTransformPanel({
                     type="button"
                     onClick={() => onAspectRatioChange(id)}
                     className={cn(
-                      "px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "min-h-11 rounded-lg border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation",
                       aspectRatio === id
                         ? "border-primary bg-primary/8 text-primary"
                         : "border-border bg-background text-muted-foreground hover:border-primary/40"
@@ -495,7 +509,7 @@ export default function ImageTransformPanel({
           <Button
             onClick={isTransforming ? onCancelTransform : onTransform}
             disabled={!sourcePreview || isUploadingSource}
-            className="w-full gap-2 mb-4"
+            className="mb-4 min-h-11 w-full gap-2 touch-manipulation"
             variant={isTransforming ? "outline" : "default"}
           >
             {isTransforming ? (
