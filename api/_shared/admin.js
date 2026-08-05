@@ -7,6 +7,10 @@ const requireAdmin = async (context, req) => {
   if (!auth) return null;
 
   const identity = await resolveIdentity(auth.user);
+  if (!identity.isActive) {
+    context.res = error("使用者帳號已停用", "user_disabled", 403, req);
+    return null;
+  }
   const isLocalBypass =
     auth.user?.authType === "bypass" &&
     process.env.NODE_ENV !== "production" &&

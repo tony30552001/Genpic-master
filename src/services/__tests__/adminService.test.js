@@ -14,7 +14,9 @@ import { apiGet, apiPut } from "../apiClient";
 import {
   getAdminModelSettings,
   listAdminUsers,
+  listAdminUserOptions,
   updateAdminModelSettings,
+  updateAdminUserStatus,
 } from "../adminService";
 
 describe("adminService", () => {
@@ -24,17 +26,21 @@ describe("adminService", () => {
 
   it("uses the non-reserved management API route", async () => {
     await getAdminModelSettings();
-    await listAdminUsers();
+    await listAdminUsers({ page: 2, pageSize: 25 });
+    await listAdminUserOptions();
     await updateAdminModelSettings({
       allowedModels: ["gemini-imagen", "gpt-image-2"],
       defaultModel: "gpt-image-2",
     });
+    await updateAdminUserStatus("user-id", false);
 
     expect(apiGet).toHaveBeenNthCalledWith(1, "/api/management/settings");
-    expect(apiGet).toHaveBeenNthCalledWith(2, "/api/management/users");
+    expect(apiGet).toHaveBeenNthCalledWith(2, "/api/management/users?page=2&pageSize=25");
+    expect(apiGet).toHaveBeenNthCalledWith(3, "/api/management/user-options");
     expect(apiPut).toHaveBeenCalledWith("/api/management/settings", {
       allowedModels: ["gemini-imagen", "gpt-image-2"],
       defaultModel: "gpt-image-2",
     });
+    expect(apiPut).toHaveBeenCalledWith("/api/management/users/user-id", { isActive: false });
   });
 });

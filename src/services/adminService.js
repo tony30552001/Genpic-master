@@ -19,8 +19,11 @@ export const getCurrentUserProfile = async () =>
 export const getAdminModelSettings = async () =>
   apiGet(`${ADMIN_API_BASE}/settings`);
 
-export const listAdminUsers = async () =>
-  apiGet(`${ADMIN_API_BASE}/users`);
+export const listAdminUsers = async ({ page = 1, pageSize = 25 } = {}) =>
+  apiGet(`${ADMIN_API_BASE}/users${buildQueryString({ page, pageSize })}`);
+
+export const listAdminUserOptions = async () =>
+  apiGet(`${ADMIN_API_BASE}/user-options`);
 
 export const listAdminHistory = async (userId) =>
   apiGet(`${ADMIN_API_BASE}/history${buildQueryString({ userId })}`);
@@ -30,6 +33,9 @@ export const listAdminStyles = async (userId) =>
 
 export const updateAdminUserRole = async (userId, role) =>
   apiPut(`${ADMIN_API_BASE}/users/${userId}`, { role });
+
+export const updateAdminUserStatus = async (userId, isActive) =>
+  apiPut(`${ADMIN_API_BASE}/users/${userId}`, { isActive });
 
 export const updateAdminModelSettings = async (settings) =>
   apiPut(`${ADMIN_API_BASE}/settings`, settings);

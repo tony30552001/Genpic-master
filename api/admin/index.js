@@ -25,9 +25,18 @@ const mapUser = (row) => ({
   email: row.email,
   displayName: row.display_name || row.email,
   role: row.role,
+  isActive: row.is_active !== false,
   createdAt: timestamp(row.created_at),
   generationCount: Number(row.generation_count || 0),
   styleCount: Number(row.style_count || 0),
+});
+
+const mapUserOption = (row) => ({
+  id: row.id,
+  email: row.email,
+  displayName: row.display_name || row.email,
+  role: row.role,
+  isActive: row.is_active !== false,
 });
 
 const mapHistory = (row) => ({
@@ -64,13 +73,35 @@ const mapStyle = (row) => ({
   updatedAt: timestamp(row.updated_at || row.created_at),
 });
 
+const parsePositiveInt = (value, fallback, maximum) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.trunc(parsed), 1), maximum);
+};
+
+const getUserPagination = (req) => ({
+  page: parsePositiveInt(req.query?.page, 1, Number.MAX_SAFE_INTEGER),
+  pageSize: parsePositiveInt(req.query?.pageSize, 25, 100),
+});
+
 const listUsers = async (context, identity, req) => {
+  const { page, pageSize } = getUserPagination(req);
+  const countResult = await query(
+    "SELECT COUNT(*)::int AS total FROM users WHERE tenant_id = $1",
+    [identity.tenantId]
+  );
+  const total = Number(countResult.rows[0]?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const offset = (currentPage - 1) * pageSize;
+
   const result = await query(
     `SELECT
        u.id,
        u.email,
        u.display_name,
        u.role,
+       u.is_active,
        u.created_at,
        (SELECT COUNT(*) FROM history h
         WHERE h.user_id = u.id AND h.tenant_id = u.tenant_id) AS generation_count,
@@ -78,10 +109,34 @@ const listUsers = async (context, identity, req) => {
         WHERE s.created_by = u.id AND s.tenant_id = u.tenant_id) AS style_count
      FROM users u
      WHERE u.tenant_id = $1
-     ORDER BY u.created_at DESC`,
+     ORDER BY u.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [identity.tenantId, pageSize, offset]
+  );
+  context.res = ok(
+    {
+      items: result.rows.map(mapUser),
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        totalPages,
+      },
+    },
+    200,
+    req
+  );
+};
+
+const listUserOptions = async (context, identity, req) => {
+  const result = await query(
+    `SELECT id, email, display_name, role, is_active
+     FROM users
+     WHERE tenant_id = $1
+     ORDER BY display_name ASC NULLS LAST, email ASC`,
     [identity.tenantId]
   );
-  context.res = ok(result.rows.map(mapUser), 200, req);
+  context.res = ok(result.rows.map(mapUserOption), 200, req);
 };
 
 const listHistory = async (context, identity, req) => {
@@ -162,20 +217,22 @@ const listStyles = async (context, identity, req) => {
   context.res = ok(result.rows.map(mapStyle), 200, req);
 };
 
-const updateUserRole = async (context, identity, req, targetId) => {
+const updateUser = async (context, identity, req, targetId) => {
   if (!targetId) {
     context.res = error("缺少 user id", "bad_request", 400, req);
     return;
   }
 
-  const role = String(req.body?.role || "").trim();
-  if (!["admin", "editor", "viewer"].includes(role)) {
-    context.res = error("不支援的使用者角色", "bad_request", 400, req);
+  const payload = req.body || {};
+  const hasRole = payload.role !== undefined;
+  const hasStatus = payload.isActive !== undefined;
+  if (!hasRole && !hasStatus) {
+    context.res = error("缺少使用者更新內容", "bad_request", 400, req);
     return;
   }
 
   const current = await query(
-    "SELECT id, role FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    "SELECT id, role, is_active FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
     [targetId, identity.tenantId]
   );
   if (current.rows.length === 0) {
@@ -183,9 +240,32 @@ const updateUserRole = async (context, identity, req, targetId) => {
     return;
   }
 
-  if (current.rows[0].role === "admin" && role !== "admin") {
+  const currentUser = current.rows[0];
+  const role = hasRole ? String(payload.role || "").trim() : currentUser.role;
+  const isActive = hasStatus ? payload.isActive : currentUser.is_active;
+
+  if (hasRole && !["admin", "editor", "viewer"].includes(role)) {
+    context.res = error("不支援的使用者角色", "bad_request", 400, req);
+    return;
+  }
+
+  if (hasStatus && typeof isActive !== "boolean") {
+    context.res = error("使用者啟用狀態格式錯誤", "bad_request", 400, req);
+    return;
+  }
+
+  if (hasStatus && !isActive && targetId === identity.userId) {
+    context.res = error("不能停用目前登入的管理員帳號", "bad_request", 400, req);
+    return;
+  }
+
+  if (
+    currentUser.role === "admin" &&
+    currentUser.is_active &&
+    (role !== "admin" || !isActive)
+  ) {
     const adminCount = await query(
-      "SELECT COUNT(*) AS count FROM users WHERE tenant_id = $1 AND role = 'admin'",
+      "SELECT COUNT(*) AS count FROM users WHERE tenant_id = $1 AND role = 'admin' AND is_active = true",
       [identity.tenantId]
     );
     if (Number(adminCount.rows[0].count) <= 1) {
@@ -197,22 +277,23 @@ const updateUserRole = async (context, identity, req, targetId) => {
   const result = await query(
     `WITH updated_user AS (
        UPDATE users
-       SET role = $1
-       WHERE id = $2 AND tenant_id = $3
-       RETURNING id, email, display_name, role, created_at, tenant_id
+       SET role = $1, is_active = $2
+       WHERE id = $3 AND tenant_id = $4
+       RETURNING id, email, display_name, role, is_active, created_at, tenant_id
      )
      SELECT
        u.id,
        u.email,
        u.display_name,
        u.role,
+       u.is_active,
        u.created_at,
        (SELECT COUNT(*) FROM history h
         WHERE h.user_id = u.id AND h.tenant_id = u.tenant_id) AS generation_count,
        (SELECT COUNT(*) FROM styles s
         WHERE s.created_by = u.id AND s.tenant_id = u.tenant_id) AS style_count
      FROM updated_user u`,
-    [role, targetId, identity.tenantId]
+    [role, isActive, targetId, identity.tenantId]
   );
   context.res = ok(mapUser(result.rows[0]), 200, req);
 };
@@ -263,6 +344,11 @@ module.exports = async function (context, req) {
     return;
   }
 
+  if (method === "GET" && resource === "user-options") {
+    await listUserOptions(context, identity, req);
+    return;
+  }
+
   if (method === "GET" && resource === "history") {
     await listHistory(context, identity, req);
     return;
@@ -310,7 +396,7 @@ module.exports = async function (context, req) {
   }
 
   if (method === "PUT" && resource === "users") {
-    await updateUserRole(context, identity, req, targetId);
+    await updateUser(context, identity, req, targetId);
     return;
   }
 

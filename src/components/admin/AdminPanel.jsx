@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Database,
   Image,
   Loader2,
@@ -12,6 +14,8 @@ import {
   ShieldCheck,
   Trash2,
   Users,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,8 +28,10 @@ import {
   listAdminHistory,
   listAdminStyles,
   listAdminUsers,
+  listAdminUserOptions,
   updateAdminModelSettings,
   updateAdminUserRole,
+  updateAdminUserStatus,
 } from "../../services/adminService";
 import { IMAGE_MODEL_OPTIONS } from "../../config";
 
@@ -55,6 +61,35 @@ const emptyPolicy = {
   defaultModel: "gemini-imagen",
 };
 
+const USER_PAGE_SIZE = 25;
+const EMPTY_USER_PAGINATION = {
+  page: 1,
+  pageSize: USER_PAGE_SIZE,
+  total: 0,
+  totalPages: 1,
+};
+
+const normalizeUserPage = (data) => {
+  if (Array.isArray(data)) {
+    return {
+      items: data,
+      pagination: {
+        ...EMPTY_USER_PAGINATION,
+        pageSize: data.length || USER_PAGE_SIZE,
+        total: data.length,
+      },
+    };
+  }
+
+  return {
+    items: data?.items || [],
+    pagination: {
+      ...EMPTY_USER_PAGINATION,
+      ...(data?.pagination || {}),
+    },
+  };
+};
+
 export default function AdminPanel() {
   const navigate = useNavigate();
   const { user, profile, handleLogout } = useAuth();
@@ -62,10 +97,14 @@ export default function AdminPanel() {
   const [users, setUsers] = useState([]);
   const [historyItems, setHistoryItems] = useState([]);
   const [styles, setStyles] = useState([]);
+  const [userOptions, setUserOptions] = useState([]);
+  const [userPagination, setUserPagination] = useState(EMPTY_USER_PAGINATION);
   const [modelPolicy, setModelPolicy] = useState(emptyPolicy);
   const [supportedModels, setSupportedModels] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingUserOptions, setIsLoadingUserOptions] = useState(false);
+  const [hasLoadedUserOptions, setHasLoadedUserOptions] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -74,12 +113,14 @@ export default function AdminPanel() {
   const loadDashboard = useCallback(async () => {
     try {
       const [userData, historyData, styleData, settingsData] = await Promise.all([
-        listAdminUsers(),
+        listAdminUsers({ page: 1, pageSize: USER_PAGE_SIZE }),
         listAdminHistory(),
         listAdminStyles(),
         getAdminModelSettings(),
       ]);
-      setUsers(userData || []);
+      const userPage = normalizeUserPage(userData);
+      setUsers(userPage.items);
+      setUserPagination(userPage.pagination);
       setHistoryItems(historyData || []);
       setStyles(styleData || []);
       setModelPolicy(settingsData?.modelPolicy || emptyPolicy);
@@ -94,6 +135,46 @@ export default function AdminPanel() {
   useEffect(() => {
     void Promise.resolve().then(loadDashboard);
   }, [loadDashboard]);
+
+  const loadUserOptions = useCallback(async () => {
+    setIsLoadingUserOptions(true);
+    setErrorMessage("");
+    try {
+      const data = await listAdminUserOptions();
+      setUserOptions(data || []);
+    } catch (error) {
+      setErrorMessage(error.message || "使用者篩選清單載入失敗");
+    } finally {
+      setHasLoadedUserOptions(true);
+      setIsLoadingUserOptions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      (activeSection === "history" || activeSection === "styles") &&
+      !hasLoadedUserOptions
+    ) {
+      void Promise.resolve().then(loadUserOptions);
+    }
+  }, [activeSection, hasLoadedUserOptions, loadUserOptions]);
+
+  const handleUserPageChange = async (page) => {
+    if (page < 1 || page > userPagination.totalPages || page === userPagination.page) return;
+    setIsRefreshing(true);
+    setErrorMessage("");
+    try {
+      const data = normalizeUserPage(
+        await listAdminUsers({ page, pageSize: USER_PAGE_SIZE })
+      );
+      setUsers(data.items);
+      setUserPagination(data.pagination);
+    } catch (error) {
+      setErrorMessage(error.message || "使用者清單載入失敗");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const refreshFilteredData = useCallback(async (userId) => {
     setIsRefreshing(true);
@@ -125,8 +206,36 @@ export default function AdminPanel() {
       setUsers((previous) =>
         previous.map((item) => (item.id === userId ? { ...item, ...updated } : item))
       );
+      setUserOptions((previous) =>
+        previous.map((item) => (item.id === userId ? { ...item, ...updated } : item))
+      );
     } catch (error) {
       setErrorMessage(error.message || "使用者角色更新失敗");
+    }
+  };
+
+  const handleUserStatusChange = async (item) => {
+    const nextIsActive = !item.isActive;
+    if (
+      !nextIsActive &&
+      !window.confirm(`確定要停用 ${item.displayName} 嗎？停用後該使用者將無法使用系統。`)
+    ) {
+      return;
+    }
+
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const updated = await updateAdminUserStatus(item.id, nextIsActive);
+      setUsers((previous) =>
+        previous.map((userItem) => (userItem.id === item.id ? { ...userItem, ...updated } : userItem))
+      );
+      setUserOptions((previous) =>
+        previous.map((userItem) => (userItem.id === item.id ? { ...userItem, ...updated } : userItem))
+      );
+      setSuccessMessage(`${item.displayName} 已${nextIsActive ? "啟用" : "停用"}。`);
+    } catch (error) {
+      setErrorMessage(error.message || "使用者狀態更新失敗");
     }
   };
 
@@ -181,9 +290,10 @@ export default function AdminPanel() {
   };
 
   const selectedUser = useMemo(
-    () => users.find((item) => item.id === selectedUserId),
-    [selectedUserId, users]
+    () => [...userOptions, ...users].find((item) => item.id === selectedUserId),
+    [selectedUserId, userOptions, users]
   );
+  const filterUsers = userOptions.length > 0 ? userOptions : users;
 
   const activeSectionInfo = SECTIONS.find((section) => section.id === activeSection);
 
@@ -275,13 +385,14 @@ export default function AdminPanel() {
                   <select
                     value={selectedUserId}
                     onChange={handleUserFilterChange}
+                    disabled={isLoadingUserOptions}
                     className="h-9 max-w-[240px] rounded-lg border border-input bg-background px-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label="依使用者篩選"
                   >
                     <option value="">全部使用者</option>
-                    {users.map((item) => (
+                    {filterUsers.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.displayName} · {item.email}
+                        {item.displayName} · {item.email}{item.isActive ? "" : "（已停用）"}
                       </option>
                     ))}
                   </select>
@@ -318,23 +429,28 @@ export default function AdminPanel() {
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Users className="h-4 w-4 text-primary" aria-hidden="true" />
                         使用者清單
-                        <Badge variant="secondary" className="ml-auto">{users.length}</Badge>
+                        <Badge variant="secondary" className="ml-auto">{userPagination.total}</Badge>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="overflow-x-auto p-0">
-                      <table className="w-full min-w-[680px] text-sm">
+                      <table className="w-full min-w-[880px] text-sm">
                         <thead className="border-y border-border bg-muted/40 text-left text-xs text-muted-foreground">
                           <tr>
                             <th className="px-5 py-3 font-medium">使用者</th>
                             <th className="px-5 py-3 font-medium">角色</th>
+                            <th className="px-5 py-3 font-medium">狀態</th>
                             <th className="px-5 py-3 font-medium">生成圖片</th>
                             <th className="px-5 py-3 font-medium">儲存風格</th>
                             <th className="px-5 py-3 font-medium">加入時間</th>
+                            <th className="px-5 py-3 font-medium">操作</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                           {users.map((item) => (
-                            <tr key={item.id} className="hover:bg-muted/30">
+                            <tr
+                              key={item.id}
+                              className={cn("hover:bg-muted/30", !item.isActive && "bg-muted/20")}
+                            >
                               <td className="px-5 py-3">
                                 <p className="font-medium">{item.displayName}</p>
                                 <p className="text-xs text-muted-foreground">{item.email}</p>
@@ -351,15 +467,80 @@ export default function AdminPanel() {
                                   ))}
                                 </select>
                               </td>
+                              <td className="px-5 py-3">
+                                <Badge variant={item.isActive ? "secondary" : "destructive"}>
+                                  {item.isActive ? "啟用" : "已停用"}
+                                </Badge>
+                              </td>
                               <td className="px-5 py-3 tabular-nums">{item.generationCount}</td>
                               <td className="px-5 py-3 tabular-nums">{item.styleCount}</td>
                               <td className="px-5 py-3 text-xs text-muted-foreground">{formatDate(item.createdAt)}</td>
+                              <td className="px-5 py-3">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleUserStatusChange(item)}
+                                  disabled={item.id === profile?.id && item.isActive}
+                                  title={item.id === profile?.id && item.isActive ? "不能停用目前登入的管理員帳號" : undefined}
+                                  aria-label={`${item.isActive ? "停用" : "啟用"} ${item.displayName}`}
+                                  className={cn(
+                                    "gap-1.5",
+                                    item.isActive
+                                      ? "text-destructive hover:bg-destructive/5 hover:text-destructive"
+                                      : "text-success hover:bg-success/5 hover:text-success"
+                                  )}
+                                >
+                                  {item.isActive ? (
+                                    <UserX className="h-3.5 w-3.5" aria-hidden="true" />
+                                  ) : (
+                                    <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                                  )}
+                                  {item.isActive ? "停用" : "啟用"}
+                                </Button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                       {users.length === 0 && (
                         <p className="px-5 py-10 text-center text-sm text-muted-foreground">目前沒有使用者資料。</p>
+                      )}
+                      {userPagination.total > 0 && (
+                        <div className="flex flex-col gap-3 border-t border-border px-5 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                          <p>
+                            顯示 {(userPagination.page - 1) * userPagination.pageSize + 1}–
+                            {Math.min(userPagination.page * userPagination.pageSize, userPagination.total)}
+                            位，共 {userPagination.total} 位使用者
+                          </p>
+                          <div className="flex items-center justify-between gap-2 sm:justify-end">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleUserPageChange(userPagination.page - 1)}
+                              disabled={isRefreshing || userPagination.page <= 1}
+                              aria-label="上一頁使用者"
+                              className="h-9 w-9"
+                            >
+                              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                            <span className="min-w-20 text-center tabular-nums">
+                              第 {userPagination.page} / {userPagination.totalPages} 頁
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleUserPageChange(userPagination.page + 1)}
+                              disabled={isRefreshing || userPagination.page >= userPagination.totalPages}
+                              aria-label="下一頁使用者"
+                              className="h-9 w-9"
+                            >
+                              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </div>
+                        </div>
                       )}
                     </CardContent>
                   </Card>

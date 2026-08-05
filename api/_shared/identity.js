@@ -57,7 +57,7 @@ const getOrCreateUser = async (tenantId, user) => {
          WHEN EXCLUDED.role = 'admin' THEN 'admin'
          ELSE users.role
        END
-     RETURNING id, role`,
+     RETURNING id, role, is_active`,
     [
       tenantId,
       identity.email,
@@ -74,8 +74,9 @@ const resolveIdentity = async (user) => {
   const databaseUser = await getOrCreateUser(tenantId, user);
   return {
     tenantId,
-    userId: databaseUser?.id || null,
+    userId: databaseUser?.is_active === false ? null : databaseUser?.id || null,
     role: databaseUser?.role || null,
+    isActive: databaseUser?.is_active !== false,
     email: identity?.email || null,
     displayName: identity?.displayName || null,
   };
