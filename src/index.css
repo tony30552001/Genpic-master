@@ -57,6 +57,7 @@
   --animate-slide-up: slideUp 0.2s ease-out;
   --animate-scale-in: scaleIn 0.15s ease-in;
   --animate-shimmer: shimmer 2s linear infinite;
+  --animate-preview-dot: previewDot 1.8s ease-in-out infinite;
 
   @keyframes accordion-down {
     from {
@@ -113,6 +114,17 @@
     }
     100% {
       background-position: 200% 0;
+    }
+  }
+
+  @keyframes previewDot {
+    0%, 100% {
+      opacity: calc(var(--dot-opacity) * 0.45);
+      transform: scale(0.72);
+    }
+    50% {
+      opacity: var(--dot-opacity);
+      transform: scale(1.18);
     }
   }
 }
@@ -273,4 +285,14 @@
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
+}
+
+.image-preview-dot {
+  display: block;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.72);
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.16);
+  will-change: opacity, transform;
 }
