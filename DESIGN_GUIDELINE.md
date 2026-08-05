@@ -143,14 +143,15 @@ Tailwind 已透過 `@custom-variant dark (&:where(.dark, .dark *))` 設定 class
 ### 4.1 字體堆疊
 
 ```css
-font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont,
-             'Segoe UI', 'Helvetica Neue', sans-serif;
+font-family: 'Noto Sans TC', 'Geist', 'Avenir Next', -apple-system,
+             BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
 ```
 
 | 字型 | 角色 |
 |:---|:---|
-| **Inter** | 主體英文字型，現代幾何無襯線，Variable Font |
-| **Noto Sans TC** | 中文回退，Google 開源繁體 |
+| **Noto Sans TC** | 中文主體字型，Google 開源繁體 |
+| **Geist** | 英文字型回退，清晰的現代無襯線 |
+| **Avenir Next** | Geist 不可用時的系統英文字型回退 |
 | **JetBrains Mono** | 等寬字型（Prompt 輸入、程式碼區塊） |
 
 ### 4.2 字級量表 (Type Scale)

@@ -269,11 +269,11 @@ export default function ScriptEditor({
 
       <StylePalette selected={paletteSelected} onSelectedChange={handlePaletteChange} />
 
-      <Card className="rounded-2xl border-border bg-card shadow-md ring-1 ring-border/40">
+      <Card className="rounded-2xl border-border bg-card">
         <button
           type="button"
           onClick={() => setShowAssistTools((open) => !open)}
-          className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-expanded={assistToolsOpen}
           aria-controls={assistToolsId}
         >
@@ -297,8 +297,19 @@ export default function ScriptEditor({
           </span>
         </button>
 
-        {assistToolsOpen && (
-          <CardContent id={assistToolsId} className="space-y-4 border-t border-border bg-background/80 p-4">
+        <div
+          id={assistToolsId}
+          aria-hidden={!assistToolsOpen}
+          inert={!assistToolsOpen}
+          className={cn(
+            "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+            assistToolsOpen
+              ? "grid-rows-[1fr] opacity-100"
+              : "pointer-events-none grid-rows-[0fr] opacity-0"
+          )}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <CardContent className="space-y-4 border-t border-border bg-background/80 p-4">
             <section className="space-y-3 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="reference-style-title">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
@@ -660,8 +671,9 @@ export default function ScriptEditor({
                 )}
               </section>
             )}
-          </CardContent>
-        )}
+            </CardContent>
+          </div>
+        </div>
       </Card>
     </div>
   );

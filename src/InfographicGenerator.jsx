@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay, ShieldCheck
+    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay, ShieldCheck, MoreHorizontal
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -68,7 +68,21 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [isStyleTagsTouched, setIsStyleTagsTouched] = useState(false);
     const [appliedStyleId, setAppliedStyleId] = useState(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
+    const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [paletteStyle, setPaletteStyle] = useState('');
+
+    useEffect(() => {
+        if (!mobileMoreOpen) return undefined;
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setMobileMoreOpen(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [mobileMoreOpen]);
 
     const handlePaletteStyleChange = (styleStr) => {
         setPaletteStyle(styleStr);
@@ -525,6 +539,13 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         { id: 'settings', label: '設定', shortLabel: '設定', icon: Settings },
     ];
     const activeTabInfo = tabs.find(t => t.id === activeTab);
+    const mobilePrimaryTabs = tabs.filter((tab) =>
+        ['general', 'templates', 'styles', 'history'].includes(tab.id)
+    );
+    const mobileSecondaryTabs = tabs.filter((tab) =>
+        ['document', 'image-transform', 'settings'].includes(tab.id)
+    );
+    const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
 
     // --- Render ---
     return (
@@ -973,15 +994,50 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             )}
 
             {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
-            <nav className="sm:hidden shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-40 pb-[env(safe-area-inset-bottom)]">
+            <nav className="relative z-40 shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] sm:hidden pb-[env(safe-area-inset-bottom)]">
+                {mobileMoreOpen && (
+                    <div
+                        className="absolute inset-x-3 bottom-full z-50 mb-2 rounded-xl border border-border bg-card p-2 shadow-xl ring-1 ring-border/40"
+                        role="menu"
+                        aria-label="更多功能"
+                    >
+                        <div className="grid grid-cols-3 gap-2">
+                            {mobileSecondaryTabs.map((tab) => {
+                                const isActive = activeTab === tab.id;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={tab.id}
+                                        role="menuitem"
+                                        onClick={() => {
+                                            setActiveTab(tab.id);
+                                            setMobileMoreOpen(false);
+                                        }}
+                                        aria-pressed={isActive}
+                                        className={`flex min-h-11 touch-manipulation flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isActive
+                                            ? 'border-primary/30 bg-primary/10 text-primary'
+                                            : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
+                                            }`}
+                                    >
+                                        <tab.icon className="h-4 w-4" aria-hidden="true" />
+                                        {tab.shortLabel}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
                 <div className="flex items-stretch h-16">
-                    {tabs.map((tab) => {
+                    {mobilePrimaryTabs.map((tab) => {
                         const isActive = activeTab === tab.id;
                         return (
                             <button
                                 type="button"
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => {
+                                    setActiveTab(tab.id);
+                                    setMobileMoreOpen(false);
+                                }}
                                 aria-pressed={isActive}
                                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isActive
                                     ? 'text-primary'
@@ -1004,6 +1060,30 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                             </button>
                         );
                     })}
+                    <button
+                        type="button"
+                        onClick={() => setMobileMoreOpen((open) => !open)}
+                        aria-expanded={mobileMoreOpen}
+                        aria-haspopup="menu"
+                        aria-pressed={isMobileMoreActive}
+                        aria-label="更多功能"
+                        className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isMobileMoreActive || mobileMoreOpen
+                            ? 'text-primary'
+                            : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                    >
+                        {(isMobileMoreActive || mobileMoreOpen) && (
+                            <span className="absolute top-0 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-primary" />
+                        )}
+                        <span className={`flex h-6 w-6 items-center justify-center rounded-lg transition-colors duration-200 ${isMobileMoreActive || mobileMoreOpen ? 'bg-primary/10' : ''
+                            }`}>
+                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                        <span className={`text-[10px] font-medium leading-none transition-colors ${isMobileMoreActive ? 'font-semibold' : ''
+                            }`}>
+                            更多
+                        </span>
+                    </button>
                 </div>
             </nav>
         </div>

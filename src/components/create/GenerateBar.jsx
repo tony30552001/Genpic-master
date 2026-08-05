@@ -87,7 +87,7 @@ export default function GenerateBar({
                             aria-label={`設定圖片比例為 ${ratio.label}`}
                             aria-pressed={aspectRatio === ratio.id}
                             className={cn(
-                                "flex-1 flex items-center justify-center gap-1 rounded-md py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted",
+                                "min-h-11 flex-1 touch-manipulation flex items-center justify-center gap-1 rounded-md px-1 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted",
                                 aspectRatio === ratio.id
                                      ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
                                      : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
@@ -113,7 +113,7 @@ export default function GenerateBar({
                                 aria-label={`設定圖片解析度為 ${size.label}`}
                                 aria-pressed={imageSize === size.id}
                                 className={cn(
-                                    "rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                    "min-h-11 min-w-11 touch-manipulation rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                                     imageSize === size.id
                                         ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
                                         : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"

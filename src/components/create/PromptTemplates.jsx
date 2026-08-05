@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const TEMPLATES = [
   {
@@ -82,14 +83,16 @@ const TEMPLATES = [
  */
 export default function PromptTemplates({ onFill }) {
   const [isOpen, setIsOpen] = useState(false);
+  const contentId = "prompt-templates-content";
 
   return (
     <div>
       <button
         type="button"
         onClick={() => setIsOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded-lg border border-border/70 bg-muted/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="flex min-h-11 w-full touch-manipulation items-center gap-2 rounded-lg border border-border/70 bg-muted/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-expanded={isOpen}
+        aria-controls={contentId}
       >
         <Lightbulb
           className="h-4 w-4 shrink-0 text-amber-500"
@@ -114,25 +117,37 @@ export default function PromptTemplates({ onFill }) {
         )}
       </button>
 
-      {isOpen && (
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {TEMPLATES.map((tpl) => (
-            <button
-              key={tpl.id}
-              type="button"
-              onClick={() => onFill?.(tpl.text, tpl.palette)}
-              className="group rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <p className="text-xs font-semibold text-foreground transition-colors group-hover:text-primary">
-                {tpl.title}
-              </p>
-              <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                {tpl.text}
-              </p>
-            </button>
-          ))}
+      <div
+        id={contentId}
+        aria-hidden={!isOpen}
+        inert={!isOpen}
+        className={cn(
+          "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+          isOpen
+            ? "grid-rows-[1fr] opacity-100"
+            : "pointer-events-none grid-rows-[0fr] opacity-0"
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {TEMPLATES.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => onFill?.(tpl.text, tpl.palette)}
+                className="group min-h-11 touch-manipulation rounded-lg border border-border bg-card p-3 text-left transition-[background-color,border-color,box-shadow,color] hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <p className="text-xs font-semibold text-foreground transition-colors group-hover:text-primary">
+                  {tpl.title}
+                </p>
+                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {tpl.text}
+                </p>
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

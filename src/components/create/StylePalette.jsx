@@ -53,7 +53,7 @@ export const STYLE_DIMENSIONS = [
  * onSelectedChange(newSelected): 通知父元件更新
  */
 export default function StylePalette({ selected = {}, onSelectedChange }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   const activeCount = useMemo(
     () => STYLE_DIMENSIONS.reduce((sum, d) => sum + (selected[d.id]?.length ?? 0), 0),
@@ -77,12 +77,12 @@ export default function StylePalette({ selected = {}, onSelectedChange }) {
   }, [onSelectedChange]);
 
   return (
-    <Card className="rounded-2xl border-border bg-card shadow-md ring-1 ring-border/40">
+    <Card className="rounded-2xl border-border bg-card">
       {/* Card header — 可點擊收合，與「參考與風格」保持一致 */}
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-expanded={!collapsed}
       >
         <span className="min-w-0 space-y-0.5">
@@ -108,49 +108,60 @@ export default function StylePalette({ selected = {}, onSelectedChange }) {
         </span>
       </button>
 
-      {!collapsed && (
-        <CardContent className="border-t border-border bg-background/80 p-4 space-y-4">
-          {/* 4 欄 × 2 列維度格線 */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
-            {STYLE_DIMENSIONS.map(({ id, label, tags }) => (
-              <div key={id} className="space-y-2">
-                <p className="text-sm font-semibold text-foreground">{label}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {tags.map((tag) => {
-                    const isActive = (selected[id] || []).includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => toggleTag(id, tag)}
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-                          isActive
-                            ? "border-teal-400 bg-teal-50 text-teal-700 dark:border-teal-500 dark:bg-teal-950 dark:text-teal-300"
-                            : "border-border bg-background text-foreground/70 hover:border-border/70 hover:bg-muted/50 hover:text-foreground"
-                        )}
-                      >
-                        {tag}
-                      </button>
-                    );
-                  })}
+      <div
+        aria-hidden={collapsed}
+        inert={collapsed}
+        className={cn(
+          "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+          collapsed
+            ? "pointer-events-none grid-rows-[0fr] opacity-0"
+            : "grid-rows-[1fr] opacity-100"
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <CardContent className="space-y-4 border-t border-border bg-background/80 p-4">
+            {/* 4 欄 × 2 列維度格線 */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
+              {STYLE_DIMENSIONS.map(({ id, label, tags }) => (
+                <div key={id} className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map((tag) => {
+                      const isActive = (selected[id] || []).includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTag(id, tag)}
+                          className={cn(
+                            "min-h-11 touch-manipulation rounded-full border px-3 py-2 text-sm leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                            isActive
+                              ? "border-primary/60 bg-primary/10 text-primary hover:border-primary/70 hover:bg-primary/15"
+                              : "border-border bg-background text-foreground/70 hover:border-border/70 hover:bg-muted/50 hover:text-foreground"
+                          )}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          {/* 清空風格 */}
-          <div className="border-t border-border/60 pt-3">
-            <button
-              type="button"
-              onClick={handleClear}
-              className="rounded-lg border border-border bg-background px-4 py-1.5 text-sm text-muted-foreground transition-colors hover:border-border/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-            >
-              清空風格
-            </button>
-          </div>
-        </CardContent>
-      )}
+            {/* 清空風格 */}
+            <div className="border-t border-border/60 pt-3">
+              <button
+                type="button"
+                onClick={handleClear}
+                className="min-h-11 touch-manipulation rounded-lg border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-border/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              >
+                清空風格
+              </button>
+            </div>
+          </CardContent>
+        </div>
+      </div>
     </Card>
   );
 }
