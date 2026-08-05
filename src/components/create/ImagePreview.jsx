@@ -64,12 +64,12 @@ export default function ImagePreview({
     >
       <div
         className={cn(
-          "relative flex max-w-[92%] max-h-[82%] items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-900 shadow-xl",
+          "relative flex max-w-[92%] max-h-[82%] items-center justify-center overflow-hidden rounded-[2rem] border border-primary/15 bg-muted/60 shadow-lg ring-1 ring-border/50 dark:border-white/10 dark:bg-neutral-900 dark:ring-transparent",
           getPreviewFrameClass(aspectRatio)
         )}
         aria-hidden="true"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_66%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.12),transparent_66%)] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_66%)]" />
         <div
           className="relative grid h-[76%] w-[76%] place-items-center gap-2"
           style={{ gridTemplateColumns: `repeat(${LOADING_DOT_COLUMNS}, minmax(0, 1fr))` }}
@@ -82,7 +82,7 @@ export default function ImagePreview({
             />
           ))}
         </div>
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.04] to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-primary/[0.05] to-transparent dark:from-white/[0.04]" />
       </div>
       <p className="sr-only" aria-live="polite">
         {generationStatus?.label || "正在生成圖片"}

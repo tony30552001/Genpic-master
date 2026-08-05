@@ -292,7 +292,12 @@
   width: var(--dot-size);
   height: var(--dot-size);
   border-radius: 9999px;
+  background: hsl(var(--primary) / 0.58);
+  box-shadow: 0 0 8px hsl(var(--primary) / 0.16);
+  will-change: opacity, transform;
+}
+
+.dark .image-preview-dot {
   background: rgb(255 255 255 / 0.72);
   box-shadow: 0 0 8px rgb(255 255 255 / 0.16);
-  will-change: opacity, transform;
 }
