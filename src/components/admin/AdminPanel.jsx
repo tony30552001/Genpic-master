@@ -63,19 +63,19 @@ const emptyPolicy = {
 
 const DEFAULT_USER_PAGE_SIZE = 10;
 const USER_PAGE_SIZE_OPTIONS = [10, 25, 50];
-const EMPTY_USER_PAGINATION = {
+const EMPTY_PAGINATION = {
   page: 1,
   pageSize: DEFAULT_USER_PAGE_SIZE,
   total: 0,
   totalPages: 1,
 };
 
-const normalizeUserPage = (data, fallbackPageSize = DEFAULT_USER_PAGE_SIZE) => {
+const normalizePaginatedData = (data, fallbackPageSize = DEFAULT_USER_PAGE_SIZE) => {
   if (Array.isArray(data)) {
     return {
       items: data,
       pagination: {
-        ...EMPTY_USER_PAGINATION,
+        ...EMPTY_PAGINATION,
         pageSize: data.length || fallbackPageSize,
         total: data.length,
       },
@@ -85,11 +85,71 @@ const normalizeUserPage = (data, fallbackPageSize = DEFAULT_USER_PAGE_SIZE) => {
   return {
     items: data?.items || [],
     pagination: {
-      ...EMPTY_USER_PAGINATION,
+      ...EMPTY_PAGINATION,
       pageSize: fallbackPageSize,
       ...(data?.pagination || {}),
     },
   };
+};
+
+const PageSizeSelect = ({ value, onChange, disabled, ariaLabel }) => (
+  <label className="flex items-center gap-2 self-end text-xs text-muted-foreground sm:self-auto">
+    <span>每頁顯示</span>
+    <select
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      aria-label={ariaLabel}
+    >
+      {USER_PAGE_SIZE_OPTIONS.map((pageSize) => (
+        <option key={pageSize} value={pageSize}>
+          {pageSize} 項
+        </option>
+      ))}
+    </select>
+  </label>
+);
+
+const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChange }) => {
+  if (pagination.total <= 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border px-5 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        顯示 {(pagination.page - 1) * pagination.pageSize + 1}–
+        {Math.min(pagination.page * pagination.pageSize, pagination.total)}
+        {itemLabel}，共 {pagination.total}{itemLabel}
+      </p>
+      <div className="flex items-center justify-between gap-2 sm:justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => onPageChange(pagination.page - 1)}
+          disabled={isRefreshing || pagination.page <= 1}
+          aria-label={`上一頁${itemLabel}`}
+          className="h-9 w-9"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <span className="min-w-20 text-center tabular-nums">
+          第 {pagination.page} / {pagination.totalPages} 頁
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => onPageChange(pagination.page + 1)}
+          disabled={isRefreshing || pagination.page >= pagination.totalPages}
+          aria-label={`下一頁${itemLabel}`}
+          className="h-9 w-9"
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+    </div>
+  );
 };
 
 export default function AdminPanel() {
@@ -98,9 +158,13 @@ export default function AdminPanel() {
   const [activeSection, setActiveSection] = useState("users");
   const [users, setUsers] = useState([]);
   const [historyItems, setHistoryItems] = useState([]);
+  const [historyPagination, setHistoryPagination] = useState(EMPTY_PAGINATION);
+  const [historyPageSize, setHistoryPageSize] = useState(DEFAULT_USER_PAGE_SIZE);
   const [styles, setStyles] = useState([]);
+  const [stylesPagination, setStylesPagination] = useState(EMPTY_PAGINATION);
+  const [stylesPageSize, setStylesPageSize] = useState(DEFAULT_USER_PAGE_SIZE);
   const [userOptions, setUserOptions] = useState([]);
-  const [userPagination, setUserPagination] = useState(EMPTY_USER_PAGINATION);
+  const [userPagination, setUserPagination] = useState(EMPTY_PAGINATION);
   const [userPageSize, setUserPageSize] = useState(DEFAULT_USER_PAGE_SIZE);
   const [modelPolicy, setModelPolicy] = useState(emptyPolicy);
   const [supportedModels, setSupportedModels] = useState([]);
@@ -117,16 +181,22 @@ export default function AdminPanel() {
     try {
       const [userData, historyData, styleData, settingsData] = await Promise.all([
         listAdminUsers({ page: 1, pageSize: DEFAULT_USER_PAGE_SIZE }),
-        listAdminHistory(),
-        listAdminStyles(),
+        listAdminHistory({ page: 1, pageSize: DEFAULT_USER_PAGE_SIZE }),
+        listAdminStyles({ page: 1, pageSize: DEFAULT_USER_PAGE_SIZE }),
         getAdminModelSettings(),
       ]);
-      const userPage = normalizeUserPage(userData, DEFAULT_USER_PAGE_SIZE);
+      const userPage = normalizePaginatedData(userData, DEFAULT_USER_PAGE_SIZE);
+      const historyPage = normalizePaginatedData(historyData, DEFAULT_USER_PAGE_SIZE);
+      const stylesPage = normalizePaginatedData(styleData, DEFAULT_USER_PAGE_SIZE);
       setUsers(userPage.items);
       setUserPagination(userPage.pagination);
       setUserPageSize(userPage.pagination.pageSize);
-      setHistoryItems(historyData || []);
-      setStyles(styleData || []);
+      setHistoryItems(historyPage.items);
+      setHistoryPagination(historyPage.pagination);
+      setHistoryPageSize(historyPage.pagination.pageSize);
+      setStyles(stylesPage.items);
+      setStylesPagination(stylesPage.pagination);
+      setStylesPageSize(stylesPage.pagination.pageSize);
       setModelPolicy(settingsData?.modelPolicy || emptyPolicy);
       setSupportedModels(settingsData?.supportedModels || []);
     } catch (error) {
@@ -169,7 +239,7 @@ export default function AdminPanel() {
     setErrorMessage("");
     try {
       const pageSize = userPagination.pageSize || userPageSize;
-      const data = normalizeUserPage(await listAdminUsers({ page, pageSize }), pageSize);
+      const data = normalizePaginatedData(await listAdminUsers({ page, pageSize }), pageSize);
       setUsers(data.items);
       setUserPagination(data.pagination);
       setUserPageSize(data.pagination.pageSize);
@@ -187,7 +257,7 @@ export default function AdminPanel() {
     setIsRefreshing(true);
     setErrorMessage("");
     try {
-      const data = normalizeUserPage(
+      const data = normalizePaginatedData(
         await listAdminUsers({ page: 1, pageSize }),
         pageSize
       );
@@ -201,22 +271,138 @@ export default function AdminPanel() {
     }
   };
 
+  const handleHistoryPageChange = async (page) => {
+    if (
+      page < 1 ||
+      page > historyPagination.totalPages ||
+      page === historyPagination.page
+    ) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    setErrorMessage("");
+    try {
+      const data = normalizePaginatedData(
+        await listAdminHistory({
+          userId: selectedUserId,
+          page,
+          pageSize: historyPagination.pageSize,
+        }),
+        historyPagination.pageSize
+      );
+      setHistoryItems(data.items);
+      setHistoryPagination(data.pagination);
+      setHistoryPageSize(data.pagination.pageSize);
+    } catch (error) {
+      setErrorMessage(error.message || "生成紀錄載入失敗");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleHistoryPageSizeChange = async (event) => {
+    const pageSize = Number(event.target.value);
+    if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === historyPageSize) return;
+
+    setIsRefreshing(true);
+    setErrorMessage("");
+    try {
+      const data = normalizePaginatedData(
+        await listAdminHistory({ userId: selectedUserId, page: 1, pageSize }),
+        pageSize
+      );
+      setHistoryItems(data.items);
+      setHistoryPagination(data.pagination);
+      setHistoryPageSize(data.pagination.pageSize);
+    } catch (error) {
+      setErrorMessage(error.message || "生成紀錄載入失敗");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleStylesPageChange = async (page) => {
+    if (
+      page < 1 ||
+      page > stylesPagination.totalPages ||
+      page === stylesPagination.page
+    ) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    setErrorMessage("");
+    try {
+      const data = normalizePaginatedData(
+        await listAdminStyles({
+          userId: selectedUserId,
+          page,
+          pageSize: stylesPagination.pageSize,
+        }),
+        stylesPagination.pageSize
+      );
+      setStyles(data.items);
+      setStylesPagination(data.pagination);
+      setStylesPageSize(data.pagination.pageSize);
+    } catch (error) {
+      setErrorMessage(error.message || "風格資料載入失敗");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleStylesPageSizeChange = async (event) => {
+    const pageSize = Number(event.target.value);
+    if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === stylesPageSize) return;
+
+    setIsRefreshing(true);
+    setErrorMessage("");
+    try {
+      const data = normalizePaginatedData(
+        await listAdminStyles({ userId: selectedUserId, page: 1, pageSize }),
+        pageSize
+      );
+      setStyles(data.items);
+      setStylesPagination(data.pagination);
+      setStylesPageSize(data.pagination.pageSize);
+    } catch (error) {
+      setErrorMessage(error.message || "風格資料載入失敗");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const refreshFilteredData = useCallback(async (userId) => {
     setIsRefreshing(true);
     setErrorMessage("");
     try {
       const [historyData, styleData] = await Promise.all([
-        listAdminHistory(userId),
-        listAdminStyles(userId),
+        listAdminHistory({
+          userId,
+          page: 1,
+          pageSize: historyPageSize,
+        }),
+        listAdminStyles({
+          userId,
+          page: 1,
+          pageSize: stylesPageSize,
+        }),
       ]);
-      setHistoryItems(historyData || []);
-      setStyles(styleData || []);
+      const historyPage = normalizePaginatedData(historyData, historyPageSize);
+      const stylesPage = normalizePaginatedData(styleData, stylesPageSize);
+      setHistoryItems(historyPage.items);
+      setHistoryPagination(historyPage.pagination);
+      setHistoryPageSize(historyPage.pagination.pageSize);
+      setStyles(stylesPage.items);
+      setStylesPagination(stylesPage.pagination);
+      setStylesPageSize(stylesPage.pagination.pageSize);
     } catch (error) {
       setErrorMessage(error.message || "篩選資料載入失敗");
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [historyPageSize, stylesPageSize]);
 
   const handleUserFilterChange = (event) => {
     const userId = event.target.value;
@@ -446,22 +632,12 @@ export default function AdminPanel() {
                         使用者清單
                         <Badge variant="secondary" className="ml-auto">{userPagination.total}</Badge>
                       </CardTitle>
-                      <label className="flex items-center gap-2 self-end text-xs text-muted-foreground sm:self-auto">
-                        <span>每頁顯示</span>
-                        <select
-                          value={userPageSize}
-                          onChange={handleUserPageSizeChange}
-                          disabled={isRefreshing}
-                          className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label="每頁顯示使用者數量"
-                        >
-                          {USER_PAGE_SIZE_OPTIONS.map((pageSize) => (
-                            <option key={pageSize} value={pageSize}>
-                              {pageSize} 項
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <PageSizeSelect
+                        value={userPageSize}
+                        onChange={handleUserPageSizeChange}
+                        disabled={isRefreshing}
+                        ariaLabel="每頁顯示使用者數量"
+                      />
                     </CardHeader>
                     <CardContent className="overflow-x-auto p-0">
                       <table className="w-full min-w-[880px] text-sm">
@@ -537,54 +713,30 @@ export default function AdminPanel() {
                       {users.length === 0 && (
                         <p className="px-5 py-10 text-center text-sm text-muted-foreground">目前沒有使用者資料。</p>
                       )}
-                      {userPagination.total > 0 && (
-                        <div className="flex flex-col gap-3 border-t border-border px-5 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                          <p>
-                            顯示 {(userPagination.page - 1) * userPagination.pageSize + 1}–
-                            {Math.min(userPagination.page * userPagination.pageSize, userPagination.total)}
-                            位，共 {userPagination.total} 位使用者
-                          </p>
-                          <div className="flex items-center justify-between gap-2 sm:justify-end">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleUserPageChange(userPagination.page - 1)}
-                              disabled={isRefreshing || userPagination.page <= 1}
-                              aria-label="上一頁使用者"
-                              className="h-9 w-9"
-                            >
-                              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                            </Button>
-                            <span className="min-w-20 text-center tabular-nums">
-                              第 {userPagination.page} / {userPagination.totalPages} 頁
-                            </span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleUserPageChange(userPagination.page + 1)}
-                              disabled={isRefreshing || userPagination.page >= userPagination.totalPages}
-                              aria-label="下一頁使用者"
-                              className="h-9 w-9"
-                            >
-                              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
+                      <AdminTablePagination
+                        pagination={userPagination}
+                        itemLabel="位使用者"
+                        isRefreshing={isRefreshing}
+                        onPageChange={handleUserPageChange}
+                      />
                     </CardContent>
                   </Card>
                 )}
 
                 {activeSection === "history" && (
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Database className="h-4 w-4 text-primary" aria-hidden="true" />
                         使用者生成圖片紀錄
-                        <Badge variant="secondary" className="ml-auto">{historyItems.length}</Badge>
+                        <Badge variant="secondary" className="ml-auto">{historyPagination.total}</Badge>
                       </CardTitle>
+                      <PageSizeSelect
+                        value={historyPageSize}
+                        onChange={handleHistoryPageSizeChange}
+                        disabled={isRefreshing}
+                        ariaLabel="每頁顯示生成紀錄數量"
+                      />
                     </CardHeader>
                     <CardContent className="overflow-x-auto p-0">
                       <table className="w-full min-w-[860px] text-sm">
@@ -634,6 +786,12 @@ export default function AdminPanel() {
                       {historyItems.length === 0 && (
                         <p className="px-5 py-10 text-center text-sm text-muted-foreground">目前沒有生成紀錄。</p>
                       )}
+                      <AdminTablePagination
+                        pagination={historyPagination}
+                        itemLabel="筆紀錄"
+                        isRefreshing={isRefreshing}
+                        onPageChange={handleHistoryPageChange}
+                      />
                     </CardContent>
                   </Card>
                 )}
@@ -712,12 +870,18 @@ export default function AdminPanel() {
 
                 {activeSection === "styles" && (
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
                         使用者儲存風格庫
-                        <Badge variant="secondary" className="ml-auto">{styles.length}</Badge>
+                        <Badge variant="secondary" className="ml-auto">{stylesPagination.total}</Badge>
                       </CardTitle>
+                      <PageSizeSelect
+                        value={stylesPageSize}
+                        onChange={handleStylesPageSizeChange}
+                        disabled={isRefreshing}
+                        ariaLabel="每頁顯示風格數量"
+                      />
                     </CardHeader>
                     <CardContent className="overflow-x-auto p-0">
                       <table className="w-full min-w-[780px] text-sm">
@@ -780,6 +944,12 @@ export default function AdminPanel() {
                       {styles.length === 0 && (
                         <p className="px-5 py-10 text-center text-sm text-muted-foreground">目前沒有風格資料。</p>
                       )}
+                      <AdminTablePagination
+                        pagination={stylesPagination}
+                        itemLabel="筆風格"
+                        isRefreshing={isRefreshing}
+                        onPageChange={handleStylesPageChange}
+                      />
                     </CardContent>
                   </Card>
                 )}

@@ -13,6 +13,8 @@ vi.mock("../apiClient", () => ({
 import { apiGet, apiPut } from "../apiClient";
 import {
   getAdminModelSettings,
+  listAdminHistory,
+  listAdminStyles,
   listAdminUsers,
   listAdminUserOptions,
   updateAdminModelSettings,
@@ -48,5 +50,19 @@ describe("adminService", () => {
     await listAdminUsers();
 
     expect(apiGet).toHaveBeenCalledWith("/api/management/users?page=1&pageSize=10");
+  });
+
+  it("passes pagination and user filters to history and styles", async () => {
+    await listAdminHistory({ userId: "user-id", page: 2, pageSize: 10 });
+    await listAdminStyles({ userId: "user-id", page: 3, pageSize: 25 });
+
+    expect(apiGet).toHaveBeenNthCalledWith(
+      1,
+      "/api/management/history?userId=user-id&page=2&pageSize=10"
+    );
+    expect(apiGet).toHaveBeenNthCalledWith(
+      2,
+      "/api/management/styles?userId=user-id&page=3&pageSize=25"
+    );
   });
 });

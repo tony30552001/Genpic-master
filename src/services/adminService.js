@@ -25,11 +25,22 @@ export const listAdminUsers = async ({ page = 1, pageSize = 10 } = {}) =>
 export const listAdminUserOptions = async () =>
   apiGet(`${ADMIN_API_BASE}/user-options`);
 
-export const listAdminHistory = async (userId) =>
-  apiGet(`${ADMIN_API_BASE}/history${buildQueryString({ userId })}`);
+const normalizeListParams = (params) =>
+  typeof params === "string" ? { userId: params } : params || {};
 
-export const listAdminStyles = async (userId) =>
-  apiGet(`${ADMIN_API_BASE}/styles${buildQueryString({ userId })}`);
+export const listAdminHistory = async (params = {}) => {
+  const { userId, page = 1, pageSize = 10 } = normalizeListParams(params);
+  return apiGet(
+    `${ADMIN_API_BASE}/history${buildQueryString({ userId, page, pageSize })}`
+  );
+};
+
+export const listAdminStyles = async (params = {}) => {
+  const { userId, page = 1, pageSize = 10 } = normalizeListParams(params);
+  return apiGet(
+    `${ADMIN_API_BASE}/styles${buildQueryString({ userId, page, pageSize })}`
+  );
+};
 
 export const updateAdminUserRole = async (userId, role) =>
   apiPut(`${ADMIN_API_BASE}/users/${userId}`, { role });

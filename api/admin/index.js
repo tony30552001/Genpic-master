@@ -84,6 +84,15 @@ const getUserPagination = (req) => ({
   pageSize: parsePositiveInt(req.query?.pageSize, 10, 100),
 });
 
+const getListPagination = (req) => ({
+  page: parsePositiveInt(req.query?.page, 1, Number.MAX_SAFE_INTEGER),
+  pageSize: parsePositiveInt(
+    req.query?.pageSize ?? req.query?.limit,
+    10,
+    100
+  ),
+});
+
 const listUsers = async (context, identity, req) => {
   const { page, pageSize } = getUserPagination(req);
   const countResult = await query(
@@ -148,11 +157,18 @@ const listHistory = async (context, identity, req) => {
     where.push(`h.user_id = $${params.length}`);
   }
 
-  const requestedLimit = Number(req.query?.limit || 50);
-  const limit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-    : 50;
-  params.push(limit);
+  const { page, pageSize } = getListPagination(req);
+  const countResult = await query(
+    `SELECT COUNT(*)::int AS total
+     FROM history h
+     WHERE ${where.join(" AND ")}`,
+    params
+  );
+  const total = Number(countResult.rows[0]?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const offset = (currentPage - 1) * pageSize;
+  const resultParams = [...params, pageSize, offset];
 
   const result = await query(
     `SELECT
@@ -172,12 +188,24 @@ const listHistory = async (context, identity, req) => {
      LEFT JOIN users u ON u.id = h.user_id
      LEFT JOIN styles s ON s.id = h.style_id
      WHERE ${where.join(" AND ")}
-     ORDER BY h.created_at DESC
-     LIMIT $${params.length}`,
-    params
+     ORDER BY h.created_at DESC, h.id DESC
+     LIMIT $${resultParams.length - 1} OFFSET $${resultParams.length}`,
+    resultParams
   );
 
-  context.res = ok(result.rows.map(mapHistory), 200, req);
+  context.res = ok(
+    {
+      items: result.rows.map(mapHistory),
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        totalPages,
+      },
+    },
+    200,
+    req
+  );
 };
 
 const listStyles = async (context, identity, req) => {
@@ -188,6 +216,19 @@ const listStyles = async (context, identity, req) => {
     params.push(userId);
     where.push(`s.created_by = $${params.length}`);
   }
+
+  const { page, pageSize } = getListPagination(req);
+  const countResult = await query(
+    `SELECT COUNT(*)::int AS total
+     FROM styles s
+     WHERE ${where.join(" AND ")}`,
+    params
+  );
+  const total = Number(countResult.rows[0]?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const offset = (currentPage - 1) * pageSize;
+  const resultParams = [...params, pageSize, offset];
 
   const result = await query(
     `SELECT
@@ -210,11 +251,24 @@ const listStyles = async (context, identity, req) => {
      FROM styles s
      LEFT JOIN users u ON u.id = s.created_by
      WHERE ${where.join(" AND ")}
-     ORDER BY s.updated_at DESC NULLS LAST, s.created_at DESC`,
-    params
+     ORDER BY s.updated_at DESC NULLS LAST, s.created_at DESC, s.id DESC
+     LIMIT $${resultParams.length - 1} OFFSET $${resultParams.length}`,
+    resultParams
   );
 
-  context.res = ok(result.rows.map(mapStyle), 200, req);
+  context.res = ok(
+    {
+      items: result.rows.map(mapStyle),
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        totalPages,
+      },
+    },
+    200,
+    req
+  );
 };
 
 const updateUser = async (context, identity, req, targetId) => {
