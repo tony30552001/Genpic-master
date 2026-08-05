@@ -26,7 +26,11 @@ const ASPECT_RATIO_TO_SIZE = {
 const isAzureOpenAiEndpoint = (endpoint) => {
   try {
     const { hostname } = new URL(endpoint);
-    return hostname.endsWith(".openai.azure.com") || hostname.endsWith(".cognitiveservices.azure.com");
+    return (
+      hostname.endsWith(".openai.azure.com") ||
+      hostname.endsWith(".cognitiveservices.azure.com") ||
+      hostname.endsWith(".services.ai.azure.com")
+    );
   } catch {
     return false;
   }

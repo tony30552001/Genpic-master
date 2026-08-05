@@ -11,6 +11,8 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
    - `GPT_IMAGE_EDIT_ENDPOINT`（可省略，會由生成端點推導）
    - `GPT_IMAGE_API_KEY`
    - `GPT_IMAGE_DEPLOYMENT`
+   - Foundry endpoint 範例：`https://<resource>.services.ai.azure.com/openai/v1/images/generations`
+   - `services.ai.azure.com` 端點使用 `api-key` header；只設定前端 `VITE_GPT_IMAGE_*` 不會讓 `/api/generate-images` 取得後端設定。
 4. 重新登入後，管理員可從 `/admin` 開啟管理中心。
 
 ## 模型政策

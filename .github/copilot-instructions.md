@@ -51,7 +51,7 @@ Database
 
 **Image models**:
 - `gemini-imagen` ("Nano Banana 2") — default, via Azure Functions API gateway  
-- `gpt-image-2` ("GPT Image 2") — Azure AI Foundry endpoint, direct from frontend
+- `gpt-image-2` ("GPT Image 2") — Azure AI Foundry endpoint, selected by tenant policy and called through the Azure Functions gateway; keep `GPT_IMAGE_*` in Functions runtime settings
 
 ## Environment Variables
 

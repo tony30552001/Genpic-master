@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock config
 vi.mock("../../config", () => ({
-  GPT_IMAGE_ENDPOINT: "https://test.azure.com/openai/v1/images/generations",
+  GPT_IMAGE_ENDPOINT: "https://test.services.ai.azure.com/openai/v1/images/generations",
   GPT_IMAGE_API_KEY: "test-api-key",
   GPT_IMAGE_EDIT_ENDPOINT: "https://image-resource.openai.azure.com/openai/deployments/gpt-image-2/images/edits?api-version=2025-04-01",
   GPT_IMAGE_DEPLOYMENT: "gpt-image-2",
@@ -31,12 +31,12 @@ describe("gptImageService", () => {
     const result = await generateImageGpt({ prompt: "a red fox", aspectRatio: "1:1" });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "https://test.azure.com/openai/v1/images/generations",
+      "https://test.services.ai.azure.com/openai/v1/images/generations",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer test-api-key",
+          "api-key": "test-api-key",
         }),
       })
     );

@@ -20,7 +20,8 @@ const isAzureOpenAiEndpoint = (endpoint) => {
     const { hostname } = new URL(endpoint);
     return (
       hostname.endsWith(".openai.azure.com") ||
-      hostname.endsWith(".cognitiveservices.azure.com")
+      hostname.endsWith(".cognitiveservices.azure.com") ||
+      hostname.endsWith(".services.ai.azure.com")
     );
   } catch {
     return false;
