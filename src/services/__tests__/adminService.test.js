@@ -43,4 +43,10 @@ describe("adminService", () => {
     });
     expect(apiPut).toHaveBeenCalledWith("/api/management/users/user-id", { isActive: false });
   });
+
+  it("defaults user pagination to ten items", async () => {
+    await listAdminUsers();
+
+    expect(apiGet).toHaveBeenCalledWith("/api/management/users?page=1&pageSize=10");
+  });
 });

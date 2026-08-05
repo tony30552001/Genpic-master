@@ -81,7 +81,7 @@ const parsePositiveInt = (value, fallback, maximum) => {
 
 const getUserPagination = (req) => ({
   page: parsePositiveInt(req.query?.page, 1, Number.MAX_SAFE_INTEGER),
-  pageSize: parsePositiveInt(req.query?.pageSize, 25, 100),
+  pageSize: parsePositiveInt(req.query?.pageSize, 10, 100),
 });
 
 const listUsers = async (context, identity, req) => {

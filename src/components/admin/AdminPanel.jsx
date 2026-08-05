@@ -61,21 +61,22 @@ const emptyPolicy = {
   defaultModel: "gemini-imagen",
 };
 
-const USER_PAGE_SIZE = 25;
+const DEFAULT_USER_PAGE_SIZE = 10;
+const USER_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const EMPTY_USER_PAGINATION = {
   page: 1,
-  pageSize: USER_PAGE_SIZE,
+  pageSize: DEFAULT_USER_PAGE_SIZE,
   total: 0,
   totalPages: 1,
 };
 
-const normalizeUserPage = (data) => {
+const normalizeUserPage = (data, fallbackPageSize = DEFAULT_USER_PAGE_SIZE) => {
   if (Array.isArray(data)) {
     return {
       items: data,
       pagination: {
         ...EMPTY_USER_PAGINATION,
-        pageSize: data.length || USER_PAGE_SIZE,
+        pageSize: data.length || fallbackPageSize,
         total: data.length,
       },
     };
@@ -85,6 +86,7 @@ const normalizeUserPage = (data) => {
     items: data?.items || [],
     pagination: {
       ...EMPTY_USER_PAGINATION,
+      pageSize: fallbackPageSize,
       ...(data?.pagination || {}),
     },
   };
@@ -99,6 +101,7 @@ export default function AdminPanel() {
   const [styles, setStyles] = useState([]);
   const [userOptions, setUserOptions] = useState([]);
   const [userPagination, setUserPagination] = useState(EMPTY_USER_PAGINATION);
+  const [userPageSize, setUserPageSize] = useState(DEFAULT_USER_PAGE_SIZE);
   const [modelPolicy, setModelPolicy] = useState(emptyPolicy);
   const [supportedModels, setSupportedModels] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -113,14 +116,15 @@ export default function AdminPanel() {
   const loadDashboard = useCallback(async () => {
     try {
       const [userData, historyData, styleData, settingsData] = await Promise.all([
-        listAdminUsers({ page: 1, pageSize: USER_PAGE_SIZE }),
+        listAdminUsers({ page: 1, pageSize: DEFAULT_USER_PAGE_SIZE }),
         listAdminHistory(),
         listAdminStyles(),
         getAdminModelSettings(),
       ]);
-      const userPage = normalizeUserPage(userData);
+      const userPage = normalizeUserPage(userData, DEFAULT_USER_PAGE_SIZE);
       setUsers(userPage.items);
       setUserPagination(userPage.pagination);
+      setUserPageSize(userPage.pagination.pageSize);
       setHistoryItems(historyData || []);
       setStyles(styleData || []);
       setModelPolicy(settingsData?.modelPolicy || emptyPolicy);
@@ -164,11 +168,32 @@ export default function AdminPanel() {
     setIsRefreshing(true);
     setErrorMessage("");
     try {
+      const pageSize = userPagination.pageSize || userPageSize;
+      const data = normalizeUserPage(await listAdminUsers({ page, pageSize }), pageSize);
+      setUsers(data.items);
+      setUserPagination(data.pagination);
+      setUserPageSize(data.pagination.pageSize);
+    } catch (error) {
+      setErrorMessage(error.message || "使用者清單載入失敗");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleUserPageSizeChange = async (event) => {
+    const pageSize = Number(event.target.value);
+    if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === userPageSize) return;
+
+    setIsRefreshing(true);
+    setErrorMessage("");
+    try {
       const data = normalizeUserPage(
-        await listAdminUsers({ page, pageSize: USER_PAGE_SIZE })
+        await listAdminUsers({ page: 1, pageSize }),
+        pageSize
       );
       setUsers(data.items);
       setUserPagination(data.pagination);
+      setUserPageSize(data.pagination.pageSize);
     } catch (error) {
       setErrorMessage(error.message || "使用者清單載入失敗");
     } finally {
@@ -334,16 +359,6 @@ export default function AdminPanel() {
       </header>
 
       <main className="mx-auto max-w-[1800px] space-y-6 px-4 py-6 lg:px-8 lg:py-8">
-        <div className="flex flex-col gap-2">
-          <Badge variant="outline" className="w-fit border-primary/30 bg-primary/5 text-primary">
-            Administrator
-          </Badge>
-          <h1 className="text-2xl font-semibold tracking-tight">平台管理</h1>
-          <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            查看租戶內的使用者、生成紀錄與風格資產，並由管理員統一決定圖片生成模型。
-          </p>
-        </div>
-
         <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="h-fit rounded-2xl border border-border bg-card p-2 shadow-sm">
             <nav className="space-y-1" aria-label="管理功能">
@@ -373,7 +388,7 @@ export default function AdminPanel() {
           <section className="min-w-0 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">{activeSectionInfo?.label}</h2>
+                <h1 className="text-lg font-semibold">{activeSectionInfo?.label}</h1>
                 {selectedUser && (
                   <p className="text-xs text-muted-foreground">
                     目前篩選：{selectedUser.displayName}（{selectedUser.email}）
@@ -425,12 +440,28 @@ export default function AdminPanel() {
               <>
                 {activeSection === "users" && (
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Users className="h-4 w-4 text-primary" aria-hidden="true" />
                         使用者清單
                         <Badge variant="secondary" className="ml-auto">{userPagination.total}</Badge>
                       </CardTitle>
+                      <label className="flex items-center gap-2 self-end text-xs text-muted-foreground sm:self-auto">
+                        <span>每頁顯示</span>
+                        <select
+                          value={userPageSize}
+                          onChange={handleUserPageSizeChange}
+                          disabled={isRefreshing}
+                          className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="每頁顯示使用者數量"
+                        >
+                          {USER_PAGE_SIZE_OPTIONS.map((pageSize) => (
+                            <option key={pageSize} value={pageSize}>
+                              {pageSize} 項
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </CardHeader>
                     <CardContent className="overflow-x-auto p-0">
                       <table className="w-full min-w-[880px] text-sm">

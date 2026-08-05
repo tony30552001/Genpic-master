@@ -23,7 +23,7 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 
 - `GET /api/me`：取得目前使用者角色與模型政策。
 - `GET /api/management/users`：使用者清單與生成／風格統計。
-- `GET /api/management/users?page=1&pageSize=25`：分頁取得使用者清單。
+- `GET /api/management/users?page=1&pageSize=10`：分頁取得使用者清單。
 - `GET /api/management/user-options`：取得歷史紀錄與風格庫篩選用的使用者選項。
 - `GET /api/management/history`：租戶生成紀錄，可用 `userId` 篩選。
 - `GET /api/management/styles`：租戶風格庫，可用 `userId` 篩選。
