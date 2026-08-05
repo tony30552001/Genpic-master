@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { transformImage } from "../services/aiService";
 import { requestBlobSas } from "../services/storageService";
 import { DEFAULT_IMAGE_MODEL } from "../config";
-import { STYLE_DIMENSIONS } from "../components/create/StylePalette";
+import { STYLE_DIMENSIONS } from "../components/create/styleDimensions";
 
 const INITIAL_MODE = "style_transfer";
 const INITIAL_ASPECT_RATIO = "1:1";

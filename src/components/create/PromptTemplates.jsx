@@ -81,9 +81,33 @@ const TEMPLATES = [
  * PromptTemplates — 可收折的常用提示詞範本區
  * onFill(text, palette): 填入文字並套用調色盤預設
  */
-export default function PromptTemplates({ onFill }) {
+export default function PromptTemplates({ onFill, collapsible = true }) {
   const [isOpen, setIsOpen] = useState(false);
   const contentId = "prompt-templates-content";
+
+  const templateGrid = (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {TEMPLATES.map((tpl) => (
+        <button
+          key={tpl.id}
+          type="button"
+          onClick={() => onFill?.(tpl.text, tpl.palette)}
+          className="group min-h-11 touch-manipulation rounded-lg border border-border bg-card p-3 text-left transition-[background-color,border-color,box-shadow,color] hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <p className="text-xs font-semibold text-foreground transition-colors group-hover:text-primary">
+            {tpl.title}
+          </p>
+          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+            {tpl.text}
+          </p>
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!collapsible) {
+    return templateGrid;
+  }
 
   return (
     <div>
@@ -129,23 +153,7 @@ export default function PromptTemplates({ onFill }) {
         )}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {TEMPLATES.map((tpl) => (
-              <button
-                key={tpl.id}
-                type="button"
-                onClick={() => onFill?.(tpl.text, tpl.palette)}
-                className="group min-h-11 touch-manipulation rounded-lg border border-border bg-card p-3 text-left transition-[background-color,border-color,box-shadow,color] hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <p className="text-xs font-semibold text-foreground transition-colors group-hover:text-primary">
-                  {tpl.title}
-                </p>
-                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                  {tpl.text}
-                </p>
-              </button>
-            ))}
-          </div>
+          <div className="mt-2">{templateGrid}</div>
         </div>
       </div>
     </div>

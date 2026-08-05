@@ -22,7 +22,8 @@ import { cn } from "@/lib/utils";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
-import StylePalette, { STYLE_DIMENSIONS } from "./StylePalette";
+import StylePalette from "./StylePalette";
+import { STYLE_DIMENSIONS } from "./styleDimensions";
 import PromptTemplates from "./PromptTemplates";
 
 /**
