@@ -145,6 +145,8 @@
    - `GPT_IMAGE_EDIT_ENDPOINT` = Optional image edit endpoint
    - `GPT_IMAGE_API_KEY` = Key Vault Secret Reference
    - `GPT_IMAGE_DEPLOYMENT` = `gpt-image-2`
+   - `BLOB_CONTAINER_GENERATED` = `generated`
+   - `IMAGE_JOB_POLL_MS` = `2000`（可選）
    - `LINE_TOKEN_ENCRYPTION_KEY` = Key Vault Secret Reference
    - `ADMIN_EMAILS` = Comma-separated admin email list
    - `AUTH_DISABLED` = `false`
@@ -153,6 +155,10 @@
    - `API_BODY_LIMIT` = `100mb`
    - `SCM_DO_BUILD_DURING_DEPLOYMENT` = `true`
 3. **Save**
+
+部署後，先使用相同的 `DATABASE_URL` 執行 `node api/scripts/migrate.cjs`，
+建立 `image_generation_jobs` table。GPT Image 2 會由 App Service 背景 worker
+處理，避免 SWA linked API 約 45 秒 gateway timeout。
 
 ---
 

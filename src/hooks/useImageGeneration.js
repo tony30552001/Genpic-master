@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { analyzeStyle, generateImage, generateFilename } from "../services/aiService";
+import {
+  analyzeStyle,
+  generateImage,
+  generateFilename,
+  waitForImageJob,
+} from "../services/aiService";
 import { getGenerationStatus } from "../utils/generationProgress";
 import { DEFAULT_IMAGE_MODEL } from "../config";
 
@@ -137,7 +142,7 @@ export default function useImageGeneration() {
         const stylePart = stylePrompt ? `Create an image with the following style: ${stylePrompt}. ` : "";
         const finalPrompt = `${stylePart}The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.${langDirective ? ` ${langDirective}` : ''}`;
 
-        const result = await generateImage({
+        let result = await generateImage({
           prompt: finalPrompt,
           aspectRatio,
           imageSize,
@@ -145,6 +150,13 @@ export default function useImageGeneration() {
           model,
           signal: abortController.signal,
         });
+
+        if (result?.jobId) {
+          result = await waitForImageJob({
+            jobId: result.jobId,
+            signal: abortController.signal,
+          });
+        }
 
         if (updatePreview) {
           setGeneratedImage(result.imageUrl);

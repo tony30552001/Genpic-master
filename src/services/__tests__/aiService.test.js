@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("../apiClient", () => ({
+  apiGet: vi.fn(),
   apiPost: vi.fn(() => Promise.resolve({ ok: true })),
 }));
 
-import { apiPost } from "../apiClient";
-import { analyzeStyle, generateImage } from "../aiService";
+import { apiGet, apiPost } from "../apiClient";
+import { analyzeStyle, generateImage, waitForImageJob } from "../aiService";
 
 describe("aiService", () => {
   it("analyzeStyle posts reference image", async () => {
@@ -37,5 +38,25 @@ describe("aiService", () => {
   it("generateImage uses apiPost for unknown model", async () => {
     await generateImage({ prompt: "prompt", aspectRatio: "16:9", model: "dall-e-3" });
     expect(apiPost).toHaveBeenCalled();
+  });
+
+  it("waits for queued image jobs until the result is ready", async () => {
+    apiGet
+      .mockResolvedValueOnce({ status: "queued", jobId: "job-1" })
+      .mockResolvedValueOnce({
+        status: "succeeded",
+        jobId: "job-1",
+        imageUrl: "data:image/png;base64,AAA",
+      });
+
+    const result = await waitForImageJob({
+      jobId: "job-1",
+      pollIntervalMs: 0,
+    });
+
+    expect(result.imageUrl).toBe("data:image/png;base64,AAA");
+    expect(apiGet).toHaveBeenCalledWith("/api/image-jobs/job-1", {
+      signal: undefined,
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import { apiPost } from "./apiClient";
+import { apiGet, apiPost } from "./apiClient";
 
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
@@ -10,6 +10,55 @@ export const generateImage = async ({ prompt, aspectRatio, imageSize, imageUrl, 
     { prompt, aspectRatio, imageSize, imageUrl, model },
     { signal }
   );
+};
+
+export const getImageJob = async ({ jobId, signal }) =>
+  apiGet(`${API_BASE_URL}/image-jobs/${encodeURIComponent(jobId)}`, { signal });
+
+const abortableDelay = (durationMs, signal) =>
+  new Promise((resolve, reject) => {
+    const timerApi = globalThis;
+    if (signal?.aborted) {
+      const error = new Error("The operation was aborted");
+      error.name = "AbortError";
+      reject(error);
+      return;
+    }
+
+    let timerId;
+    const abort = () => {
+      timerApi.clearTimeout(timerId);
+      const error = new Error("The operation was aborted");
+      error.name = "AbortError";
+      reject(error);
+    };
+
+    timerId = timerApi.setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, durationMs);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+
+export const waitForImageJob = async ({
+  jobId,
+  signal,
+  pollIntervalMs = 2000,
+  timeoutMs = 20 * 60 * 1000,
+}) => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const job = await getImageJob({ jobId, signal });
+    if (job?.status === "succeeded" && job.imageUrl) return job;
+    if (job?.status === "failed") {
+      throw new Error(job.error?.message || "圖片生成失敗，請稍後重試");
+    }
+
+    await abortableDelay(pollIntervalMs, signal);
+  }
+
+  throw new Error("圖片生成工作逾時，請稍後重試");
 };
 
 export const embedText = async ({ text }) =>

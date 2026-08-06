@@ -10,7 +10,9 @@ const generateFilename = require("./generate-filename");
 const generateImages = require("./generate-images");
 const health = require("./health");
 const history = require("./history");
+const imageJobs = require("./image-jobs");
 const imageTransform = require("./image-transform");
+const { startImageJobWorker } = require("./_shared/imageJobs");
 const lineConfig = require("./line-config");
 const me = require("./me");
 const optimizePrompt = require("./optimize-prompt");
@@ -99,6 +101,7 @@ registerRoutes(["/api/blob-sas"], ["POST", "OPTIONS"], blobSas);
 registerRoutes(["/api/embeddings"], ["POST", "OPTIONS"], embeddings);
 registerRoutes(["/api/generate-filename"], ["GET", "POST", "OPTIONS"], generateFilename);
 registerRoutes(["/api/generate-images"], ["POST", "OPTIONS"], generateImages);
+registerRoutes(["/api/image-jobs/:id"], ["GET", "OPTIONS"], imageJobs);
 registerRoutes(["/api/image-transform"], ["POST", "OPTIONS"], imageTransform);
 registerRoutes(["/api/line-config"], ["GET", "POST", "DELETE", "OPTIONS"], lineConfig);
 registerRoutes(["/api/optimize-prompt"], ["POST", "OPTIONS"], optimizePrompt);
@@ -174,9 +177,11 @@ app.use((error, req, res, next) => {
 
 const start = () => {
   const port = Number(process.env.PORT || 3000);
-  return app.listen(port, "0.0.0.0", () => {
+  const server = app.listen(port, "0.0.0.0", () => {
     console.log(`[api] App Service server listening on port ${port}`);
   });
+  startImageJobWorker();
+  return server;
 };
 
 if (require.main === module) {

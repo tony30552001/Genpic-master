@@ -50,13 +50,15 @@ API runtime（App Service 或本機 adapter）；不要加上 `VITE_` 前綴，�
 
 ## 2.1 DB migrations
 
-在專案根目錄執行：
+在專案根目錄執行最新 migration：
 
-```bash
-psql "postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require" \
-  -f db/migrations/001_init.sql \
-  -f db/migrations/002_add_history_fields.sql
+```powershell
+$env:DATABASE_URL = "postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require"
+$env:DATABASE_SSL = "true"
+node api/scripts/migrate.cjs
 ```
+
+這會包含 `009_image_generation_jobs.sql`。不要將正式資料庫連線字串提交到 repository。
 
 ---
 
@@ -77,6 +79,11 @@ http://localhost:3000/api
 ```
 
 `api/server.js` 會直接載入既有 handlers。執行 `npm start` 時，請先在 shell 或 IDE 設定 backend environment variables；`local.settings.json` 仍由 Azure Functions Core Tools 使用。
+
+若要測試 GPT Image 2 的非同步流程，需另外設定 `GPT_IMAGE_ENDPOINT`、
+`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`，並確保 `BLOB_CONTAINER_GENERATED`
+（預設為 `generated`）可由 API 使用。`POST /api/generate-images` 會立即回傳
+`202` 和 `jobId`，前端會輪詢 `GET /api/image-jobs/{jobId}`。
 
 要繼續使用原本的 Functions runtime，可改執行：
 

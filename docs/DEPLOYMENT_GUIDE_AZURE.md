@@ -33,13 +33,19 @@
 - `GOOGLE_API_KEY`、`GEMINI_MODEL_ANALYSIS`、`GEMINI_MODEL_GENERATION`
 - `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_DEPLOYMENT`
 - `GPT_IMAGE_ENDPOINT`、`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`
+- `BLOB_CONTAINER_GENERATED=generated`
 - `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`GOOGLE_CLIENT_ID`
 - `AUTH_DISABLED=false`
 - `CORS_ALLOW_ORIGIN=https://<your-swa-domain>,http://localhost:5173`
 - `RATE_LIMIT_PER_MINUTE=60`
 - `API_BODY_LIMIT=100mb`
+- `IMAGE_JOB_POLL_MS=2000`（可選，App Service worker 掃描 queued jobs 的間隔）
 
 App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 production port。
+
+GPT Image 2 會由 `POST /api/generate-images` 建立 queued job，App Service
+背景 worker 在不佔用 SWA gateway request 的情況下執行生成。生成結果會放在
+`BLOB_CONTAINER_GENERATED`，前端再透過 `/api/image-jobs/{id}` polling 取得結果。
 
 ## 3. 連結 Static Web App
 
@@ -74,7 +80,20 @@ Repository secrets：
 
 workflow 不再使用 `api_location: "api"`；API 由獨立 App Service deployment step 提供。
 
-## 5. 驗證與 rollback
+## 5. 資料庫 migration
+
+部署 async image jobs 前，先對正式 PostgreSQL 執行一次最新 migrations：
+
+```powershell
+$env:DATABASE_URL = "<postgresql-connection-string>"
+$env:DATABASE_SSL = "true"
+node api/scripts/migrate.cjs
+```
+
+`009_image_generation_jobs.sql` 只新增 job table 和 indexes；不會修改既有
+history 資料。執行前請確認 App Service 使用的資料庫連線字串相同。
+
+## 6. 驗證與 rollback
 
 先直接測試 App Service：
 
@@ -90,10 +109,12 @@ https://<swa-domain>/api/health
 
 接著驗證登入、圖片生成、文件分析、風格、歷史、範本、LINE 與管理 API。若切換失敗，可先 unlink App Service，再暫時恢復 workflow 的 `api_location: "api"`，因為既有 handlers、`function.json` 與 `host.json` 仍保留。
 
-## 6. 常見問題
+## 7. 常見問題
 
 - **API 404**：確認 App Service Startup command 為 `npm start`、deployment package 包含 `server.js`，且 SWA 已連結正確 App Service。
 - **JSON body 413**：確認 App Service 與 `API_BODY_LIMIT` 足以容納文件/圖片 base64；目前 adapter 預設為 `100mb`。
 - **API 401**：確認 App Service linked API 沒有移除 `X-Auth-Token` 或 `x-ms-client-principal`，並檢查 `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`GOOGLE_CLIENT_ID`。
 - **資料庫連線失敗**：確認 PostgreSQL firewall/private networking 允許 App Service outbound access。
+- **GPT Image 2 仍顯示 Backend call failure**：確認 migration 已執行、App Service
+  log 有 `image-jobs` worker、以及 `generated` Blob container 可寫入。
 - **CORS 錯誤**：同源 SWA proxy 不應需要額外 CORS；若直接測試 App Service，將 SWA 網域與本機網域加入 `CORS_ALLOW_ORIGIN`。
