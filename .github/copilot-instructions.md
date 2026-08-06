@@ -1,89 +1,107 @@
 # Copilot Instructions — Pixora 智繪
 
+## Hard requirements
+
+These rules are mandatory for every change:
+
+- **Do not preserve backward compatibility.** Remove obsolete code and paths. Do not add compatibility wrappers, behavior fallbacks, or data migrations whose only purpose is preserving obsolete behavior.
+- **Choose the simplest complete implementation.** Avoid speculative abstractions, configuration, and indirection.
+- **Grow the system in layers.** Start with the smallest version that works end to end; add capabilities only on top of a working product.
+- **Keep concerns separated.** Components, hooks, services, API handlers, and shared infrastructure must retain clear responsibilities.
+- **Prefer established libraries and existing dependencies.** Check current documentation and types before adding packages or reimplementing common functionality.
+- **Make long-term architectural decisions.** Do not introduce temporary stopgaps intended to be replaced later.
+- **Make breaking changes completely.** Update all callers, tests, documentation, and contracts in the same change; remove the replaced implementation.
+- **Do not hide failures.** Surface errors through existing UI or API patterns; do not add silent catches or success-shaped fallbacks.
+- Treat current source code and this file as authoritative. Keep product and architecture documentation in `docs/`.
+
 ## Commands
 
-```bash
-# All commands use corepack pnpm (not npm)
-corepack pnpm build           # Production build (Vite)
-corepack pnpm lint            # ESLint 9
-corepack pnpm exec vitest run # Run all tests (Vitest 4)
-corepack pnpm exec vitest run src/services/__tests__/gptImageService.test.js  # Single test file
-corepack pnpm dev             # Local dev server (port 5173)
+```powershell
+# Frontend
+corepack pnpm@10.33.2 install
+corepack pnpm build
+corepack pnpm lint
+corepack pnpm exec vitest run
+corepack pnpm exec vitest run <test-file>
+corepack pnpm dev
+
+# Backend
+npm ci --prefix api
+npm --prefix api start
+node --check api/<function>/index.js
 ```
 
-The CI pipeline (`azure-static-web-apps-thankful-island-0ab89420f.yml`) builds the frontend with `pnpm install --frozen-lockfile` → `pnpm build`, installs `api/` with `npm ci`, deploys `dist/` to Static Web Apps, and deploys `api/` to the linked App Service on `main`. **Always run `corepack pnpm build` locally before pushing** to catch import/export errors before CI does.
+The frontend uses the repository-pinned pnpm version. The `api/` package uses npm and its own `package-lock.json`.
 
 ## Architecture
 
-```
-Frontend (React 19 + Vite + Tailwind 4)
-  └── src/
-       ├── InfographicGenerator.jsx   ← root page, most-edited file
-       ├── config.js                  ← single source of truth for env vars & feature flags
-       ├── components/
-       │   ├── create/                ← ScriptEditor, StylePalette, PromptTemplates, GenerateBar
-       │   ├── styles/                ← StyleLibrary, StyleCard (shared style feature)
-       │   ├── auth/                  ← SessionExpiryBanner
-       │   └── ui/                    ← shadcn/ui adapter components (don't edit directly)
-       ├── context/AuthContext.jsx    ← Google + MSAL auth state, token refresh logic
-       ├── services/
-       │          ├── aiService.js           ← Gemini API via App Service gateway
-       │   ├── authService.js         ← acquireAccessToken (Google first, then MSAL silent→popup)
-       │   └── gptImageService.js     ← Azure AI Foundry (GPT-Image-2)
-       └── hooks/
+- `src/main.jsx`: initializes MSAL, handles redirect responses, restores the active account, then renders React.
+- `src/App.jsx`: owns routing and protected routes.
+- `src/InfographicGenerator.jsx`: owns the creation workspace, active tabs, and responsive application navigation.
+- `src/components/`: feature UI grouped by `create`, `admin`, `auth`, `history`, `settings`, `styles`, and `templates`.
+- `src/components/ui/`: shadcn/ui adapters; modify only when the shared primitive itself must change.
+- `src/hooks/`: feature state and asynchronous workflows.
+- `src/services/`: API, authentication, storage, and provider clients.
+- `api/server.js`: Express entry point and canonical API route registration.
+- `api/<endpoint>/index.js`: endpoint handlers.
+- `api/_shared/`: authentication, identity, database, model policy, image jobs, HTTP, storage, and provider helpers.
+- `db/migrations/`: ordered PostgreSQL schema changes required by the current product.
 
-Backend (Node.js App Service API)
-  └── api/                           ← One folder per function endpoint
-       ├── server.js                 ← Express adapter for App Service; preserves existing handlers
-       ├── generate-images/           ← Calls Gemini Imagen via @google/genai
-       ├── analyze-document/          ← Gemini document analysis
-       ├── styles/                    ← Shared style library CRUD (PostgreSQL)
-       └── _shared/                  ← Shared utilities and DB connection
+Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js`, receives `/api/*`, and starts the image-job worker. The `main` workflow deploys both surfaces.
 
-Database
-  └── db/migrations/                 ← PostgreSQL migration files (run manually or via script)
-```
+## Authentication
 
-**Hosting**: Azure Static Web Apps serves `dist/`; a linked Node.js App Service runs `api/server.js` and receives the SWA `/api/*` proxy. Push to `main` deploys both surfaces.
+- The application supports Microsoft Entra ID through MSAL and Google OAuth.
+- MSAL MUST initialize and process redirect responses before React renders.
+- MSAL cache remains in `localStorage`; restore the active account after reload.
+- Microsoft token acquisition MUST try silent renewal first. On HTTP 401, force one silent refresh and retry once.
+- Interaction-required MSAL errors MUST use redirect re-authentication. Do not add popup fallback.
+- `api/_shared/auth.js` returns `{ displayName, email }`; identity resolution MUST prefer `user.displayName || user.name || email`.
+- `getOrCreateUser` MUST update `display_name` on every login.
 
-**Auth**: Dual provider — Microsoft MSAL (Entra ID) for enterprise users + Google OAuth for personal users. Both share `AuthContext.jsx`. `acquireAccessToken` in `authService.js` tries Google token first, then MSAL silent refresh; when interaction is required, it uses redirect re-authentication. MSAL uses `localStorage`, restores the active account before React renders, and forces one silent refresh before retrying a 401 response.
+## Image generation
 
-**`identity.js` field precedence (critical):** `auth.js` always returns `{ displayName, email }` — **not** `{ name, email }`. When reading user identity in `api/_shared/identity.js`, always prefer `user.displayName || user.name || email`. Never use `user.name` alone (it is always `undefined`). `getOrCreateUser` must also **UPDATE** `display_name` on every login (not only on INSERT) so existing users with email stored as display name get corrected automatically.
+- Tenant policy in `api/_shared/modelPolicy.js` controls the model; do not add a client-side model selector.
+- `gemini-imagen` is the default model handled through `/api/generate-images`.
+- `gpt-image-2` uses `api/_shared/gptImage.js` and the App Service image-job worker.
+- Generation may return HTTP `202` with a `jobId`; the frontend polls through `aiService.waitForImageJob()`.
+- If the image-job contract changes, update the worker, endpoint, polling client, tests, and UI together. Current states are `pending`, `running`, `succeeded`, and `failed`.
 
-**Image models**:
-- `gemini-imagen` ("Nano Banana 2") — default, via the App Service API gateway
-- `gpt-image-2` ("GPT Image 2") — Azure AI Foundry endpoint, selected by tenant policy and called through the App Service gateway; keep `GPT_IMAGE_*` in App Service settings
+## Environment variables
 
-## Environment Variables
+- `VITE_*` variables are injected at build time. Changing one requires a new CI/CD deployment.
+- Frontend variables MUST be declared in `src/config.js` and added to the workflow `env` block.
+- Backend-only variables belong in App Service settings, not `VITE_*`.
+- Keep `GPT_IMAGE_*` server-side. Do not hardcode provider endpoints or credentials in components.
 
-`VITE_*` variables are **injected at build time** by Vite — they are NOT available at runtime. Changing a `VITE_*` variable in Azure Portal or GitHub Secrets requires **re-triggering a CI/CD deployment** (re-run the GitHub Actions workflow) to take effect. Always tell the user this when they modify env vars.
+## UI conventions
 
-All env vars are declared in `src/config.js`. New env vars must be added there AND to the `env:` block in `.github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml`.
+- Use `cn()` from `src/lib/utils.js` for conditional Tailwind classes.
+- Use existing CSS color variables and shadcn/ui primitives.
+- Full-page creation panels use the existing 60/40 layout: controls at `lg:col-span-3`, preview at `lg:col-span-2`.
+- Do not use fixed-width panels for full-page layouts.
+- Navigation breakpoints are:
+  - `xl` and above: full tab navigation.
+  - `md` through `xl`: compact `創作`, `素材庫`, `紀錄`, and `更多` navigation.
+  - Below `md`: bottom navigation.
+- Navigation labels MUST remain on one line. Shrinkable flex children use `min-w-0` and `truncate`.
+- Interactive controls MUST use semantic elements, visible `focus-visible` states, and accessible labels for icon-only actions.
+- `StylePalette` and `PromptTemplates` are controlled components.
+- `STYLE_DIMENSIONS` is defined only in `src/components/create/styleDimensions.js`.
 
-## Design System
+## Backend and database safety
 
-UI is built on **shadcn/ui** (copy-paste components in `src/components/ui/`) + **Tailwind CSS v4** (via `@tailwindcss/vite`). Full design spec is in `DESIGN_GUIDELINE.md`.
+- Shared backend logic belongs in `api/_shared/`; do not duplicate it across handlers.
+- API handlers MUST reuse existing authentication, rate-limit, URL-validation, HTTP-response, and database helpers.
+- SQL MUST remain parameterized.
+- After changing an API handler, run `node --check` and verify every `$N` placeholder matches the parameter array.
+- Product-required schema changes use the next numbered file in `db/migrations/`. Do not create migrations solely to preserve obsolete behavior or data shapes.
+- Never commit or log secrets, credentials, tokens, or connection strings.
 
-- Use `cn()` from `src/lib/utils.js` for conditional class merging (not template literals)
-- Use CSS variables for colors: `hsl(var(--primary))`, `hsl(var(--brand-primary))`, etc.
-- Primary color: indigo-600 (`#4F46E5`). Icons: Lucide React (1.5px stroke).
-- Add shadcn/ui components via `npx shadcn@latest add <component>` — do not hand-write Radix UI primitives directly
-- Target: desktop 1920×1080 as primary viewport; ensure no wasted side margins
-- **New full-page tab panels must mirror the general creation layout.** Before implementing any new tab UI, read `InfographicGenerator.jsx` for the existing layout pattern. The canonical 2-panel layout is `lg:grid lg:grid-cols-5 lg:gap-6 px-4 py-3 lg:px-8` with controls at `lg:col-span-3` (60%) and preview at `lg:col-span-2` (40%). Do not use fixed-width panels (e.g., `w-[420px]`).
+## Validation and Git
 
-## Key Conventions
-
-**Before every push:**
-1. Run `corepack pnpm build` — catches import/export errors before CI
-2. If only deleting lines and the pre-commit hook rejects, verify there are no unintended regressions, then you may use `git commit --no-verify` with an explanation in the commit message
-3. **Backend SQL safety check:** After modifying any API handler, run `node --check api/<function>/index.js` AND visually verify that every SQL query's `$N` placeholder count matches the length of the params array. A mismatch causes a runtime 500 that `node --check` will NOT catch.
-
-**Pre-commit hook (Husky):** Runs lint + type-check. For delete-only commits, Husky may produce a false-positive failure. Only bypass with `--no-verify` after confirming the staged diff is intentional.
-
-**Docs:** When creating UX plans or feature specs, write them to `docs/` as markdown. Examples: `docs/SHARED_STYLE_LIBRARY.md`, `docs/GENERAL_CREATION_LAYOUT_UX_PLAN.md`.
-
-**Database migrations:** New SQL schema changes go in `db/migrations/` with incrementing numbers (e.g., `006_*.sql`). Run migrations manually against the Azure PostgreSQL instance.
-
-**Controlled components in `src/components/create/`:** `StylePalette` and `PromptTemplates` are controlled — state lives in `ScriptEditor.jsx`. When refactoring these, ensure named exports (`STYLE_DIMENSIONS`, etc.) stay in sync with all importers. Build verify is mandatory after any export change.
-
-**Auto-push:** After completing any task that involves a commit, **always push immediately** (`git push origin main`) without waiting to be asked. Do not wait for the user to say "幫我 push". If user ends a request with "做完後 push" or similar, push is already implied.
+- Run the smallest relevant lint and test commands for changed behavior.
+- Run `corepack pnpm build` before every push.
+- Do not reset, checkout, or revert unrelated user changes.
+- Do not amend commits unless explicitly requested.
+- When a task includes a commit, push it immediately to `origin main`.

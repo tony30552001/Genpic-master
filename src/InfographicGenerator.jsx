@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, History, Bookmark, Wand2,
-    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay, ShieldCheck, MoreHorizontal
+    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -14,6 +14,7 @@ import useTemplates from './hooks/useTemplates';
 import useImageTransform from './hooks/useImageTransform';
 import { requestBlobSas } from './services/storageService';
 import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from './config';
+import { cn } from './lib/utils';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -69,20 +70,22 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [appliedStyleId, setAppliedStyleId] = useState(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+    const [compactNavSection, setCompactNavSection] = useState(null);
     const [paletteStyle, setPaletteStyle] = useState('');
 
     useEffect(() => {
-        if (!mobileMoreOpen) return undefined;
+        if (!mobileMoreOpen && !compactNavSection) return undefined;
 
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
                 setMobileMoreOpen(false);
+                setCompactNavSection(null);
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [mobileMoreOpen]);
+    }, [compactNavSection, mobileMoreOpen]);
 
     const handlePaletteStyleChange = (styleStr) => {
         setPaletteStyle(styleStr);
@@ -546,16 +549,28 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         ['document', 'image-transform', 'settings'].includes(tab.id)
     );
     const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
+    const compactNavGroups = [
+        { id: 'create', label: '創作', icon: Wand2, tabIds: ['general', 'document', 'image-transform'] },
+        { id: 'library', label: '素材庫', icon: Bookmark, tabIds: ['templates', 'styles'] },
+        { id: 'more', label: '更多', icon: MoreHorizontal, tabIds: ['settings'] },
+    ];
+    const compactActiveGroup = compactNavGroups.find((group) => group.tabIds.includes(activeTab))?.id;
+    const compactOpenGroup = compactNavGroups.find((group) => group.id === compactNavSection);
+    const setCompactActiveTab = (tabId) => {
+        setActiveTab(tabId);
+        setCompactNavSection(null);
+        setMobileMoreOpen(false);
+    };
 
     // --- Render ---
     return (
         <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden">
 
             {/* ═══════════ Top Header Bar ═══════════ */}
-            <header className="shrink-0 border-b border-border bg-primary text-white shadow-md">
-                <div className="flex items-center justify-between px-4 lg:px-8 h-14">
+            <header className="relative shrink-0 border-b border-border bg-primary text-white shadow-md">
+                <div className="flex min-w-0 items-center justify-between px-4 lg:px-8 h-14">
                     {/* Logo */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
                             <Wand2 className="w-5 h-5" />
                         </div>
@@ -572,15 +587,58 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                         )}
                     </div>
 
+                    {/* 平板版：Compact Main Navigation */}
+                    <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 px-3 md:flex xl:hidden" aria-label="主要功能">
+                        {compactNavGroups.map((group) => {
+                            const GroupIcon = group.icon;
+                            const isOpen = compactNavSection === group.id;
+                            const isActive = compactActiveGroup === group.id;
+                            return (
+                                <button
+                                    type="button"
+                                    key={group.id}
+                                    onClick={() => setCompactNavSection(isOpen ? null : group.id)}
+                                    aria-expanded={isOpen}
+                                    aria-haspopup="menu"
+                                    aria-pressed={isActive}
+                                    className={cn(
+                                        'flex min-w-0 shrink items-center justify-center gap-1 rounded-md px-2.5 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80',
+                                        isActive || isOpen
+                                            ? 'bg-white text-primary shadow-sm'
+                                            : 'text-white/80 hover:bg-white/10 hover:text-white'
+                                    )}
+                                >
+                                    <GroupIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    <span className="truncate">{group.label}</span>
+                                    <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
+                                </button>
+                            );
+                        })}
+                        <button
+                            type="button"
+                            onClick={() => setCompactActiveTab('history')}
+                            aria-pressed={activeTab === 'history'}
+                            className={cn(
+                                'flex min-w-0 shrink items-center justify-center gap-1 rounded-md px-2.5 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80',
+                                activeTab === 'history'
+                                    ? 'bg-white text-primary shadow-sm'
+                                    : 'text-white/80 hover:bg-white/10 hover:text-white'
+                            )}
+                        >
+                            <History className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="truncate">紀錄</span>
+                        </button>
+                    </nav>
+
                     {/* 桌面版：Inline Main Tabs */}
-                    <nav className="hidden sm:flex items-center gap-1 bg-white/10 backdrop-blur-sm rounded-lg p-1">
+                    <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 overflow-hidden rounded-lg bg-white/10 p-1 xl:flex" aria-label="主要功能">
                         {tabs.map((tab) => (
                             <button
                                 type="button"
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 aria-pressed={activeTab === tab.id}
-                                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${activeTab === tab.id
+                                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${activeTab === tab.id
                                     ? 'bg-white text-primary shadow-sm'
                                     : 'text-white/80 hover:text-white hover:bg-white/10'
                                     }`}
@@ -592,13 +650,13 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     </nav>
 
                     {/* User Controls */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-3">
                         {isAdmin && (
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => navigate("/admin")}
-                                className="hidden gap-1.5 text-white/90 hover:bg-white/10 hover:text-white sm:flex"
+                                className="hidden gap-1.5 text-white/90 hover:bg-white/10 hover:text-white xl:flex"
                                 title="開啟管理中心"
                             >
                                 <ShieldCheck className="h-4 w-4" aria-hidden="true" />
@@ -607,7 +665,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                         )}
                         {user && (
                             <div className="flex items-center gap-3 pl-3 border-l border-white/20">
-                                <div className="flex flex-col items-end hidden md:flex">
+                                <div className="hidden flex-col items-end xl:flex">
                                     <span className="text-xs font-bold leading-tight">{user.displayName}</span>
                                     <span className="text-[10px] text-white/70 leading-tight">{user.email}</span>
                                 </div>
@@ -643,6 +701,66 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                         )}
                     </div>
                 </div>
+
+                {compactOpenGroup && (
+                    <div
+                        className="absolute inset-x-4 top-full z-50 mt-2 rounded-xl border border-white/20 bg-card p-2 text-foreground shadow-xl ring-1 ring-black/10"
+                        role="menu"
+                        aria-label={`${compactOpenGroup.label}功能`}
+                    >
+                        <div className="flex items-center justify-between border-b border-border px-2 pb-2">
+                            <span className="text-xs font-semibold text-muted-foreground">{compactOpenGroup.label}</span>
+                            <button
+                                type="button"
+                                onClick={() => setCompactNavSection(null)}
+                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                aria-label="關閉功能選單"
+                            >
+                                <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-3">
+                            {compactOpenGroup.tabIds.map((tabId) => {
+                                const tab = tabs.find((item) => item.id === tabId);
+                                if (!tab) return null;
+                                const TabIcon = tab.icon;
+                                const isActive = activeTab === tab.id;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={tab.id}
+                                        role="menuitem"
+                                        onClick={() => setCompactActiveTab(tab.id)}
+                                        aria-pressed={isActive}
+                                        className={cn(
+                                            'flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                            isActive
+                                                ? 'border-primary/30 bg-primary/10 text-primary'
+                                                : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
+                                        )}
+                                    >
+                                        <TabIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                        <span className="truncate">{tab.label}</span>
+                                    </button>
+                                );
+                            })}
+                            {compactOpenGroup.id === 'more' && isAdmin && (
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                        setCompactNavSection(null);
+                                        navigate('/admin');
+                                    }}
+                                    className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    <span className="truncate">管理中心</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
             </header>
 
             {/* ═══════════ Main Content Area ═══════════ */}
@@ -994,7 +1112,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             )}
 
             {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
-            <nav className="relative z-40 shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] sm:hidden pb-[env(safe-area-inset-bottom)]">
+            <nav className="relative z-40 shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] md:hidden pb-[env(safe-area-inset-bottom)]">
                 {mobileMoreOpen && (
                     <div
                         className="absolute inset-x-3 bottom-full z-50 mb-2 rounded-xl border border-border bg-card p-2 shadow-xl ring-1 ring-border/40"
