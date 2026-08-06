@@ -10,18 +10,7 @@ import { AuthProvider } from './context/AuthContext'
 
 const root = createRoot(document.getElementById('root'));
 
-// 確保 MSAL 初始化完成後再渲染
-msalInstance.initialize().then(() => {
-  // 處理 Redirect 流程回傳的結果
-  msalInstance.handleRedirectPromise().then((response) => {
-    if (response) {
-      // Redirect 登入成功，設定活躍帳號
-      msalInstance.setActiveAccount(response.account);
-    }
-  }).catch((error) => {
-    console.error('MSAL Redirect 處理失敗:', error);
-  });
-
+const renderApp = () => {
   root.render(
     <StrictMode>
       <MsalProvider instance={msalInstance}>
@@ -33,4 +22,27 @@ msalInstance.initialize().then(() => {
       </MsalProvider>
     </StrictMode>,
   );
-});
+};
+
+const bootstrap = async () => {
+  try {
+    await msalInstance.initialize();
+
+    // 完成 redirect callback 後再渲染，避免重載時短暫判定為未登入。
+    const response = await msalInstance.handleRedirectPromise();
+    const account =
+      response?.account ||
+      msalInstance.getActiveAccount() ||
+      msalInstance.getAllAccounts()[0];
+
+    if (account) {
+      msalInstance.setActiveAccount(account);
+    }
+  } catch (error) {
+    console.error('MSAL 初始化或 Redirect 處理失敗:', error);
+  }
+
+  renderApp();
+};
+
+void bootstrap();

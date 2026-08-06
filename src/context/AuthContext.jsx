@@ -182,14 +182,21 @@ export const AuthProvider = ({ children }) => {
 
     // 設定 Token 過期處理回呼
     useEffect(() => {
-        setAuthExpiredHandler(() => {
+        const handleAuthExpired = () => {
             if (googleUser) {
                 googleLogout();
                 setGoogleUser(null);
                 localStorage.removeItem('google_user');
+                setAuthExpired(true);
+                return;
             }
-            setAuthExpired(true);
-        });
+
+            // Microsoft 會保留 MSAL session，顯示重新驗證提示即可。
+            setAuthExpiredWarning(true);
+        };
+
+        setAuthExpiredHandler(handleAuthExpired);
+        return () => setAuthExpiredHandler(null);
     }, [googleUser]);
 
     // MSAL 自動設定活躍帳號

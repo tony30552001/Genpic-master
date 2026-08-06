@@ -4,10 +4,11 @@
 export const MSAL_CLIENT_ID = import.meta.env.VITE_MSAL_CLIENT_ID || "529a30b4-cdd0-4dbb-b3e6-257e717dfdbf";
 export const MSAL_TENANT_ID = import.meta.env.VITE_MSAL_TENANT_ID || "6f4e2c19-7620-4dea-8852-11ec264fbef1";
 export const MSAL_REDIRECT_URI = (import.meta.env.VITE_MSAL_REDIRECT_URI || window.location.origin).replace(/\/$/, "");
-export const MSAL_SCOPES = (import.meta.env.VITE_MSAL_SCOPES || "User.Read")
+const configuredMsalScopes = (import.meta.env.VITE_MSAL_SCOPES || "User.Read")
     .split(",")
     .map((scope) => scope.trim())
     .filter(Boolean);
+export const MSAL_SCOPES = [...new Set(["openid", "profile", ...configuredMsalScopes])];
 
 export const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true";
 

@@ -46,7 +46,7 @@ Database
 
 **Hosting**: Azure Static Web Apps serves `dist/`; a linked Node.js App Service runs `api/server.js` and receives the SWA `/api/*` proxy. Push to `main` deploys both surfaces.
 
-**Auth**: Dual provider — Microsoft MSAL (Entra ID) for enterprise users + Google OAuth for personal users. Both share `AuthContext.jsx`. `acquireAccessToken` in `authService.js` tries Google token first, then MSAL silent, then MSAL popup fallback.
+**Auth**: Dual provider — Microsoft MSAL (Entra ID) for enterprise users + Google OAuth for personal users. Both share `AuthContext.jsx`. `acquireAccessToken` in `authService.js` tries Google token first, then MSAL silent refresh; when interaction is required, it uses redirect re-authentication. MSAL uses `localStorage`, restores the active account before React renders, and forces one silent refresh before retrying a 401 response.
 
 **`identity.js` field precedence (critical):** `auth.js` always returns `{ displayName, email }` — **not** `{ name, email }`. When reading user identity in `api/_shared/identity.js`, always prefer `user.displayName || user.name || email`. Never use `user.name` alone (it is always `undefined`). `getOrCreateUser` must also **UPDATE** `display_name` on every login (not only on INSERT) so existing users with email stored as display name get corrected automatically.
 

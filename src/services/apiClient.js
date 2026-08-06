@@ -24,7 +24,9 @@ const buildHeaders = async (options) => {
 
   if (!AUTH_BYPASS && options.auth !== false) {
     try {
-      const token = await acquireAccessToken();
+      const token = await acquireAccessToken({
+        forceRefresh: options.forceRefresh === true,
+      });
       if (!token) {
         // Token 取得為空（例如 Google token 已過期被清除）
         if (onAuthExpiredCallback) {
@@ -139,7 +141,7 @@ const requestWithRetry = async (url, baseOptions, options) => {
     try {
       const retryResponse = await fetch(url, {
         ...baseOptions,
-        headers: await buildHeaders(retryOptions),
+        headers: await buildHeaders({ ...retryOptions, forceRefresh: true }),
         ...retryOptions,
       });
       return parseResponse(retryResponse);

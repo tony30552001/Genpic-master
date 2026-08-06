@@ -72,7 +72,7 @@ export const logout = async () => {
   await msalInstance.logoutRedirect({ account });
 };
 
-export const acquireAccessToken = async () => {
+export const acquireAccessToken = async ({ forceRefresh = false } = {}) => {
   // 優先檢查是否有 Google Token
   const googleToken = getGoogleToken();
   if (googleToken) return googleToken;
@@ -87,23 +87,33 @@ export const acquireAccessToken = async () => {
     const result = await msalInstance.acquireTokenSilent({
       ...loginRequest,
       account,
+      forceRefresh,
+      refreshTokenExpirationOffsetSeconds: 5 * 60,
     });
+
+    if (!result.idToken) {
+      throw new Error("Microsoft ID Token 不存在");
+    }
+
     return result.idToken;
   } catch (silentError) {
-    // InteractionRequiredAuthError：refresh token 失效，嘗試 popup 刷新（官方推薦流程）
-    if (silentError instanceof InteractionRequiredAuthError) {
-      try {
-        const result = await msalInstance.acquireTokenPopup({
-          ...loginRequest,
-          account,
-        });
-        return result.idToken;
-      } catch {
-        throw new Error("認證已過期，請重新登入");
-      }
+    if (!(silentError instanceof InteractionRequiredAuthError)) {
+      console.debug('無法靜默取得 Microsoft Token:', silentError.message);
+      throw new Error("無法取得 Microsoft 認證，請重新登入");
     }
-    // Silent 失敗時，不應自動彈窗，而是讓呼叫者決定如何處理
-    console.debug('無法靜默取得 Access Token，可能需要重新登入:', silentError.message);
-    throw new Error("認證已過期，請重新登入");
+
+    // Refresh token 需要重新驗證時使用 redirect，避免 popup 被攔截。
+    try {
+      await msalInstance.acquireTokenRedirect({
+        ...loginRequest,
+        account,
+        redirectStartPage: window.location.href,
+      });
+    } catch (redirectError) {
+      console.error('Microsoft 重新驗證失敗:', redirectError);
+      throw new Error("Microsoft 認證已過期，請重新登入");
+    }
+
+    throw new Error("Microsoft 認證需要重新登入");
   }
 };

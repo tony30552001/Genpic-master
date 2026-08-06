@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
+import { InteractionRequiredAuthError } from "@azure/msal-browser";
 
 const mocks = vi.hoisted(() => ({
-  loginPopup: vi.fn(() => Promise.resolve({ account: { id: "1" } })),
-  logoutPopup: vi.fn(),
-  acquireTokenSilent: vi.fn(() => Promise.resolve({ accessToken: "token" })),
-  acquireTokenPopup: vi.fn(() => Promise.resolve({ accessToken: "token" })),
+  loginRedirect: vi.fn(() => Promise.resolve()),
+  logoutRedirect: vi.fn(),
+  acquireTokenSilent: vi.fn(() => Promise.resolve({
+    accessToken: "access-token",
+    idToken: "id-token",
+  })),
+  acquireTokenRedirect: vi.fn(() => Promise.resolve()),
   getActiveAccount: vi.fn(() => ({ id: "1" })),
   setActiveAccount: vi.fn(),
   getAllAccounts: vi.fn(() => [{ id: "1" }]),
@@ -13,10 +17,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../msalClient", () => ({
   loginRequest: { scopes: ["User.Read"] },
   msalInstance: {
-    loginPopup: mocks.loginPopup,
-    logoutPopup: mocks.logoutPopup,
+    loginRedirect: mocks.loginRedirect,
+    logoutRedirect: mocks.logoutRedirect,
     acquireTokenSilent: mocks.acquireTokenSilent,
-    acquireTokenPopup: mocks.acquireTokenPopup,
+    acquireTokenRedirect: mocks.acquireTokenRedirect,
     getActiveAccount: mocks.getActiveAccount,
     setActiveAccount: mocks.setActiveAccount,
     getAllAccounts: mocks.getAllAccounts,
@@ -31,27 +35,39 @@ import {
 
 describe("authService", () => {
   it("loginWithMicrosoft sets active account", async () => {
-    const account = await loginWithMicrosoft();
-    expect(mocks.loginPopup).toHaveBeenCalled();
-    expect(mocks.setActiveAccount).toHaveBeenCalled();
-    expect(account).toEqual({ id: "1" });
+    await loginWithMicrosoft();
+    expect(mocks.loginRedirect).toHaveBeenCalledWith({
+      scopes: ["User.Read"],
+    });
   });
 
-  it("logout uses popup", async () => {
+  it("logout uses redirect", async () => {
     await logout();
-    expect(mocks.logoutPopup).toHaveBeenCalled();
+    expect(mocks.logoutRedirect).toHaveBeenCalled();
   });
 
   it("acquireAccessToken uses silent first", async () => {
     const token = await acquireAccessToken();
     expect(mocks.acquireTokenSilent).toHaveBeenCalled();
-    expect(token).toBe("token");
+    expect(token).toBe("id-token");
   });
 
-  it("acquireAccessToken falls back to popup", async () => {
-    mocks.acquireTokenSilent.mockRejectedValueOnce(new Error("fail"));
-    const token = await acquireAccessToken();
-    expect(mocks.acquireTokenPopup).toHaveBeenCalled();
-    expect(token).toBe("token");
+  it("acquireAccessToken redirects when interaction is required", async () => {
+    mocks.acquireTokenSilent.mockRejectedValueOnce(
+      new InteractionRequiredAuthError("interaction_required")
+    );
+
+    await expect(acquireAccessToken()).rejects.toThrow("需要重新登入");
+    expect(mocks.acquireTokenRedirect).toHaveBeenCalled();
+  });
+
+  it("acquireAccessToken can force a cache refresh", async () => {
+    await acquireAccessToken({ forceRefresh: true });
+    expect(mocks.acquireTokenSilent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        forceRefresh: true,
+        refreshTokenExpirationOffsetSeconds: 300,
+      })
+    );
   });
 });
