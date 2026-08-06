@@ -568,9 +568,9 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
 
             {/* ═══════════ Top Header Bar ═══════════ */}
             <header className="relative shrink-0 border-b border-border bg-primary text-white shadow-md">
-                <div className="flex min-w-0 items-center justify-between px-4 lg:px-8 h-14">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 lg:px-8 h-14">
                     {/* Logo */}
-                    <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex min-w-0 shrink-0 items-center gap-3 justify-self-start">
                         <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
                             <Wand2 className="w-5 h-5" />
                         </div>
@@ -588,7 +588,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     </div>
 
                     {/* 平板版：Compact Main Navigation */}
-                    <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 px-3 md:flex xl:hidden" aria-label="主要功能">
+                    <nav className="hidden w-fit items-center justify-center gap-1 px-3 md:flex xl:hidden" aria-label="主要功能">
                         {compactNavGroups.map((group) => {
                             const GroupIcon = group.icon;
                             const isOpen = compactNavSection === group.id;
@@ -631,7 +631,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     </nav>
 
                     {/* 桌面版：Inline Main Tabs */}
-                    <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 overflow-hidden rounded-lg bg-white/10 p-1 xl:flex" aria-label="主要功能">
+                    <nav className="hidden w-fit items-center justify-center gap-0.5 rounded-lg bg-white/10 p-1 xl:flex" aria-label="主要功能">
                         {tabs.map((tab) => (
                             <button
                                 type="button"
@@ -650,7 +650,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     </nav>
 
                     {/* User Controls */}
-                    <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex min-w-0 shrink-0 items-center gap-3 justify-self-end">
                         {isAdmin && (
                             <Button
                                 variant="ghost"
