@@ -93,6 +93,9 @@ node api/scripts/migrate.cjs
 `009_image_generation_jobs.sql` 只新增 job table 和 indexes；不會修改既有
 history 資料。執行前請確認 App Service 使用的資料庫連線字串相同。
 
+若暫時 rollback 回 Azure Functions，`FUNCTIONS_WORKER_RUNTIME` 會讓 GPT Image 2
+回到原本的同步 handler 路徑；非同步 worker 只在 App Service `npm start` 中啟動。
+
 ## 6. 驗證與 rollback
 
 先直接測試 App Service：

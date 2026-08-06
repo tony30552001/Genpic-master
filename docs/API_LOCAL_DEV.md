@@ -92,6 +92,8 @@ func start
 ```
 
 此時 URL 仍為 `http://localhost:7071/api`。
+Functions runtime 會使用 GPT Image 2 的同步 fallback；`npm start` 才會啟用
+PostgreSQL job worker 與 polling 流程。
 
 ---
 

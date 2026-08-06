@@ -6,6 +6,7 @@ const { isUrlAllowed } = require("../_shared/urlValidator");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { createImageJob } = require("../_shared/imageJobs");
+const { generateGptImage } = require("../_shared/gptImage");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -38,6 +39,17 @@ module.exports = async function (context, req) {
 
   try {
     if (selectedModel === "gpt-image-2") {
+      if (process.env.FUNCTIONS_WORKER_RUNTIME) {
+        const result = await generateGptImage({ prompt, aspectRatio });
+        context.res = ok({
+          ...result,
+          aspectRatio: aspectRatio || "1:1",
+          prompt,
+          model: selectedModel,
+        });
+        return;
+      }
+
       const job = await createImageJob({
         tenantId: identity.tenantId,
         userId: identity.userId,
