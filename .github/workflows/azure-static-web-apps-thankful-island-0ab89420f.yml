@@ -69,6 +69,7 @@ jobs:
           ls -la api/node_modules/@azure/storage-blob 2>/dev/null || echo "ERROR: @azure/storage-blob not found!"
           ls -la api/node_modules/pg 2>/dev/null || echo "ERROR: pg not found!"
           ls -la api/node_modules/@google/genai 2>/dev/null || echo "ERROR: @google/genai not found!"
+          ls -la api/node_modules/express 2>/dev/null || echo "ERROR: express not found!"
 
       # 列出 API 目錄結構（除錯用）
       - name: Debug - List API Structure
@@ -79,6 +80,15 @@ jobs:
           cat api/host.json
           echo "=== node_modules exists ==="
           ls -la api/node_modules | head -10
+
+      # Deploy the API before removing the managed SWA Functions backend.
+      - name: Deploy API to App Service
+        if: github.event_name == 'push'
+        uses: Azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_API_APP_SERVICE_NAME }}
+          publish-profile: ${{ secrets.AZURE_API_APP_SERVICE_PUBLISH_PROFILE }}
+          package: api
 
       - name: Get Id Token
         uses: actions/github-script@v7
@@ -97,7 +107,7 @@ jobs:
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "dist" # Prebuilt app content directory
-          api_location: "api" # API source code path - optional
+          api_location: "" # Disable managed Functions; API is linked to App Service
           output_location: "" # Empty because app_location already points at dist
           skip_app_build: true
           github_id_token: ${{ steps.idtoken.outputs.result }}

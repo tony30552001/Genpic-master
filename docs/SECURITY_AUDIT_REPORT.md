@@ -2,7 +2,7 @@
 
 > **審查日期**: 2026-03-02
 > **最後更新**: 2026-03-04 (P0 修復已套用 + Git 歷史清洗完成)
-> **審查範圍**: 前端 (React/Vite) + 後端 (Azure Functions Node.js) + 資料庫 (PostgreSQL)
+> **審查範圍**: 前端 (React/Vite) + 後端 (Node.js App Service API) + 資料庫 (PostgreSQL)
 > **審查方法**: 靜態程式碼分析 + 邏輯推演
 
 > [!NOTE]
@@ -28,7 +28,7 @@
 > | LINE Channel Secret / Access Token | LINE Developers Console → Channel Settings | ☐ |
 > | MSAL Client Secret（若有） | Azure AD App Registrations → Certificates & secrets | ☐ |
 >
-> 輪換後，**同步更新** Azure Functions 的應用程式設定與本機 `api/local.settings.json`。
+> 輪換後，**同步更新** App Service 的應用程式設定與本機 `api/local.settings.json`。
 
 ---
 
@@ -43,7 +43,7 @@
 | 5 | 🔴 **高** | **CORS 設定為通配符 `*`** | `api/_shared/http.js:2`, `api/local.settings.json:CORS_ALLOW_ORIGIN=*` | `Access-Control-Allow-Origin: *` 允許任何網域的 JavaScript 發起跨域請求，結合已認證的 Cookie/Token，可被第三方惡意網站利用進行 CSRF 式攻擊。 |
 | 6 | 🟠 **中** | **Blob SAS Token 權限過大 (寫入 + 1 年讀取)** | `api/blob-sas/index.js:101,109-120` | 寫入 SAS 授予 `crw`（create/read/write）權限；讀取 SAS 有效期長達 **1 年**。若 SAS URL 外洩，攻擊者可長期讀取檔案，或上傳惡意檔案覆寫現有 Blob。 |
 | 7 | 🟠 **中** | **Container 名稱由使用者控制，無白名單** | `api/blob-sas/index.js:85` | `req.body.container` 直接作為 SAS 生成的 containerName，攻擊者可指定任意 Container（如 `$logs`、其他業務 Container），取得不該存取的 Storage 區域的 SAS Token。 |
-| 8 | 🟠 **中** | **記憶體內 Rate Limiting 可輕易繞過** | `api/_shared/rateLimit.js` | Rate Limit 使用 `Map()` 存於單一 Function 實例記憶體中。Azure Functions 可能有多個實例，每次冷啟動也會重置。攻擊者只需並行請求或觸發新實例即可繞過。 |
+| 8 | 🟠 **中** | **記憶體內 Rate Limiting 可輕易繞過** | `api/_shared/rateLimit.js` | Rate Limit 使用 `Map()` 存於單一 App Service 實例記憶體中。App Service 可能有多個實例，每次重啟也會重置。攻擊者只需並行請求或觸發新實例即可繞過。 |
 | 9 | 🟠 **中** | **IP-based Rate Limit Key 可偽造** | `api/_shared/rateLimit.js:6-11` | 當使用者未認證時，以 `x-forwarded-for` / `x-client-ip` 為 key，這些 header 可被客戶端任意偽造，輕易繞過速率限制。 |
 | 10 | 🟠 **中** | **錯誤訊息洩漏內部細節** | `api/_shared/auth.js:234`, `api/generate-images/index.js:138`, 多處 catch | 錯誤回應直接附帶 `err.message`，可能洩漏資料庫結構、API Key 格式、內部服務 URL 等敏感資訊，協助攻擊者進一步攻擊。 |
 | 11 | 🟠 **中** | **前端 AUTH_BYPASS 旁路可繞過** | `src/config.js:12`, `.env:VITE_AUTH_BYPASS=true` | `VITE_AUTH_BYPASS` 編譯時嵌入前端 bundle。若 build 時未正確設定，生產環境前端將跳過認證檢查，雖然後端仍有保護，但前端 UI 完全開放。 |

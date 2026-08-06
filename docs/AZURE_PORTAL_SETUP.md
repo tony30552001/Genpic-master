@@ -45,15 +45,17 @@
 
 ---
 
-## 4. Azure Functions（API）
-1. 進入 **Function App** → **Create**
+## 4. Azure App Service（API）
+1. 進入 **App Services** → **Create** → **Web App**
 2. **Resource group**：`genpic-rg`
-3. **Function App name**：`genpic-func`
-4. **Runtime stack**：Node.js
-5. **Version**：20
-6. **Region**：East Asia
-7. **Plan type**：Consumption
-8. **Review + Create** → **Create**
+3. **Name**：`genpic-api`
+4. **Publish**：Code
+5. **Runtime stack**：Node.js
+6. **Version**：22 LTS
+7. **Operating System**：Linux
+8. **Region**：East Asia
+9. 選擇現有或新建 App Service Plan
+10. **Review + Create** → **Create**
 
 ---
 
@@ -120,11 +122,17 @@
 
 ---
 
-## 9. Function App 設定環境變數（App Settings）
-1. 進入 `genpic-func` → **Configuration** → **Application settings**
+## 9. App Service 設定環境變數（App Settings）
+1. 進入 `genpic-api` → **Configuration** → **Application settings**
 2. 新增：
    - `AZURE_TENANT_ID` = Tenant ID
    - `AZURE_CLIENT_ID` = Client ID
+   - `GOOGLE_CLIENT_ID` = Google OAuth client ID
+   - `DATABASE_URL` = PostgreSQL connection string
+   - `DATABASE_SSL` = `true`
+   - `AZURE_STORAGE_ACCOUNT` = Storage account name
+   - `AZURE_STORAGE_KEY` = Key Vault Secret Reference
+   - `BLOB_CONTAINER_DEFAULT` = `uploads`
    - `GOOGLE_API_KEY` = Key Vault Secret Reference
      - Key Vault Secret 頁面複製 **Secret Identifier**
      - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
@@ -133,17 +141,29 @@
    - `AZURE_OPENAI_ENDPOINT` = `https://<resource>.services.ai.azure.com/openai/v1`
    - `AZURE_OPENAI_API_KEY` = Key Vault Secret Reference
    - `AZURE_OPENAI_DEPLOYMENT` = `gpt-5.6-luna`
+   - `GPT_IMAGE_ENDPOINT` = Azure AI Foundry image endpoint
+   - `GPT_IMAGE_EDIT_ENDPOINT` = Optional image edit endpoint
+   - `GPT_IMAGE_API_KEY` = Key Vault Secret Reference
+   - `GPT_IMAGE_DEPLOYMENT` = `gpt-image-2`
+   - `LINE_TOKEN_ENCRYPTION_KEY` = Key Vault Secret Reference
+   - `ADMIN_EMAILS` = Comma-separated admin email list
    - `AUTH_DISABLED` = `false`
    - `CORS_ALLOW_ORIGIN` = `https://<your-swa-domain>`
    - `RATE_LIMIT_PER_MINUTE` = `60`
+   - `API_BODY_LIMIT` = `100mb`
+   - `SCM_DO_BUILD_DURING_DEPLOYMENT` = `true`
 3. **Save**
 
 ---
 
-## 10. Functions CORS
-1. 進入 `genpic-func` → **CORS**
-2. 新增：`https://<your-swa-domain>`
-3. **Save**
+## 10. 連結 Static Web App 與 App Service
+1. 進入現有 Static Web App → **APIs** → **Link**
+2. 選擇 `genpic-api` App Service
+3. 儲存設定，讓 Static Web App 的 `/api/*` 代理到 App Service 相同路徑
+4. App Service 若啟用平台 CORS，加入：
+   - `https://<your-swa-domain>`
+   - `http://localhost:5173`
+5. 正式環境不要將 `CORS_ALLOW_ORIGIN` 設為 `*`
 
 ---
 
@@ -153,13 +173,14 @@ VITE_MSAL_CLIENT_ID=<client-id>
 VITE_MSAL_TENANT_ID=<tenant-id>
 VITE_MSAL_REDIRECT_URI=http://localhost:5173
 VITE_MSAL_SCOPES=User.Read
-VITE_API_BASE_URL=https://<your-function-app>.azurewebsites.net/api
+VITE_API_BASE_URL=/api
 ```
 
 ---
 
 ## 12. 最小驗證
-- Functions `/api/health` 回 `200 {"status":"ok"}`
+- App Service `https://<your-app-service>.azurewebsites.net/api/health` 回 `200 {"status":"ok"}`
+- Static Web App `https://<your-swa-domain>/api/health` 回 `200 {"status":"ok"}`
 - MSAL 登入可取得 token
 - API 呼叫不回 401
 - Blob 容器存在

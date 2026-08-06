@@ -11,7 +11,7 @@ corepack pnpm exec vitest run src/services/__tests__/gptImageService.test.js  # 
 corepack pnpm dev             # Local dev server (port 5173)
 ```
 
-The CI pipeline (`azure-static-web-apps-thankful-island-0ab89420f.yml`) runs `pnpm install --frozen-lockfile` → `pnpm build`. **Always run `corepack pnpm build` locally before pushing** to catch import/export errors before CI does.
+The CI pipeline (`azure-static-web-apps-thankful-island-0ab89420f.yml`) builds the frontend with `pnpm install --frozen-lockfile` → `pnpm build`, installs `api/` with `npm ci`, deploys `dist/` to Static Web Apps, and deploys `api/` to the linked App Service on `main`. **Always run `corepack pnpm build` locally before pushing** to catch import/export errors before CI does.
 
 ## Architecture
 
@@ -27,13 +27,14 @@ Frontend (React 19 + Vite + Tailwind 4)
        │   └── ui/                    ← shadcn/ui adapter components (don't edit directly)
        ├── context/AuthContext.jsx    ← Google + MSAL auth state, token refresh logic
        ├── services/
-       │   ├── aiService.js           ← Gemini API via Azure Functions gateway
+       │          ├── aiService.js           ← Gemini API via App Service gateway
        │   ├── authService.js         ← acquireAccessToken (Google first, then MSAL silent→popup)
        │   └── gptImageService.js     ← Azure AI Foundry (GPT-Image-2)
        └── hooks/
 
-Backend (Azure Functions Node.js)
+Backend (Node.js App Service API)
   └── api/                           ← One folder per function endpoint
+       ├── server.js                 ← Express adapter for App Service; preserves existing handlers
        ├── generate-images/           ← Calls Gemini Imagen via @google/genai
        ├── analyze-document/          ← Gemini document analysis
        ├── styles/                    ← Shared style library CRUD (PostgreSQL)
@@ -43,15 +44,15 @@ Database
   └── db/migrations/                 ← PostgreSQL migration files (run manually or via script)
 ```
 
-**Hosting**: Azure Static Web Apps (`dist/` + `api/`). Push to `main` triggers automatic CI/CD deployment.
+**Hosting**: Azure Static Web Apps serves `dist/`; a linked Node.js App Service runs `api/server.js` and receives the SWA `/api/*` proxy. Push to `main` deploys both surfaces.
 
 **Auth**: Dual provider — Microsoft MSAL (Entra ID) for enterprise users + Google OAuth for personal users. Both share `AuthContext.jsx`. `acquireAccessToken` in `authService.js` tries Google token first, then MSAL silent, then MSAL popup fallback.
 
 **`identity.js` field precedence (critical):** `auth.js` always returns `{ displayName, email }` — **not** `{ name, email }`. When reading user identity in `api/_shared/identity.js`, always prefer `user.displayName || user.name || email`. Never use `user.name` alone (it is always `undefined`). `getOrCreateUser` must also **UPDATE** `display_name` on every login (not only on INSERT) so existing users with email stored as display name get corrected automatically.
 
 **Image models**:
-- `gemini-imagen` ("Nano Banana 2") — default, via Azure Functions API gateway  
-- `gpt-image-2` ("GPT Image 2") — Azure AI Foundry endpoint, selected by tenant policy and called through the Azure Functions gateway; keep `GPT_IMAGE_*` in Functions runtime settings
+- `gemini-imagen` ("Nano Banana 2") — default, via the App Service API gateway
+- `gpt-image-2` ("GPT Image 2") — Azure AI Foundry endpoint, selected by tenant policy and called through the App Service gateway; keep `GPT_IMAGE_*` in App Service settings
 
 ## Environment Variables
 
@@ -75,7 +76,7 @@ UI is built on **shadcn/ui** (copy-paste components in `src/components/ui/`) + *
 **Before every push:**
 1. Run `corepack pnpm build` — catches import/export errors before CI
 2. If only deleting lines and the pre-commit hook rejects, verify there are no unintended regressions, then you may use `git commit --no-verify` with an explanation in the commit message
-3. **Backend SQL safety check:** After modifying any Azure Function, run `node --check api/<function>/index.js` AND visually verify that every SQL query's `$N` placeholder count matches the length of the params array. A mismatch causes a runtime 500 that `node --check` will NOT catch.
+3. **Backend SQL safety check:** After modifying any API handler, run `node --check api/<function>/index.js` AND visually verify that every SQL query's `$N` placeholder count matches the length of the params array. A mismatch causes a runtime 500 that `node --check` will NOT catch.
 
 **Pre-commit hook (Husky):** Runs lint + type-check. For delete-only commits, Husky may produce a false-positive failure. Only bypass with `--no-verify` after confirming the staged diff is intentional.
 

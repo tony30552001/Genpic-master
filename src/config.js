@@ -14,7 +14,7 @@ export const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true";
 // 2. Google OAuth 設定
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
-// 3. API 設定 (Azure Functions Gateway)
+// 3. API 設定 (SWA proxy / App Service gateway)
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 // 4. GPT-Image-2 設定 (Azure AI Foundry)

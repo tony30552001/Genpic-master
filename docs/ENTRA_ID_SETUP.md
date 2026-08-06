@@ -50,7 +50,7 @@ VITE_MSAL_REDIRECT_URI=http://localhost:5173
 VITE_MSAL_SCOPES=您的_Application_Client_ID
 
 # API Gateway
-VITE_API_BASE_URL=http://localhost:7071/api
+VITE_API_BASE_URL=http://localhost:3000/api
 
 # Local auth bypass (設為 false 以啟用真實登入)
 VITE_AUTH_BYPASS=false
@@ -75,9 +75,9 @@ VITE_AUTH_BYPASS=false
 
 ---
 
-## 步驟 4：正式環境設定 (Azure Static Web Apps)
+## 步驟 4：正式環境設定 (Static Web Apps + App Service)
 
-當您部署到 Azure Static Web Apps 後，請記得在 Azure Portal 的 **Environment variables** (或 Configuration) 中加入這些設定：
+前端仍部署到 Azure Static Web Apps，API backend settings 請放在 linked Azure App Service 的 **Configuration**。前端 `VITE_*` 則由 GitHub Actions build 時注入：
 
 | Variable Name | Value | 說明 |
 | :--- | :--- | :--- |

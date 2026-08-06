@@ -37,12 +37,12 @@
 
 ### 範圍與原則
 - 移除前端 Firebase Auth 依賴，改用 MSAL
-- 所有 API 呼叫經由 Azure Functions 代理
+- 所有 API 呼叫經由 linked App Service API 代理
 - 強制落實統一錯誤格式與 Token 驗證
 
 ### 工作分解（WBS）
 - Step 1.1：清理 Firebase 依賴與設定檔
-- Step 1.2：初始化 Azure Functions + health check
+- Step 1.2：初始化 Node.js API adapter + health check
 - Step 1.3：前端導入 MSAL，後端驗證 Token
 - Step 1.4：加入 Rate limit、CORS、統一錯誤格式
 

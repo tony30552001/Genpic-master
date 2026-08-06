@@ -1,112 +1,99 @@
-# Azure Static Web Apps 部署指南 (React + Azure Functions)
+# Azure Static Web Apps + App Service 部署指南
 
-您的專案結構非常適合部署到 **Azure Static Web Apps (SWA)**。這是一個現代化的 Azure 服務，專門用於託管像您這樣的專案：前端使用靜態框架 (React/Vite)，後端使用 Serverless API (Azure Functions)。
+本專案採用 **Azure Static Web Apps (SWA) + Azure App Service** 分離部署：
 
-## 為什麼選擇 Azure Static Web Apps？
+- SWA 託管 React/Vite 產出的 `dist/`
+- App Service 執行 `api/server.js`
+- SWA 的 `/api/*` 代理到已連結的 App Service
 
-1.  **自動化部署**：連接 GitHub 後，每次 `git push` 都會自動觸發 GitHub Actions 進行建置與部署。
-2.  **整合式架構**：它會自動識別並部署您的 `src` (前端) 和 `api` (後端)，無需分開管理。
-3.  **內建反向代理**：SWA 會自動處理路由，前端呼叫 `/api/*` 會直接轉發到後端函數，解決了 CORS 問題。
-4.  **免費 SSL 憑證**：自動提供 HTTPS 安全連線。
+## 1. 專案部署結構
 
----
+- 前端根目錄：`/`
+- API 目錄：`/api`
+- API 入口：`api/server.js`
+- 前端輸出：`dist`
+- 正式環境 API base URL：`/api`
 
-## 步驟 1：準備工作
+`api/server.js` 會將既有 Azure Function handlers 轉成 App Service HTTP routes，因此不需要重寫 endpoint 商業邏輯。`function.json` 與 `host.json` 仍保留供 Functions 本機/回滾使用。
 
-確認您的專案結構符合 SWA 的預設標準 (您的專案目前已經符合)：
--   **前端根目錄**：`/` (包含 `package.json`, `vite.config.js`)
--   **後端目錄**：`/api` (包含 `host.json`, `local.settings.json`, `package.json`)
--   **前端輸出目錄**：`dist` (這是 Vite 預設的建置輸出資料夾)
+## 2. 建立 App Service
 
----
+1. Azure Portal → **App Services** → **Create** → **Web App**。
+2. **Publish** 選 `Code`。
+3. Runtime 選 **Node.js 22 LTS / Linux**。
+4. 區域建議與 SWA、PostgreSQL、Storage 相同。
+5. Startup command 使用 `npm start`。
+6. 在 **Configuration** → **Application settings** 設定目前 Function runtime 使用的所有 backend settings。
+7. 敏感值使用 Key Vault reference 或 App Service secrets，不要提交到 Git。
 
-## 步驟 2：建立 Azure Static Web App
+至少確認以下設定存在：
 
-1.  登入 [Azure Portal](https://portal.azure.com)。
-2.  搜尋並選擇 **Static Web Apps**。
-3.  點擊 **+ Create** (建立)。
-4.  填寫基本資訊：
-    -   **Subscription (訂閱)**：選擇您的 Azure 訂閱。
-    -   **Resource Group (資源群組)**：建立一個新的 (例如 `rg-genpic-prod`) 或選擇現有的。
-    -   **Name (名稱)**：輸入專案名稱 (例如 `stapp-genpic-eastasia`)。
-    -   **Plan Type (方案類型)**：選擇 **Free** (免費供嗜好使用) 或 **Standard** (若需要自訂網域 SSL 或 SLA)。
-    -   **Region (區域)**：選擇離您使用者最近的區域 (例如 `East Asia`)。
-5.  在 **Deployment details (部署詳細資料)** 區域：
-    -   **Source (來源)**：選擇 **GitHub**。
-    -   點擊 **Sign in with GitHub** 並授權 Azure 存取您的儲存庫。
-    -   選擇您的 **Organization (組織)**、**Repository (儲存庫)** (`genpic-master`) 和 **Branch (分支)** (`main` 或您開發用的分支)。
-6.  在 **Build Details (建置詳細資料)** 區域：
-    -   **Build Presets (建置預設值)**：選擇 **React**。
-    -   **App location (應用程式位置)**：輸入 `/` (代表前端在根目錄)。
-    -   **Api location (Api 位置)**：輸入 `/api` (代表後端在 api 資料夾)。
-    -   **Output location (輸出位置)**：輸入 `dist` (Vite 的預設輸出)。
-7.  點擊 **Review + create**，然後點擊 **Create**。
+- `DATABASE_URL`、`DATABASE_SSL`
+- `AZURE_STORAGE_ACCOUNT`、`AZURE_STORAGE_KEY`、`BLOB_CONTAINER_DEFAULT`
+- `GOOGLE_API_KEY`、`GEMINI_MODEL_ANALYSIS`、`GEMINI_MODEL_GENERATION`
+- `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_DEPLOYMENT`
+- `GPT_IMAGE_ENDPOINT`、`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`
+- `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`GOOGLE_CLIENT_ID`
+- `AUTH_DISABLED=false`
+- `CORS_ALLOW_ORIGIN=https://<your-swa-domain>,http://localhost:5173`
+- `RATE_LIMIT_PER_MINUTE=60`
+- `API_BODY_LIMIT=100mb`
 
----
+App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 production port。
 
-## 步驟 3：設定環境變數
+## 3. 連結 Static Web App
 
-您的本地開發使用了 `local.settings.json` 中的環境變數 (如資料庫連線字串、API Key 等)。這些檔案**不會**被上傳到 Azure，因此您需要在 Azure Portal 中手動設定。
+在 Static Web App 的 **APIs** 設定中，將 API App Service 設為 linked backend。連結後：
 
-1.  在 Azure Portal 中，前往剛建立的 Static Web App 資源。
-2.  在左側選單中，點擊 **Configuration (組態)** (在 Settings 下)。
-3.  點擊 **+ Add** 加入以下應用程式設定 (請參考您的 `api/local.settings.json`)：
+```text
+https://<swa-domain>/api/health
+  -> https://<app-service-domain>/api/health
+```
 
-    | Name (名稱) | Value (值) | 說明 |
-    | :--- | :--- | :--- |
-    | `AZURE_TENANT_ID` | `6f4e2c19-7620-4dea-8852-11ec264fbef1` | Azure AD 租戶 ID |
-    | `AZURE_CLIENT_ID` | `529a30b4-cdd0-4dbb-b3e6-257e717dfdbf` | 應用程式 Client ID |
-    | `AZURE_STORAGE_ACCOUNT` | `genpicstorage001` | 儲存體帳戶名稱 |
-    | `AZURE_STORAGE_KEY` | `QMjM3...` (請複製完整金鑰) | 儲存體帳戶金鑰 |
-    | `DATABASE_URL` | `postgresql://...` (請複製完整連線字串) | Database 連線字串 |
-    | `GOOGLE_API_KEY` | `AIzaSy...` (請複製完整 API Key) | Google Gemini API Key |
-    | `GEMINI_MODEL_ANALYSIS` | `gemini-3-pro-preview` | 模型名稱 |
-    | `GEMINI_MODEL_GENERATION` | `gemini-3-pro-image-preview` | 模型名稱 |
-    | `AZURE_OPENAI_ENDPOINT` | `https://<resource>.services.ai.azure.com/openai/v1` | Azure OpenAI v1 endpoint |
-    | `AZURE_OPENAI_API_KEY` | `<your-azure-openai-key>` | Azure OpenAI API Key |
-    | `AZURE_OPENAI_DEPLOYMENT` | `gpt-5.6-luna` | 智能優化使用的 deployment |
-    | `AUTH_DISABLED` | `false` | 正式環境建議設為 false |
-    | `CORS_ALLOW_ORIGIN` | `*` | 允許的來源 |
-    | `RATE_LIMIT_PER_MINUTE` | `60` |速率限制 |
-    | `BLOB_CONTAINER_DEFAULT` | `uploads` | Blob 容器名稱 |
-    | `EMBEDDING_DIM` | `1536` | 嵌入向量維度 |
-    | `EMBEDDING_MODEL` | `text-embedding-004` | 嵌入模型名稱 |
+前端維持：
 
-4.  加入所有變數後，記得點擊上方的 **Save (儲存)**。
+```dotenv
+VITE_API_BASE_URL=/api
+```
 
----
+因此不需要把 App Service hostname 編譯進 Vite，也不需要為每個前端環境維護不同 API URL。`X-Auth-Token`、Bearer token 與 `x-ms-client-principal` 會繼續交給既有 API auth logic 處理。
 
-## 步驟 4：驗證部署
+## 4. GitHub Actions
 
-1.  當您在步驟 2 點擊建立後，Azure 會自動在您的 GitHub 儲存庫中建立一個 Workflow 檔案 (位於 `.github/workflows/` 下)。
-2.  前往您的 GitHub Repo 的 **Actions** 頁面，您應該會看到一個正在執行的 Workflow (通常叫做 `Azure Static Web Apps CI/CD`)。
-3.  等待 Action 執行完成 (綠色勾勾)。
-4.  回到 Azure Portal 的 Static Web App 概觀頁面，點擊 **URL** 連結。
-5.  您的網站應該已經成功上線！測試一下登入、圖片生成等功能是否正常。
+現有 workflow 會：
 
----
+1. Build 前端並部署 `dist/` 到 SWA。
+2. 使用 `npm ci --prefix api` 安裝 API dependencies。
+3. push 到 `main` 時，以 `Azure/webapps-deploy@v3` 將 `api/` 部署到 App Service。
+4. Pull Request 只部署 SWA preview，不會覆蓋正式 API。
 
-## 常見問題排除
+Repository secrets：
 
--   **API 請求 404**：
-    -   請確認您的前端 API 呼叫路徑是否正確 (應為 `/api/...`)。
-    -   檢查 GitHub Action 部署日誌，確認與 API 相關的步驟是否成功。確保 `Api location` 設定正確為 `api`。
--   **環境變數無效**：
-    -   Azure SWA 的環境變數設定後需要幾分鐘才會生效，有時需要重新整理或重新部署。
-    -   請確保變數名稱與程式碼中 `process.env.VARIABLE_NAME` 完全一致。
--   **資料庫連線失敗**：
-    -   請確認您的 Azure Database for PostgreSQL (或您使用的資料庫服務) 的防火牆設定，需允許 **Azure 服務和資源存取此伺服器** (Allow Azure services and resources to access this server)。因為 SWA Function 也是 Azure 服務的一部分。
--   **圖片上傳失敗 (CORS Error)**：
-    -   錯誤訊息：`Access to XMLHttpRequest at '...' from origin '...' has been blocked by CORS policy`。
-    -   原因：Azure Blob Storage 預設不允許跨網域存取。
-    -   解決方法：
-        1.  前往 Azure Portal 的 Storage Account (`genpicstorage001`)。
-        2.  在左側選單找到 **Settings** -> **Resource sharing (CORS)**。
-        3.  切換到 **Blob service** 分頁。
-        4.  新增一條規則：
-            -   **Allowed origins**: 輸入您的 Static Web App 網域 (例如 `https://thankful-island-xxx.azurestaticapps.net`)，或暫時使用 `*`。
-            -   **Allowed methods**: 把 `GET`, `PUT`, `POST`, `OPTIONS`, `HEAD` 全部勾選 (或是至少勾選 `PUT` 與 `GET`)。
-            -   **Allowed headers**: `*`
-            -   **Exposed headers**: `*`
-            -   **Max age**: `86400`
-        5.  點擊 **Save**。等待幾分鐘後重試。
+- `AZURE_API_APP_SERVICE_NAME`
+- `AZURE_API_APP_SERVICE_PUBLISH_PROFILE`
+
+workflow 不再使用 `api_location: "api"`；API 由獨立 App Service deployment step 提供。
+
+## 5. 驗證與 rollback
+
+先直接測試 App Service：
+
+```text
+https://<app-service-domain>/api/health
+```
+
+再測試 SWA proxy：
+
+```text
+https://<swa-domain>/api/health
+```
+
+接著驗證登入、圖片生成、文件分析、風格、歷史、範本、LINE 與管理 API。若切換失敗，可先 unlink App Service，再暫時恢復 workflow 的 `api_location: "api"`，因為既有 handlers、`function.json` 與 `host.json` 仍保留。
+
+## 6. 常見問題
+
+- **API 404**：確認 App Service Startup command 為 `npm start`、deployment package 包含 `server.js`，且 SWA 已連結正確 App Service。
+- **JSON body 413**：確認 App Service 與 `API_BODY_LIMIT` 足以容納文件/圖片 base64；目前 adapter 預設為 `100mb`。
+- **API 401**：確認 App Service linked API 沒有移除 `X-Auth-Token` 或 `x-ms-client-principal`，並檢查 `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`GOOGLE_CLIENT_ID`。
+- **資料庫連線失敗**：確認 PostgreSQL firewall/private networking 允許 App Service outbound access。
+- **CORS 錯誤**：同源 SWA proxy 不應需要額外 CORS；若直接測試 App Service，將 SWA 網域與本機網域加入 `CORS_ALLOW_ORIGIN`。

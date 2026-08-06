@@ -9,11 +9,11 @@
 
 ### 1.2 解決方案選擇
 我們選擇 **直接整合 (Direct Integration)** 模式，而非架設獨立的 MCP Server。
-*   **原因**：Genpic 專案已使用 Azure Functions 作為後端，直接在現有架構中加入 Line Messaging API 的呼叫是最輕量、效能最好且維護成本最低的方式。
+*   **原因**：Genpic 專案已使用 App Service API 作為後端，直接在現有架構中加入 Line Messaging API 的呼叫是最輕量、效能最好且維護成本最低的方式。
 *   **流程**：
     1.  **前端**：使用者產生圖片 -> 圖片上傳至 Azure Blob Storage -> 取得公開存取 URL (SAS URL)。
     2.  **前端**：呼叫後端 API (例如 `/api/send-line-image`)，帶入圖片 URL。
-    3.  **後端**：Azure Function 接收請求 -> 驗證權限 -> 使用 Line Messaging API (`pushMessage` 或 `multicast`) 將圖片推送到指定群組。
+    3.  **後端**：App Service API 接收請求 -> 驗證權限 -> 使用 Line Messaging API (`pushMessage` 或 `multicast`) 將圖片推送到指定群組。
 
 ## 2. 前置準備 (Line Developers Console)
 
@@ -30,7 +30,7 @@
     *   這部分比較 tricky。最簡單的方法是暫時開啟一個 Webhook (例如使用 Ngrok)，將 Bot 加入群組，然後從 Webhook 的 `join` 事件中取得 Group ID。
     *   或者，初期開發可以先測試推送到個人 (User ID)，User ID 可以在 "Basic settings" 下方的 "Your user ID" 找到。
 
-## 3. 後端實作 (Azure Functions)
+## 3. 後端實作 (App Service API)
 
 ### 3.1 安裝依賴
 在 `api` 目錄下安裝 Line Bot SDK：
@@ -53,8 +53,8 @@ npm install @line/bot-sdk
 }
 ```
 
-### 3.3 建立 Azure Function (`api/send-line-image`)
-建立一個新的 Function 用於處理發送請求。
+### 3.3 更新 API endpoint (`api/send-line-image`)
+沿用現有 API handler 處理發送請求，App Service adapter 會將其掛載到 `/api/send-line-image`。
 
 **檔案位置**: `api/send-line-image/index.js`
 

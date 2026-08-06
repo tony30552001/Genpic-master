@@ -43,7 +43,7 @@ func --version
 ```
 
 「AI 智能優化」使用 Azure OpenAI Responses API。以上三個設定只放在
-Functions runtime；不要加上 `VITE_` 前綴，也不要放進前端 `.env`。
+API runtime（App Service 或本機 adapter）；不要加上 `VITE_` 前綴，也不要放進前端 `.env`。
 若未設定 `AZURE_OPENAI_API_KEY`，後端會暫時共用 `GPT_IMAGE_API_KEY`。
 
 ---
@@ -60,21 +60,31 @@ psql "postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require" \
 
 ---
 
-## 3. 啟動 Functions
+## 3. 啟動 App Service API adapter
 
 在專案根目錄執行：
 
 ```bash
 cd api
 npm install
+npm start
+```
+
+預設 App Service adapter URL：
+
+```
+http://localhost:3000/api
+```
+
+`api/server.js` 會直接載入既有 handlers。執行 `npm start` 時，請先在 shell 或 IDE 設定 backend environment variables；`local.settings.json` 仍由 Azure Functions Core Tools 使用。
+
+要繼續使用原本的 Functions runtime，可改執行：
+
+```bash
 func start
 ```
 
-預設 Functions Base URL：
-
-```
-http://localhost:7071/api
-```
+此時 URL 仍為 `http://localhost:7071/api`。
 
 ---
 
@@ -83,7 +93,7 @@ http://localhost:7071/api
 編輯 [.env](../.env)：
 
 ```dotenv
-VITE_API_BASE_URL=http://localhost:7071/api
+VITE_API_BASE_URL=http://localhost:3000/api
 ```
 
 若要透過 Vite 代理，可改用 `/api` 並在 `vite.config.js` 加 proxy（可選）。
@@ -104,7 +114,7 @@ VITE_API_BASE_URL=http://localhost:7071/api
 啟動後可測：
 
 ```bash
-curl http://localhost:7071/api/health
+curl http://localhost:3000/api/health
 ```
 
 預期回應：

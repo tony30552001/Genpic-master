@@ -1,12 +1,12 @@
 # Administrator 管理中心
 
-Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片模型政策與風格資產管理。管理員權限由 `users.role = 'admin'` 控制；首次部署可在 Azure Functions 設定 `ADMIN_EMAILS`，以逗號分隔登入 email，登入時會自動同步為管理員。
+Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片模型政策與風格資產管理。管理員權限由 `users.role = 'admin'` 控制；首次部署可在 linked App Service 設定 `ADMIN_EMAILS`，以逗號分隔登入 email，登入時會自動同步為管理員。
 
 ## 啟用步驟
 
 1. 若尚未執行，依序執行 `db/migrations/006_administrator_mode.sql`、`db/migrations/007_dedupe_users.sql` 與 `db/migrations/008_user_status.sql`。
-2. 在 Functions 設定 `ADMIN_EMAILS`，例如 `admin@example.com`。
-3. 若要開放 GPT Image 2，將 GPT 設定放在 Functions runtime（不是 `VITE_*` build 變數）：
+2. 在 App Service 設定 `ADMIN_EMAILS`，例如 `admin@example.com`。
+3. 若要開放 GPT Image 2，將 GPT 設定放在 App Service runtime（不是 `VITE_*` build 變數）：
    - `GPT_IMAGE_ENDPOINT`
    - `GPT_IMAGE_EDIT_ENDPOINT`（可省略，會由生成端點推導）
    - `GPT_IMAGE_API_KEY`
@@ -18,7 +18,7 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 ## AI 智能優化模型
 
 圖片生成頁面的「AI 智能優化」使用 Azure OpenAI Responses API。請在
-Azure Functions runtime 設定以下變數，不要使用 `VITE_*` 前端變數：
+App Service runtime 設定以下變數，不要使用 `VITE_*` 前端變數：
 
 - `AZURE_OPENAI_ENDPOINT=https://<resource>.services.ai.azure.com/openai/v1`
 - `AZURE_OPENAI_API_KEY=<Azure OpenAI API Key>`
