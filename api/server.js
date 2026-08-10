@@ -1,5 +1,7 @@
 const express = require("express");
+const { apiReference } = require("@scalar/express-api-reference");
 const { corsHeaders } = require("./_shared/http");
+const openapiDocument = require("./openapi");
 
 const admin = require("./admin");
 const analyzeDocument = require("./analyze-document");
@@ -29,6 +31,19 @@ const apiBodyLimit = process.env.API_BODY_LIMIT || "100mb";
 app.disable("x-powered-by");
 app.set("trust proxy", true);
 app.use(express.json({ limit: apiBodyLimit }));
+
+app.get("/api/openapi.json", (req, res) => {
+  res.set(corsHeaders(req));
+  res.json(openapiDocument);
+});
+
+app.use(
+  "/api/docs",
+  apiReference({
+    url: "/api/openapi.json",
+    pageTitle: "Pixora API Reference",
+  })
+);
 
 const createLogger = () => {
   const log = (...args) => console.log(...args);

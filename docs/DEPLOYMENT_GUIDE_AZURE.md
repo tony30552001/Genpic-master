@@ -110,6 +110,12 @@ https://<app-service-domain>/api/health
 https://<swa-domain>/api/health
 ```
 
+Scalar API 文件：
+
+```text
+https://<swa-domain>/api/docs/
+```
+
 接著驗證登入、圖片生成、文件分析、風格、歷史、範本、LINE 與管理 API。若切換失敗，可先 unlink App Service，再暫時恢復 workflow 的 `api_location: "api"`，因為既有 handlers、`function.json` 與 `host.json` 仍保留。
 
 ## 7. 常見問題

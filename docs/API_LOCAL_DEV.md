@@ -131,3 +131,21 @@ curl http://localhost:3000/api/health
 ```json
 { "status": "ok" }
 ```
+
+---
+
+## 7. Scalar API Reference
+
+啟動 API adapter 後，可使用 Scalar 查看互動式 API 文件：
+
+```text
+http://localhost:3000/api/docs/
+```
+
+OpenAPI 規格位於：
+
+```text
+http://localhost:3000/api/openapi.json
+```
+
+需要驗證的端點可在 Scalar 的 Authorize 面板填入 `X-Auth-Token` 或 Bearer token。

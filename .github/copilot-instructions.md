@@ -105,3 +105,20 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 - Do not reset, checkout, or revert unrelated user changes.
 - Do not amend commits unless explicitly requested.
 - When a task includes a commit, push it immediately to `origin main`.
+
+## OpenWiki maintenance
+
+The `openwiki/` directory is the generated knowledge base for this repository.
+
+Before pushing changes that affect source code, architecture, API behavior,
+database schema, deployment, configuration, or other documented behavior:
+
+1. Run `openwiki --update`.
+2. Review the generated OpenWiki changes.
+3. Verify that the generated documentation is consistent with the implementation.
+4. Include relevant `openwiki/`, `AGENTS.md`, and `CLAUDE.md` changes in the same
+   commit as the code changes, or create a follow-up documentation commit.
+5. Only push after the working tree contains the intended code and OpenWiki changes.
+
+Do not manually edit generated files under `openwiki/` unless explicitly requested.
+Treat source code and tests as authoritative.
