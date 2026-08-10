@@ -7,6 +7,8 @@ import {
   MSAL_SCOPES,
 } from "../config";
 
+const TOKEN_RENEWAL_OFFSET_SECONDS = 5 * 60;
+
 const authority = MSAL_TENANT_ID
   ? `https://login.microsoftonline.com/${MSAL_TENANT_ID}`
   : "https://login.microsoftonline.com/common";
@@ -16,13 +18,14 @@ export const msalConfig = {
     clientId: MSAL_CLIENT_ID,
     authority,
     redirectUri: MSAL_REDIRECT_URI,
-    navigateToLoginRequestUrl: false,
+    navigateToLoginRequestUrl: true,
   },
   cache: {
     cacheLocation: "localStorage",
     storeAuthStateInCookie: false,
   },
   system: {
+    tokenRenewalOffsetSeconds: TOKEN_RENEWAL_OFFSET_SECONDS,
     loggerOptions: {
       loggerCallback: (level, message, containsPii) => {
         if (containsPii) {
@@ -52,4 +55,3 @@ export const loginRequest = {
 export const msalInstance = new PublicClientApplication(msalConfig);
 
 // Initialize is handled in main.jsx to prevent race conditions and handle popup flow gracefully
-

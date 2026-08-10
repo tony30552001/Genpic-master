@@ -118,3 +118,9 @@ VITE_AUTH_BYPASS=false
 
 -   **登入後跳轉回 localhost 但顯示 404**：請確認您在 Azure Portal 的 Redirect URI 設定的是 `http://localhost:5173` 而不是 `http://localhost:5173/` (尾部斜線有時會造成問題)，且必須完全匹配。
 -   **權限不足錯誤**：請確認已在 API Permissions 頁面點擊 "Grant admin consent"。
+
+## 登入工作階段與重新驗證
+
+前端會在 ID token 即將過期時先嘗試 MSAL 靜默更新；若 Microsoft 要求互動驗證，會使用 redirect 回到原本的頁面，不會直接清除登入帳號。
+
+Microsoft Entra ID 的 SPA refresh token 仍有服務端限制（一般 SPA 約 24 小時），無法由前端保證永久登入。若瀏覽器工作階段超過 refresh token 的有效期限，使用者仍需要完成一次互動式重新驗證；若產品需要長時間免互動登入，應改採後端 BFF／伺服器工作階段架構。

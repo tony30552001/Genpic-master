@@ -1,12 +1,24 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
+
+const makeJwt = (payload) => {
+  const encodedPayload = btoa(JSON.stringify(payload))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  return `eyJhbGciOiJSUzI1NiJ9.${encodedPayload}.signature`;
+};
+
+const freshIdToken = makeJwt({
+  exp: Math.floor(Date.now() / 1000) + 3600,
+});
 
 const mocks = vi.hoisted(() => ({
   loginRedirect: vi.fn(() => Promise.resolve()),
   logoutRedirect: vi.fn(),
   acquireTokenSilent: vi.fn(() => Promise.resolve({
     accessToken: "access-token",
-    idToken: "id-token",
+    idToken: freshIdToken,
   })),
   acquireTokenRedirect: vi.fn(() => Promise.resolve()),
   getActiveAccount: vi.fn(() => ({ id: "1" })),
@@ -34,10 +46,20 @@ import {
 } from "../authService";
 
 describe("authService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.acquireTokenSilent.mockResolvedValue({
+      accessToken: "access-token",
+      idToken: freshIdToken,
+    });
+    mocks.acquireTokenRedirect.mockResolvedValue();
+  });
+
   it("loginWithMicrosoft sets active account", async () => {
     await loginWithMicrosoft();
     expect(mocks.loginRedirect).toHaveBeenCalledWith({
       scopes: ["User.Read"],
+      redirectStartPage: window.location.href,
     });
   });
 
@@ -49,7 +71,7 @@ describe("authService", () => {
   it("acquireAccessToken uses silent first", async () => {
     const token = await acquireAccessToken();
     expect(mocks.acquireTokenSilent).toHaveBeenCalled();
-    expect(token).toBe("id-token");
+    expect(token).toBe(freshIdToken);
   });
 
   it("acquireAccessToken redirects when interaction is required", async () => {
@@ -61,11 +83,37 @@ describe("authService", () => {
     expect(mocks.acquireTokenRedirect).toHaveBeenCalled();
   });
 
+  it("refreshes a stale ID token even when MSAL returns a cached result", async () => {
+    const staleIdToken = makeJwt({
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
+    mocks.acquireTokenSilent
+      .mockResolvedValueOnce({
+        accessToken: "cached-access-token",
+        idToken: staleIdToken,
+      })
+      .mockResolvedValueOnce({
+        accessToken: "refreshed-access-token",
+        idToken: freshIdToken,
+      });
+
+    const token = await acquireAccessToken();
+
+    expect(token).toBe(freshIdToken);
+    expect(mocks.acquireTokenSilent).toHaveBeenCalledTimes(2);
+    expect(mocks.acquireTokenSilent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        forceRefresh: true,
+      })
+    );
+  });
+
   it("acquireAccessToken can force a cache refresh", async () => {
     await acquireAccessToken({ forceRefresh: true });
     expect(mocks.acquireTokenSilent).toHaveBeenLastCalledWith(
       expect.objectContaining({
         forceRefresh: true,
+        redirectUri: window.location.origin,
         refreshTokenExpirationOffsetSeconds: 300,
       })
     );
