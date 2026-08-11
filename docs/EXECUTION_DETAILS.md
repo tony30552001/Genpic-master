@@ -18,7 +18,7 @@
 - Step 0.4：加入路由與錯誤邊界，補齊最小品質基線
 
 ### 定義完成 (Definition of Done)
-- 主頁 `/`、`/styles`、`/history` 可直接進入且重新整理不 404
+- 主頁 `/` 與素材中心 `/library?section=overview|templates|styles|history` 可直接進入且重新整理不 404
 - `components/` 內不再直接 import `firebase/*`
 - `InfographicGenerator.jsx` 僅負責 state 組裝與元件佈局（不含 SDK 呼叫）
 - 基本冒煙測試通過（風格分析 → 生成 → 存歷史 → 讀歷史 → 刪歷史）

@@ -5,6 +5,7 @@ import {
   Eye,
   Image as ImageIcon,
   Lock,
+  Pencil,
   Share2,
   Sparkles,
   Trash2,
@@ -31,6 +32,7 @@ export default function StyleCard({
   onPublish,
   onUnpublish,
   onCopy,
+  onEdit,
   selectedTags,
   onToggleTag,
   isSelectionMode,
@@ -51,6 +53,7 @@ export default function StyleCard({
   const canCopy = Boolean(onCopy);
   const canPublish = Boolean(onPublish);
   const canUnpublish = Boolean(onUnpublish);
+  const canEdit = Boolean(onEdit);
 
   const handleSelectionClick = () => {
     if (isSelectionMode) {
@@ -214,8 +217,20 @@ export default function StyleCard({
             <Download className="h-4 w-4" aria-hidden="true" />
             套用風格
           </Button>
-          {(canCopy || canPublish || canUnpublish || onDelete) && (
+          {(canCopy || canPublish || canUnpublish || canEdit || onDelete) && (
             <div className="flex w-full gap-2">
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEdit(style)}
+                  className="flex-1 gap-1.5"
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  編輯
+                </Button>
+              )}
               {canCopy ? (
                 <Button
                   type="button"

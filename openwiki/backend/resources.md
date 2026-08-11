@@ -13,6 +13,8 @@ tags: [backend, resources, storage, line]
 
 `/styles/search` searches only the caller's own embedded styles by pgvector distance. `/styles/backfill-embeddings` processes at most 100 missing embeddings per request; it supports dry run and reports per-record failures. History lists/creates/deletes tenant+user records; templates list/create/update/delete tenant+creator records. Their frontend adapters live in `storageService.js` and hooks.
 
+`PUT /styles/:id` is a partial update: it changes only supplied `name`, `prompt`, `description`, `tags`, `previewUrl`, or `category` fields and requires creator ownership. `PUT /templates/:id`, however, requires `name` and replaces every persisted template field: omitted `userScript`, `stylePrompt`, `styleId`, and `previewUrl` become `null`, while omitted `category` becomes `general`. The [Asset Center](../frontend/asset-center.md) accounts for this by sending those retained fields from the selected template with its metadata edits. Keep that client payload complete while the handler remains a replacement update; a newly added replacement field must be wired through it, and a partial-update handler would require an intentional client-contract change.
+
 ## Blob asset lifecycle
 
 ```mermaid

@@ -6,6 +6,7 @@ import {
     Filter,
     Image as ImageIcon,
     Palette,
+    Pencil,
     Search,
     Trash2,
     X,
@@ -20,6 +21,7 @@ function TemplateCard({
     isSelectionMode,
     isSelected,
     onToggleSelect,
+    onEdit,
 }) {
     const handleClick = (e) => {
         if (isSelectionMode) {
@@ -112,7 +114,7 @@ function TemplateCard({
                     </div>
                 )}
 
-                {/* 標籤 */}
+                {/* 標籤（非選擇模式時，讓內容區佔滿、操作列固定在卡片底部） */}
                 {template.tags && template.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-auto pt-1">
                         {template.tags.slice(0, 4).map((tag, i) => {
@@ -148,29 +150,41 @@ function TemplateCard({
                 )}
             </div>
 
-            {/* hover 操作按鈕 (僅在非選擇模式下) */}
+            {/* 常駐操作列：觸控裝置可及，不再依賴 hover（僅非選擇模式顯示） */}
             {!isSelectionMode && (
-                <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/0 opacity-0 transition-[background-color,opacity] duration-200 group-hover:bg-black/5 group-hover:opacity-100 group-focus-visible:bg-black/5 group-focus-visible:opacity-100">
+                <div className="mt-auto flex items-center gap-1.5 border-t border-border/70 px-4 py-2">
                     <button
                         type="button"
                         onClick={(e) => {
                             e.stopPropagation();
                             onApply(template);
                         }}
-                        className="flex h-10 items-center gap-1 rounded-lg bg-background/95 px-3 text-xs font-medium text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                     >
-                        <Copy className="w-3 h-3" aria-hidden="true" /> 套用
+                        <Copy className="h-3.5 w-3.5" aria-hidden="true" /> 套用
                     </button>
+                    {onEdit && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit(template);
+                            }}
+                            className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> 編輯
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={(e) => {
                             e.stopPropagation();
                             onDelete(template.id, e);
                         }}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-background/95 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="flex min-h-9 min-w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label={`刪除範本 ${template.name}`}
                     >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                 </div>
             )}
@@ -180,17 +194,29 @@ function TemplateCard({
 
 export default function TemplateLibrary({
     templates,
+    searchQuery: controlledSearchQuery,
+    onSearchChange,
+    hideSearch = false,
     onApplyTemplate,
     onDeleteTemplate,
     onDeleteTemplates,
+    onEditTemplate,
 }) {
-    const [searchQuery, setSearchQuery] = useState("");
+    const [localSearchQuery, setLocalSearchQuery] = useState("");
     const [selectedTags, setSelectedTags] = useState([]);
     const [showAllTags, setShowAllTags] = useState(false);
 
     // 批次操作
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState(new Set());
+    const searchQuery = controlledSearchQuery ?? localSearchQuery;
+    const updateSearchQuery = (value) => {
+        if (onSearchChange) {
+            onSearchChange(value);
+        } else {
+            setLocalSearchQuery(value);
+        }
+    };
 
     // 收集所有標籤
     const allTags = useMemo(() => {
@@ -238,10 +264,10 @@ export default function TemplateLibrary({
 
     const clearFilters = () => {
         setSelectedTags([]);
-        setSearchQuery("");
+        updateSearchQuery("");
     };
 
-    const hasActiveFilters = selectedTags.length > 0 || searchQuery;
+    const hasActiveFilters = selectedTags.length > 0 || Boolean(searchQuery);
 
     // --- 批次操作 ---
     const toggleSelectionMode = () => {
@@ -280,27 +306,29 @@ export default function TemplateLibrary({
         <div className="space-y-5">
             {/* 搜尋與篩選 */}
             <div className="space-y-3">
-                <div className="relative">
-                    <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-3 pointer-events-none" aria-hidden="true" />
-                    <input
-                        type="text"
-                        placeholder="搜尋範本名稱、描述或內容…"
-                        aria-label="搜尋範本"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full rounded-xl border border-input bg-background py-2.5 pl-10 pr-10 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery("")}
-                            className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            aria-label="清除搜尋"
-                        >
-                            <X className="w-4 h-4" aria-hidden="true" />
-                        </button>
-                    )}
-                </div>
+                {!hideSearch && (
+                    <div className="relative">
+                        <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-3 pointer-events-none" aria-hidden="true" />
+                        <input
+                            type="text"
+                            placeholder="搜尋範本名稱、描述或內容…"
+                            aria-label="搜尋範本"
+                            value={searchQuery}
+                            onChange={(e) => updateSearchQuery(e.target.value)}
+                            className="w-full rounded-xl border border-input bg-background py-2.5 pl-10 pr-10 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => updateSearchQuery("")}
+                                className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                aria-label="清除搜尋"
+                            >
+                                <X className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 {allTags.length > 0 && (
                     <div className="space-y-2">
@@ -482,6 +510,7 @@ export default function TemplateLibrary({
                             template={tpl}
                             onApply={onApplyTemplate}
                             onDelete={onDeleteTemplate}
+                            onEdit={onEditTemplate}
                             selectedTags={selectedTags}
                             onToggleTag={toggleTag}
                             isSelectionMode={isSelectionMode}

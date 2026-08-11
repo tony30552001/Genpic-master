@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    AlertCircle, History, Bookmark, Wand2,
-    FileText, LogIn, LogOut, User, Settings, LayoutTemplate, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown
+    AlertCircle, Wand2,
+    FileText, LogIn, LogOut, User, Settings, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown, Library
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -22,16 +22,17 @@ import { Button } from '@/components/ui/button';
 
 import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
-import StyleLibrary from './components/styles/StyleLibrary';
-import HistoryPanel from './components/history/HistoryPanel';
 import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
-import TemplateLibrary from './components/templates/TemplateLibrary';
 import ImageTransformPanel from './components/create/ImageTransformPanel';
+import AssetCenter from './components/library/AssetCenter';
 
-export default function InfographicGenerator({ initialTab = 'general' }) {
+export default function InfographicGenerator({
+    initialTab = 'general',
+    initialLibrarySection = 'overview',
+}) {
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -122,9 +123,16 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         unpublishStyle,
         copyStyle,
         markStyleUsed,
+        updateStyle,
     } = useStyles({ user });
     const { historyItems, saveHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
-    const { templates, saveTemplate, removeTemplate, removeTemplates } = useTemplates({ user });
+    const {
+        templates,
+        saveTemplate,
+        updateTemplate,
+        removeTemplate,
+        removeTemplates,
+    } = useTemplates({ user });
 
     const {
         isAnalyzing: isAnalyzingDocument, analysisPhase: documentAnalysisPhase,
@@ -560,14 +568,12 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         { id: 'general', label: '一般創作', shortLabel: '創作', icon: Wand2 },
         { id: 'document', label: '文件分析', shortLabel: '文件', icon: FileText },
         { id: 'image-transform', label: '圖片轉換', shortLabel: '轉換', icon: ImagePlay },
-        { id: 'templates', label: '範本', shortLabel: '範本', icon: LayoutTemplate },
-        { id: 'styles', label: '風格庫', shortLabel: '風格', icon: Bookmark },
-        { id: 'history', label: '紀錄', shortLabel: '紀錄', icon: History },
+        { id: 'library', label: '素材中心', shortLabel: '素材', icon: Library },
         { id: 'settings', label: '設定', shortLabel: '設定', icon: Settings },
     ];
     const activeTabInfo = tabs.find(t => t.id === activeTab);
     const mobilePrimaryTabs = tabs.filter((tab) =>
-        ['general', 'templates', 'styles', 'history'].includes(tab.id)
+        ['general', 'library'].includes(tab.id)
     );
     const mobileSecondaryTabs = tabs.filter((tab) =>
         ['document', 'image-transform', 'settings'].includes(tab.id)
@@ -575,7 +581,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
     const compactNavGroups = [
         { id: 'create', label: '創作', icon: Wand2, tabIds: ['general', 'document', 'image-transform'] },
-        { id: 'library', label: '素材庫', icon: Bookmark, tabIds: ['templates', 'styles'] },
+        { id: 'library', label: '素材中心', icon: Library, tabIds: ['library'] },
         { id: 'more', label: '更多', icon: MoreHorizontal, tabIds: ['settings'] },
     ];
     const compactActiveGroup = compactNavGroups.find((group) => group.tabIds.includes(activeTab))?.id;
@@ -638,20 +644,6 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                 </button>
                             );
                         })}
-                        <button
-                            type="button"
-                            onClick={() => setCompactActiveTab('history')}
-                            aria-pressed={activeTab === 'history'}
-                            className={cn(
-                                'flex min-w-0 shrink items-center justify-center gap-1 rounded-md px-2.5 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80',
-                                activeTab === 'history'
-                                    ? 'bg-white text-primary shadow-sm'
-                                    : 'text-white/80 hover:bg-white/10 hover:text-white'
-                            )}
-                        >
-                            <History className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            <span className="truncate">紀錄</span>
-                        </button>
                     </nav>
 
                     {/* 桌面版：Inline Main Tabs */}
@@ -1001,63 +993,44 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                     </div>
                 )}
 
-                {/* ─── Templates Tab ─── */}
-                {activeTab === 'templates' && (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-6 custom-scrollbar">
-                        <div className="mx-auto w-full max-w-[1600px]">
-                            <TemplateLibrary
-                                templates={templates}
-                                onApplyTemplate={applyTemplate}
-                                onDeleteTemplate={handleDeleteTemplate}
-                                onDeleteTemplates={removeTemplates}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* ─── Styles Tab ─── */}
-                {activeTab === 'styles' && (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 2xl:px-12 py-6 custom-scrollbar">
-                        <div className="w-full max-w-[1760px] mx-auto">
-                            <StyleLibrary
-                                savedStyles={savedStyles}
-                                isLoading={isLoadingStyles}
-                                isSearching={isSearching}
-                                error={styleError}
-                                searchQuery={styleSearchQuery}
-                                onSearchChange={(value) => { setStyleSearchQuery(value); searchStyles(value); }}
-                                scope={styleScope}
-                                onScopeChange={setStyleScope}
-                                sort={styleSort}
-                                onSortChange={setStyleSort}
-                                onApplyStyle={applySavedStyle}
-                                onDeleteStyle={deleteSavedStyle}
-                                onDeleteStyles={deleteStyles}
-                                onPublishStyle={handlePublishStyle}
-                                onUnpublishStyle={handleUnpublishStyle}
-                                onCopyStyle={handleCopyStyle}
-                                onGoCreate={() => setActiveTab('general')}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* ─── History Tab ─── */}
-                {activeTab === 'history' && (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-8 2xl:px-12 py-6 custom-scrollbar">
-                        <div className="w-full max-w-[1760px] mx-auto">
-                            <HistoryPanel
-                                historyItems={historyItems}
-                                savedStyles={savedStyles}
-                                searchQuery={searchQuery}
-                                onSearchChange={setSearchQuery}
-                                onLoad={loadFromHistory}
-                                onDelete={deleteHistoryItem}
-                                onDeleteItems={deleteHistoryItems}
-                                onGoCreate={() => setActiveTab('general')}
-                                onGoStyles={() => setActiveTab('styles')}
-                            />
-                        </div>
+                {/* ─── Unified Asset Center ─── */}
+                {activeTab === 'library' && (
+                    <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar lg:px-8 2xl:px-12">
+                        <AssetCenter
+                            initialSection={initialLibrarySection}
+                            templates={templates}
+                            savedStyles={savedStyles}
+                            historyItems={historyItems}
+                            historySearchQuery={searchQuery}
+                            onHistorySearchChange={setSearchQuery}
+                            styleSearchQuery={styleSearchQuery}
+                            onStyleSearchChange={(value) => {
+                                setStyleSearchQuery(value);
+                                searchStyles(value);
+                            }}
+                            isLoadingStyles={isLoadingStyles}
+                            isSearchingStyles={isSearching}
+                            styleError={styleError}
+                            styleScope={styleScope}
+                            onStyleScopeChange={setStyleScope}
+                            styleSort={styleSort}
+                            onStyleSortChange={setStyleSort}
+                            onApplyTemplate={applyTemplate}
+                            onDeleteTemplate={handleDeleteTemplate}
+                            onDeleteTemplates={removeTemplates}
+                            onUpdateTemplate={updateTemplate}
+                            onApplyStyle={applySavedStyle}
+                            onDeleteStyle={deleteSavedStyle}
+                            onDeleteStyles={deleteStyles}
+                            onUpdateStyle={updateStyle}
+                            onPublishStyle={handlePublishStyle}
+                            onUnpublishStyle={handleUnpublishStyle}
+                            onCopyStyle={handleCopyStyle}
+                            onLoadHistory={loadFromHistory}
+                            onDeleteHistory={deleteHistoryItem}
+                            onDeleteHistoryItems={deleteHistoryItems}
+                            onGoCreate={() => setActiveTab('general')}
+                        />
                     </div>
                 )}
 

@@ -28,8 +28,10 @@
 
 ### 主要前端檔案
 
-- `src\pages\StylesPage.jsx`
-  - 目前只將 `InfographicGenerator` 的初始 tab 設為 `styles`。
+- `src\pages\LibraryPage.jsx`
+  - 將素材中心的初始分頁解析自 `?section=styles`，並交由 `InfographicGenerator` 組合完整管理介面。
+- `src\components\library\AssetCenter.jsx`
+  - 將範本、風格庫與生成紀錄整合在同一個素材中心，提供分頁、搜尋、摘要與 metadata 管理。
 - `src\InfographicGenerator.jsx`
   - 管理主要 tab、風格分析、儲存風格、套用風格、生成圖片與歷史紀錄。
 - `src\components\styles\StyleLibrary.jsx`

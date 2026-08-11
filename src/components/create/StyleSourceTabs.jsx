@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Check,
   ChevronDown,
   ChevronUp,
+  Library,
   Palette,
   Search,
   Wand2,
@@ -37,6 +39,7 @@ export default function StyleSourceTabs({
 }) {
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [styleSearch, setStyleSearch] = useState("");
+  const navigate = useNavigate();
 
   const selectedPaletteCount = STYLE_DIMENSIONS.reduce(
     (total, dimension) => total + (selectedPalette?.[dimension.id]?.length || 0),
@@ -231,6 +234,7 @@ export default function StyleSourceTabs({
                           ))}
                         </div>
                       )}
+
                     </div>
                     <button
                       type="button"
@@ -363,6 +367,20 @@ export default function StyleSourceTabs({
                 )}
               </div>
             )}
+
+            <div className="flex justify-end border-t border-border/70 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const section = activeTab === "templates" ? "templates" : "styles";
+                  navigate(`/library?section=${section}`);
+                }}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              >
+                <Library className="h-3.5 w-3.5" aria-hidden="true" />
+                開啟素材中心管理
+              </button>
+            </div>
           </div>
         </div>
       </div>

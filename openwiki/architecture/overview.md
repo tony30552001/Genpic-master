@@ -34,7 +34,7 @@ This shows the normal browser-to-API ownership boundary. Detailed sign-in and ex
 ## Runtime composition
 
 - `src/main.jsx` mounts `GoogleOAuthProvider` and `AuthProvider` around `App`; `AuthProvider` bootstraps its user from `GET /api/auth/session`.
-- `src/App.jsx` maps `/`, `/styles`, `/history`, `/admin`, and `/login`; all but login are protected, and `/admin` additionally waits for `/api/me` role data.
+- `src/App.jsx` maps `/`, `/library`, `/admin`, and `/login`; all but login are protected, and `/admin` additionally waits for `/api/me` role data. `LibraryPage` passes its optional `section` query parameter to the library tab described in [Asset Center](../frontend/asset-center.md).
 - `api/server.js` maps `/api/*` routes to function-style handlers through `invokeFunction`, applies JSON parsing, translates `context.res`, and starts `startImageJobWorker()` when the standalone API process starts.
 - `api/auth/index.js` exchanges Entra authorization codes or Google credentials for opaque cookies; `api/_shared/auth.js` checks each protected request before its resource handler executes.
 - `staticwebapp.config.json` lets anonymous/authenticated users reach `/api/*` and rewrites non-asset, non-API navigation to `index.html`.

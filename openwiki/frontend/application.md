@@ -6,8 +6,8 @@ tags: [frontend, authentication, sessions, csrf, google, entra]
 openwiki:
   roles: [architecture, integration, workflow, testing]
   change_kinds: [authentication, session-lifecycle, csrf, routing]
-  source_paths: [src/main.jsx, src/context/AuthContext.jsx, src/services/authService.js, src/services/apiClient.js, src/components/auth/SessionExpiryBanner.jsx]
-  symbols: [AuthProvider, getAuthSession, loginWithMicrosoft, loginWithGoogle, requestWithRetry, setCsrfToken]
+  source_paths: [src/main.jsx, src/App.jsx, src/pages/LibraryPage.jsx, src/context/AuthContext.jsx, src/services/authService.js, src/services/apiClient.js, src/components/auth/SessionExpiryBanner.jsx]
+  symbols: [App, ProtectedRoute, LibraryPage, AuthProvider, getAuthSession, loginWithMicrosoft, loginWithGoogle, requestWithRetry, setCsrfToken]
   test_paths: [src/services/__tests__/authService.test.js, src/services/__tests__/apiClient.test.js]
   invariants: ["The browser holds the CSRF token only in memory and sends it on unsafe requests.", "Authenticated requests include the server-issued session cookie rather than a provider token."]
   validation_commands: [pnpm test --run src/context/__tests__/AuthContext.test.jsx src/services/__tests__/authService.test.js src/services/__tests__/apiClient.test.js]
@@ -16,6 +16,10 @@ openwiki:
 # Browser application and authentication
 
 `src/main.jsx` is the browser composition root: it mounts `GoogleOAuthProvider`, `AuthProvider`, and `App`. It no longer initializes MSAL or handles a browser-side provider redirect. Microsoft sign-in is a full-page navigation to the BFF; Google supplies a credential to the BFF once. The server-side flow, cookies, and authorization-code exchange are canonical in [server sessions and BFF sign-in](../backend/sessions.md).
+
+## Routing
+
+`App` exposes public `/login` and protected `/`, `/library`, and `/admin` routes. `ProtectedRoute` waits for `useAuth` initialization and redirects an unauthenticated location to `/login`; `ProtectedAdminRoute` additionally waits for the profile and redirects non-admin users to `/`. `LibraryPage` reads `section` from the query string and passes it as `initialLibrarySection` to `InfographicGenerator`; the center accepts `overview`, `templates`, `styles`, or `history` and falls back to overview. The library's browser composition and resource callbacks are specified in [Asset Center](asset-center.md).
 
 ## Browser session lifecycle
 

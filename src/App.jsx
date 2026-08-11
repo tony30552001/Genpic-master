@@ -2,8 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import CreatePage from './pages/CreatePage';
-import StylesPage from './pages/StylesPage';
-import HistoryPage from './pages/HistoryPage';
+import LibraryPage from './pages/LibraryPage';
 import AdminPage from './pages/AdminPage';
 import LoginPage from './pages/LoginPage';
 import SessionExpiryBanner from './components/auth/SessionExpiryBanner';
@@ -83,15 +82,9 @@ function App() {
             </ProtectedRoute>
           } />
 
-          <Route path="/styles" element={
+          <Route path="/library" element={
             <ProtectedRoute>
-              <StylesPage />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/history" element={
-            <ProtectedRoute>
-              <HistoryPage />
+              <LibraryPage />
             </ProtectedRoute>
           } />
 

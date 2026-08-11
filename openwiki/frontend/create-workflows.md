@@ -15,7 +15,7 @@ openwiki:
 
 # Creation workspace, documents, and exports
 
-`InfographicGenerator.jsx` is the creation workspace composition point. It combines generation, document analysis, transforms, styles, templates, history, settings and sharing components. Its hooks isolate remote interactions: `useImageGeneration`, `useDocumentAnalysis`, `useImageTransform`, `useStyles`, `useTemplates`, and `useHistory`.
+`InfographicGenerator.jsx` is the creation workspace composition point. It combines general generation, document analysis, transforms, settings, sharing, and the library tab. Its hooks isolate remote interactions: `useImageGeneration`, `useDocumentAnalysis`, `useImageTransform`, `useStyles`, `useTemplates`, and `useHistory`. Templates, saved styles, and history are now composed through [Asset Center](asset-center.md), rather than independent creation tabs.
 
 ## Generation and persistence
 

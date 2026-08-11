@@ -331,7 +331,7 @@ Authorization: Bearer <API_KEY>
 - [ ] 所有 hooks 改為呼叫 service 層，不再直接 import Firebase SDK
 
 #### Step 0.4 — 基礎設施與品質
-- [ ] 安裝 React Router DOM，實作基本路由 (`/`, `/styles`, `/history`)
+- [ ] 安裝 React Router DOM，實作基本路由 (`/`, `/library?section=overview|templates|styles|history`)
 - [ ] 安裝 React Error Boundary，包裹頂層元件
 - [ ] 設定 Vitest + React Testing Library
 - [ ] 為每個 service 撰寫基礎單元測試
@@ -462,7 +462,7 @@ Authorization: Bearer <API_KEY>
 | F-01 | 元件拆分完整性 | R | `InfographicGenerator.jsx` 不存在或僅為 Page Wrapper（< 50 行） | [ ] |
 | F-02 | Service 層解耦 | R | `components/` 內無直接 import `firebase/*`，一律透過 `services/` | [ ] |
 | F-03 | 冒煙測試 | M | 風格分析 → 生成圖片 → 存歷史 → 讀歷史 → 刪歷史 → 皆正常 | [ ] |
-| F-04 | 路由導航 | M | 瀏覽器直接存取 `/styles` 可到風格庫頁面，重新整理不 404 | [ ] |
+| F-04 | 路由導航 | M | 瀏覽器直接存取 `/library?section=styles` 可到素材中心的風格庫分頁，重新整理不 404 | [ ] |
 | F-05 | Error Boundary | M | 故意讓子元件拋出錯誤 → 顯示 Fallback UI，不白屏 | [ ] |
 | F-06 | Vitest 可執行 | A | `npm test` 通過所有 service 層基礎測試 | [ ] |
 | F-07 | shadcn/ui 元件載入 | M | Button, Card, Dialog, Tabs 等元件正常渲染 | [ ] |

@@ -22,6 +22,7 @@ export default function HistoryPanel({
   onDelete,
   onGoCreate,
   onDeleteItems, // 新增：批次刪除 callback
+  hideSearch = false,
 }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -120,30 +121,31 @@ export default function HistoryPanel({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* 搜尋列 */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-2.5 pointer-events-none" aria-hidden="true" />
-          <input
-            type="text"
-            placeholder="搜尋文字、日期或風格…"
-            aria-label="搜尋生成紀錄"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-xl border border-input bg-background py-2 pl-10 pr-10 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => onSearchChange("")}
-              className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              aria-label="清除搜尋"
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
-          )}
+      {!hideSearch && (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-2.5 pointer-events-none" aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="搜尋文字、日期或風格…"
+              aria-label="搜尋生成紀錄"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full rounded-xl border border-input bg-background py-2 pl-10 pr-10 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchChange("")}
+                className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label="清除搜尋"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 批次操作列 */}
       {isSelectionMode && (

@@ -50,6 +50,8 @@ export default function StyleLibrary({
   onUnpublishStyle,
   onCopyStyle,
   onGoCreate,
+  onEditStyle,
+  hideSearch = false,
 }) {
   const [selectedTags, setSelectedTags] = useState([]);
   const [showAllTags, setShowAllTags] = useState(false);
@@ -176,33 +178,35 @@ export default function StyleLibrary({
 
         <CardContent className="pt-5 space-y-5">
           {/* Search + Sort row */}
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <Input
-                type="text"
-                placeholder="搜尋風格名稱、描述、作者或標籤…"
-                aria-label="搜尋風格"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 pr-10"
-              />
-              {isSearching && (
-                <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-              )}
-              {searchQuery && !isSearching && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onSearchChange("")}
-                  aria-label="清除搜尋"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              )}
-            </div>
+          <div className={hideSearch ? "flex justify-end" : "grid gap-4 sm:grid-cols-[1fr_auto]"}>
+            {!hideSearch && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <Input
+                  type="text"
+                  placeholder="搜尋風格名稱、描述、作者或標籤…"
+                  aria-label="搜尋風格"
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+                )}
+                {searchQuery && !isSearching && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onSearchChange("")}
+                    aria-label="清除搜尋"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <Label htmlFor="style-sort" className="shrink-0 text-sm text-muted-foreground">
@@ -393,6 +397,7 @@ export default function StyleLibrary({
                 style={style}
                 onApply={onApplyStyle}
                 onDelete={canManage ? onDeleteStyle : undefined}
+                onEdit={canManage ? onEditStyle : undefined}
                 onPublish={canManage && style.visibility !== "shared" ? onPublishStyle : undefined}
                 onUnpublish={canManage && style.visibility === "shared" ? onUnpublishStyle : undefined}
                 onCopy={!canManage ? onCopyStyle : undefined}
