@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  DOCUMENT_ACCEPT,
+  DOCUMENT_FORMAT_GROUPS,
+  MAX_DOCUMENT_FILE_SIZE,
+  isSupportedDocumentFile,
+} from "@/lib/documentFormats";
 
 /**
  * 分析進度步驟定義
@@ -313,24 +319,15 @@ export default function DocumentUploader({
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef(null);
 
-  const supportedFormats = [
-    { ext: "pdf", label: "PDF", color: "text-red-500" },
-    { ext: "txt", label: "Text", color: "text-gray-500" },
-    { ext: "md", label: "Markdown", color: "text-gray-500" },
-    { ext: "png", label: "PNG", color: "text-green-500" },
-    { ext: "jpg", label: "JPG", color: "text-green-500" },
-  ];
-
   const handleFile = useCallback((file) => {
-    const MAX_SIZE = 50 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
+    if (file.size > MAX_DOCUMENT_FILE_SIZE) {
       alert("檔案大小超過 50MB 限制");
       return;
     }
-    const supportedExtensions = ["pdf", "txt", "md", "png", "jpg", "jpeg"];
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (!supportedExtensions.includes(ext)) {
-      alert("不支援的檔案格式。請上傳 PDF、TXT 或圖片檔案。");
+    if (!isSupportedDocumentFile(file)) {
+      alert(
+        "不支援的檔案格式。請上傳 PDF、Office、OpenDocument、RTF、EPUB、CSV、文字或圖片檔案。"
+      );
       return;
     }
     setSelectedFile(file);
@@ -458,7 +455,7 @@ export default function DocumentUploader({
             type="file"
             className="hidden"
             onChange={handleChange}
-            accept=".pdf,.txt,.md,.png,.jpg,.jpeg"
+            accept={DOCUMENT_ACCEPT}
             disabled={disabled}
           />
 
@@ -484,7 +481,9 @@ export default function DocumentUploader({
                 <Upload className="h-12 w-12 text-muted-foreground/50" />
                 <div className="text-center">
                   <p className="text-sm font-medium text-foreground">點擊或拖曳檔案至此處</p>
-                  <p className="text-xs text-muted-foreground mt-1">支援 PDF、文字檔案與圖片</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    支援 PDF、Office、OpenDocument、文字與圖片
+                  </p>
                   <p className="text-xs text-muted-foreground/60">最大 50MB</p>
                 </div>
               </>
@@ -495,12 +494,12 @@ export default function DocumentUploader({
         {/* 支援格式標籤 */}
         {!selectedFile && (
           <div className="flex flex-wrap gap-2 justify-center">
-            {supportedFormats.map((format) => (
+            {DOCUMENT_FORMAT_GROUPS.map((format) => (
               <span
-                key={format.ext}
+                key={format}
                 className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground"
               >
-                {format.label}
+                {format}
               </span>
             ))}
           </div>

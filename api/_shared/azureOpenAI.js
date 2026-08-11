@@ -95,7 +95,53 @@ const parseJsonContent = (content) => {
   }
 };
 
-const generateJsonCompletion = async ({ systemMessage, userMessage }) => {
+const buildResponseInput = ({
+  userMessage,
+  imageDataUrl,
+  fileDataUrl,
+  fileName,
+}) => {
+  const jsonInstruction = `${userMessage}\n\nPlease return a valid JSON object only.`;
+  if (!imageDataUrl && !fileDataUrl) {
+    return jsonInstruction;
+  }
+
+  if (imageDataUrl && fileDataUrl) {
+    throw new Error("Azure OpenAI 每次分析只能附加一個 image 或 file input");
+  }
+
+  const content = [
+    {
+      type: "input_text",
+      text: jsonInstruction,
+    },
+  ];
+
+  if (imageDataUrl) {
+    content.push({
+      type: "input_image",
+      image_url: imageDataUrl,
+      detail: "auto",
+    });
+  } else {
+    content.push({
+      type: "input_file",
+      filename: fileName || "document.pdf",
+      file_data: fileDataUrl,
+    });
+  }
+
+  return [{ role: "user", content }];
+};
+
+const generateJsonCompletion = async ({
+  systemMessage,
+  userMessage,
+  imageDataUrl,
+  fileDataUrl,
+  fileName,
+  maxOutputTokens,
+}) => {
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error(
@@ -112,8 +158,14 @@ const generateJsonCompletion = async ({ systemMessage, userMessage }) => {
     body: JSON.stringify({
       model: getDeployment(),
       instructions: systemMessage,
-      input: `${userMessage}\n\nPlease return a valid JSON object only.`,
+      input: buildResponseInput({
+        userMessage,
+        imageDataUrl,
+        fileDataUrl,
+        fileName,
+      }),
       text: { format: { type: "json_object" } },
+      ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
     }),
   });
 
@@ -148,6 +200,7 @@ const generateJsonCompletion = async ({ systemMessage, userMessage }) => {
 };
 
 module.exports = {
+  buildResponseInput,
   generateJsonCompletion,
   parseJsonContent,
   getResponsesEndpoint,

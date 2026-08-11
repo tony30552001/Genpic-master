@@ -32,6 +32,7 @@
 - `DATABASE_URL`、`DATABASE_SSL`
 - `AZURE_STORAGE_ACCOUNT`、`AZURE_STORAGE_KEY`、`BLOB_CONTAINER_DEFAULT`
 - `GOOGLE_API_KEY`、`GEMINI_MODEL_ANALYSIS`、`GEMINI_MODEL_GENERATION`
+- `DOCUMENT_ANALYSIS_MAX_CHARS=500000`（AnyDoc 解析後可交給同步 GPT 分析的最大字元數；超過時回傳 413，不會靜默截斷）
 - `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_DEPLOYMENT`
 - `GPT_IMAGE_ENDPOINT`、`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`
 - `BLOB_CONTAINER_GENERATED=generated`
@@ -49,6 +50,10 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 GPT Image 2 會由 `POST /api/generate-images` 建立 queued job，App Service
 背景 worker 在不佔用 SWA gateway request 的情況下執行生成。生成結果會放在
 `BLOB_CONTAINER_GENERATED`，前端再透過 `/api/image-jobs/{id}` polling 取得結果。
+
+`POST /api/analyze-document` 的文字、圖片與掃描型 PDF 分析都使用
+`AZURE_OPENAI_DEPLOYMENT`。該 deployment 必須支援 Responses API、image input
+與 PDF file input；未設定時程式預設使用 `gpt-5.6-luna`。
 
 ## 3. 連結 Static Web App
 
@@ -125,7 +130,9 @@ https://<swa-domain>/api/docs/
 ## 7. 常見問題
 
 - **API 404**：確認 App Service Startup command 為 `npm start`、deployment package 包含 `server.js`，且 SWA 已連結正確 App Service。
-- **JSON body 413**：確認 App Service 與 `API_BODY_LIMIT` 足以容納文件/圖片 base64；目前 adapter 預設為 `100mb`。
+- **JSON body 413**：一般文件會先上傳 Blob，App Service 透過 AnyDoc 解析，不應以提高 `API_BODY_LIMIT` 傳送大型 base64。base64 只保留給前端極小檔案的上傳失敗備援。
+- **AnyDoc native binding 載入失敗**：確認部署使用 Node.js 20+ 的 Linux x64／arm64 App Service，且以 `npm ci --prefix api` 安裝 optional native package；不要使用 `--omit=optional`。
+- **`document_text_too_large`**：文件已成功由 AnyDoc 解析，但 Markdown 超過 `DOCUMENT_ANALYSIS_MAX_CHARS`。第一版需縮小文件；300 MB 文件將由後續非同步 chunk pipeline 處理。
 - **API 401**：確認 session cookie 未被瀏覽器封鎖，並檢查 `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`ENTRA_REDIRECT_URI`、`AUTH_SESSION_SECRET`、`DATABASE_URL`。
 - **資料庫連線失敗**：確認 PostgreSQL firewall/private networking 允許 App Service outbound access。
 - **GPT Image 2 仍顯示 Backend call failure**：確認 migration 已執行、App Service log 有 `image-jobs` worker、以及 `generated` Blob container 可寫入。

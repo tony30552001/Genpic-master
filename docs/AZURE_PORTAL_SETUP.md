@@ -140,11 +140,12 @@
    - `GOOGLE_API_KEY` = Key Vault Secret Reference
      - Key Vault Secret 頁面複製 **Secret Identifier**
      - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
-   - `GEMINI_MODEL_ANALYSIS` = `gemini-1.5-flash`
+   - `GEMINI_MODEL_ANALYSIS` = `gemini-1.5-flash`（風格分析、檔名生成與場景優化）
    - `GEMINI_MODEL_GENERATION` = `gemini-3-pro-image-preview`
    - `AZURE_OPENAI_ENDPOINT` = `https://<resource>.services.ai.azure.com/openai/v1`
    - `AZURE_OPENAI_API_KEY` = Key Vault Secret Reference
    - `AZURE_OPENAI_DEPLOYMENT` = `gpt-5.6-luna`
+     - 文件分析的文字、圖片與掃描型 PDF 都使用此 deployment；必須支援 Responses API image/file input
    - `GPT_IMAGE_ENDPOINT` = Azure AI Foundry image endpoint
    - `GPT_IMAGE_EDIT_ENDPOINT` = Optional image edit endpoint
    - `GPT_IMAGE_API_KEY` = Key Vault Secret Reference

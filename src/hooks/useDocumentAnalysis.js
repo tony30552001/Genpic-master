@@ -1,5 +1,10 @@
 import { useCallback, useState } from "react";
 
+import {
+  MAX_DOCUMENT_FILE_SIZE,
+  inferDocumentMimeType,
+  isSupportedDocumentFile,
+} from "../lib/documentFormats";
 import { analyzeDocument } from "../services/aiService";
 import { uploadFileToBlob } from "../services/storageService";
 
@@ -25,25 +30,13 @@ export default function useDocumentAnalysis() {
       throw new Error("請先選擇文件。");
     }
 
-    // 驗證檔案格式
-    const supportedTypes = [
-      "application/pdf",
-      "text/plain",
-      "text/markdown",
-      "image/png",
-      "image/jpeg",
-    ];
-
-    const fileExtension = file.name.split(".").pop().toLowerCase();
-    const supportedExtensions = ["pdf", "txt", "md", "png", "jpg", "jpeg"];
-
-    if (!supportedTypes.includes(file.type) && !supportedExtensions.includes(fileExtension)) {
-      throw new Error("不支援的檔案格式。請上傳 PDF、TXT 或圖片檔案。");
+    if (!isSupportedDocumentFile(file)) {
+      throw new Error(
+        "不支援的檔案格式。請上傳 PDF、Office、OpenDocument、RTF、EPUB、CSV、文字或圖片檔案。"
+      );
     }
 
-    // 檔案大小限制 (50MB)
-    const MAX_FILE_SIZE = 50 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
+    if (file.size > MAX_DOCUMENT_FILE_SIZE) {
       throw new Error("檔案大小超過 50MB 限制。");
     }
 
@@ -54,7 +47,7 @@ export default function useDocumentAnalysis() {
     try {
       const analysisParams = {
         fileName: file.name,
-        contentType: file.type || getMimeTypeFromExt(fileExtension),
+        contentType: inferDocumentMimeType(file),
         sceneCount: sceneCount || 'auto',
         mode,
       };
@@ -184,19 +177,4 @@ export default function useDocumentAnalysis() {
     title: documentResult?.title || "",
     summary: documentResult?.summary || "",
   };
-}
-
-/**
- * 根據副檔名推斷 MIME type（browser 的 file.type 有時為空）
- */
-function getMimeTypeFromExt(ext) {
-  const map = {
-    pdf: "application/pdf",
-    txt: "text/plain",
-    md: "text/plain",
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-  };
-  return map[ext] || "application/octet-stream";
 }

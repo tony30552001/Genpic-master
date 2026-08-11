@@ -25,8 +25,8 @@ App Service runtime 設定以下變數，不要使用 `VITE_*` 前端變數：
 - `AZURE_OPENAI_DEPLOYMENT=gpt-5.6-luna`
 
 `AZURE_OPENAI_API_KEY` 未設定時，後端會共用 `GPT_IMAGE_API_KEY`，方便與
-同一個 Azure AI Foundry 資源整合。`optimize-scene` 文件／分鏡功能仍使用
-Gemini 設定。
+同一個 Azure AI Foundry 資源整合。文件分析的 AnyDoc Markdown、圖片及掃描型
+PDF 也使用此 GPT deployment；`optimize-scene` 的單一場景優化仍使用 Gemini 設定。
 
 ## 模型政策
 

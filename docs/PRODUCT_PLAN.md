@@ -35,8 +35,8 @@
 | 單張圖片生成 | ✅ 可用 | Firebase Vertex AI SDK → Imagen 3 |
 | Microsoft SSO 登入 | ✅ 可用 | Firebase Auth + OAuthProvider |
 | 生成歷史記錄 | ✅ 可用 | Firestore + Base64 圖片 (壓縮至 JPEG 0.6) |
-| 文件分析（分鏡模式） | ✅ 可用 | Azure Function + Gemini → 場景JSON → AI圖片生成 |
-| 文件分析（簡報模式） | ✅ 可用 | Gemini → bullet_points / speaker_notes → pptxgenjs 匯出 .pptx |
+| 文件分析（分鏡模式） | ✅ 可用 | AnyDoc 統一解析 Office／PDF／試算表 → Azure OpenAI GPT → 場景 JSON → AI 圖片生成 |
+| 文件分析（簡報模式） | ✅ 可用 | AnyDoc → Azure OpenAI GPT bullet_points / speaker_notes → pptxgenjs 匯出 .pptx |
 | 大綱文字輸入 | ✅ 可用 | 貼上大綱分頁 → 暫存 .txt 上傳 → 自動套用簡報模式 |
 
 ### 主要技術債
@@ -191,12 +191,12 @@
 | **Database** | **Azure Database for PostgreSQL** | (Flexible Server) 配合 `JSONB` 儲存腳本，並利用 `pgvector` 實作風格庫向量搜尋。 |
 | **Object Storage** | **Azure Blob Storage** | 儲存企業上傳的原始文件 (PDF/SOP) 與 AI 生成的高解析度圖片。 |
 
-### 4.2 AI 核心引擎 (Powered by Gemini)
+### 4.2 AI 核心引擎
 
 | 功能模組 | 指定模型 | 應用說明 |
 | :--- | :--- | :--- |
 | **連續圖片生成** | **gemini-3-pro-image-preview** | **核心生成引擎**。利用多模態生成能力，精準控制角色一致性與場景細節。 |
-| **智慧文件分析** | **gemini-3-pro-preview** | 利用長文本 (2M+ Tokens) 推理能力，一次讀取整份 PDF/SOP 並提取分鏡。 |
+| **智慧文件分析** | **Azure OpenAI GPT deployment** | AnyDoc 將文字型文件正規化為 Markdown；圖片與掃描型 PDF 使用 GPT multimodal input，再輸出結構化分鏡／簡報 JSON。 |
 | **風格分析** | **gemini-3-pro-preview** | 針對參考圖進行風格特徵提取與 Prompt 優化。 |
 
 ### 4.3 系統架構流程 (Architecture Flow)
@@ -208,7 +208,8 @@ sequenceDiagram
     participant API as BFF App Service
     participant DB as PostgreSQL
     participant File as Blob Storage
-    participant AI as Google Gemini API
+    participant Analysis as Azure OpenAI GPT
+    participant Image as Gemini / GPT Image
 
     User->>API: 1. 開始 BFF 登入
     API->>Auth: 2. Authorization Code / credential
@@ -217,11 +218,13 @@ sequenceDiagram
     API-->>User: 5. HttpOnly session cookie
     User->>API: 6. 上傳 PDF / 發送 Prompt
     API->>File: 7. 暫存文件
-    API->>AI: 8. 呼叫 Gemini-3 (分析/生成)
-    AI-->>API: 9. 回傳結果/圖片
-    API->>File: 10. 轉存圖片至 Blob (私有化)
-    API->>DB: 11. 寫入 Metadata & Log
-    API-->>User: 12. 回傳最終結果
+    API->>Analysis: 8. 呼叫 GPT 文件分析
+    Analysis-->>API: 9. 回傳結構化內容
+    API->>Image: 10. 呼叫租戶圖片模型
+    Image-->>API: 11. 回傳圖片
+    API->>File: 12. 轉存圖片至 Blob (私有化)
+    API->>DB: 13. 寫入 Metadata & Log
+    API-->>User: 14. 回傳最終結果
 ```
 
 ### 4.4 AI API 呼叫範例 (Reference)
@@ -253,7 +256,7 @@ Authorization: Bearer <API_KEY>
 
 ```text
 1. 上傳與分析 (Upload & Analyze)
-   [PDF/PPT 文件] --> [Azure Blob] --> [Gemini 3 文件分析] --> [分鏡腳本草稿]
+   [PDF/PPT 文件] --> [Azure Blob] --> [AnyDoc] --> [Azure OpenAI GPT] --> [分鏡腳本草稿]
 
 2. 風格設定 (Configure Style)
    [參考圖/企業範本] --> [Gemini 3 風格分析] --> [角色/風格鎖定參數]
@@ -404,10 +407,11 @@ Authorization: Bearer <API_KEY>
 執行細節請參考 [docs/EXECUTION_DETAILS.md](docs/EXECUTION_DETAILS.md)。
 
 #### Step 3.1 — 文件分析 Function
-- [ ] 實作 `api/analyze-document/index.js`
-- [ ] 使用 `@google/generative-ai` → `gemini-3-pro-preview`
-- [ ] 支援 PDF、DOCX、PPTX、TXT/MD 格式（Blob URL 輸入）
-- [ ] 回傳結構化分鏡 JSON
+- [x] 實作 `api/analyze-document/index.js`
+- [x] 使用 Azure OpenAI Responses API 與 `AZURE_OPENAI_DEPLOYMENT`
+- [x] 支援 PDF、Word、PowerPoint、Excel、OpenDocument、RTF、EPUB、CSV、TXT/MD 與圖片格式（Blob URL 輸入）
+- [x] 以固定版本 AnyDoc 將 Office、試算表與文字型 PDF 正規化為 Markdown；掃描 PDF 與圖片明確走 GPT multimodal input
+- [x] 回傳結構化分鏡 JSON
 
 #### Step 3.2 — 圖片生成 Function
 - [ ] 實作 `api/generate-images/index.js`

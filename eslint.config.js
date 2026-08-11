@@ -36,6 +36,15 @@ export default defineConfig([
     }
   },
   {
+    files: ['api/**/__tests__/**/*.test.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+      sourceType: 'module'
+    }
+  },
+  {
     files: ['*.config.js'],
     languageOptions: {
       globals: {

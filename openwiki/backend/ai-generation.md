@@ -17,7 +17,35 @@ Handlers authenticate, rate-limit, and generally resolve identity before work. `
 
 ### Document analysis contract
 
-`POST /analyze-document` accepts `documentUrl` or `base64Content`, filename/MIME, `sceneCount`, and `mode`. `storyboard` prompt requests visual scenes; `presentation` also requests bullets, speaker notes, and layout. Numeric requested count is clamped to 1–10. Supported inputs are PDF, DOCX, PPTX, plain text, PNG, and JPEG (also recognized by extension). A same-account Blob URL is read with the Storage SDK; another URL must pass `isUrlAllowed`; missing/octet-stream MIME falls back to filename. Text input is decoded and truncated to 30,000 characters before Gemini. Response extraction attempts direct JSON, an outer `{...}` object, then a `[...]` scene array wrapper. Provider errors, parse errors, missing scenes, and fully empty normalized scenes return distinct failure responses; valid output maps snake/camel fields and guards presentation fields, then returns title, summary, scenes, characters, total count, estimated time, and mode.
+`POST /analyze-document` accepts `documentUrl` or `base64Content`, filename/MIME, `sceneCount`, and `mode`. `storyboard` requests visual scenes; `presentation` also requests bullets, speaker notes, and layout. Numeric requested count is clamped to 1–10. It recognizes the shared server format set in `_shared/documentParser.js`: PDF; Word, PowerPoint, and Excel variants; OpenDocument; RTF; EPUB; CSV; TXT/Markdown; and PNG/JPEG, by filename extension or MIME type. A same-account Blob URL is read with the Storage SDK; another URL must pass `isUrlAllowed`; missing/octet-stream MIME falls back to filename.
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant Blob as Azure Blob Storage
+  participant Handler as analyze-document
+  participant Parser as documentParser
+  participant Azure as Azure OpenAI Responses
+  Browser->>Blob: upload document
+  Browser->>Handler: document URL or base64 and analysis options
+  Handler->>Blob: download same-account document
+  Handler->>Parser: parse buffer and identify input kind
+  alt text or converted document
+    Parser-->>Handler: text and parser metadata
+    Handler->>Azure: JSON request with text
+  else image or scanned PDF
+    Parser-->>Handler: vision buffer and parser metadata
+    Handler->>Azure: JSON request with image or PDF file
+  end
+  Azure-->>Handler: structured analysis
+  Handler-->>Browser: normalized scenes and provenance
+```
+
+This sequence shows the document-analysis request path; the handler downloads only when the request identifies a Blob URL.
+
+`parseDocumentBuffer` strips a text BOM and sends TXT/Markdown directly as text. It converts other recognized document formats to Markdown through `@firecrawl/anydoc`; a PDF that AnyDoc reports unsupported is instead sent as a PDF file for GPT vision. Images are sent as image input. The handler rejects empty or conversion failures with mapped `DocumentConversionError` status/code, and rejects text over `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it does not truncate. It then uses `_shared/azureOpenAI.js::generateJsonCompletion` against the configured Azure OpenAI deployment with JSON output and `maxOutputTokens: 8192`. The Responses adapter permits exactly one attached image or file input. Provider errors, missing scenes, and fully empty normalized scenes return distinct failure responses; valid output maps snake/camel fields and guards presentation fields, then returns title, summary, scenes, characters, total count, estimated time, mode, `analysis_provider`, `analysis_model`, `source_parser`, and `source_format`.
+
+For a format, conversion, or Responses-input change, begin with `documentParser.js` and `azureOpenAI.js`, then trace the handler and browser policy in [creation workflows](../frontend/create-workflows.md). `api/_shared/__tests__/documentParser.test.js` covers extension/MIME recognition, direct text, CSV conversion, image routing, and conversion error mapping; `azureOpenAI.test.js` covers image/PDF Responses input and configured deployment output. Run `pnpm test --run api/_shared/__tests__/documentParser.test.js api/_shared/__tests__/azureOpenAI.test.js`. Handler-level route behavior and live conversion/provider behavior remain integration concerns; do not validate provider credentials for an adapter-only change.
 
 Other AI routes: `analyze-style` returns style prompt/metadata, `optimize-scene` falls back to original fields if model JSON cannot parse, `optimize-prompt` requires Azure OpenAI JSON fields, embedding expects the configured vector dimension, and filename generation sanitizes/falls back rather than blocking creation.
 

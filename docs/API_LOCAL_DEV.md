@@ -51,6 +51,9 @@ func --version
 「AI 智能優化」使用 Azure OpenAI Responses API。以上三個設定只放在
 API runtime（App Service 或本機 adapter）；不要加上 `VITE_` 前綴，也不要放進前端 `.env`。
 若未設定 `AZURE_OPENAI_API_KEY`，後端會暫時共用 `GPT_IMAGE_API_KEY`。
+文件分析也使用相同的 `AZURE_OPENAI_DEPLOYMENT`，包含 AnyDoc Markdown、圖片及
+掃描型 PDF；deployment 必須支援 Responses API 的 image 與 file input。
+`GEMINI_MODEL_ANALYSIS` 仍供風格分析、檔名生成與場景優化使用。
 
 ---
 

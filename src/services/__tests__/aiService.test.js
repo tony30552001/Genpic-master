@@ -6,7 +6,12 @@ vi.mock("../apiClient", () => ({
 }));
 
 import { apiGet, apiPost } from "../apiClient";
-import { analyzeStyle, generateImage, waitForImageJob } from "../aiService";
+import {
+  analyzeDocument,
+  analyzeStyle,
+  generateImage,
+  waitForImageJob,
+} from "../aiService";
 
 describe("aiService", () => {
   it("analyzeStyle posts reference image", async () => {
@@ -38,6 +43,27 @@ describe("aiService", () => {
   it("generateImage uses apiPost for unknown model", async () => {
     await generateImage({ prompt: "prompt", aspectRatio: "16:9", model: "dall-e-3" });
     expect(apiPost).toHaveBeenCalled();
+  });
+
+  it("sends document metadata to the analysis endpoint", async () => {
+    await analyzeDocument({
+      documentUrl: "https://storage.example/report.docx",
+      fileName: "report.docx",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      sceneCount: 6,
+      mode: "presentation",
+    });
+
+    expect(apiPost).toHaveBeenCalledWith("/api/analyze-document", {
+      documentUrl: "https://storage.example/report.docx",
+      fileName: "report.docx",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      base64Content: undefined,
+      sceneCount: 6,
+      mode: "presentation",
+    });
   });
 
   it("waits for queued image jobs until the result is ready", async () => {
