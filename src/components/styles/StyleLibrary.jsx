@@ -535,15 +535,15 @@ export default function StyleLibrary({
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-5">
       {/* ── Control Panel ── */}
       <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-foreground">風格庫</h2>
-              <p className="text-sm text-muted-foreground">
-                以標籤快速分類與篩選風格，管理個人收藏或套用公司內共享資產。
+        <CardHeader className="px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-foreground">風格庫</h2>
+              <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
+                管理個人與共享風格，使用標籤快速篩選。
               </p>
             </div>
 
@@ -569,9 +569,9 @@ export default function StyleLibrary({
 
         <Separator />
 
-        <CardContent className="pt-5 space-y-5">
+        <CardContent className="space-y-4 px-4 py-4 sm:px-5">
           {/* Search + Sort row */}
-          <div className={hideSearch ? "flex justify-end" : "grid gap-4 sm:grid-cols-[1fr_auto]"}>
+          <div className={hideSearch ? "flex justify-end" : "grid gap-3 sm:grid-cols-[1fr_auto]"}>
             {!hideSearch && (
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -621,7 +621,7 @@ export default function StyleLibrary({
           </div>
 
           {/* Tag filter */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               <span className="text-xs font-medium text-muted-foreground">標籤分類</span>
@@ -808,7 +808,7 @@ export default function StyleLibrary({
           })}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7">
           {filtered.map((style) => {
             const actions = getStyleActions(style);
             return (

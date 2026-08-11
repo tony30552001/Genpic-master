@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import AssetViewModeToggle from "../AssetViewModeToggle";
+import { normalizeViewMode } from "../viewMode";
 
 describe("AssetViewModeToggle", () => {
   it("marks the current mode and changes mode on selection", () => {
@@ -15,5 +16,10 @@ describe("AssetViewModeToggle", () => {
     fireEvent.click(screen.getByRole("button", { name: "表格模式" }));
 
     expect(onChange).toHaveBeenCalledWith("table");
+  });
+
+  it("falls back to table for an absent or invalid view", () => {
+    expect(normalizeViewMode()).toBe("table");
+    expect(normalizeViewMode("kanban")).toBe("table");
   });
 });

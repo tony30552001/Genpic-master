@@ -32,7 +32,7 @@ import AssetCenter from './components/library/AssetCenter';
 export default function InfographicGenerator({
     initialTab = 'general',
     initialLibrarySection = 'overview',
-    initialLibraryViewMode = 'grid',
+    initialLibraryViewMode = 'table',
 }) {
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);

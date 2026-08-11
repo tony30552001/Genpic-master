@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TemplateLibrary from "@/components/templates/TemplateLibrary";
@@ -354,7 +353,7 @@ function OverviewSection({
             ))}
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
             {assets.map((asset, index) => (
               <OverviewAssetCard
                 key={`${asset.type}-${asset.id}`}
@@ -389,7 +388,7 @@ function OverviewSection({
 
 export default function AssetCenter({
   initialSection = "overview",
-  initialViewMode = "grid",
+  initialViewMode = "table",
   templates = [],
   savedStyles = [],
   historyItems = [],
@@ -555,42 +554,9 @@ export default function AssetCenter({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5">
-      {/* 品牌 header：漸層光暈＋display 字級 */}
-      <Card className="relative overflow-hidden border-border/80 shadow-sm">
-        <div
-          className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary/15 blur-3xl"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none absolute -bottom-40 -left-16 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
-          aria-hidden="true"
-        />
-        <CardHeader className="relative gap-5 bg-transparent pb-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-                  <Library className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance sm:text-3xl">素材中心</h1>
-                  <p className="mt-1 text-sm text-muted-foreground text-pretty">
-                    在同一個工作區管理可重複使用的範本、風格與生成紀錄。
-                  </p>
-                </div>
-              </div>
-            </div>
-            <Button type="button" onClick={onGoCreate} className="w-full gap-2 sm:w-auto">
-              <Wand2 className="h-4 w-4" aria-hidden="true" />
-              開始創作
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
-
+    <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-4">
       {/* 分頁＋搜尋：sticky 吸頂，長列表操作不迷路 */}
-      <div className="sticky top-0 z-20 -mx-1 space-y-3 bg-background/80 px-1 py-3 backdrop-blur-md">
+      <div className="sticky top-0 z-20 -mx-1 space-y-2 bg-background/80 px-1 py-2 backdrop-blur-md">
         <Tabs value={section} onValueChange={setSection}>
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4" aria-label="素材中心分類">
             {SECTIONS.map(({ id, label, icon: Icon }) => (

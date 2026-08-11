@@ -19,7 +19,7 @@ openwiki:
 
 ## Routing
 
-`App` exposes public `/login` and protected `/`, `/library`, and `/admin` routes. `ProtectedRoute` waits for `useAuth` initialization and redirects an unauthenticated location to `/login`; `ProtectedAdminRoute` additionally waits for the profile and redirects non-admin users to `/`. `LibraryPage` reads `section` from the query string and passes it as `initialLibrarySection` to `InfographicGenerator`. `AssetCenter` owns the current query state: `section` accepts `overview`, `templates`, `styles`, or `history`, while `view` accepts `grid`, `list`, or `table`; invalid values fall back to overview/grid. The library's browser composition and resource callbacks are specified in [Asset Center](asset-center.md).
+`App` exposes public `/login` and protected `/`, `/library`, and `/admin` routes. `ProtectedRoute` waits for `useAuth` initialization and redirects an unauthenticated location to `/login`; `ProtectedAdminRoute` additionally waits for the profile and redirects non-admin users to `/`. `LibraryPage` reads `section` and `view` from the query string and passes them as initial library inputs to `InfographicGenerator`. `AssetCenter` owns the current query state: `section` accepts `overview`, `templates`, `styles`, or `history` and falls back to `overview`; `view` accepts `grid`, `list`, or `table` and falls back to `table`. The library's browser composition and resource callbacks are specified in [Asset Center](asset-center.md).
 
 ## Browser session lifecycle
 

@@ -38,7 +38,7 @@ export default function HistoryCard({
       aria-pressed={isSelectionMode ? isSelected : undefined}
       aria-label={isSelectionMode ? "選取此生成紀錄" : "載入此生成紀錄設定"}
       onKeyDown={handleKeyDown}
-      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-card transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
         ? "border-primary ring-2 ring-primary/20 shadow-md"
         : "border-border hover:border-primary/30 hover:shadow-md"
         }`}
@@ -112,9 +112,9 @@ export default function HistoryCard({
       </div>
 
       {/* 資訊區 */}
-      <div className="flex-1 p-3 flex flex-col gap-2">
+      <div className="flex-1 p-2.5 flex flex-col gap-1.5">
         {/* 腳本摘要 */}
-        <p className="text-sm text-foreground line-clamp-2 leading-relaxed h-11 font-medium">
+        <p className="text-xs text-foreground line-clamp-2 leading-relaxed h-10 font-medium">
           {item.userScript || "無內容"}
         </p>
 

@@ -9,13 +9,13 @@ openwiki:
   source_paths: [src/pages/LibraryPage.jsx, src/InfographicGenerator.jsx, src/components/create/StyleSourceTabs.jsx, src/components/library/AssetCenter.jsx, src/components/library/AssetViewModeToggle.jsx, src/components/library/viewMode.js, src/components/library/AssetMetadataSheet.jsx, src/components/templates/TemplateLibrary.jsx, src/components/styles/StyleLibrary.jsx, src/components/history/HistoryPanel.jsx]
   symbols: [LibraryPage, InfographicGenerator, AssetCenter, AssetViewModeToggle, normalizeViewMode, AssetMetadataSheet, handleSaveMetadata, updateTemplate, updateStyle]
   test_paths: [src/components/library/__tests__/AssetViewModeToggle.test.jsx, src/services/__tests__/storageService.test.js]
-  invariants: [The Asset Center is a browser composition layer and does not own resource persistence., The URL accepts only overview/templates/styles/history sections and grid/list/table views and falls back to overview/grid., Template metadata saves retain the selected template's replacement fields while style updates remain partial., Overview actions apply a template or style or load history rather than creating a new resource.]
+  invariants: [The Asset Center is a browser composition layer and does not own resource persistence., The URL accepts only overview/templates/styles/history sections and grid/list/table views and falls back to overview/table., Template metadata saves retain the selected template's replacement fields while style updates remain partial., Overview actions apply a template or style or load history rather than creating a new resource.]
   validation_commands: [pnpm test --run src/components/library/__tests__/AssetViewModeToggle.test.jsx src/services/__tests__/storageService.test.js]
 ---
 
 # Asset Center
 
-`/library` is the protected browser route for reusable templates, saved styles, and generated-history records. `LibraryPage` reads `?section=` and renders `InfographicGenerator` with `initialTab="library"`; `AssetCenter` then owns the live `section` and `view` query state. Valid sections are `overview`, `templates`, `styles`, and `history`; valid views are `grid`, `list`, and `table`. Invalid or absent values fall back to `overview` and `grid`. Section and view changes replace the current history entry while preserving unrelated query parameters. Route protection and session initialization remain owned by [browser application and authentication](application.md), while the underlying tenant-scoped resource contracts remain owned by [resource APIs](../backend/resources.md).
+`/library` is the protected browser route for reusable templates, saved styles, and generated-history records. `LibraryPage` reads `?section=` and `?view=` and renders `InfographicGenerator` with `initialTab="library"`; `AssetCenter` then owns the live `section` and `view` query state through `useSearchParams`. Valid sections are `overview`, `templates`, `styles`, and `history`; valid views are `grid`, `list`, and `table`. Invalid or absent sections fall back to `overview`; invalid or absent views fall back to `table`. Section and view changes replace the current history entry, write both normalized keys, and preserve unrelated query parameters. Route protection and session initialization remain owned by [browser application and authentication](application.md), while the underlying tenant-scoped resource contracts remain owned by [resource APIs](../backend/resources.md).
 
 ## Composition and user flow
 
@@ -47,7 +47,9 @@ This flow shows browser composition and URL-backed presentation state only; `sto
 
 The shared header search writes only the active section's query: overview and templates keep local state; styles and history retain their hook/root state. Do not merge those scopes without deciding whether a query should survive a category switch.
 
-`AssetViewModeToggle` changes the shared presentation mode for every section. `normalizeViewMode` permits only `grid`, `list`, or `table`; `AssetCenter` writes the normalized value to `?view=` alongside the active `section`. The overview renders its own cards, rows, or table, while each child library receives `viewMode` and remains responsible for its category-specific rendering. Treat this as URL-backed presentation state, not another resource filter or a server query parameter.
+`AssetViewModeToggle` changes the shared presentation mode for every section. `normalizeViewMode` permits only `grid`, `list`, or `table` and defaults absent or invalid input to `table`; `AssetCenter` writes the normalized value to `?view=` alongside the active `section`. The overview renders its own cards, rows, or table, while each child library receives `viewMode` and remains responsible for its category-specific rendering. Table is therefore the initial library presentation, not a server query parameter or another resource filter.
+
+Grid density is presentation-owned: overview cards use an auto-fill grid with a 220px minimum, while `TemplateLibrary`, `StyleLibrary`, and `HistoryPanel` define their own progressively denser breakpoint grids and cards. Keep that responsive layout in the category renderer when changing a category’s card; do not move it into resource hooks, URL state, or server queries.
 
 ## Template and style metadata edits
 
@@ -75,7 +77,7 @@ Preserve these boundaries:
 3. Metadata editing is limited to templates and styles and must await the hook update before closing. Template updates must retain every replacement field from the selected template because the server clears omitted values.
 4. Applying an asset and navigating to the create tab are distinct callbacks; preserve the existing caller behavior for each.
 
-`src/components/library/__tests__/AssetViewModeToggle.test.jsx` verifies the toggle's three choices and pressed state. `src/services/__tests__/storageService.test.js` covers the style PUT adapter, including its method and path. Neither imports `AssetCenter` or exercises `updateTemplate`; URL query synchronization, template replacement semantics, and the metadata-sheet flow have no focused automated coverage. Run both narrow checks after changing the toggle, style persistence adapter, or edit payloads:
+`src/components/library/__tests__/AssetViewModeToggle.test.jsx` verifies the toggle's three choices and pressed state and that absent or invalid view values normalize to `table`. `src/services/__tests__/storageService.test.js` covers the style PUT adapter, including its method and path. Neither imports `AssetCenter` or exercises `updateTemplate`; URL query synchronization, template replacement semantics, and the metadata-sheet flow have no focused automated coverage. Run both narrow checks after changing the toggle, default/fallback policy, style persistence adapter, or edit payloads:
 
 ```sh
 pnpm test --run src/components/library/__tests__/AssetViewModeToggle.test.jsx src/services/__tests__/storageService.test.js

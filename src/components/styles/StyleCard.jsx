@@ -81,7 +81,7 @@ export default function StyleCard({
         : "hover:border-primary/30 hover:shadow-lg"
         } ${isSelectionMode ? "cursor-pointer" : ""}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+      <div className="relative aspect-[16/9] overflow-hidden bg-muted">
         {hasPreview ? (
           <img
             src={style.previewUrl}
@@ -145,13 +145,13 @@ export default function StyleCard({
         )}
       </div>
 
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+      <CardContent className="flex flex-1 flex-col gap-2.5 p-3">
         <div className="space-y-1.5">
-          <h4 className="line-clamp-1 text-base font-semibold leading-snug text-foreground">
+          <h4 className="line-clamp-1 text-sm font-semibold leading-snug text-foreground">
             {style.name}
           </h4>
           {style.description && (
-            <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+            <p className="line-clamp-1 text-xs leading-relaxed text-muted-foreground">
               {style.description}
             </p>
           )}
@@ -206,13 +206,13 @@ export default function StyleCard({
       </CardContent>
 
       {!isSelectionMode && (
-        <CardFooter className="flex flex-col gap-2 px-4 pb-4 pt-0">
+        <CardFooter className="flex flex-col gap-2 px-3 pb-3 pt-0">
           <Separator className="mb-1" />
           <Button
             type="button"
-            size="default"
+            size="sm"
             onClick={() => onApply(style)}
-            className="w-full gap-2"
+            className="min-h-10 w-full gap-2"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
             套用風格

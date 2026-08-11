@@ -53,14 +53,14 @@ function TemplateCard({
             aria-pressed={isSelectionMode ? isSelected : undefined}
             aria-label={isSelectionMode ? "選取此範本" : `套用範本 ${template.name}`}
             onKeyDown={handleKeyDown}
-            className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-card transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
+            className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
                 ? "border-primary ring-2 ring-primary/20 shadow-md"
                 : "border-border hover:border-primary/30 hover:shadow-md"
                 }`}
             onClick={handleClick}
         >
             {/* 頂部色帶 */}
-            <div className="h-2 bg-primary" />
+            <div className="h-1.5 bg-primary" />
 
             {/* 選擇模式 Checkbox */}
             {isSelectionMode && (
@@ -77,11 +77,11 @@ function TemplateCard({
             )}
 
             {/* 資訊區 */}
-            <div className="flex-1 p-4 flex flex-col gap-2.5">
+            <div className="flex-1 p-3 flex flex-col gap-2">
                 {/* Icon + 標題 */}
                 <div className="flex items-start gap-2.5">
-                    <div className="shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <FileText className="w-4 h-4 text-primary" aria-hidden="true" />
+                    <div className="shrink-0 w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
+                        <FileText className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
                     </div>
                     <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors">
@@ -97,8 +97,8 @@ function TemplateCard({
 
                 {/* 內容預覽 */}
                 {scriptPreview && (
-                    <div className="bg-muted/50 border border-border/60 rounded-lg px-3 py-2">
-                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 whitespace-pre-wrap">
+                    <div className="bg-muted/50 border border-border/60 rounded-md px-2.5 py-1.5">
+                        <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 whitespace-pre-wrap">
                             {scriptPreview}
                         </p>
                     </div>
@@ -152,7 +152,7 @@ function TemplateCard({
 
             {/* 常駐操作列：觸控裝置可及，不再依賴 hover（僅非選擇模式顯示） */}
             {!isSelectionMode && (
-                <div className="mt-auto flex items-center gap-1.5 border-t border-border/70 px-4 py-2">
+                <div className="mt-auto flex items-center gap-1.5 border-t border-border/70 px-3 py-1.5">
                     <button
                         type="button"
                         onClick={(e) => {
@@ -801,7 +801,7 @@ export default function TemplateLibrary({
                     ))}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7">
                     {filtered.map((tpl) => (
                         <TemplateCard
                             key={tpl.id}

@@ -5,4 +5,4 @@ export const VIEW_MODE_OPTIONS = [
 ];
 
 export const normalizeViewMode = (value) =>
-  VIEW_MODE_OPTIONS.some((option) => option.id === value) ? value : "grid";
+  VIEW_MODE_OPTIONS.some((option) => option.id === value) ? value : "table";
