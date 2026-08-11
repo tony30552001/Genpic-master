@@ -31,8 +31,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { optimizeScene } from "@/services/aiService";
+import ImageGeneratingState from "./ImageGeneratingState";
 
 
 /* ────────────────────────────────────────────
@@ -332,12 +332,7 @@ function SceneModal({
             {/* 左：預覽圖 */}
             <div className="relative aspect-[4/3] md:aspect-auto bg-muted/20 border-b md:border-b-0 md:border-r border-border/30 flex items-center justify-center overflow-hidden">
               {isThisGenerating ? (
-                <div className="absolute inset-0 p-4" aria-live="polite">
-                  <Skeleton className="h-full w-full rounded-xl" />
-                  <p className="absolute inset-x-0 bottom-6 text-center text-xs font-medium text-muted-foreground">
-                    圖片生成中…
-                  </p>
-                </div>
+                <ImageGeneratingState compact />
               ) : sceneImage ? (
                 <div className="relative w-full h-full group">
                   <img
@@ -1171,12 +1166,7 @@ export default function DocumentScenes({
                     aria-label={`查看場景 ${scene.scene_number}：${scene.scene_title}`}
                   >
                     {isThisGenerating ? (
-                      <div className="absolute inset-0 p-3" aria-live="polite">
-                        <Skeleton className="h-full w-full rounded-lg" />
-                        <p className="absolute inset-x-0 bottom-4 text-center text-[10px] font-medium text-muted-foreground">
-                          圖片生成中…
-                        </p>
-                      </div>
+                      <ImageGeneratingState compact />
                     ) : sceneImage ? (
                       <div className="relative w-full h-full group/img">
                         <img

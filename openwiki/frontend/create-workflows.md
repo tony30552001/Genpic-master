@@ -6,11 +6,11 @@ tags: [frontend, creation, document-analysis, export]
 openwiki:
   roles: [workflow, frontend]
   change_kinds: [document-analysis, style-selection, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/hooks/useDocumentAnalysis.js]
-  symbols: [AnalysisProgress, handleGenerateScene, handleApplyDocumentStyle, handleClearDocumentStyle]
+  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/ImagePreview.jsx, src/components/create/ImageGeneratingState.jsx, src/hooks/useDocumentAnalysis.js]
+  symbols: [AnalysisProgress, ImageGeneratingState, handleGenerateScene, handleApplyDocumentStyle, handleClearDocumentStyle]
   test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js]
-  invariants: [Document scene generation uses the AI recommendation unless a saved-style override is active.]
-  validation_commands: [pnpm test --run src/lib/__tests__/documentFormats.test.js src/services/__tests__/aiService.test.js]
+  invariants: [Document scene generation uses the AI recommendation unless a saved-style override is active., General and document-scene generation states use the same visual feedback component without sharing generation state.]
+  validation_commands: [pnpm exec eslint src/components/create/ImagePreview.jsx src/components/create/DocumentScenes.jsx src/components/create/ImageGeneratingState.jsx]
 ---
 
 # Creation workspace, documents, and exports
@@ -22,6 +22,8 @@ openwiki:
 `useImageGeneration.runGeneration` requires a script, aborts an earlier browser wait, concurrently asks for a filename, builds a style/content/language prompt, calls `generateImage`, and polls a returned job. The generation model is display/progress state; server policy is authoritative. `useHistory` compresses images to max 800px JPEG before saving, while history deletion is optimistic and restores only failed deletions. Styles are debounced (300ms) server searches; saving compresses preview images. Templates snapshot script/style data.
 
 `useImageTransform` limits source files to 10 MB, requests Blob SAS, uploads with XHR progress, retains preview plus SAS URL, and merges user prompt, palette tags and saved-style prompt before `/image-transform`. Cancellation aborts waiting, not necessarily remote work. See [AI generation](../backend/ai-generation.md) and [resources](../backend/resources.md).
+
+`ImageGeneratingState` centralizes the visual in-progress treatment used by both `ImagePreview` for general creation and `DocumentScenes` / `SceneModal` for per-scene work. Its normal variant selects a framed layout for `16:9`, `4:3`, `1:1`, or `9:16`; its `compact` variant fills the caller's image region. Both variants expose `aria-busy`, and its screen-reader-only status uses `generationStatus.label` when supplied. It owns presentation only: `ImagePreview` and `DocumentScenes` still decide whether their respective request is generating. When changing this feedback, preserve that ownership split and check both general preview and scene-card/modal placements; there is no focused component test. Run `pnpm exec eslint src/components/create/ImagePreview.jsx src/components/create/DocumentScenes.jsx src/components/create/ImageGeneratingState.jsx`; perform an interactive check of normal and compact layouts only for styling, accessibility, or aspect-ratio changes.
 
 ## Document-to-scenes
 
