@@ -18,6 +18,7 @@ import {
   Trash2,
   Users,
   X,
+  ZoomIn,
 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -30,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StyleCard from "./StyleCard";
+import StyleImageLightbox from "./StyleImageLightbox";
 
 const SCOPE_OPTIONS = [
   { value: "mine", label: "我的風格", description: "私人與已共享的個人風格" },
@@ -61,21 +63,46 @@ const formatStyleDate = (style) => {
   }).format(new Date(seconds * 1000));
 };
 
-function StylePreview({ style, className }) {
+function StylePreview({ style, className, onPreview }) {
   const [imgError, setImgError] = useState(false);
 
   if (style.previewUrl && !imgError) {
-    return (
+    const image = (
       <img
         src={style.previewUrl}
-        alt=""
+        alt={style.name}
         width={160}
         height={112}
         loading="lazy"
         decoding="async"
         onError={() => setImgError(true)}
-        className={`shrink-0 rounded-lg border border-border object-cover ${className}`}
+        className="h-full w-full rounded-lg border border-border object-cover"
       />
+    );
+
+    if (onPreview) {
+      return (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onPreview(style);
+          }}
+          className={`group/preview relative shrink-0 overflow-hidden rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${className}`}
+          aria-label={`放大查看風格圖片 ${style.name}`}
+        >
+          {image}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition-opacity duration-200 group-hover/preview:bg-black/35 group-hover/preview:opacity-100 group-focus-visible/preview:bg-black/35 group-focus-visible/preview:opacity-100 motion-reduce:transition-none">
+            <ZoomIn className="h-5 w-5 drop-shadow" aria-hidden="true" />
+          </span>
+        </button>
+      );
+    }
+
+    return (
+      <span className={`relative block shrink-0 overflow-hidden rounded-lg ${className}`}>
+        {image}
+      </span>
     );
   }
 
@@ -248,6 +275,7 @@ function StyleListRow({
   isSelectionMode,
   isSelected,
   onToggleSelect,
+  onPreview,
 }) {
   const isShared = style.visibility === "shared";
   const authorText = style.authorName || style.authorEmail || "未知共享人";
@@ -269,7 +297,11 @@ function StyleListRow({
           className="h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-ring"
         />
       )}
-      <StylePreview style={style} className="h-20 w-28" />
+      <StylePreview
+        style={style}
+        className="h-20 w-28"
+        onPreview={isSelectionMode ? undefined : onPreview}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-foreground">{style.name}</h3>
@@ -327,6 +359,7 @@ function StyleTable({
   isSelectionMode,
   selectedIds,
   onToggleSelect,
+  onPreview,
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -365,7 +398,11 @@ function StyleTable({
                 )}
                 <td className="px-4 py-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <StylePreview style={style} className="h-12 w-16" />
+                    <StylePreview
+                      style={style}
+                      className="h-12 w-16"
+                      onPreview={isSelectionMode ? undefined : onPreview}
+                    />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{style.name}</p>
                       <p className="mt-1 line-clamp-2 max-w-[280px] text-xs text-muted-foreground">
@@ -436,6 +473,7 @@ export default function StyleLibrary({
   const [showAllTags, setShowAllTags] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [previewStyle, setPreviewStyle] = useState(null);
 
   const allTags = useMemo(() => {
     const tagCount = {};
@@ -789,6 +827,7 @@ export default function StyleLibrary({
           isSelectionMode={isSelectionMode}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
+          onPreview={(style) => setPreviewStyle(style)}
         />
       ) : viewMode === "list" ? (
         <div className="space-y-2">
@@ -803,6 +842,7 @@ export default function StyleLibrary({
                 isSelectionMode={isSelectionMode}
                 isSelected={selectedIds.has(style.id)}
                 onToggleSelect={toggleSelect}
+                onPreview={() => setPreviewStyle(style)}
               />
             );
           })}
@@ -820,10 +860,19 @@ export default function StyleLibrary({
                 isSelectionMode={isSelectionMode}
                 isSelected={selectedIds.has(style.id)}
                 onToggleSelect={toggleSelect}
+                onPreview={() => setPreviewStyle(style)}
               />
             );
           })}
         </div>
+      )}
+
+      {previewStyle?.previewUrl && (
+        <StyleImageLightbox
+          src={previewStyle.previewUrl}
+          alt={previewStyle.name}
+          onClose={() => setPreviewStyle(null)}
+        />
       )}
     </div>
   );

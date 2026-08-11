@@ -10,6 +10,7 @@ import {
   Sparkles,
   Trash2,
   Users,
+  ZoomIn,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ export default function StyleCard({
   isSelectionMode,
   isSelected,
   onToggleSelect,
+  onPreview,
 }) {
   const [imgError, setImgError] = useState(false);
   const hasPreview = style.previewUrl && !imgError;
@@ -83,16 +85,42 @@ export default function StyleCard({
     >
       <div className="relative aspect-[16/9] overflow-hidden bg-muted">
         {hasPreview ? (
-          <img
-            src={style.previewUrl}
-            alt={style.name}
-            width={480}
-            height={360}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transform-none"
-            onError={() => setImgError(true)}
-          />
+          onPreview && !isSelectionMode ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPreview(style);
+              }}
+              className="group/preview relative block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              aria-label={`放大查看風格圖片 ${style.name}`}
+            >
+              <img
+                src={style.previewUrl}
+                alt={style.name}
+                width={480}
+                height={270}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover/preview:scale-[1.02] motion-reduce:transform-none"
+                onError={() => setImgError(true)}
+              />
+              <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition-[background-color,opacity] duration-200 group-hover/preview:bg-black/35 group-hover/preview:opacity-100 group-focus-visible/preview:bg-black/35 group-focus-visible/preview:opacity-100 motion-reduce:transition-none">
+                <ZoomIn className="h-6 w-6 drop-shadow" aria-hidden="true" />
+              </span>
+            </button>
+          ) : (
+            <img
+              src={style.previewUrl}
+              alt={style.name}
+              width={480}
+              height={270}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transform-none"
+              onError={() => setImgError(true)}
+            />
+          )
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <div className="text-center">
