@@ -72,9 +72,10 @@ VITE_API_BASE_URL=/api
 現有 workflow 會：
 
 1. Build 前端並部署 `dist/` 到 SWA。
-2. 使用 `npm ci --prefix api` 安裝 API dependencies。
-3. push 到 `main` 時，以 `Azure/webapps-deploy@v3` 將 `api/` 部署到 App Service。
-4. Pull Request 只部署 SWA preview，不會覆蓋正式 API。
+2. 將 `api/` 原始檔、`package.json` 與 `package-lock.json` 部署到 App Service。
+3. App Service 的 `SCM_DO_BUILD_DURING_DEPLOYMENT=true` 由 Oryx 使用 Node 22 安裝 production dependencies。
+4. push 到 `main` 時，以 `Azure/webapps-deploy@v3` 將 API 部署到 App Service；文件-only push 不會觸發部署。
+5. Pull Request 只部署 SWA preview，不會覆蓋正式 API。
 
 Repository secrets：
 
@@ -82,6 +83,7 @@ Repository secrets：
 - `AZURE_API_APP_SERVICE_PUBLISH_PROFILE`
 
 workflow 不再使用 `api_location: "api"`；API 由獨立 App Service deployment step 提供。
+不要將本機 `node_modules` 放入 deployment package，避免 OneDeploy 在重新建置依賴時留下不完整的壓縮檔。
 
 ## 5. 資料庫 migration
 

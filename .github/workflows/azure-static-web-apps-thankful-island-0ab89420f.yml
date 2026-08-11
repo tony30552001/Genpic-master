@@ -4,10 +4,18 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'openwiki/**'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+
+concurrency:
+  group: pixora-deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build_and_deploy_job:
@@ -50,30 +58,10 @@ jobs:
           VITE_API_BASE_URL: "/api"
           VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
 
-      # 安裝 API 依賴
-      - name: Install API Dependencies
-        run: |
-          npm ci --prefix api
+      - name: Validate API entrypoint
+        run: node --check api/server.js
 
-      # 驗證 API node_modules
-      - name: Verify API Dependencies
-        run: |
-          ls -la api/node_modules/@azure/storage-blob 2>/dev/null || echo "ERROR: @azure/storage-blob not found!"
-          ls -la api/node_modules/pg 2>/dev/null || echo "ERROR: pg not found!"
-          ls -la api/node_modules/@google/genai 2>/dev/null || echo "ERROR: @google/genai not found!"
-          ls -la api/node_modules/express 2>/dev/null || echo "ERROR: express not found!"
-
-      # 列出 API 目錄結構（除錯用）
-      - name: Debug - List API Structure
-        run: |
-          echo "=== API Directory Structure ==="
-          find api -name "*.json" -o -name "*.js" | head -30
-          echo "=== host.json ==="
-          cat api/host.json
-          echo "=== node_modules exists ==="
-          ls -la api/node_modules | head -10
-
-      # Deploy the API before removing the managed SWA Functions backend.
+      # App Service Oryx installs production dependencies from api/package-lock.json.
       - name: Deploy API to App Service
         if: github.event_name == 'push'
         uses: Azure/webapps-deploy@v3
