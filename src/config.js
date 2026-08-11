@@ -1,73 +1,30 @@
 // 應用程式設定 (Configuration)
 
-// 1. Microsoft Entra ID 設定 (MSAL)
-export const MSAL_CLIENT_ID = import.meta.env.VITE_MSAL_CLIENT_ID || "529a30b4-cdd0-4dbb-b3e6-257e717dfdbf";
-export const MSAL_TENANT_ID = import.meta.env.VITE_MSAL_TENANT_ID || "6f4e2c19-7620-4dea-8852-11ec264fbef1";
-export const MSAL_REDIRECT_URI = (import.meta.env.VITE_MSAL_REDIRECT_URI || window.location.origin).replace(/\/$/, "");
-const configuredMsalScopes = (import.meta.env.VITE_MSAL_SCOPES || "User.Read")
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-export const MSAL_SCOPES = [...new Set(["openid", "profile", ...configuredMsalScopes])];
-
+// 1. Local development auth bypass
 export const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true";
 
-// 2. Google OAuth 設定
+// 2. Google OAuth public client configuration
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
-// 3. API 設定 (SWA proxy / App Service gateway)
+// 3. API configuration (SWA proxy / App Service gateway)
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
-// 4. GPT-Image-2 設定 (Azure AI Foundry)
-export const GPT_IMAGE_ENDPOINT = import.meta.env.VITE_GPT_IMAGE_ENDPOINT || "";
-export const GPT_IMAGE_API_KEY = import.meta.env.VITE_GPT_IMAGE_API_KEY || "";
-export const GPT_IMAGE_DEPLOYMENT = import.meta.env.VITE_GPT_IMAGE_DEPLOYMENT || "gpt-image-2";
-
-// GPT-Image-2 圖片編輯端點（若未設定，自動從生成端點推導）
-const _gptEditEnv = import.meta.env.VITE_GPT_IMAGE_EDIT_ENDPOINT || "";
-export const deriveGptImageEditEndpoint = (endpoint, deployment = GPT_IMAGE_DEPLOYMENT) => {
-  if (!endpoint) return "";
-
-  try {
-    const url = new URL(endpoint);
-    const isAzureOpenAi =
-      url.hostname.endsWith(".openai.azure.com") ||
-      url.hostname.endsWith(".cognitiveservices.azure.com");
-
-    if (!isAzureOpenAi) {
-      return endpoint.replace(/\/images\/generations([^/]*)$/, "/images/edits$1");
-    }
-
-    const apiVersion = url.searchParams.get("api-version") || "2025-04-01";
-    if (!/^\/openai\/deployments\/[^/]+\/images\/edits\/?$/i.test(url.pathname)) {
-      url.pathname = `/openai/deployments/${encodeURIComponent(deployment)}/images/edits`;
-    }
-    url.search = "";
-    url.searchParams.set("api-version", apiVersion);
-    return url.toString();
-  } catch {
-    return endpoint.replace(/\/images\/generations([^/]*)$/, "/images/edits$1");
-  }
-};
-
-export const GPT_IMAGE_EDIT_ENDPOINT = deriveGptImageEditEndpoint(_gptEditEnv || GPT_IMAGE_ENDPOINT);
-
-// 5. 圖片生成模型選項
+// 4. Image generation model options
 export const IMAGE_MODEL_OPTIONS = [
-    {
-        id: "gemini-imagen",
-        label: "Nano Banana 2",
-        description: "Google Gemini & Imagen 圖片生成模型，透過後端 API Gateway 呼叫。",
-        sizes: ["512", "1K", "2K", "4K"],
-        supportsSizeMapping: false,
-    },
-    {
-        id: "gpt-image-2",
-        label: "GPT Image 2",
-        description: "OpenAI 最新圖片生成模型，支援高品質影像與精確文字渲染。",
-        sizes: ["1024x1024", "1024x1536", "1536x1024"],
-        supportsSizeMapping: true,
-    },
+  {
+    id: "gemini-imagen",
+    label: "Nano Banana 2",
+    description: "Google Gemini & Imagen 圖片生成模型，透過後端 API Gateway 呼叫。",
+    sizes: ["512", "1K", "2K", "4K"],
+    supportsSizeMapping: false,
+  },
+  {
+    id: "gpt-image-2",
+    label: "GPT Image 2",
+    description: "OpenAI 最新圖片生成模型，支援高品質影像與精確文字渲染。",
+    sizes: ["1024x1024", "1024x1536", "1536x1024"],
+    supportsSizeMapping: true,
+  },
 ];
 
 export const DEFAULT_IMAGE_MODEL = "gemini-imagen";

@@ -1,57 +1,60 @@
-/**
- * CORS Origin 白名單設定
- * 從環境變數 CORS_ALLOW_ORIGIN 讀取，支援逗號分隔多個 Origin
- * 範例: "https://genpic.edgentauems.com.tw,http://localhost:5175"
- * 本地開發: 設為 "*" (local.settings.json，已在 .gitignore 中)
- */
-const ALLOWED_ORIGINS = (process.env.CORS_ALLOW_ORIGIN || "")
+const isExplicitDevelopment =
+  process.env.AZURE_FUNCTIONS_ENVIRONMENT === "Development";
+const isProductionEnvironment =
+  !isExplicitDevelopment &&
+  (process.env.AZURE_FUNCTIONS_ENVIRONMENT === "Production" ||
+    process.env.NODE_ENV === "production" ||
+    Boolean(process.env.WEBSITE_SITE_NAME));
+
+const DEFAULT_DEV_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "http://127.0.0.1:5175",
+];
+
+const configuredOrigins = String(process.env.CORS_ALLOW_ORIGIN || "")
   .split(",")
-  .map((o) => o.trim())
+  .map((origin) => origin.trim())
   .filter(Boolean);
 
-/**
- * 計算正確的 Access-Control-Allow-Origin 值
- * @param {object|null} req - Azure Function request 物件（選用）
- * @returns {object} CORS headers
- */
+if (configuredOrigins.includes("*")) {
+  console.warn(
+    "[CORS] CORS_ALLOW_ORIGIN contains '*'. Wildcards are ignored for credentialed sessions."
+  );
+}
+
+const ALLOWED_ORIGINS = Array.from(
+  new Set(
+    configuredOrigins
+      .filter((origin) => origin !== "*")
+      .concat(configuredOrigins.length > 0 || isProductionEnvironment ? [] : DEFAULT_DEV_ORIGINS)
+  )
+);
+
+const getAllowedOrigins = () => [...ALLOWED_ORIGINS];
+
+const getRequestOrigin = (req) => req?.headers?.origin || req?.headers?.Origin || "";
+
 const corsHeaders = (req) => {
-  const requestOrigin = req?.headers?.origin || "";
-
-  // 開發模式：CORS_ALLOW_ORIGIN 包含 "*" 或未設定
-  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
-  if (isWildcard) {
-    return {
-      "Access-Control-Allow-Origin": requestOrigin || "*",
-      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-      "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Auth-Token",
-    };
-  }
-
-  // 生產模式：單一 Origin（最常見情況，直接回傳，不需動態比對）
-  if (ALLOWED_ORIGINS.length === 1) {
-    return {
-      "Access-Control-Allow-Origin": ALLOWED_ORIGINS[0],
-      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-      "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Auth-Token",
-      "Vary": "Origin",
-    };
-  }
-
-  // 多 Origin 模式：動態比對 request Origin
-  const allowOrigin = requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
-    ? requestOrigin
-    : "";
+  const requestOrigin = getRequestOrigin(req);
+  const allowOrigin =
+    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : "";
 
   return {
-    ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
+    ...(allowOrigin
+      ? {
+          "Access-Control-Allow-Origin": allowOrigin,
+          "Access-Control-Allow-Credentials": "true",
+        }
+      : {}),
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Auth-Token",
-    "Vary": "Origin",
+    "Access-Control-Allow-Headers": "Content-Type,X-CSRF-Token",
+    Vary: "Origin",
   };
 };
-
-// ─── Response Helpers ────────────────────────────────────────────────────────
-// req 參數為選用，向後相容現有所有 API 呼叫端（不傳 req 也能正常運作）
 
 const ok = (body, status = 200, req = null) => ({
   status,
@@ -70,4 +73,4 @@ const options = (req = null) => ({
   headers: { ...corsHeaders(req) },
 });
 
-module.exports = { ok, error, options, corsHeaders };
+module.exports = { ok, error, options, corsHeaders, getAllowedOrigins };

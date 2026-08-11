@@ -20,9 +20,10 @@
 
 ---
 
-## 一之二、現況評估 (Current State Analysis)
+## 一之二、重構前現況評估 (Pre-refactor State Analysis)
 
 > 在規劃重構前，必須先清楚認知目前程式碼的技術債。
+> 本節保留 BFF 改造前的 Firebase 原型紀錄；目前執行中的認證架構請以第六節、`docs/ENTRA_ID_SETUP.md` 與 `docs/EXECUTION_DETAILS.md` 為準。
 
 ### 已實作功能
 
@@ -203,21 +204,24 @@
 ```mermaid
 sequenceDiagram
     participant User as React Frontend
-    participant Auth as Entra ID
-    participant API as Azure Functions
+    participant Auth as Entra ID / Google
+    participant API as BFF App Service
     participant DB as PostgreSQL
     participant File as Blob Storage
     participant AI as Google Gemini API
 
-    User->>Auth: 1. SSO 登入
-    Auth-->>User: Token
-    User->>API: 2. 上傳 PDF / 發送 Prompt
-    API->>File: 3. 暫存文件
-    API->>AI: 4. 呼叫 Gemini-3 (分析/生成)
-    AI-->>API: 5. 回傳結果/圖片
-    API->>File: 6. 轉存圖片至 Blob (私有化)
-    API->>DB: 7. 寫入 Metadata & Log
-    API-->>User: 8. 回傳最終結果
+    User->>API: 1. 開始 BFF 登入
+    API->>Auth: 2. Authorization Code / credential
+    Auth-->>API: 3. Provider identity
+    API->>DB: 4. 建立 auth_sessions
+    API-->>User: 5. HttpOnly session cookie
+    User->>API: 6. 上傳 PDF / 發送 Prompt
+    API->>File: 7. 暫存文件
+    API->>AI: 8. 呼叫 Gemini-3 (分析/生成)
+    AI-->>API: 9. 回傳結果/圖片
+    API->>File: 10. 轉存圖片至 Blob (私有化)
+    API->>DB: 11. 寫入 Metadata & Log
+    API-->>User: 12. 回傳最終結果
 ```
 
 ### 4.4 AI API 呼叫範例 (Reference)
@@ -318,7 +322,7 @@ Authorization: Bearer <API_KEY>
 
 #### Step 0.3 — 建立 API 抽象層
 - [ ] 建立 `services/apiClient.js` — 統一的 HTTP/SDK 呼叫介面
-- [ ] 建立 `services/authService.js` — 認證相關 (目前包裝 Firebase Auth，之後換 MSAL)
+- [ ] 建立 `services/authService.js` — 認證相關（BFF redirect、session bootstrap、logout）
 - [ ] 建立 `services/aiService.js` — AI 呼叫 (目前包裝 Vertex AI SDK，之後改 Azure Functions)
 - [ ] 建立 `services/storageService.js` — 資料存取 (目前包裝 Firestore，之後改 REST API)
 - [ ] 所有 hooks 改為呼叫 service 層，不再直接 import Firebase SDK
@@ -332,7 +336,7 @@ Authorization: Bearer <API_KEY>
 
 ---
 
-### Phase 1: Auth & API Gateway (清理 Firebase → Azure) 🔐
+### Phase 1: Auth & API Gateway (清理 Firebase → Azure BFF) 🔐
 
 > **前置條件**：Phase 0 完成，API 抽象層已到位。
 
@@ -350,22 +354,22 @@ Authorization: Bearer <API_KEY>
 - [ ] 實作 `api/health/index.js` — Health check 端點
 - [ ] 設定環境變數管理（Azure Key Vault / App Settings）
 
-#### Step 1.3 — 實作 MSAL 認證
-- [ ] 前端安裝 `@azure/msal-react` + `@azure/msal-browser`
-- [ ] 更新 `services/authService.js`：Firebase Auth → MSAL
-- [ ] 實作 Azure Function middleware：驗證 Bearer Token + 注入 `user.uid`
-- [ ] 設定 CORS：僅允許前端 origin
+#### Step 1.3 — 實作 BFF 伺服器工作階段認證
+- [ ] Entra 使用 authorization-code callback，Google 使用一次性 credential exchange
+- [ ] 使用既有 PostgreSQL 儲存 opaque session hash、CSRF hash 與期限
+- [ ] 設定 App Service secret、callback URI 與精確 CORS origin
+- [ ] 前端只使用 HttpOnly `pixora_session` cookie，不保存 Provider Token
 
 #### Step 1.4 — API Gateway
 - [ ] 實作 Rate Limiting middleware (每分鐘上限)
 - [ ] 統一錯誤回傳格式 `{ error: { code, message } }`
-- [ ] 更新 `services/apiClient.js`：加入 Token 自動附加與 401 重試邏輯
+- [ ] 更新 `services/apiClient.js`：使用 cookie credentials、CSRF header 與 401 session expiry
 
 ---
 
 ### Phase 2: Database & Storage 💾
 
-> **前置條件**：Phase 1 完成，API Gateway 可驗證 Token。
+> **前置條件**：Phase 1 完成，API Gateway 可驗證 BFF session。
 
 執行細節請參考 [docs/EXECUTION_DETAILS.md](docs/EXECUTION_DETAILS.md)。
 
@@ -469,17 +473,17 @@ Authorization: Bearer <API_KEY>
 |:--|:---|:---:|:---|:---:|
 | A-01 | Microsoft SSO 登入流程 | M | 點擊登入 → 導向 Microsoft 登入頁 → 成功回調 → 顯示使用者名稱與頭貼 | [ ] |
 | A-02 | Tenant 限制 | M | 設定 `MICROSOFT_TENANT_ID` 後，僅該組織帳號可登入；外部帳號被拒絕並顯示錯誤 | [ ] |
-| A-03 | 登出流程 | M | 點擊登出 → 清除 Token → UI 回到未登入狀態 | [ ] |
-| A-04 | Token 過期自動重新整理 | M | 長時間掛置後操作，MSAL 自動以 refresh token 取得新 access token，不中斷使用 | [ ] |
-| A-05 | 未登入存取保護 | A | 未帶 Token 呼叫 `/api/*` → 回傳 `401 Unauthorized` | [ ] |
-| A-06 | 無效 Token 拒絕 | A | 帶過期或竄改的 Token → 回傳 `401`，response body 包含錯誤描述 | [ ] |
+| A-03 | 登出流程 | M | 點擊登出 → 撤銷 Pixora session（不觸發 Provider 全域登出）→ UI 回到未登入狀態 | [ ] |
+| A-04 | Session 期限 | M | 閒置超過 8 小時或絕對期限超過 30 天 → session 失效並要求重新登入 | [ ] |
+| A-05 | 未登入存取保護 | A | 未帶有效 session cookie 呼叫 `/api/*` → 回傳 `401 Unauthorized` | [ ] |
+| A-06 | 無效 Session 拒絕 | A | 帶過期、撤銷或竄改的 cookie → 回傳 `401`，response body 包含錯誤描述 | [ ] |
 
 #### 7.1.2 API Gateway
 
 | # | 驗證項目 | 驗證方式 | 預期結果 | 通過 |
 |:--|:---|:---:|:---|:---:|
 | G-01 | Health check 端點 | A | `GET /api/health` → `200 { status: "ok" }` | [ ] |
-| G-02 | Token 驗證中介層 | A | 合法 Token → request 中注入 `user.uid` 與 `user.email` | [ ] |
+| G-02 | Session 驗證中介層 | A | 合法 session cookie → request 中解析使用者 identity 與租戶 | [ ] |
 | G-03 | CORS 設定 | A | 僅允許前端 origin；其他 origin 被拒 | [ ] |
 | G-04 | Rate limiting | A | 同一使用者 1 分鐘超過上限 → 回傳 `429 Too Many Requests` | [ ] |
 | G-05 | 錯誤回傳格式一致 | R | 所有 API 錯誤回傳 `{ error: { code, message } }` 統一結構 | [ ] |
@@ -662,7 +666,7 @@ gantt
     section Phase 1 - Auth & Gateway
     清理 Firebase 依賴            :p1a, after p0d, 1d
     初始化 Azure Functions        :p1b, after p1a, 2d
-    實作 MSAL 認證                :p1c, after p1b, 3d
+    實作 BFF session 認證          :p1c, after p1b, 3d
     API Gateway + Rate Limit      :p1d, after p1c, 2d
     Phase 1 驗證                  :milestone, after p1d, 0d
 

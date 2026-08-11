@@ -16,8 +16,6 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@azure/msal-browser": "^5.1.0",
-    "@azure/msal-react": "^5.0.3",
     "@line/liff": "^2.27.3",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
@@ -31,7 +29,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "jspdf": "^4.2.0",
-    "jwt-decode": "^4.0.0",
     "lucide-react": "^0.562.0",
     "pptxgenjs": "^4.0.1",
     "react": "^19.2.0",

@@ -20,6 +20,14 @@ const requestBody = {
   },
 };
 
+const csrfHeaderParameter = {
+  name: "X-CSRF-Token",
+  in: "header",
+  required: true,
+  schema: { type: "string" },
+  description: "CSRF token returned by GET /api/auth/session.",
+};
+
 const response = (description) => ({
   description,
   content: {
@@ -34,6 +42,7 @@ const operation = ({
   tags,
   auth = true,
   body = false,
+  csrf = false,
   successStatuses = [200],
   parameters = [],
 }) => ({
@@ -42,19 +51,22 @@ const operation = ({
   ...(auth
     ? {
         security: [
-          { authToken: [] },
-          { bearerAuth: [] },
+          { sessionCookie: [] },
         ],
       }
     : {}),
   ...(body ? { requestBody } : {}),
-  ...(parameters.length > 0 ? { parameters } : {}),
+  ...((parameters.length > 0 || csrf)
+    ? {
+        parameters: [...parameters, ...(csrf ? [csrfHeaderParameter] : [])],
+      }
+    : {}),
   responses: {
     ...Object.fromEntries(
       successStatuses.map((status) => [
         status,
-        status === 204
-          ? { description: "No content" }
+        status === 204 || status === 302 || status === 304
+          ? { description: status === 302 ? "Redirect" : "No content" }
           : response(status === 202 ? "Accepted" : "Successful response"),
       ])
     ),
@@ -80,6 +92,39 @@ addOperation("/api/health", "get", {
   auth: false,
 });
 
+addOperation("/api/auth/entra/start", "get", {
+  summary: "Start Entra ID sign-in",
+  tags: ["Authentication"],
+  auth: false,
+  successStatuses: [302],
+});
+
+addOperation("/api/auth/entra/callback", "get", {
+  summary: "Handle Entra ID auth-code callback",
+  tags: ["Authentication"],
+  auth: false,
+  successStatuses: [302],
+});
+
+addOperation("/api/auth/google", "post", {
+  summary: "Create Pixora session from Google credential",
+  tags: ["Authentication"],
+  auth: false,
+  body: true,
+});
+
+addOperation("/api/auth/session", "get", {
+  summary: "Get current Pixora session state",
+  tags: ["Authentication"],
+  auth: false,
+});
+
+addOperation("/api/auth/logout", "post", {
+  summary: "Revoke current Pixora session",
+  tags: ["Authentication"],
+  csrf: true,
+});
+
 addOperation("/api/me", "get", {
   summary: "Get the current user profile and model policy",
   tags: ["Authentication"],
@@ -89,24 +134,28 @@ addOperation("/api/analyze-document", "post", {
   summary: "Analyze an uploaded document",
   tags: ["AI"],
   body: true,
+  csrf: true,
 });
 
 addOperation("/api/analyze-style", "post", {
   summary: "Analyze a visual style",
   tags: ["AI"],
   body: true,
+  csrf: true,
 });
 
 addOperation("/api/blob-sas", "post", {
   summary: "Create a blob upload SAS URL",
   tags: ["Storage"],
   body: true,
+  csrf: true,
 });
 
 addOperation("/api/embeddings", "post", {
   summary: "Create text embeddings",
   tags: ["AI"],
   body: true,
+  csrf: true,
 });
 
 for (const method of ["get", "post"]) {
@@ -114,6 +163,7 @@ for (const method of ["get", "post"]) {
     summary: "Generate a filename",
     tags: ["AI"],
     body: method === "post",
+    csrf: method === "post",
   });
 }
 
@@ -121,6 +171,7 @@ addOperation("/api/generate-images", "post", {
   summary: "Start an image generation request",
   tags: ["AI"],
   body: true,
+  csrf: true,
   successStatuses: [200, 202],
 });
 
@@ -134,6 +185,7 @@ addOperation("/api/image-transform", "post", {
   summary: "Transform an image",
   tags: ["AI"],
   body: true,
+  csrf: true,
 });
 
 for (const method of ["get", "post", "delete"]) {
@@ -141,6 +193,7 @@ for (const method of ["get", "post", "delete"]) {
     summary: `${method === "get" ? "Get" : method === "post" ? "Save" : "Delete"} LINE configuration`,
     tags: ["LINE"],
     body: method === "post",
+    csrf: method !== "get",
   });
 }
 
@@ -148,18 +201,21 @@ addOperation("/api/optimize-prompt", "post", {
   summary: "Optimize an image prompt",
   tags: ["AI"],
   body: true,
+  csrf: true,
 });
 
 addOperation("/api/optimize-scene", "post", {
   summary: "Optimize a document scene",
   tags: ["AI"],
   body: true,
+  csrf: true,
 });
 
 addOperation("/api/send-line-image", "post", {
   summary: "Send an image through LINE",
   tags: ["LINE"],
   body: true,
+  csrf: true,
 });
 
 for (const path of ["/api/history", "/api/history/{id}"]) {
@@ -168,6 +224,7 @@ for (const path of ["/api/history", "/api/history/{id}"]) {
       summary: `${method === "get" ? "List" : method === "post" ? "Save" : "Delete"} history`,
       tags: ["History"],
       body: method === "post",
+      csrf: method !== "get",
       parameters: path.includes("{id}") ? pathParameters("id") : [],
     });
   }
@@ -177,12 +234,14 @@ addOperation("/api/styles/search", "post", {
   summary: "Search the shared style library",
   tags: ["Styles"],
   body: true,
+  csrf: true,
 });
 
 addOperation("/api/styles/backfill-embeddings", "post", {
   summary: "Backfill style embeddings",
   tags: ["Styles"],
   body: true,
+  csrf: true,
 });
 
 for (const path of ["/api/styles", "/api/styles/{id}", "/api/styles/{id}/{action}"]) {
@@ -191,6 +250,7 @@ for (const path of ["/api/styles", "/api/styles/{id}", "/api/styles/{id}/{action
       summary: `${method.toUpperCase()} style resource`,
       tags: ["Styles"],
       body: ["post", "put"].includes(method),
+      csrf: method !== "get",
       parameters: pathParameters(
         ...(path.includes("{id}") ? ["id"] : []),
         ...(path.includes("{action}") ? ["action"] : [])
@@ -205,6 +265,7 @@ for (const path of ["/api/templates", "/api/templates/{id}"]) {
       summary: `${method.toUpperCase()} template resource`,
       tags: ["Templates"],
       body: ["post", "put"].includes(method),
+      csrf: method !== "get",
       parameters: path.includes("{id}") ? pathParameters("id") : [],
     });
   }
@@ -216,6 +277,7 @@ for (const path of ["/api/management", "/api/management/{resource}", "/api/manag
       summary: `${method.toUpperCase()} management resource`,
       tags: ["Administration"],
       body: method === "put",
+      csrf: method !== "get",
       parameters: pathParameters(
         ...(path.includes("{resource}") ? ["resource"] : []),
         ...(path.includes("{id}") ? ["id"] : [])
@@ -245,16 +307,11 @@ module.exports = {
   ],
   components: {
     securitySchemes: {
-      authToken: {
+      sessionCookie: {
         type: "apiKey",
-        in: "header",
-        name: "X-Auth-Token",
-        description: "Microsoft Entra ID or Google ID token.",
-      },
-      bearerAuth: {
-        type: "http",
-        scheme: "bearer",
-        description: "Alternative Authorization header accepted by the API.",
+        in: "cookie",
+        name: "pixora_session",
+        description: "Opaque Pixora server session cookie.",
       },
     },
   },

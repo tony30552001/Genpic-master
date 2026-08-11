@@ -36,29 +36,30 @@
 ## Phase 1 — Auth & API Gateway
 
 ### 範圍與原則
-- 移除前端 Firebase Auth 依賴，改用 MSAL
+- 移除前端 Firebase 與 Provider Token 依賴，改用 BFF 伺服器工作階段
 - 所有 API 呼叫經由 linked App Service API 代理
-- 強制落實統一錯誤格式與 Token 驗證
+- 強制落實統一錯誤格式、Cookie session 與 CSRF 驗證
 
 ### 工作分解（WBS）
 - Step 1.1：清理 Firebase 依賴與設定檔
 - Step 1.2：初始化 Node.js API adapter + health check
-- Step 1.3：前端導入 MSAL，後端驗證 Token
+- Step 1.3：App Service 導入 Entra authorization code、Google credential exchange 與 PostgreSQL session
 - Step 1.4：加入 Rate limit、CORS、統一錯誤格式
 
 ### 定義完成 (Definition of Done)
 - 前端不再引用 Firebase Auth
 - `/api/health` 回傳 200 `{ status: "ok" }`
-- 未登入呼叫 `/api/*` 皆回 401
+- 未登入呼叫受保護 `/api/*` 皆回 401
+- App Service 重啟後仍可使用未過期的 PostgreSQL session
 - 錯誤回傳格式統一 `{ error: { code, message } }`
 
 ### 風險與回退
-- 風險：Token 驗證邏輯錯誤導致全站 401
-- 回退策略：保留 Firebase Auth 分支；MSAL 啟用採 feature flag
+- 風險：Cookie、CSRF 或 callback 設定錯誤導致全站 401
+- 切換策略：認證合約一次性切換；沿用既有 App Service 與 PostgreSQL，不保留舊 Token fallback
 
 ### 驗證方式
-- 手動：MSAL 登入/登出流程
-- 自動：API health + 401/429 測試
+- 手動：Entra/Google BFF 登入、session 重整、App Service restart、session expiry 與 local logout
+- 自動：API health + session/CSRF/401/429 測試
 
 ---
 

@@ -1,32 +1,39 @@
 ---
 type: operations guide
 title: Development, migrations, and deployment
-description: Local commands, runtime entrypoints, migration procedure, and non-secret configuration categories.
-tags: [operations, development, deployment]
+description: Local commands, API entrypoints, BFF session configuration, migration procedure, and deployment validation boundaries.
+tags: [operations, development, deployment, sessions, entra]
+openwiki:
+  roles: [operations, workflow]
+  change_kinds: [deployment, configuration, session-lifecycle, migrations]
+  source_paths: [package.json, api/package.json, api/_shared/http.js, api/_shared/session.js, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  validation_commands: [pnpm lint && pnpm build]
 ---
 
 # Development, migrations, and deployment
 
 The root package requires Node `>=22.22.0` and pnpm `>=10`; use `corepack pnpm@10.33.2 install`. Root scripts are `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, and `pnpm preview`. Vite listens on 5175 and uses `@` for `src`.
 
-The API is a separate Node package requiring Node `>=22.22.0`: run its `start` script to execute `server.js`. Standalone startup also starts the in-process image job polling worker. This differs from Azure Functions handling where GPT image generation is synchronous (`FUNCTIONS_WORKER_RUNTIME` branch). API migration command runs `api/scripts/migrate.cjs`, which needs a database connection configuration and executes all SQL files in lexicographic order.
+The API is a separate Node package requiring Node `>=22.22.0`: run its `start` script to execute `server.js`. Standalone startup also starts the in-process image job polling worker. The API migration command runs `api/scripts/migrate.cjs`, which needs database connection configuration and executes SQL files in lexicographic order.
 
-## Configuration categories
+## BFF session configuration
 
-Do not place values in source. Browser configuration covers MSAL/Google IDs, API base URL, optional direct GPT Image endpoint/deployment and `VITE_AUTH_BYPASS`. API configuration covers IdP audience/tenant and Google client ID, database, Blob account/containers, allowed CORS origins, Google/Azure AI provider settings, optional OpenAI deployment, API body limit, job poll interval, and LINE encryption/key configuration. `AUTH_DISABLED` is rejected in production by code; `CORS_ALLOW_ORIGIN` should be explicit in production.
+Browser configuration is limited to the public Google client ID, API base URL, and local `VITE_AUTH_BYPASS`; `.env.example` demonstrates the non-secret names. Do not put Entra client secrets, session secrets, or provider keys in Vite configuration.
 
-`staticwebapp.config.json` supplies API route allowance and SPA fallback. The Azure Static Web Apps workflow in `.github/workflows` is deployment evidence; existing `docs/` deployment and identity guides are supporting operational material, not runtime authority.
+The API needs Entra tenant/client/secret and the exact `ENTRA_REDIRECT_URI`, `AUTH_SESSION_SECRET` of at least 32 bytes, Google client ID, and database configuration. Production must also set exact `CORS_ALLOW_ORIGIN` values and leave `AUTH_DISABLED` false. Without configured origins outside production, `_shared/http.js` permits only its built-in localhost ports (5173–5175 on `localhost` or `127.0.0.1`). Any configured origin must match the browser origin exactly: session requests use credentials, so `*` is ignored and cannot support cookie authentication. The BFF configuration and safety rationale are explained in [server sessions](../backend/sessions.md).
 
-## Entra session operations
+Register the Entra callback as a **Web** redirect URI, for example `http://localhost:3000/api/auth/entra/callback` locally or `https://<your-swa-domain>/api/auth/entra/callback` in deployment. The callback, client secret, and session secret remain API/App Service configuration. Existing `docs/ENTRA_ID_SETUP.md` and `docs/API_LOCAL_DEV.md` provide setup details; source code is authoritative for runtime behavior.
 
-The browser's Microsoft path uses MSAL silent renewal before an ID token has fewer than five minutes remaining, then redirects back to the initiating page only when interactive authentication is required. This protects API calls from a stale cached ID token but cannot guarantee a permanent SPA session: Entra refresh tokens still have service-side lifetime limits (the setup guide describes the typical SPA limit as about 24 hours). After that limit, a user must interactively re-authenticate; a long-lived no-prompt product session would require a server-side BFF/session design rather than a browser-only change. See the runtime ownership and focused regression check in [browser application and authentication](../frontend/application.md).
+## Development and migration guide
 
-When changing Entra redirect settings, register the exact `VITE_MSAL_REDIRECT_URI` value as a SPA redirect URI and manually exercise login, a return to the original page, and an expired-session re-authentication in the target environment. Do not use production credentials in local validation.
+For browser-only changes, use the focused test from the owning wiki page, then `pnpm lint && pnpm build` when the changed surface needs a build check. For API route wiring, use the syntax and adapter smoke checks in [HTTP API](../backend/http-api.md). Avoid running the whole suite by default.
 
-Run `pnpm lint && pnpm test && pnpm build` for frontend changes. For schema/API changes, run migrations on a disposable database and start the API with non-production credentials; add authenticated manual checks for CORS, policy selection, and job behavior. Never use a production direct browser key for normal server-owned generation.
+For schema changes, run `cd api && npm run migrate` only against a disposable database and check the owning API behavior. `010_auth_sessions.sql` is required for the BFF session implementation; see [schema](../data/schema.md). Do not run migrations against production as routine validation.
 
-## API reference operation
+For a session/authentication change, run the focused browser and API tests documented by [browser application](../frontend/application.md) and [server sessions](../backend/sessions.md), then use non-production configuration to check this sequence: BFF login returns to the requested local route, `GET /api/auth/session` reports a user and CSRF value, a mutation includes cookie plus CSRF, logout clears the session, and an expired/revoked session produces recovery UI. This is conditional integration validation, not a baseline for unrelated frontend work.
 
-The standalone `api/server.js` process serves the interactive Scalar reference at `/api/docs` and its OpenAPI document at `/api/openapi.json`. Locally, after `cd api && npm start`, use `curl -fsS http://localhost:3000/api/openapi.json` as the narrow contract-discovery smoke check, then open `http://localhost:3000/api/docs` when verifying the rendered UI. The Azure Static Web App linked-backend path exposes the same routes under its own `/api` origin; a deployment change that affects proxying or the API package should check `https://<swa-domain>/api/openapi.json` and `https://<swa-domain>/api/docs` after the health endpoint.
+## Deployment boundaries
 
-These routes belong to the Express adapter rather than the Azure Functions host, and the JSON catalog intentionally uses generic object schemas. For route registration, catalog synchronization, authentication declarations, and handler-contract ownership, consult [HTTP API composition and routes](../backend/http-api.md); do not treat a successful documentation UI render as a substitute for authenticated endpoint or provider validation.
+`staticwebapp.config.json` supplies API route allowance and SPA fallback. The Azure Static Web Apps workflow builds the frontend, deploys `api` to App Service, and configures SWA with no managed Functions `api_location`; it therefore expects the linked App Service to serve the BFF/API. Treat API and Static Web App deployment as a coupled operational boundary when changing proxy behavior, callback URL, CORS, or API dependencies.
+
+The standalone `api/server.js` process serves Scalar at `/api/docs` and OpenAPI at `/api/openapi.json`. After API deployment or proxy changes, check health first, then `https://<swa-domain>/api/openapi.json` and `/api/docs` on the deployed origin. For the interactive catalog locally, after `cd api && npm start`, use `curl -fsS http://localhost:3000/api/openapi.json`. A rendered docs UI does not substitute for authenticated session or provider validation.

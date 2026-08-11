@@ -11,14 +11,13 @@
     "enable-cors": "node scripts/enable-cors.js"
   },
   "dependencies": {
+    "@azure/msal-node": "^3.8.3",
     "@azure/storage-blob": "^12.27.0",
     "@google/genai": "^1.0.0",
     "@scalar/express-api-reference": "^0.10.13",
     "dotenv": "^17.3.1",
     "express": "^5.1.0",
     "google-auth-library": "^10.5.0",
-    "jsonwebtoken": "^9.0.2",
-    "jwks-rsa": "^3.1.0",
     "pg": "^8.13.3",
     "pixora": "file:.."
   }

@@ -45,18 +45,10 @@ jobs:
           # HUSKY=0 告知 Husky 在 CI 環境中跳過 git hooks 初始化
           # 參考: https://typicode.github.io/husky/how-to.html#ci-server-and-docker
           HUSKY: 0
-          VITE_MSAL_CLIENT_ID: ${{ secrets.VITE_MSAL_CLIENT_ID }}
-          VITE_MSAL_TENANT_ID: ${{ secrets.VITE_MSAL_TENANT_ID }}
-          VITE_MSAL_REDIRECT_URI: "https://thankful-island-0ab89420f.1.azurestaticapps.net"
-          VITE_MSAL_SCOPES: "openid,profile,User.Read"
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_AUTH_BYPASS: "false"
           VITE_API_BASE_URL: "/api"
           VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
-          VITE_GPT_IMAGE_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_ENDPOINT }}
-          VITE_GPT_IMAGE_API_KEY: ${{ secrets.VITE_GPT_IMAGE_API_KEY }}
-          VITE_GPT_IMAGE_EDIT_ENDPOINT: ${{ secrets.VITE_GPT_IMAGE_EDIT_ENDPOINT }}
-          VITE_GPT_IMAGE_DEPLOYMENT: ${{ secrets.VITE_GPT_IMAGE_DEPLOYMENT }}
 
       # 安裝 API 依賴
       - name: Install API Dependencies

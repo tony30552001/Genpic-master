@@ -1,3 +1,3 @@
 # Files
 
-- [Development, migrations, and deployment](development-deployment.md) - Local commands, runtime entrypoints, migration procedure, and non-secret configuration categories.
+- [Development, migrations, and deployment](development-deployment.md) - Local commands, API entrypoints, BFF session configuration, migration procedure, and deployment validation boundaries.

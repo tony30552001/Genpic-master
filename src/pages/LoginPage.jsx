@@ -8,7 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
-    const { handleMicrosoftLogin, handleGoogleLoginSuccess, isAuthenticated, isLoading, authExpired } = useAuth();
+    const {
+        handleMicrosoftLogin,
+        handleGoogleLoginSuccess,
+        isAuthenticated,
+        isLoading,
+        authExpired,
+        profileError,
+    } = useAuth();
     const location = useLocation();
 
     const from = location.state?.from?.pathname || "/";
@@ -42,11 +49,11 @@ export default function LoginPage() {
                 </CardHeader>
                 <CardContent className="space-y-5">
                     {/* 登入過期提示 */}
-                    {authExpired && (
+                    {(authExpired || profileError) && (
                         <Alert variant="destructive">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription>
-                                您的登入已過期，請重新登入以繼續使用
+                                {profileError || "您的登入已過期，請重新登入以繼續使用"}
                             </AlertDescription>
                         </Alert>
                     )}

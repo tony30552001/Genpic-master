@@ -23,7 +23,7 @@
 3. Runtime 選 **Node.js 22 LTS / Linux**。
 4. 區域建議與 SWA、PostgreSQL、Storage 相同。
 5. Startup command 使用 `npm start`。
-6. 在 **Configuration** → **Application settings** 設定目前 Function runtime 使用的所有 backend settings。
+6. 在 **Configuration** → **Application settings** 設定 backend settings。
 7. 敏感值使用 Key Vault reference 或 App Service secrets，不要提交到 Git。
 
 至少確認以下設定存在：
@@ -34,9 +34,11 @@
 - `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_DEPLOYMENT`
 - `GPT_IMAGE_ENDPOINT`、`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`
 - `BLOB_CONTAINER_GENERATED=generated`
-- `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`GOOGLE_CLIENT_ID`
+- `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`
+- `ENTRA_REDIRECT_URI=https://<your-swa-domain>/api/auth/entra/callback`
+- `AUTH_SESSION_SECRET`（至少 32 bytes 的隨機 secret）
 - `AUTH_DISABLED=false`
-- `CORS_ALLOW_ORIGIN=https://<your-swa-domain>,http://localhost:5173`
+- `CORS_ALLOW_ORIGIN=https://<your-swa-domain>,http://localhost:5175`
 - `RATE_LIMIT_PER_MINUTE=60`
 - `API_BODY_LIMIT=100mb`
 - `IMAGE_JOB_POLL_MS=2000`（可選，App Service worker 掃描 queued jobs 的間隔）
@@ -62,7 +64,7 @@ https://<swa-domain>/api/health
 VITE_API_BASE_URL=/api
 ```
 
-因此不需要把 App Service hostname 編譯進 Vite，也不需要為每個前端環境維護不同 API URL。`X-Auth-Token`、Bearer token 與 `x-ms-client-principal` 會繼續交給既有 API auth logic 處理。
+因此不需要把 App Service hostname 編譯進 Vite，也不需要為每個前端環境維護不同 API URL。BFF 會透過同源 HttpOnly session cookie 驗證請求，前端不再傳送 Provider Token。
 
 ## 4. GitHub Actions
 
@@ -82,7 +84,7 @@ workflow 不再使用 `api_location: "api"`；API 由獨立 App Service deployme
 
 ## 5. 資料庫 migration
 
-部署 async image jobs 前，先對正式 PostgreSQL 執行一次最新 migrations：
+部署 async image jobs 與 BFF session 前，先對正式 PostgreSQL 執行最新 migrations：
 
 ```powershell
 $env:DATABASE_URL = "<postgresql-connection-string>"
@@ -90,8 +92,7 @@ $env:DATABASE_SSL = "true"
 node api/scripts/migrate.cjs
 ```
 
-`009_image_generation_jobs.sql` 只新增 job table 和 indexes；不會修改既有
-history 資料。執行前請確認 App Service 使用的資料庫連線字串相同。
+`009_image_generation_jobs.sql` 與 `010_auth_sessions.sql` 只新增 job/session tables 和 indexes；不會修改既有 history 資料。執行前請確認 App Service 使用的資料庫連線字串相同。
 
 若暫時 rollback 回 Azure Functions，`FUNCTIONS_WORKER_RUNTIME` 會讓 GPT Image 2
 回到原本的同步 handler 路徑；非同步 worker 只在 App Service `npm start` 中啟動。
@@ -116,14 +117,13 @@ Scalar API 文件：
 https://<swa-domain>/api/docs/
 ```
 
-接著驗證登入、圖片生成、文件分析、風格、歷史、範本、LINE 與管理 API。若切換失敗，可先 unlink App Service，再暫時恢復 workflow 的 `api_location: "api"`，因為既有 handlers、`function.json` 與 `host.json` 仍保留。
+接著驗證 Entra/Google 登入、頁面重整、App Service restart 後 session、圖片生成、文件分析、風格、歷史、範本、LINE 與管理 API。若切換失敗，可先 unlink App Service，再暫時恢復 workflow 的 `api_location: "api"`，因為既有 handlers、`function.json` 與 `host.json` 仍保留。
 
 ## 7. 常見問題
 
 - **API 404**：確認 App Service Startup command 為 `npm start`、deployment package 包含 `server.js`，且 SWA 已連結正確 App Service。
 - **JSON body 413**：確認 App Service 與 `API_BODY_LIMIT` 足以容納文件/圖片 base64；目前 adapter 預設為 `100mb`。
-- **API 401**：確認 App Service linked API 沒有移除 `X-Auth-Token` 或 `x-ms-client-principal`，並檢查 `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`GOOGLE_CLIENT_ID`。
+- **API 401**：確認 session cookie 未被瀏覽器封鎖，並檢查 `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`ENTRA_REDIRECT_URI`、`AUTH_SESSION_SECRET`、`DATABASE_URL`。
 - **資料庫連線失敗**：確認 PostgreSQL firewall/private networking 允許 App Service outbound access。
-- **GPT Image 2 仍顯示 Backend call failure**：確認 migration 已執行、App Service
-  log 有 `image-jobs` worker、以及 `generated` Blob container 可寫入。
-- **CORS 錯誤**：同源 SWA proxy 不應需要額外 CORS；若直接測試 App Service，將 SWA 網域與本機網域加入 `CORS_ALLOW_ORIGIN`。
+- **GPT Image 2 仍顯示 Backend call failure**：確認 migration 已執行、App Service log 有 `image-jobs` worker、以及 `generated` Blob container 可寫入。
+- **CORS 錯誤**：同源 SWA proxy 不應需要額外 CORS；若直接測試 App Service，將 SWA 網域與本機網域加入 `CORS_ALLOW_ORIGIN`，並保留 credentials。

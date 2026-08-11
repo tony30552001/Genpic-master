@@ -6,6 +6,7 @@ const openapiDocument = require("./openapi");
 const admin = require("./admin");
 const analyzeDocument = require("./analyze-document");
 const analyzeStyle = require("./analyze-style");
+const auth = require("./auth");
 const blobSas = require("./blob-sas");
 const embeddings = require("./embeddings");
 const generateFilename = require("./generate-filename");
@@ -109,6 +110,11 @@ const registerRoutes = (path, methods, handler) => {
 };
 
 registerRoutes(["/api/health"], ["GET", "OPTIONS"], health);
+registerRoutes(["/api/auth/entra/start"], ["GET", "OPTIONS"], auth);
+registerRoutes(["/api/auth/entra/callback"], ["GET", "OPTIONS"], auth);
+registerRoutes(["/api/auth/google"], ["POST", "OPTIONS"], auth);
+registerRoutes(["/api/auth/session"], ["GET", "OPTIONS"], auth);
+registerRoutes(["/api/auth/logout"], ["POST", "OPTIONS"], auth);
 registerRoutes(["/api/me"], ["GET", "OPTIONS"], me);
 registerRoutes(["/api/analyze-document"], ["POST", "OPTIONS"], analyzeDocument);
 registerRoutes(["/api/analyze-style"], ["POST", "OPTIONS"], analyzeStyle);

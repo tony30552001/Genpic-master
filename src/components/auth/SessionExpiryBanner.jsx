@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import useAuth from "@/hooks/useAuth";
 
 /**
- * SessionExpiryBanner — 登入即將/已過期的非阻斷式重新登入提示
+ * SessionExpiryBanner — Pixora 工作階段過期的非阻斷式重新登入提示
  * 當 authExpiredWarning 為 true 時顯示 sticky 橫幅，讓使用者在原頁面重新登入。
  */
 export default function SessionExpiryBanner() {
@@ -26,7 +26,7 @@ export default function SessionExpiryBanner() {
       <AlertTriangle className="size-4 shrink-0 text-amber-500" />
 
       <span className="flex-1 font-medium">
-        您的登入已過期，請重新登入以繼續使用
+        您的 Pixora 工作階段已過期，請重新登入以繼續使用
       </span>
 
       {/* Google 重新登入 */}

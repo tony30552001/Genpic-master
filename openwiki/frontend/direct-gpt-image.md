@@ -1,23 +1,19 @@
 ---
-type: integration surface
-title: Browser-direct GPT Image service
-description: The configured browser-side GPT Image generation and edit client, distinct from server-mediated generation.
-tags: [frontend, gpt-image, integration]
+type: retired integration surface
+title: Retired browser-direct GPT Image client
+description: Historical boundary for the removed browser-side GPT Image service; current image generation is server-mediated through the API.
+tags: [frontend, gpt-image, retired]
+openwiki:
+  roles: [repository, integration]
+  change_kinds: [deprecation, security]
+  source_paths: [src/services/gptImageService.js, src/config.js]
+  invariants: ["No current browser runtime module calls a configured direct GPT Image endpoint."]
 ---
 
-# Browser-direct GPT Image service
+# Retired browser-direct GPT Image client
 
-`src/services/gptImageService.js` exports `generateImageGpt` and `editImageGpt`. They call `VITE_GPT_IMAGE_ENDPOINT` or derived `VITE_GPT_IMAGE_EDIT_ENDPOINT` directly from the browser. This is distinct from `aiService.generateImage`, which calls `/api/generate-images`; the server ignores its requested model in favor of tenant policy and may enqueue work.
+`src/services/gptImageService.js` and its focused test were removed. `src/config.js` now exposes only local bypass, Google client, API base URL, and image-model metadata; it has no browser GPT Image endpoint or key configuration. The browser also no longer obtains provider tokens for API requests.
 
-## Contract
+Current creation code uses the server API path described in [AI generation](../backend/ai-generation.md). This is intentional: the API applies tenant model policy, keeps provider credentials server-side, and can create durable image jobs. The browser-side session transition that accompanies this removal is documented in [browser application and authentication](application.md).
 
-- `ASPECT_RATIO_TO_SIZE` converts the supported ratios to provider pixel sizes; unknown values use `1024x1024`.
-- Azure/OpenAI hostnames use `api-key`; other endpoints use `Authorization: Bearer`. If no configured image key exists, it attempts the currently authenticated Microsoft/Google token unless bypassed.
-- Generation posts JSON `{ prompt, model, size, n: 1 }`; edit builds `FormData`, selecting `image[]` for Azure endpoints and `image` otherwise. It does not manually set multipart `Content-Type`.
-- Both normalize either `b64_json` or provider `url` to `{ imageUrl }`, parse provider errors, and pass `AbortSignal` to `fetch`.
-
-## Security and change implications
-
-Any `VITE_*` key is compiled into the browser bundle. Treat this client as a deliberately exposed credential/deployment surface; prefer [server-mediated AI generation](../backend/ai-generation.md) for tenant policy, durable work, and secret isolation. Keep frontend and server aspect mappings aligned only if the provider contract requires it; they are separate implementations today.
-
-Focused evidence is `src/services/__tests__/gptImageService.test.js`: Azure headers/payload, ratio mapping, multipart field selection, malformed and error response handling, and abort propagation. Change callers only after locating imports of these exports; they are not the main generation path documented in [creation workflows](create-workflows.md).
+When investigating a request to reintroduce a browser-direct provider call, start with [AI generation](../backend/ai-generation.md) and [server sessions](../backend/sessions.md), not this retired surface. It would be a new security and public configuration boundary: assess tenant-policy bypass, bundled secrets, cancellation behavior, and focused consumer tests before adding configuration or an export. There is no current implementation or validation command for it.

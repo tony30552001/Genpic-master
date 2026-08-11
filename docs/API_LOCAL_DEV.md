@@ -1,6 +1,6 @@
 # 本機 API 開發指南
 
-> 版本 v1.0 | 最後更新：2026-02-10
+> 版本 v1.0 | 最後更新：2026-08-10
 
 ---
 
@@ -30,7 +30,13 @@ func --version
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "AZURE_TENANT_ID": "<your-tenant-id>",
     "AZURE_CLIENT_ID": "<your-client-id>",
+    "AZURE_CLIENT_SECRET": "<server-only-client-secret>",
+    "ENTRA_REDIRECT_URI": "http://localhost:3000/api/auth/entra/callback",
+    "AUTH_SESSION_SECRET": "<random-session-secret>",
     "DATABASE_URL": "postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require",
+    "DATABASE_SSL": "true",
+    "GOOGLE_CLIENT_ID": "<google-client-id>",
+    "CORS_ALLOW_ORIGIN": "http://localhost:5175",
     "GOOGLE_API_KEY": "<your-gemini-api-key>",
     "GEMINI_MODEL_ANALYSIS": "gemini-1.5-flash",
     "GEMINI_MODEL_GENERATION": "gemini-3-pro-image-preview",
@@ -58,7 +64,7 @@ $env:DATABASE_SSL = "true"
 node api/scripts/migrate.cjs
 ```
 
-這會包含 `009_image_generation_jobs.sql`。不要將正式資料庫連線字串提交到 repository。
+這會包含 `010_auth_sessions.sql`。不要將正式資料庫連線字串或 session secret 提交到 repository。
 
 ---
 
@@ -109,12 +115,14 @@ VITE_API_BASE_URL=http://localhost:3000/api
 
 ---
 
-## 5. MSAL 驗證注意事項
+## 5. BFF 驗證注意事項
 
-- 需在 Azure App Registration 設定 Redirect URI：
-  - `http://localhost:5173`
-- 建議至少開啟 `User.Read` scope
-- 若要暫時略過驗證，可將 `AUTH_DISABLED` 改成 `true`
+- 在 Azure App Registration 的 **Web** 平台設定：
+  - `http://localhost:3000/api/auth/entra/callback`
+- 前端使用 `VITE_API_BASE_URL=http://localhost:3000/api`，登入由 BFF redirect 到 Entra。
+- 登入成功後使用 HttpOnly Cookie；不要在前端設定 `VITE_MSAL_*` 或保存 Token。
+- Google credential 只會一次性 POST 到 `/api/auth/google`。
+- 若要暫時略過驗證，可將 `AUTH_DISABLED` 改成 `true`。
 
 ---
 
@@ -148,4 +156,4 @@ OpenAPI 規格位於：
 http://localhost:3000/api/openapi.json
 ```
 
-需要驗證的端點可在 Scalar 的 Authorize 面板填入 `X-Auth-Token` 或 Bearer token。
+需要驗證的端點請先在同源瀏覽器完成 BFF 登入；Scalar 的 Authorize 面板不再接受 Provider Token。

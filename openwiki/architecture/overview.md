@@ -1,52 +1,61 @@
 ---
 type: architecture overview
 title: Pixora architecture
-description: Runtime topology for the Pixora React application, its Node API, persistence, storage, and AI providers.
-tags: [architecture, runtime]
+description: Runtime topology for the Pixora React application, BFF API, persistent sessions, PostgreSQL data, Blob assets, and AI providers.
+tags: [architecture, runtime, sessions]
+openwiki:
+  roles: [architecture, repository]
+  change_kinds: [runtime, authentication, session-lifecycle]
+  source_paths: [src/main.jsx, api/server.js, api/auth/index.js, api/_shared/session.js, staticwebapp.config.json]
+  symbols: [AuthProvider, start, requireAuth, createSession]
 ---
 
 # Pixora architecture
 
-Pixora is a Vite/React 19 single-page application backed by a CommonJS Express service that adapts Azure-Functions-style handlers. The browser owns interactive state and export artifacts; the API owns authentication verification, tenant resolution, persistence, provider credentials, and long-running GPT image work.
+Pixora is a Vite/React single-page application backed by a CommonJS Express service that adapts Azure-Functions-style handlers. The browser owns interactive state and export artifacts; the API owns provider verification, BFF session issuance, tenant resolution, persistence, provider credentials, and long-running GPT image work.
 
 ```mermaid
 sequenceDiagram
   participant Browser
   participant Api as API service
   participant Database
-  participant Provider as AI provider
+  participant Provider as Identity or AI provider
   participant Storage as Blob Storage
-  Browser->>Api: authenticated API request
-  Api->>Database: resolve tenant and user
-  Api->>Provider: analyze or generate
-  Provider-->>Api: result
+  Browser->>Api: cookie request and optional CSRF header
+  Api->>Database: load session and resolve tenant user
+  Api->>Provider: sign in exchange or generation
+  Provider-->>Api: identity or result
   Api->>Storage: store durable job output when needed
-  Api-->>Browser: JSON or image data URL
+  Api-->>Browser: cookie redirect or JSON response
 ```
 
-This is the normal authenticated request path; direct browser GPT calls are a separate legacy/configured surface described in [direct GPT Image](../frontend/direct-gpt-image.md).
+This shows the normal browser-to-API ownership boundary. Detailed sign-in and expiry behavior belongs to [server sessions](../backend/sessions.md); AI work is documented in [AI generation](../backend/ai-generation.md).
 
 ## Runtime composition
 
-- `src/main.jsx` initializes MSAL, handles its redirect promise, then mounts `MsalProvider`, `GoogleOAuthProvider`, and `AuthProvider` around `App`.
+- `src/main.jsx` mounts `GoogleOAuthProvider` and `AuthProvider` around `App`; `AuthProvider` bootstraps its user from `GET /api/auth/session`.
 - `src/App.jsx` maps `/`, `/styles`, `/history`, `/admin`, and `/login`; all but login are protected, and `/admin` additionally waits for `/api/me` role data.
-- `api/server.js` maps every `/api/*` route to a function-style handler through `invokeFunction`, applies JSON parsing, translates `context.res`, and starts `startImageJobWorker()` when invoked as the standalone API process.
+- `api/server.js` maps `/api/*` routes to function-style handlers through `invokeFunction`, applies JSON parsing, translates `context.res`, and starts `startImageJobWorker()` when the standalone API process starts.
+- `api/auth/index.js` exchanges Entra authorization codes or Google credentials for opaque cookies; `api/_shared/auth.js` checks each protected request before its resource handler executes.
 - `staticwebapp.config.json` lets anonymous/authenticated users reach `/api/*` and rewrites non-asset, non-API navigation to `index.html`.
 
 ## Major ownership boundaries
 
 | Boundary | Owner | Canonical details |
 |---|---|---|
-| Login, routing, local UI state | browser React app | [application](../frontend/application.md) |
-| Creation, documents, transforms, exports | React hooks/components | [creation workflows](../frontend/create-workflows.md) |
+| Login, session bootstrap, route/profile UI | browser React app | [browser application](../frontend/application.md) |
+| Cookie/session issuance, CSRF, provider exchange | API BFF | [server sessions](../backend/sessions.md) |
 | HTTP contract, CORS, route registry | `api/server.js`, `_shared/http.js` | [HTTP API](../backend/http-api.md) |
-| Token verification, user/tenant and roles | API | [auth and admin](../backend/auth-tenancy-admin.md) |
+| Tenant identity, roles, model policy | API | [authentication and administration](../backend/auth-tenancy-admin.md) |
+| Creation, documents, transforms, exports | React hooks/components | [creation workflows](../frontend/create-workflows.md) |
 | AI providers and image-job state machine | API | [AI generation](../backend/ai-generation.md) |
 | Styles, history, templates, uploads, LINE | API and Postgres | [resources](../backend/resources.md) |
 | Database evolution | ordered SQL migrations | [schema](../data/schema.md) |
 
 ## Change rules
 
-The browser's `model` argument is not authoritative: `generate-images`, `image-transform`, and history recording use the tenant default from `tenant_model_settings`. Do not add a UI model choice without changing policy and its admin path. Likewise, API records are tenant/user scoped; follow the resource owner predicate rather than trusting client-side filtering.
+A browser request cannot establish identity with a custom token header: the API derives it from the opaque session cookie, and unsafe requests additionally need the session CSRF value. Browser-only direct GPT generation and browser MSAL token handling are not runtime surfaces.
 
-Use [operations](../operations/development-deployment.md) for commands and deployment configuration.
+The browser's generation `model` argument is also not authoritative: `generate-images`, `image-transform`, and history recording use the tenant default from `tenant_model_settings`. Do not add a UI model choice without changing policy and its admin path. Likewise, API records are tenant/user scoped; follow the resource owner predicate rather than trusting client-side filtering.
+
+Use [operations](../operations/development-deployment.md) for commands, BFF settings, CORS, and deployment configuration.

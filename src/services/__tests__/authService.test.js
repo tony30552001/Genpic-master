@@ -1,121 +1,94 @@
-import { beforeEach, describe, it, expect, vi } from "vitest";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
-
-const makeJwt = (payload) => {
-  const encodedPayload = btoa(JSON.stringify(payload))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return `eyJhbGciOiJSUzI1NiJ9.${encodedPayload}.signature`;
-};
-
-const freshIdToken = makeJwt({
-  exp: Math.floor(Date.now() / 1000) + 3600,
-});
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  loginRedirect: vi.fn(() => Promise.resolve()),
-  logoutRedirect: vi.fn(),
-  acquireTokenSilent: vi.fn(() => Promise.resolve({
-    accessToken: "access-token",
-    idToken: freshIdToken,
-  })),
-  acquireTokenRedirect: vi.fn(() => Promise.resolve()),
-  getActiveAccount: vi.fn(() => ({ id: "1" })),
-  setActiveAccount: vi.fn(),
-  getAllAccounts: vi.fn(() => [{ id: "1" }]),
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  clearCsrfToken: vi.fn(),
+  setCsrfToken: vi.fn(),
 }));
 
-vi.mock("../msalClient", () => ({
-  loginRequest: { scopes: ["User.Read"] },
-  msalInstance: {
-    loginRedirect: mocks.loginRedirect,
-    logoutRedirect: mocks.logoutRedirect,
-    acquireTokenSilent: mocks.acquireTokenSilent,
-    acquireTokenRedirect: mocks.acquireTokenRedirect,
-    getActiveAccount: mocks.getActiveAccount,
-    setActiveAccount: mocks.setActiveAccount,
-    getAllAccounts: mocks.getAllAccounts,
-  },
+vi.mock("../apiClient", () => ({
+  apiGet: mocks.apiGet,
+  apiPost: mocks.apiPost,
+  clearCsrfToken: mocks.clearCsrfToken,
+  setCsrfToken: mocks.setCsrfToken,
+}));
+
+vi.mock("../../config", () => ({
+  API_BASE_URL: "/api",
 }));
 
 import {
+  getAuthSession,
+  loginWithGoogle,
   loginWithMicrosoft,
   logout,
-  acquireAccessToken,
 } from "../authService";
 
 describe("authService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.acquireTokenSilent.mockResolvedValue({
-      accessToken: "access-token",
-      idToken: freshIdToken,
-    });
-    mocks.acquireTokenRedirect.mockResolvedValue();
-  });
-
-  it("loginWithMicrosoft sets active account", async () => {
-    await loginWithMicrosoft();
-    expect(mocks.loginRedirect).toHaveBeenCalledWith({
-      scopes: ["User.Read"],
-      redirectStartPage: window.location.href,
+    vi.stubGlobal("window", {
+      location: {
+        pathname: "/history",
+        search: "?page=2",
+        hash: "#top",
+        assign: vi.fn(),
+      },
     });
   });
 
-  it("logout uses redirect", async () => {
+  it("loads the server session and stores its CSRF token", async () => {
+    mocks.apiGet.mockResolvedValue({
+      authenticated: true,
+      csrfToken: "csrf-token",
+      user: { email: "user@example.com" },
+    });
+
+    await expect(getAuthSession()).resolves.toEqual(
+      expect.objectContaining({ authenticated: true })
+    );
+    expect(mocks.apiGet).toHaveBeenCalledWith("/api/auth/session", {
+      auth: false,
+      csrf: false,
+    });
+    expect(mocks.setCsrfToken).toHaveBeenCalledWith("csrf-token");
+  });
+
+  it("clears the CSRF token when no server session exists", async () => {
+    mocks.apiGet.mockResolvedValue({ authenticated: false });
+
+    await getAuthSession();
+
+    expect(mocks.clearCsrfToken).toHaveBeenCalled();
+  });
+
+  it("sends the Google credential to the BFF once", async () => {
+    mocks.apiPost.mockResolvedValue({ authenticated: true });
+
+    await loginWithGoogle("google-credential");
+
+    expect(mocks.apiPost).toHaveBeenCalledWith(
+      "/api/auth/google",
+      { credential: "google-credential" },
+      { auth: false, csrf: false }
+    );
+  });
+
+  it("redirects Microsoft login to the BFF callback start route", () => {
+    loginWithMicrosoft();
+
+    expect(window.location.assign).toHaveBeenCalledWith(
+      "/api/auth/entra/start?returnTo=%2Fhistory%3Fpage%3D2%23top"
+    );
+  });
+
+  it("clears the CSRF token after logout", async () => {
+    mocks.apiPost.mockResolvedValue(null);
+
     await logout();
-    expect(mocks.logoutRedirect).toHaveBeenCalled();
-  });
 
-  it("acquireAccessToken uses silent first", async () => {
-    const token = await acquireAccessToken();
-    expect(mocks.acquireTokenSilent).toHaveBeenCalled();
-    expect(token).toBe(freshIdToken);
-  });
-
-  it("acquireAccessToken redirects when interaction is required", async () => {
-    mocks.acquireTokenSilent.mockRejectedValueOnce(
-      new InteractionRequiredAuthError("interaction_required")
-    );
-
-    await expect(acquireAccessToken()).rejects.toThrow("需要重新登入");
-    expect(mocks.acquireTokenRedirect).toHaveBeenCalled();
-  });
-
-  it("refreshes a stale ID token even when MSAL returns a cached result", async () => {
-    const staleIdToken = makeJwt({
-      exp: Math.floor(Date.now() / 1000) + 60,
-    });
-    mocks.acquireTokenSilent
-      .mockResolvedValueOnce({
-        accessToken: "cached-access-token",
-        idToken: staleIdToken,
-      })
-      .mockResolvedValueOnce({
-        accessToken: "refreshed-access-token",
-        idToken: freshIdToken,
-      });
-
-    const token = await acquireAccessToken();
-
-    expect(token).toBe(freshIdToken);
-    expect(mocks.acquireTokenSilent).toHaveBeenCalledTimes(2);
-    expect(mocks.acquireTokenSilent).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        forceRefresh: true,
-      })
-    );
-  });
-
-  it("acquireAccessToken can force a cache refresh", async () => {
-    await acquireAccessToken({ forceRefresh: true });
-    expect(mocks.acquireTokenSilent).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        forceRefresh: true,
-        redirectUri: window.location.origin,
-        refreshTokenExpirationOffsetSeconds: 300,
-      })
-    );
+    expect(mocks.apiPost).toHaveBeenCalledWith("/api/auth/logout", {});
+    expect(mocks.clearCsrfToken).toHaveBeenCalled();
   });
 });

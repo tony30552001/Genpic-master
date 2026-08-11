@@ -1,68 +1,85 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-vi.mock("../authService", () => ({
-  acquireAccessToken: vi.fn(() => Promise.resolve("token")),
-}));
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../config", () => ({
   AUTH_BYPASS: false,
 }));
 
-import { apiGet, apiPost, apiDelete } from "../apiClient";
+import {
+  apiDelete,
+  apiGet,
+  apiPost,
+  AuthExpiredError,
+  setAuthExpiredHandler,
+  setCsrfToken,
+} from "../apiClient";
+
+const jsonResponse = (body, status = 200) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  text: vi.fn().mockResolvedValue(JSON.stringify(body)),
+});
 
 describe("apiClient", () => {
   beforeEach(() => {
     global.fetch = vi.fn();
+    setAuthExpiredHandler(null);
+    setCsrfToken(null);
   });
 
-  it("apiGet returns JSON on success", async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ status: "ok" }),
-    });
+  it("apiGet uses the server session cookie", async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ status: "ok" }));
 
-    const result = await apiGet("/health");
-    expect(result).toEqual({ status: "ok" });
-  });
+    await expect(apiGet("/health")).resolves.toEqual({ status: "ok" });
 
-  it("apiGet throws on error", async () => {
-    global.fetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: vi.fn().mockResolvedValue("boom"),
-    });
-
-    await expect(apiGet("/health")).rejects.toThrow("boom");
-  });
-
-  it("apiPost sends JSON body", async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ id: 1 }),
-    });
-
-    const result = await apiPost("/styles", { name: "Style" });
-    expect(result).toEqual({ id: 1 });
     expect(global.fetch).toHaveBeenCalledWith(
-      "/styles",
+      "/health",
       expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ name: "Style" }),
-        headers: expect.objectContaining({
-          "X-Auth-Token": "token",
-        }),
+        method: "GET",
+        credentials: "include",
+      })
+    );
+    expect(global.fetch.mock.calls[0][1].headers).not.toHaveProperty("X-Auth-Token");
+  });
+
+  it("apiPost includes the in-memory CSRF token", async () => {
+    setCsrfToken("csrf-token");
+    global.fetch.mockResolvedValue(jsonResponse({ id: 1 }));
+
+    await expect(apiPost("/styles", { name: "Style" })).resolves.toEqual({ id: 1 });
+
+    expect(global.fetch.mock.calls[0][1].headers).toEqual(
+      expect.objectContaining({
+        "Content-Type": "application/json",
+        "X-CSRF-Token": "csrf-token",
       })
     );
   });
 
-  it("apiDelete supports no-content", async () => {
+  it("rejects mutating requests when the session CSRF token is missing", async () => {
+    await expect(apiPost("/styles", { name: "Style" })).rejects.toBeInstanceOf(
+      AuthExpiredError
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("notifies the auth context when the server returns 401", async () => {
+    const onExpired = vi.fn();
+    setCsrfToken("csrf-token");
+    setAuthExpiredHandler(onExpired);
+    global.fetch.mockResolvedValue(jsonResponse({ error: { message: "expired" } }, 401));
+
+    await expect(apiGet("/me")).rejects.toBeInstanceOf(AuthExpiredError);
+    expect(onExpired).toHaveBeenCalledOnce();
+  });
+
+  it("apiDelete supports no-content responses", async () => {
+    setCsrfToken("csrf-token");
     global.fetch.mockResolvedValue({
       ok: true,
       status: 204,
       text: vi.fn(),
     });
 
-    const result = await apiDelete("/styles/1");
-    expect(result).toBeNull();
+    await expect(apiDelete("/styles/1")).resolves.toBeNull();
   });
 });

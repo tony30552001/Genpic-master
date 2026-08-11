@@ -21,13 +21,14 @@
 
 ---
 
-## 2. Entra ID App Registration（MSAL）
-1. 進入 **Microsoft Entra ID** → **App registrations** → **New registration**
+## 2. Entra ID App Registration（BFF）
+1. 進入 **Microsoft Entra ID** → **App registrations** → 既有 Pixora App Registration
 2. **Name**：`genpic-web`
 3. **Supported account types**：Single tenant
-4. **Redirect URI**：選 **Single-page application (SPA)**
-   - `http://localhost:5173`
-5. **Register**
+4. **Redirect URI**：選 **Web**
+   - `http://localhost:3000/api/auth/entra/callback`
+   - `https://<your-swa-domain>/api/auth/entra/callback`
+5. 在 **Certificates & secrets** 建立 client secret，僅放在 App Service
 
 記下：
 - **Tenant ID**
@@ -127,6 +128,9 @@
 2. 新增：
    - `AZURE_TENANT_ID` = Tenant ID
    - `AZURE_CLIENT_ID` = Client ID
+   - `AZURE_CLIENT_SECRET` = Existing App Registration secret value
+   - `ENTRA_REDIRECT_URI` = `https://<your-swa-domain>/api/auth/entra/callback`
+   - `AUTH_SESSION_SECRET` = Random secret with at least 32 bytes
    - `GOOGLE_CLIENT_ID` = Google OAuth client ID
    - `DATABASE_URL` = PostgreSQL connection string
    - `DATABASE_SSL` = `true`
@@ -157,7 +161,7 @@
 3. **Save**
 
 部署後，先使用相同的 `DATABASE_URL` 執行 `node api/scripts/migrate.cjs`，
-建立 `image_generation_jobs` table。GPT Image 2 會由 App Service 背景 worker
+建立 `image_generation_jobs` 與 `auth_sessions` tables。GPT Image 2 會由 App Service 背景 worker
 處理，避免 SWA linked API 約 45 秒 gateway timeout。
 
 ---
@@ -175,11 +179,9 @@
 
 ## 11. 前端 .env 設定
 ```dotenv
-VITE_MSAL_CLIENT_ID=<client-id>
-VITE_MSAL_TENANT_ID=<tenant-id>
-VITE_MSAL_REDIRECT_URI=http://localhost:5173
-VITE_MSAL_SCOPES=User.Read
 VITE_API_BASE_URL=/api
+VITE_GOOGLE_CLIENT_ID=<public-google-client-id>
+VITE_AUTH_BYPASS=false
 ```
 
 ---
@@ -187,7 +189,8 @@ VITE_API_BASE_URL=/api
 ## 12. 最小驗證
 - App Service `https://<your-app-service>.azurewebsites.net/api/health` 回 `200 {"status":"ok"}`
 - Static Web App `https://<your-swa-domain>/api/health` 回 `200 {"status":"ok"}`
-- MSAL 登入可取得 token
-- API 呼叫不回 401
+- Entra BFF 登入 callback 可建立 session cookie
+- Google credential exchange 可建立 session cookie
+- API 呼叫不回 401，且 App Service 重啟後 session 仍有效
 - Blob 容器存在
 - PostgreSQL 可連線

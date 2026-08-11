@@ -1,77 +1,46 @@
 ---
 type: frontend architecture
 title: Browser application and authentication
-description: React bootstrap, routes, Microsoft and Google identity lifecycles, and the authenticated API-client contract.
-tags: [frontend, authentication, microsoft-entra, google]
+description: React startup, server-session bootstrap, Google and Entra sign-in entry points, CSRF request handling, and session-expiry UI.
+tags: [frontend, authentication, sessions, csrf, google, entra]
 openwiki:
   roles: [architecture, integration, workflow, testing]
-  change_kinds: [authentication, session-renewal, routing]
-  source_paths: [src/main.jsx, src/context/AuthContext.jsx, src/services/authService.js, src/services/msalClient.js, src/services/apiClient.js]
-  symbols: [AuthProvider, acquireAccessToken, acquireMicrosoftTokenSilently, msalConfig, requestWithRetry]
+  change_kinds: [authentication, session-lifecycle, csrf, routing]
+  source_paths: [src/main.jsx, src/context/AuthContext.jsx, src/services/authService.js, src/services/apiClient.js, src/components/auth/SessionExpiryBanner.jsx]
+  symbols: [AuthProvider, getAuthSession, loginWithMicrosoft, loginWithGoogle, requestWithRetry, setCsrfToken]
   test_paths: [src/services/__tests__/authService.test.js, src/services/__tests__/apiClient.test.js]
-  invariants: ["The API receives a Microsoft ID token that is valid for more than five minutes or re-authentication is requested, and concurrent Microsoft acquisition shares one in-flight request."]
-  validation_commands: [pnpm test -- --run src/services/__tests__/authService.test.js]
+  invariants: ["The browser holds the CSRF token only in memory and sends it on unsafe requests.", "Authenticated requests include the server-issued session cookie rather than a provider token."]
+  validation_commands: [pnpm test --run src/context/__tests__/AuthContext.test.jsx src/services/__tests__/authService.test.js src/services/__tests__/apiClient.test.js]
 ---
 
 # Browser application and authentication
 
-`src/main.jsx` is the browser composition root. It waits for `msalInstance.initialize()` and `handleRedirectPromise()`, selects an active account when one exists, then renders providers and `App`. This ordering prevents a redirect reload from briefly being treated as logged out.
+`src/main.jsx` is the browser composition root: it mounts `GoogleOAuthProvider`, `AuthProvider`, and `App`. It no longer initializes MSAL or handles a browser-side provider redirect. Microsoft sign-in is a full-page navigation to the BFF; Google supplies a credential to the BFF once. The server-side flow, cookies, and authorization-code exchange are canonical in [server sessions and BFF sign-in](../backend/sessions.md).
 
-`App` has public `/login`, authenticated creation/styles/history routes, and an admin route. `ProtectedRoute` waits for provider initialization; `ProtectedAdminRoute` also waits for profile loading and redirects non-admins to `/`. `ErrorBoundary` wraps the router.
+## Browser session lifecycle
 
-## Identity lifecycle
+At mount, `AuthProvider` clears legacy `google_user` and `msal.*` local-storage values, then calls `getAuthSession`. That function makes unauthenticated `GET /api/auth/session`; when the response is authenticated it keeps the returned user in React state and saves the returned CSRF value only in the module-local `apiClient` variable. A no-session response clears both user/profile state and the CSRF value.
 
-`AuthProvider` merges three sources: local bypass (`VITE_AUTH_BYPASS`), Google credentials in `localStorage.google_user`, and MSAL accounts. It loads `/api/me` whenever an authenticated user is available and derives `isAdmin` from `profile.role`. The API, rather than the client, validates the token and resolves the persisted identity; see [authentication, tenancy, and administration](../backend/auth-tenancy-admin.md).
+`loginWithMicrosoft` builds an internal path, query, and hash return target then navigates to `/api/auth/entra/start`. The API creates and validates Entra state, receives the callback, and returns to that path with the HttpOnly session cookie. `loginWithGoogle` sends `{ credential }` once to `/api/auth/google`, then reloads session state. Neither provider credential is persisted by this code.
 
-Google JWT expiry is checked on startup and visibility changes. A timer tries Google One Tap silent refresh two minutes before expiry; if that fails, the context shows a re-authentication warning. A Google token returned by `acquireAccessToken` must still have more than five minutes remaining, otherwise `authService` removes the stored session.
-
-Microsoft uses redirect login and logout. Both `loginWithMicrosoft` and interaction-required re-authentication save `window.location.href` as `redirectStartPage`; `msalConfig.auth.navigateToLoginRequestUrl` is `true`, so MSAL returns to that page after redirect handling. The shared five-minute `TOKEN_EXPIRY_BUFFER_SECONDS` / `TOKEN_RENEWAL_OFFSET_SECONDS` is intentional: it gives the browser and MSAL the same early-renewal window.
-
-```mermaid
-sequenceDiagram
-  participant Client as API client
-  participant Auth as authService
-  participant MSAL
-  participant API as API service
-  Client->>Auth: acquireAccessToken
-  Auth->>MSAL: acquireTokenSilent
-  alt ID token fresh for five minutes
-    MSAL-->>Auth: ID token
-    Auth-->>Client: X-Auth-Token value
-    Client->>API: authenticated request
-  else ID token stale or absent
-    Auth->>MSAL: acquireTokenSilent forceRefresh
-    MSAL-->>Auth: refreshed ID token
-    Auth-->>Client: X-Auth-Token value
-  else interaction required
-    Auth->>MSAL: acquireTokenRedirect with return page
-    MSAL-->>Client: redirect flow
-  end
-```
-
-This flow shows the Microsoft path used before the API client sends `X-Auth-Token`; a redirect unloads the page rather than returning a usable token.
-
-### Microsoft renewal invariants
-
-`acquireAccessToken` prefers a valid Google token. Otherwise it obtains an active MSAL account through `getActiveAccount` and delegates to `acquireMicrosoftToken`.
-
-- `acquireMicrosoftTokenSilently` calls `acquireTokenSilent` with the configured `MSAL_REDIRECT_URI`, the active account, the five-minute refresh-token offset, and the caller's `forceRefresh` value.
-- The API consumes the **ID** token, not the access token. MSAL cache validity alone is therefore insufficient: when a normal silent result has no ID token or an ID token expiring within five minutes, the service performs one forced silent refresh and rejects a still-stale result.
-- One module-level `microsoftTokenRequest` promise coalesces concurrent Microsoft requests. `microsoftRedirectInProgress` prevents a second redirect request while re-authentication is being initiated; both guards reset after settlement so recoverable failures do not permanently block renewal.
-- Only `InteractionRequiredAuthError` and the enumerated MSAL interaction error codes cause `acquireTokenRedirect`. Other silent-acquisition failures become a re-login error. `AuthProvider` preserves the Microsoft MSAL session and displays its warning; it clears Google state instead.
+`AuthProvider` loads `/api/me` after a server session establishes `user`; its `profile.role` derives `isAdmin`. All protected routes wait for session initialization; only the admin route also waits for profile loading before it checks `isAdmin`. `handleLogout` calls the CSRF-protected API logout and clears local state even if that request fails. `SessionExpiryBanner` and `LoginPage` expose both sign-in choices when `apiClient` reports expiry.
 
 ## API client contract
 
-`src/services/apiClient.js` is the common JSON client. `buildHeaders` calls `acquireAccessToken` and sends its result in `X-Auth-Token` unless bypassed or explicitly `auth: false`; it parses `{ error: { message } }`, returns `null` for 204, and exposes `AuthExpiredError`. A 401 for Microsoft triggers one `forceRefresh` retry, while a Google 401 invokes the context expiry callback. Abort errors propagate unchanged, which generation hooks depend on.
+`apiClient` uses `fetch` with `credentials: "include"` for all requests. `buildHeaders` adds JSON content type as needed and adds `X-CSRF-Token` only for unsafe methods (`POST`, `PUT`, `DELETE`, and other non-safe methods), unless `auth: false` or `csrf: false` is explicit. If an unsafe request lacks an in-memory CSRF value, it fails locally with `AuthExpiredError` before it reaches the network.
+
+A protected 401 notifies the handler registered by `AuthProvider`, which clears state and shows an expiry warning; there is no token-refresh retry. Abort errors still propagate unchanged. The API verifies the cookie and CSRF header independently; this client behavior is a usability guard, not the security control. See [server sessions](../backend/sessions.md) for middleware ordering and [HTTP API](../backend/http-api.md) for endpoint registration.
 
 ## Change and validation guide
 
-Consult this page when changing login redirects, token headers, token freshness, 401 recovery, or provider bootstrap. The Microsoft change surface is `src/services/authService.js` (`acquireAccessToken`, `acquireMicrosoftTokenSilently`, `redirectForMicrosoftReauthentication`), `src/services/msalClient.js` (`msalConfig`), `src/services/apiClient.js` (`buildHeaders`, `requestWithRetry`), and `src/context/AuthContext.jsx` (`AuthProvider`). Keep the API verification contract in [authentication, tenancy, and administration](../backend/auth-tenancy-admin.md) aligned; changing client renewal must not weaken server-side verification.
+Consult this page for sign-in buttons, bootstrapping, protected-route state, client request credentials, CSRF headers, or expiry UX. Follow the complete seam: `src/context/AuthContext.jsx` owns session/profile state, `src/services/authService.js` owns auth endpoint calls and BFF navigation, `src/services/apiClient.js` owns credential and CSRF request behavior, and `src/components/auth/SessionExpiryBanner.jsx` / `src/pages/LoginPage.jsx` render recovery UI. Server behavior belongs in [server sessions](../backend/sessions.md), not a new browser token implementation.
 
-The narrow behavioral regression suite is `src/services/__tests__/authService.test.js`: `acquireAccessToken uses silent first`, `acquireAccessToken redirects when interaction is required`, `refreshes a stale ID token even when MSAL returns a cached result`, and `acquireAccessToken can force a cache refresh`. Run:
+Keep the client’s in-memory CSRF rule aligned with the API’s unsafe-method enforcement. Do not restore `X-Auth-Token`, browser MSAL initialization, provider-token storage, or a direct-GPT credential path: those modules were removed in favor of server-owned sessions and generation.
+
+Run the focused browser checks:
 
 ```sh
-pnpm test -- --run src/services/__tests__/authService.test.js
+pnpm test --run src/context/__tests__/AuthContext.test.jsx src/services/__tests__/authService.test.js src/services/__tests__/apiClient.test.js
 ```
 
-Also run `src/services/__tests__/apiClient.test.js` when changing request headers or the 401 retry. A browser redirect smoke test is warranted only when changing `MSAL_REDIRECT_URI`, redirect navigation, scopes, or Entra registration; its deployment/setup constraints belong in [development, migrations, and deployment](../operations/development-deployment.md). Domain workflow state is intentionally outside this page: use [creation workflows](create-workflows.md).
+`AuthContext.test.jsx` covers BFF-session bootstrap followed by profile loading. The auth-service suite covers session load/CSRF storage, Google posting, BFF Microsoft redirect, and logout clearing. The API-client suite covers cookie credentials, CSRF inclusion/missing-token rejection, 401 notification, and 204 handling. Perform an interactive browser check only when changing the login UI, `VITE_API_BASE_URL`, or return routing; it must cover a post-login session bootstrap, a mutation after CSRF bootstrap, logout, and expired-session recovery. Use [operations](../operations/development-deployment.md) for callback and CORS setup.
