@@ -25,6 +25,7 @@
 5. Startup command 使用 `npm start`。
 6. 在 **Configuration** → **Application settings** 設定 backend settings。
 7. 敏感值使用 Key Vault reference 或 App Service secrets，不要提交到 Git。
+8. 在 **Authentication** 中停用 App Service Authentication / Easy Auth，或允許未驗證請求；Pixora BFF 會自行處理 Entra、Google、session 與 CSRF，不可讓平台的 `RedirectToLoginPage` 先攔截 `/api/*`。
 
 至少確認以下設定存在：
 

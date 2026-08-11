@@ -29,6 +29,8 @@ Pixora 使用既有 Azure Static Web Apps + App Service 架構，由 App Service
 | `AUTH_DISABLED` | 正式環境固定為 `false` |
 | `CORS_ALLOW_ORIGIN` | 精確列出 SWA 網域與本機開發網域，不使用 `*` |
 
+App Service 的 **Authentication / Easy Auth** 必須停用，或設定為允許未驗證請求。此部署採 BFF 認證，不能再由 App Service 平台的 `RedirectToLoginPage` 取代 `/api/auth/*`。
+
 產生 session secret 的例子：
 
 ```powershell

@@ -160,6 +160,8 @@
    - `SCM_DO_BUILD_DURING_DEPLOYMENT` = `true`
 3. **Save**
 
+在同一個 App Service 的 **Authentication** 頁面停用 **App Service Authentication / Easy Auth**（平台 Authentication 必須允許匿名進入）。Pixora BFF 會自行處理 Entra authorization code、Google credential、HttpOnly session cookie 與 CSRF；若平台設定為 `RedirectToLoginPage`，會在 BFF route 前先攔截請求。
+
 部署後，先使用相同的 `DATABASE_URL` 執行 `node api/scripts/migrate.cjs`，
 建立 `image_generation_jobs` 與 `auth_sessions` tables。GPT Image 2 會由 App Service 背景 worker
 處理，避免 SWA linked API 約 45 秒 gateway timeout。
