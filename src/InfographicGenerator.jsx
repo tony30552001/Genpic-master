@@ -32,6 +32,7 @@ import AssetCenter from './components/library/AssetCenter';
 export default function InfographicGenerator({
     initialTab = 'general',
     initialLibrarySection = 'overview',
+    initialLibraryViewMode = 'grid',
 }) {
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);
@@ -998,6 +999,7 @@ export default function InfographicGenerator({
                     <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar lg:px-8 2xl:px-12">
                         <AssetCenter
                             initialSection={initialLibrarySection}
+                            initialViewMode={initialLibraryViewMode}
                             templates={templates}
                             savedStyles={savedStyles}
                             historyItems={historyItems}

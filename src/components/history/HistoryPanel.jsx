@@ -1,5 +1,16 @@
 import React, { useState } from "react";
-import { Bookmark, CheckSquare, Search, Trash2, Wand2, X, ArrowRightLeft } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Bookmark,
+  CheckSquare,
+  Clock3,
+  FileText,
+  Image as ImageIcon,
+  Search,
+  Trash2,
+  Wand2,
+  X,
+} from "lucide-react";
 import HistoryCard from "./HistoryCard";
 import ComparisonView from "./ComparisonView";
 import {
@@ -13,8 +24,217 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const formatHistoryDate = (item) => {
+  const value = item.createdAt;
+  if (!value) return "—";
+  const seconds = typeof value === "object" && typeof value.seconds === "number"
+    ? value.seconds
+    : typeof value === "number"
+      ? value > 1e12
+        ? value / 1000
+        : value
+      : Date.parse(value) / 1000;
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  return new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(seconds * 1000));
+};
+
+function HistoryPreview({ item, className }) {
+  const [imgError, setImgError] = useState(false);
+
+  if (item.imageUrl && !imgError) {
+    return (
+      <img
+        src={item.imageUrl}
+        alt=""
+        width={160}
+        height={96}
+        loading="lazy"
+        decoding="async"
+        onError={() => setImgError(true)}
+        className={`shrink-0 rounded-lg border border-border object-cover ${className}`}
+      />
+    );
+  }
+
+  return (
+    <span className={`flex shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/50 ${className}`}>
+      <ImageIcon className="h-5 w-5" aria-hidden="true" />
+    </span>
+  );
+}
+
+function HistoryListRow({
+  item,
+  style,
+  onLoad,
+  onDelete,
+  isSelectionMode,
+  isSelected,
+  onToggleSelect,
+}) {
+  return (
+    <article
+      className={`flex min-w-0 flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-[border-color,box-shadow] duration-200 ${
+        isSelected
+          ? "border-primary ring-2 ring-primary/20 shadow-md"
+          : "border-border hover:border-primary/30 hover:shadow-sm"
+      }`}
+    >
+      {isSelectionMode && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(item.id)}
+          aria-label="選取此生成紀錄"
+          className="h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-ring"
+        />
+      )}
+      <HistoryPreview item={item} className="h-20 w-28" />
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">
+          {item.userScript || "無內容"}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Clock3 className="h-3 w-3" aria-hidden="true" />
+            {formatHistoryDate(item)}
+          </span>
+          {style ? (
+            <span className="rounded-md bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+              {style.name}
+            </span>
+          ) : (
+            <span>無特定風格</span>
+          )}
+        </div>
+      </div>
+      {!isSelectionMode && (
+        <div className="flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto">
+          <button
+            type="button"
+            onClick={() => onLoad(item)}
+            className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            aria-label="載入此生成紀錄設定"
+          >
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden md:inline">載入設定</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(item.id)}
+            className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            aria-label="刪除此生成紀錄"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function HistoryTable({
+  items,
+  styleMap,
+  onLoad,
+  onDelete,
+  isSelectionMode,
+  selectedIds,
+  onToggleSelect,
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <table className="w-full min-w-[900px] text-sm">
+        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+          <tr>
+            {isSelectionMode && <th scope="col" className="w-12 px-4 py-3 font-medium">選取</th>}
+            <th scope="col" className="px-4 py-3 font-medium">預覽</th>
+            <th scope="col" className="px-4 py-3 font-medium">生成內容</th>
+            <th scope="col" className="px-4 py-3 font-medium">風格</th>
+            <th scope="col" className="px-4 py-3 font-medium">建立時間</th>
+            <th scope="col" className="px-4 py-3 text-right font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {items.map((item) => {
+            const style = item.styleId ? styleMap[item.styleId] : null;
+            return (
+              <tr
+                key={item.id}
+                className={`align-middle transition-colors ${
+                  selectedIds.has(item.id) ? "bg-primary/5" : "hover:bg-muted/30"
+                }`}
+              >
+                {isSelectionMode && (
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => onToggleSelect(item.id)}
+                      aria-label="選取此生成紀錄"
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                    />
+                  </td>
+                )}
+                <td className="px-4 py-3">
+                  <HistoryPreview item={item} className="h-14 w-20" />
+                </td>
+                <td className="max-w-[360px] px-4 py-3">
+                  <p className="line-clamp-3 text-xs leading-relaxed text-foreground">
+                    {item.userScript || "無內容"}
+                  </p>
+                </td>
+                <td className="px-4 py-3">
+                  {style ? (
+                    <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                      {style.name}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">無特定風格</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                  {formatHistoryDate(item)}
+                </td>
+                <td className="px-4 py-3">
+                  {!isSelectionMode && (
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onLoad(item)}
+                        className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        aria-label="載入此生成紀錄設定"
+                      >
+                        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                        載入
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(item.id)}
+                        className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        aria-label="刪除此生成紀錄"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function HistoryPanel({
   historyItems,
+  viewMode = "grid",
   savedStyles,
   searchQuery,
   onSearchChange,
@@ -247,6 +467,31 @@ export default function HistoryPanel({
               </button>
             </div>
           )}
+        </div>
+      ) : viewMode === "table" ? (
+        <HistoryTable
+          items={filtered}
+          styleMap={styleMap}
+          onLoad={onLoad}
+          onDelete={(id) => setPendingDeleteId(id)}
+          isSelectionMode={isSelectionMode}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+        />
+      ) : viewMode === "list" ? (
+        <div className="space-y-2">
+          {filtered.map((item) => (
+            <HistoryListRow
+              key={item.id}
+              item={item}
+              style={item.styleId ? styleMap[item.styleId] : null}
+              onLoad={onLoad}
+              onDelete={(id) => setPendingDeleteId(id)}
+              isSelectionMode={isSelectionMode}
+              isSelected={selectedIds.has(item.id)}
+              onToggleSelect={toggleSelect}
+            />
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
   Clock3,
@@ -19,6 +19,8 @@ import TemplateLibrary from "@/components/templates/TemplateLibrary";
 import StyleLibrary from "@/components/styles/StyleLibrary";
 import HistoryPanel from "@/components/history/HistoryPanel";
 import AssetMetadataSheet from "./AssetMetadataSheet";
+import AssetViewModeToggle from "./AssetViewModeToggle";
+import { normalizeViewMode } from "./viewMode";
 
 const SECTIONS = [
   { id: "overview", label: "全部資產", icon: Library },
@@ -176,7 +178,145 @@ function OverviewAssetCard({ asset, onOpen, onPrimaryAction, index = 0 }) {
   );
 }
 
-function OverviewSection({ type, title, description, icon: Icon, assets, onOpenSection, onOpenAsset, onPrimaryAction, onGoCreate }) {
+function OverviewAssetVisual({ asset, className }) {
+  const Icon = asset.type === "style" ? Palette : asset.type === "history" ? History : FileText;
+
+  if (asset.previewUrl) {
+    return (
+      <img
+        src={asset.previewUrl}
+        alt=""
+        width={160}
+        height={96}
+        loading="lazy"
+        decoding="async"
+        className={`shrink-0 rounded-lg border border-border object-cover ${className}`}
+      />
+    );
+  }
+
+  return (
+    <span className={`flex shrink-0 items-center justify-center rounded-lg bg-muted text-primary/50 ${className}`}>
+      <Icon className="h-5 w-5" aria-hidden="true" />
+    </span>
+  );
+}
+
+function OverviewAssetListRow({ asset, onOpen, onPrimaryAction }) {
+  const meta = TYPE_META[asset.type];
+
+  return (
+    <article className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card p-3 transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-sm">
+      <button
+        type="button"
+        onClick={() => onOpen(asset)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        aria-label={`查看${asset.title}`}
+      >
+        <OverviewAssetVisual asset={asset} className="h-16 w-24" />
+        <span className="min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-foreground">{asset.title}</span>
+            <Badge className={`shrink-0 text-[10px] ${meta.badgeClass}`}>{meta.label}</Badge>
+          </span>
+          <span className="mt-1 block line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {asset.description || "尚無描述"}
+          </span>
+          <span className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Clock3 className="h-3 w-3" aria-hidden="true" />
+            {formatAssetDate(asset.date)}
+          </span>
+        </span>
+      </button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => onPrimaryAction(asset.item)}
+        className="shrink-0 gap-1.5"
+        aria-label={`${meta.actionLabel} ${asset.title}`}
+      >
+        <span className="hidden sm:inline">{meta.actionLabel}</span>
+        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Button>
+    </article>
+  );
+}
+
+function OverviewAssetTable({ assets, onOpen, onPrimaryAction }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <table className="w-full min-w-[700px] text-sm">
+        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+          <tr>
+            <th scope="col" className="px-4 py-3 font-medium">資產</th>
+            <th scope="col" className="px-4 py-3 font-medium">類型</th>
+            <th scope="col" className="px-4 py-3 font-medium">描述</th>
+            <th scope="col" className="px-4 py-3 font-medium">更新時間</th>
+            <th scope="col" className="px-4 py-3 text-right font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {assets.map((asset) => {
+            const meta = TYPE_META[asset.type];
+            return (
+              <tr key={`${asset.type}-${asset.id}`} className="align-middle transition-colors hover:bg-muted/30">
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(asset)}
+                    className="flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={`查看${asset.title}`}
+                  >
+                    <OverviewAssetVisual asset={asset} className="h-10 w-14" />
+                    <span className="min-w-0 truncate font-medium text-foreground">{asset.title}</span>
+                  </button>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
+                  <Badge className={`text-[10px] ${meta.badgeClass}`}>{meta.label}</Badge>
+                </td>
+                <td className="max-w-[320px] px-4 py-3">
+                  <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                    {asset.description || "尚無描述"}
+                  </p>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                  {formatAssetDate(asset.date)}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onPrimaryAction(asset.item)}
+                    className="gap-1.5"
+                    aria-label={`${meta.actionLabel} ${asset.title}`}
+                  >
+                    {meta.actionLabel}
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function OverviewSection({
+  type,
+  title,
+  description,
+  icon: Icon,
+  assets,
+  viewMode,
+  onOpenSection,
+  onOpenAsset,
+  onPrimaryAction,
+  onGoCreate,
+}) {
   return (
     <section className="space-y-3" aria-labelledby={`overview-${type}-title`}>
       <div className="flex items-end justify-between gap-3">
@@ -196,17 +336,36 @@ function OverviewSection({ type, title, description, icon: Icon, assets, onOpenS
       </div>
 
       {assets.length > 0 ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {assets.map((asset, index) => (
-            <OverviewAssetCard
-              key={`${asset.type}-${asset.id}`}
-              asset={asset}
-              index={index}
-              onOpen={onOpenAsset}
-              onPrimaryAction={onPrimaryAction}
-            />
-          ))}
-        </div>
+        viewMode === "table" ? (
+          <OverviewAssetTable
+            assets={assets}
+            onOpen={onOpenAsset}
+            onPrimaryAction={onPrimaryAction}
+          />
+        ) : viewMode === "list" ? (
+          <div className="space-y-2">
+            {assets.map((asset) => (
+              <OverviewAssetListRow
+                key={`${asset.type}-${asset.id}`}
+                asset={asset}
+                onOpen={onOpenAsset}
+                onPrimaryAction={onPrimaryAction}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {assets.map((asset, index) => (
+              <OverviewAssetCard
+                key={`${asset.type}-${asset.id}`}
+                asset={asset}
+                index={index}
+                onOpen={onOpenAsset}
+                onPrimaryAction={onPrimaryAction}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground/50">
@@ -230,6 +389,7 @@ function OverviewSection({ type, title, description, icon: Icon, assets, onOpenS
 
 export default function AssetCenter({
   initialSection = "overview",
+  initialViewMode = "grid",
   templates = [],
   savedStyles = [],
   historyItems = [],
@@ -262,25 +422,24 @@ export default function AssetCenter({
 }) {
   const normalizeSection = (value) =>
     SECTIONS.some((item) => item.id === value) ? value : "overview";
-  const [section, setSectionState] = useState(() => normalizeSection(initialSection));
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef(null);
+  const section = normalizeSection(searchParams.get("section") || initialSection);
+  const viewMode = normalizeViewMode(searchParams.get("view") || initialViewMode);
 
-  // URL → state：瀏覽器返回鍵或外部 deep-link 變更時同步（render 期間調整 state，避免 effect 內 setState）
-  const [lastUrlSection, setLastUrlSection] = useState(() => normalizeSection(initialSection));
-  const urlSection = normalizeSection(initialSection);
-  if (urlSection !== lastUrlSection) {
-    setLastUrlSection(urlSection);
-    setSectionState(urlSection);
-  }
+  const updateLibraryQuery = (nextSection = section, nextViewMode = viewMode) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("section", nextSection);
+    nextParams.set("view", nextViewMode);
+    setSearchParams(nextParams, { replace: true });
+  };
 
-  // state → URL：tab 切換寫回 ?section=，重新整理保持上下文
   const setSection = (value) => {
-    const next = normalizeSection(value);
-    setSectionState(next);
-    if (next !== urlSection) {
-      navigate(`?section=${next}`, { replace: true });
-    }
+    updateLibraryQuery(normalizeSection(value), viewMode);
+  };
+
+  const setViewMode = (value) => {
+    updateLibraryQuery(section, normalizeViewMode(value));
   };
   const [overviewSearchQuery, setOverviewSearchQuery] = useState("");
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
@@ -446,20 +605,23 @@ export default function AssetCenter({
           </TabsList>
         </Tabs>
 
-        <div className="relative min-w-0">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            ref={searchInputRef}
-            value={activeSearchQuery}
-            onChange={(event) => handleSearchChange(event.target.value)}
-            placeholder={section === "overview" ? "搜尋全部資產…" : `搜尋${SECTIONS.find((item) => item.id === section)?.label}…`}
-            aria-label="搜尋素材"
-            autoComplete="off"
-            className="h-11 pl-10 pr-16"
-          />
-          <kbd className="pointer-events-none absolute right-3.5 top-1/2 hidden h-6 -translate-y-1/2 items-center rounded-md border border-border bg-muted px-1.5 text-[11px] font-medium text-muted-foreground sm:inline-flex">
-            /
-          </kbd>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              ref={searchInputRef}
+              value={activeSearchQuery}
+              onChange={(event) => handleSearchChange(event.target.value)}
+              placeholder={section === "overview" ? "搜尋全部資產…" : `搜尋${SECTIONS.find((item) => item.id === section)?.label}…`}
+              aria-label="搜尋素材"
+              autoComplete="off"
+              className="h-11 pl-10 pr-16"
+            />
+            <kbd className="pointer-events-none absolute right-3.5 top-1/2 hidden h-6 -translate-y-1/2 items-center rounded-md border border-border bg-muted px-1.5 text-[11px] font-medium text-muted-foreground sm:inline-flex">
+              /
+            </kbd>
+          </div>
+          <AssetViewModeToggle value={viewMode} onChange={setViewMode} />
         </div>
       </div>
 
@@ -496,6 +658,7 @@ export default function AssetCenter({
             description="快速套用常用的內容與風格組合"
             icon={FileText}
             assets={overviewByType.templates}
+            viewMode={viewMode}
             onOpenSection={() => setSection("templates")}
             onOpenAsset={handleOpenOverviewAsset}
             onPrimaryAction={onApplyTemplate}
@@ -507,6 +670,7 @@ export default function AssetCenter({
             icon={Palette}
             type="style"
             assets={overviewByType.styles}
+            viewMode={viewMode}
             onOpenSection={() => setSection("styles")}
             onOpenAsset={handleOpenOverviewAsset}
             onPrimaryAction={onApplyStyle}
@@ -518,6 +682,7 @@ export default function AssetCenter({
             icon={History}
             type="history"
             assets={overviewByType.history}
+            viewMode={viewMode}
             onOpenSection={() => setSection("history")}
             onOpenAsset={handleOpenOverviewAsset}
             onPrimaryAction={onLoadHistory}
@@ -529,14 +694,15 @@ export default function AssetCenter({
       {section === "templates" && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none" key="templates">
           <TemplateLibrary
-          templates={templates}
-          searchQuery={templateSearchQuery}
-          onSearchChange={setTemplateSearchQuery}
-          hideSearch
-          onApplyTemplate={onApplyTemplate}
-          onDeleteTemplate={onDeleteTemplate}
-          onDeleteTemplates={onDeleteTemplates}
-          onEditTemplate={(template) => handleEdit("template", template)}
+            templates={templates}
+            viewMode={viewMode}
+            searchQuery={templateSearchQuery}
+            onSearchChange={setTemplateSearchQuery}
+            hideSearch
+            onApplyTemplate={onApplyTemplate}
+            onDeleteTemplate={onDeleteTemplate}
+            onDeleteTemplates={onDeleteTemplates}
+            onEditTemplate={(template) => handleEdit("template", template)}
           />
         </div>
       )}
@@ -544,26 +710,27 @@ export default function AssetCenter({
       {section === "styles" && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none" key="styles">
           <StyleLibrary
-          savedStyles={savedStyles}
-          isLoading={isLoadingStyles}
-          isSearching={isSearchingStyles}
-          error={styleError}
-          searchQuery={styleSearchQuery}
-          onSearchChange={onStyleSearchChange}
-          hideSearch
-          scope={styleScope}
-          onScopeChange={onStyleScopeChange}
-          sort={styleSort}
-          onSortChange={onStyleSortChange}
-          onApplyStyle={onApplyStyle}
-          onDeleteStyle={onDeleteStyle}
-          onDeleteStyles={onDeleteStyles}
-          onUpdateStyle={onUpdateStyle}
-          onPublishStyle={onPublishStyle}
-          onUnpublishStyle={onUnpublishStyle}
-          onCopyStyle={onCopyStyle}
-          onGoCreate={onGoCreate}
-          onEditStyle={(style) => handleEdit("style", style)}
+            savedStyles={savedStyles}
+            viewMode={viewMode}
+            isLoading={isLoadingStyles}
+            isSearching={isSearchingStyles}
+            error={styleError}
+            searchQuery={styleSearchQuery}
+            onSearchChange={onStyleSearchChange}
+            hideSearch
+            scope={styleScope}
+            onScopeChange={onStyleScopeChange}
+            sort={styleSort}
+            onSortChange={onStyleSortChange}
+            onApplyStyle={onApplyStyle}
+            onDeleteStyle={onDeleteStyle}
+            onDeleteStyles={onDeleteStyles}
+            onUpdateStyle={onUpdateStyle}
+            onPublishStyle={onPublishStyle}
+            onUnpublishStyle={onUnpublishStyle}
+            onCopyStyle={onCopyStyle}
+            onGoCreate={onGoCreate}
+            onEditStyle={(style) => handleEdit("style", style)}
           />
         </div>
       )}
@@ -571,15 +738,16 @@ export default function AssetCenter({
       {section === "history" && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none" key="history">
           <HistoryPanel
-          historyItems={historyItems}
-          savedStyles={savedStyles}
-          searchQuery={historySearchQuery}
-          onSearchChange={onHistorySearchChange}
-          hideSearch
-          onLoad={onLoadHistory}
-          onDelete={onDeleteHistory}
-          onDeleteItems={onDeleteHistoryItems}
-          onGoCreate={onGoCreate}
+            historyItems={historyItems}
+            viewMode={viewMode}
+            savedStyles={savedStyles}
+            searchQuery={historySearchQuery}
+            onSearchChange={onHistorySearchChange}
+            hideSearch
+            onLoad={onLoadHistory}
+            onDelete={onDeleteHistory}
+            onDeleteItems={onDeleteHistoryItems}
+            onGoCreate={onGoCreate}
           />
         </div>
       )}

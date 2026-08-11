@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from "react";
 import {
     CheckSquare,
+    Clock3,
     Copy,
     FileText,
     Filter,
-    Image as ImageIcon,
     Palette,
     Pencil,
     Search,
@@ -192,8 +192,277 @@ function TemplateCard({
     );
 }
 
+const formatTemplateDate = (template) => {
+    const value = template.updatedAt || template.createdAt;
+    if (!value) return "—";
+    const seconds = typeof value === "object" && typeof value.seconds === "number"
+        ? value.seconds
+        : typeof value === "number"
+            ? value > 1e12
+                ? value / 1000
+                : value
+            : Date.parse(value) / 1000;
+    if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+    return new Intl.DateTimeFormat("zh-TW", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+    }).format(new Date(seconds * 1000));
+};
+
+function TemplateTags({ template, selectedTags, onToggleTag, isSelectionMode }) {
+    if (!template.tags || template.tags.length === 0) return null;
+
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {template.tags.slice(0, 4).map((tag, index) => {
+                const isActive = selectedTags?.includes(tag);
+                return (
+                    <button
+                        type="button"
+                        key={`${tag}-${index}`}
+                        disabled={isSelectionMode}
+                        aria-pressed={isActive}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleTag?.(tag);
+                        }}
+                        className={`rounded-full border px-2 py-0.5 text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                            isActive
+                                ? "border-primary/20 bg-primary/10 text-primary"
+                                : "border-border bg-muted/50 text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                        }`}
+                    >
+                        #{tag}
+                    </button>
+                );
+            })}
+            {template.tags.length > 4 && (
+                <span className="px-1 py-0.5 text-[10px] text-muted-foreground">
+                    +{template.tags.length - 4}
+                </span>
+            )}
+        </div>
+    );
+}
+
+function TemplateListRow({
+    template,
+    onApply,
+    onDelete,
+    onEdit,
+    selectedTags,
+    onToggleTag,
+    isSelectionMode,
+    isSelected,
+    onToggleSelect,
+}) {
+    const scriptPreview = template.userScript || "尚無內容摘要";
+
+    return (
+        <article
+            className={`flex min-w-0 flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-[border-color,box-shadow] duration-200 ${
+                isSelected
+                    ? "border-primary ring-2 ring-primary/20 shadow-md"
+                    : "border-border hover:border-primary/30 hover:shadow-sm"
+            }`}
+        >
+            {isSelectionMode && (
+                <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleSelect(template.id)}
+                    onClick={(event) => event.stopPropagation()}
+                    aria-label={`選取範本 ${template.name}`}
+                    className="h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-ring"
+                />
+            )}
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <FileText className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-sm font-semibold text-foreground">{template.name}</h3>
+                        {template.stylePrompt && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                <Palette className="h-3 w-3" aria-hidden="true" />
+                                含風格
+                            </span>
+                        )}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                        {template.description || scriptPreview}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <TemplateTags
+                            template={template}
+                            selectedTags={selectedTags}
+                            onToggleTag={onToggleTag}
+                            isSelectionMode={isSelectionMode}
+                        />
+                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <Clock3 className="h-3 w-3" aria-hidden="true" />
+                            {formatTemplateDate(template)}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {!isSelectionMode && (
+                <div className="flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto">
+                    <button
+                        type="button"
+                        onClick={() => onApply(template)}
+                        className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        aria-label={`套用範本 ${template.name}`}
+                    >
+                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span className="hidden md:inline">套用</span>
+                    </button>
+                    {onEdit && (
+                        <button
+                            type="button"
+                            onClick={() => onEdit(template)}
+                            className="flex min-h-10 min-w-10 items-center justify-center rounded-md px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                            aria-label={`編輯範本 ${template.name}`}
+                        >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span className="sr-only">編輯</span>
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={(event) => onDelete(template.id, event)}
+                        className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        aria-label={`刪除範本 ${template.name}`}
+                    >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                </div>
+            )}
+        </article>
+    );
+}
+
+function TemplateTable({
+    templates,
+    onApply,
+    onDelete,
+    onEdit,
+    selectedTags,
+    onToggleTag,
+    isSelectionMode,
+    selectedIds,
+    onToggleSelect,
+}) {
+    return (
+        <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[860px] text-sm">
+                <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                        {isSelectionMode && <th scope="col" className="w-12 px-4 py-3 font-medium">選取</th>}
+                        <th scope="col" className="px-4 py-3 font-medium">範本</th>
+                        <th scope="col" className="px-4 py-3 font-medium">內容摘要</th>
+                        <th scope="col" className="px-4 py-3 font-medium">標籤</th>
+                        <th scope="col" className="px-4 py-3 font-medium">更新時間</th>
+                        <th scope="col" className="px-4 py-3 text-right font-medium">操作</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                    {templates.map((template) => (
+                        <tr
+                            key={template.id}
+                            className={`align-middle transition-colors ${
+                                selectedIds.has(template.id) ? "bg-primary/5" : "hover:bg-muted/30"
+                            }`}
+                        >
+                            {isSelectionMode && (
+                                <td className="px-4 py-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.has(template.id)}
+                                        onChange={() => onToggleSelect(template.id)}
+                                        aria-label={`選取範本 ${template.name}`}
+                                        className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                                    />
+                                </td>
+                            )}
+                            <td className="px-4 py-3">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                        <FileText className="h-4 w-4" aria-hidden="true" />
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="truncate font-medium text-foreground">{template.name}</p>
+                                        {template.stylePrompt && (
+                                            <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary">
+                                                <Palette className="h-3 w-3" aria-hidden="true" />
+                                                含風格設定
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </td>
+                            <td className="max-w-[300px] px-4 py-3">
+                                <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                                    {template.description || template.userScript || "尚無內容摘要"}
+                                </p>
+                            </td>
+                            <td className="max-w-[210px] px-4 py-3">
+                                <TemplateTags
+                                    template={template}
+                                    selectedTags={selectedTags}
+                                    onToggleTag={onToggleTag}
+                                    isSelectionMode={isSelectionMode}
+                                />
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                                {formatTemplateDate(template)}
+                            </td>
+                            <td className="px-4 py-3">
+                                {!isSelectionMode && (
+                                    <div className="flex justify-end gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => onApply(template)}
+                                            className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                                            aria-label={`套用範本 ${template.name}`}
+                                        >
+                                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                                            套用
+                                        </button>
+                                        {onEdit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onEdit(template)}
+                                                className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                                                aria-label={`編輯範本 ${template.name}`}
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={(event) => onDelete(template.id, event)}
+                                            className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                                            aria-label={`刪除範本 ${template.name}`}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 export default function TemplateLibrary({
     templates,
+    viewMode = "grid",
     searchQuery: controlledSearchQuery,
     onSearchChange,
     hideSearch = false,
@@ -476,7 +745,7 @@ export default function TemplateLibrary({
                 )}
             </div>
 
-            {/* Grid 顯示 */}
+            {/* 資產瀏覽模式 */}
             {filtered.length === 0 ? (
                 <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-3">
                     <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
@@ -501,6 +770,35 @@ export default function TemplateLibrary({
                             清除所有篩選
                         </button>
                     )}
+                </div>
+            ) : viewMode === "table" ? (
+                <TemplateTable
+                    templates={filtered}
+                    onApply={onApplyTemplate}
+                    onDelete={onDeleteTemplate}
+                    onEdit={onEditTemplate}
+                    selectedTags={selectedTags}
+                    onToggleTag={toggleTag}
+                    isSelectionMode={isSelectionMode}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
+                />
+            ) : viewMode === "list" ? (
+                <div className="space-y-2">
+                    {filtered.map((template) => (
+                        <TemplateListRow
+                            key={template.id}
+                            template={template}
+                            onApply={onApplyTemplate}
+                            onDelete={onDeleteTemplate}
+                            onEdit={onEditTemplate}
+                            selectedTags={selectedTags}
+                            onToggleTag={toggleTag}
+                            isSelectionMode={isSelectionMode}
+                            isSelected={selectedIds.has(template.id)}
+                            onToggleSelect={toggleSelect}
+                        />
+                    ))}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

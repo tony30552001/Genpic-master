@@ -6,8 +6,8 @@ tags: [frontend, authentication, sessions, csrf, google, entra]
 openwiki:
   roles: [architecture, integration, workflow, testing]
   change_kinds: [authentication, session-lifecycle, csrf, routing]
-  source_paths: [src/main.jsx, src/App.jsx, src/pages/LibraryPage.jsx, src/context/AuthContext.jsx, src/services/authService.js, src/services/apiClient.js, src/components/auth/SessionExpiryBanner.jsx]
-  symbols: [App, ProtectedRoute, LibraryPage, AuthProvider, getAuthSession, loginWithMicrosoft, loginWithGoogle, requestWithRetry, setCsrfToken]
+  source_paths: [src/main.jsx, src/App.jsx, src/pages/LibraryPage.jsx, src/components/library/AssetCenter.jsx, src/components/library/viewMode.js, src/context/AuthContext.jsx, src/services/authService.js, src/services/apiClient.js, src/components/auth/SessionExpiryBanner.jsx]
+  symbols: [App, ProtectedRoute, LibraryPage, AssetCenter, normalizeViewMode, AuthProvider, getAuthSession, loginWithMicrosoft, loginWithGoogle, requestWithRetry, setCsrfToken]
   test_paths: [src/services/__tests__/authService.test.js, src/services/__tests__/apiClient.test.js]
   invariants: ["The browser holds the CSRF token only in memory and sends it on unsafe requests.", "Authenticated requests include the server-issued session cookie rather than a provider token."]
   validation_commands: [pnpm test --run src/context/__tests__/AuthContext.test.jsx src/services/__tests__/authService.test.js src/services/__tests__/apiClient.test.js]
@@ -19,7 +19,7 @@ openwiki:
 
 ## Routing
 
-`App` exposes public `/login` and protected `/`, `/library`, and `/admin` routes. `ProtectedRoute` waits for `useAuth` initialization and redirects an unauthenticated location to `/login`; `ProtectedAdminRoute` additionally waits for the profile and redirects non-admin users to `/`. `LibraryPage` reads `section` from the query string and passes it as `initialLibrarySection` to `InfographicGenerator`; the center accepts `overview`, `templates`, `styles`, or `history` and falls back to overview. The library's browser composition and resource callbacks are specified in [Asset Center](asset-center.md).
+`App` exposes public `/login` and protected `/`, `/library`, and `/admin` routes. `ProtectedRoute` waits for `useAuth` initialization and redirects an unauthenticated location to `/login`; `ProtectedAdminRoute` additionally waits for the profile and redirects non-admin users to `/`. `LibraryPage` reads `section` from the query string and passes it as `initialLibrarySection` to `InfographicGenerator`. `AssetCenter` owns the current query state: `section` accepts `overview`, `templates`, `styles`, or `history`, while `view` accepts `grid`, `list`, or `table`; invalid values fall back to overview/grid. The library's browser composition and resource callbacks are specified in [Asset Center](asset-center.md).
 
 ## Browser session lifecycle
 

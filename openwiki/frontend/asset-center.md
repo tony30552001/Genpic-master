@@ -6,16 +6,16 @@ tags: [frontend, assets, templates, styles, history]
 openwiki:
   roles: [frontend, workflow, integration]
   change_kinds: [asset-management, routing, persistence]
-  source_paths: [src/pages/LibraryPage.jsx, src/InfographicGenerator.jsx, src/components/create/StyleSourceTabs.jsx, src/components/library/AssetCenter.jsx, src/components/library/AssetMetadataSheet.jsx, src/components/templates/TemplateLibrary.jsx, src/components/styles/StyleLibrary.jsx, src/components/history/HistoryPanel.jsx]
-  symbols: [LibraryPage, InfographicGenerator, AssetCenter, AssetMetadataSheet, handleSaveMetadata, updateTemplate, updateStyle]
-  test_paths: [src/services/__tests__/storageService.test.js]
-  invariants: [The Asset Center is a browser composition layer and does not own resource persistence., Template metadata saves retain the selected template's replacement fields while style updates remain partial., Overview actions apply a template or style or load history rather than creating a new resource.]
-  validation_commands: [pnpm test --run src/services/__tests__/storageService.test.js]
+  source_paths: [src/pages/LibraryPage.jsx, src/InfographicGenerator.jsx, src/components/create/StyleSourceTabs.jsx, src/components/library/AssetCenter.jsx, src/components/library/AssetViewModeToggle.jsx, src/components/library/viewMode.js, src/components/library/AssetMetadataSheet.jsx, src/components/templates/TemplateLibrary.jsx, src/components/styles/StyleLibrary.jsx, src/components/history/HistoryPanel.jsx]
+  symbols: [LibraryPage, InfographicGenerator, AssetCenter, AssetViewModeToggle, normalizeViewMode, AssetMetadataSheet, handleSaveMetadata, updateTemplate, updateStyle]
+  test_paths: [src/components/library/__tests__/AssetViewModeToggle.test.jsx, src/services/__tests__/storageService.test.js]
+  invariants: [The Asset Center is a browser composition layer and does not own resource persistence., The URL accepts only overview/templates/styles/history sections and grid/list/table views and falls back to overview/grid., Template metadata saves retain the selected template's replacement fields while style updates remain partial., Overview actions apply a template or style or load history rather than creating a new resource.]
+  validation_commands: [pnpm test --run src/components/library/__tests__/AssetViewModeToggle.test.jsx src/services/__tests__/storageService.test.js]
 ---
 
 # Asset Center
 
-`/library` is the protected browser route for reusable templates, saved styles, and generated-history records. `LibraryPage` reads `?section=` and renders `InfographicGenerator` with `initialTab="library"`; invalid or absent values resolve to `overview` in `AssetCenter`. Route protection and session initialization remain owned by [browser application and authentication](application.md), while the underlying tenant-scoped resource contracts remain owned by [resource APIs](../backend/resources.md).
+`/library` is the protected browser route for reusable templates, saved styles, and generated-history records. `LibraryPage` reads `?section=` and renders `InfographicGenerator` with `initialTab="library"`; `AssetCenter` then owns the live `section` and `view` query state. Valid sections are `overview`, `templates`, `styles`, and `history`; valid views are `grid`, `list`, and `table`. Invalid or absent values fall back to `overview` and `grid`. Section and view changes replace the current history entry while preserving unrelated query parameters. Route protection and session initialization remain owned by [browser application and authentication](application.md), while the underlying tenant-scoped resource contracts remain owned by [resource APIs](../backend/resources.md).
 
 ## Composition and user flow
 
@@ -23,9 +23,11 @@ openwiki:
 
 ```mermaid
 flowchart TD
-  Route["/library with optional section"] --> Page["LibraryPage"]
+  Route["/library query"] --> Page["LibraryPage"]
   Page --> Generator["InfographicGenerator library tab"]
   Generator --> Center["AssetCenter"]
+  Center --> Query["section and view URL state"]
+  Center --> Toggle["AssetViewModeToggle"]
   Center --> Templates["TemplateLibrary"]
   Center --> Styles["StyleLibrary"]
   Center --> History["HistoryPanel"]
@@ -34,7 +36,7 @@ flowchart TD
   Hooks --> Resources["resource API adapters"]
 ```
 
-This flow shows browser composition only; `storageService` carries the authenticated PUT requests, and the server enforces ownership and tenant scope.
+This flow shows browser composition and URL-backed presentation state only; `storageService` carries the authenticated PUT requests, and the server enforces ownership and tenant scope.
 
 `AssetCenter` offers four sections:
 
@@ -44,6 +46,8 @@ This flow shows browser composition only; `storageService` carries the authentic
 - **History** passes the existing history query and callbacks to `HistoryPanel` with its internal search suppressed. Existing loading, comparison, and deletion behavior remain there.
 
 The shared header search writes only the active section's query: overview and templates keep local state; styles and history retain their hook/root state. Do not merge those scopes without deciding whether a query should survive a category switch.
+
+`AssetViewModeToggle` changes the shared presentation mode for every section. `normalizeViewMode` permits only `grid`, `list`, or `table`; `AssetCenter` writes the normalized value to `?view=` alongside the active `section`. The overview renders its own cards, rows, or table, while each child library receives `viewMode` and remains responsible for its category-specific rendering. Treat this as URL-backed presentation state, not another resource filter or a server query parameter.
 
 ## Template and style metadata edits
 
@@ -62,7 +66,7 @@ Keep the client payload complete while the handler has replacement semantics. If
 
 ## Change and validation guide
 
-Consult this page when changing `/library`, the library tab, overview aggregation/search, category composition, or template/style metadata editing. Start at `src/components/library/AssetCenter.jsx`; trace route setup through `src/pages/LibraryPage.jsx` and state/callback wiring through `src/InfographicGenerator.jsx`. For a child behavior, change the owning component (`TemplateLibrary`, `StyleLibrary`, or `HistoryPanel`) rather than duplicating it in the center.
+Consult this page when changing `/library`, its `section` or `view` query behavior, the library tab, overview aggregation/search, category composition, or template/style metadata editing. Start at `src/components/library/AssetCenter.jsx`; trace initial route setup through `src/pages/LibraryPage.jsx`, URL view validation through `src/components/library/viewMode.js` and `AssetViewModeToggle.jsx`, and state/callback wiring through `src/InfographicGenerator.jsx`. For a child behavior, change the owning component (`TemplateLibrary`, `StyleLibrary`, or `HistoryPanel`) rather than duplicating it in the center.
 
 Preserve these boundaries:
 
@@ -71,10 +75,10 @@ Preserve these boundaries:
 3. Metadata editing is limited to templates and styles and must await the hook update before closing. Template updates must retain every replacement field from the selected template because the server clears omitted values.
 4. Applying an asset and navigating to the create tab are distinct callbacks; preserve the existing caller behavior for each.
 
-`src/services/__tests__/storageService.test.js` covers the style PUT adapter, including its method and path. It does not import or exercise `updateTemplate`; template PUT semantics and this metadata-edit flow have no focused automated coverage. Run it after changing the style persistence adapter or edit payloads:
+`src/components/library/__tests__/AssetViewModeToggle.test.jsx` verifies the toggle's three choices and pressed state. `src/services/__tests__/storageService.test.js` covers the style PUT adapter, including its method and path. Neither imports `AssetCenter` or exercises `updateTemplate`; URL query synchronization, template replacement semantics, and the metadata-sheet flow have no focused automated coverage. Run both narrow checks after changing the toggle, style persistence adapter, or edit payloads:
 
 ```sh
-pnpm test --run src/services/__tests__/storageService.test.js
+pnpm test --run src/components/library/__tests__/AssetViewModeToggle.test.jsx src/services/__tests__/storageService.test.js
 ```
 
-There is no focused component test for `AssetCenter` or `AssetMetadataSheet`. For route, search-state, callback wiring, dialog, accessibility, or layout changes, add focused component coverage or perform an interactive check of `/library`, each `section` value, a successful and failed template/style edit, category-specific search, and an overview primary action. A full frontend `pnpm lint && pnpm build` is conditional on changes that cross routing, shared imports, or production styling; it is not the narrow default for a resource-adapter change.
+There is no focused component test for `AssetCenter` or `AssetMetadataSheet`, and no template-update adapter or handler test. For route/query state, search state, callback wiring, dialog, accessibility, or layout changes, add focused component coverage or perform an interactive check of `/library` with each valid `section` and `view`, an invalid query fallback, a successful and failed template/style edit, category-specific search, and an overview primary action. A full frontend `pnpm lint && pnpm build` is conditional on changes that cross routing, shared imports, or production styling; it is not the narrow default for a resource-adapter change.

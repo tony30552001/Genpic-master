@@ -3,14 +3,25 @@ import {
   AlertCircle,
   Bookmark,
   CheckSquare,
+  Clock3,
+  Copy,
+  Download,
+  Eye,
   Filter,
+  Image as ImageIcon,
   Loader2,
+  Lock,
+  Pencil,
   Search,
+  Share2,
+  Sparkles,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,8 +43,376 @@ const SORT_OPTIONS = [
   { value: "curated", label: "精選優先" },
 ];
 
+const formatStyleDate = (style) => {
+  const value = style.publishedAt || style.updatedAt || style.createdAt;
+  if (!value) return "—";
+  const seconds = typeof value === "object" && typeof value.seconds === "number"
+    ? value.seconds
+    : typeof value === "number"
+      ? value > 1e12
+        ? value / 1000
+        : value
+      : Date.parse(value) / 1000;
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  return new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(seconds * 1000));
+};
+
+function StylePreview({ style, className }) {
+  const [imgError, setImgError] = useState(false);
+
+  if (style.previewUrl && !imgError) {
+    return (
+      <img
+        src={style.previewUrl}
+        alt=""
+        width={160}
+        height={112}
+        loading="lazy"
+        decoding="async"
+        onError={() => setImgError(true)}
+        className={`shrink-0 rounded-lg border border-border object-cover ${className}`}
+      />
+    );
+  }
+
+  return (
+    <span className={`flex shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/50 ${className}`}>
+      <ImageIcon className="h-5 w-5" aria-hidden="true" />
+    </span>
+  );
+}
+
+function StyleStatusBadges({ style }) {
+  const isShared = style.visibility === "shared";
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge variant="outline" className={`gap-1 text-[10px] ${isShared ? "text-primary" : "text-muted-foreground"}`}>
+        {isShared ? <Users className="h-3 w-3" aria-hidden="true" /> : <Lock className="h-3 w-3" aria-hidden="true" />}
+        {isShared ? "已共享" : "私人"}
+      </Badge>
+      {style.isCurated && (
+        <Badge className="gap-1 bg-primary text-[10px] text-primary-foreground">
+          <Sparkles className="h-3 w-3" aria-hidden="true" />
+          精選
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+function StyleTags({ style, selectedTags, onToggleTag, isSelectionMode }) {
+  if (!style.tags || style.tags.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {style.tags.slice(0, 4).map((tag, index) => {
+        const isActive = selectedTags?.includes(tag);
+        return (
+          <Button
+            type="button"
+            key={`${tag}-${index}`}
+            variant={isActive ? "default" : "outline"}
+            size="xs"
+            disabled={isSelectionMode}
+            aria-pressed={isActive}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleTag?.(tag);
+            }}
+            className="rounded-full"
+          >
+            #{tag}
+          </Button>
+        );
+      })}
+      {style.tags.length > 4 && (
+        <span className="px-1 py-0.5 text-[10px] text-muted-foreground">
+          +{style.tags.length - 4}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StyleActionButtons({
+  style,
+  canManage,
+  onApply,
+  onDelete,
+  onPublish,
+  onUnpublish,
+  onCopy,
+  onEdit,
+  compact = false,
+}) {
+  const canCopy = Boolean(onCopy);
+  const canPublish = Boolean(onPublish);
+  const canUnpublish = Boolean(onUnpublish);
+  const canEdit = Boolean(onEdit);
+
+  return (
+    <div className={`flex items-center gap-1.5 ${compact ? "justify-end" : "flex-wrap"}`}>
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => onApply(style)}
+        className="min-h-10 gap-1.5"
+        aria-label={`套用風格 ${style.name}`}
+      >
+        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className={compact ? "hidden xl:inline" : ""}>套用</span>
+      </Button>
+      {canEdit && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onEdit(style)}
+          className="min-h-10 gap-1.5"
+          aria-label={`編輯風格 ${style.name}`}
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className={compact ? "hidden xl:inline" : ""}>編輯</span>
+        </Button>
+      )}
+      {canCopy ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onCopy(style.id)}
+          className="min-h-10 gap-1.5"
+          aria-label={`複製風格 ${style.name}`}
+        >
+          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className={compact ? "hidden xl:inline" : ""}>複製</span>
+        </Button>
+      ) : canPublish ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onPublish(style.id)}
+          className="min-h-10 gap-1.5"
+          aria-label={`共享風格 ${style.name}`}
+        >
+          <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className={compact ? "hidden xl:inline" : ""}>共享</span>
+        </Button>
+      ) : canUnpublish ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => onUnpublish(style.id)}
+          className="min-h-10 gap-1.5"
+          aria-label={`取消共享風格 ${style.name}`}
+        >
+          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className={compact ? "hidden xl:inline" : ""}>取消共享</span>
+        </Button>
+      ) : null}
+      {canManage && onDelete && (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          onClick={() => onDelete(style.id)}
+          className="min-h-10 gap-1.5"
+          aria-label={`刪除風格 ${style.name}`}
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className={compact ? "hidden xl:inline" : ""}>刪除</span>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function StyleListRow({
+  style,
+  canManage,
+  onApply,
+  onDelete,
+  onPublish,
+  onUnpublish,
+  onCopy,
+  onEdit,
+  selectedTags,
+  onToggleTag,
+  isSelectionMode,
+  isSelected,
+  onToggleSelect,
+}) {
+  const isShared = style.visibility === "shared";
+  const authorText = style.authorName || style.authorEmail || "未知共享人";
+
+  return (
+    <article
+      className={`flex min-w-0 flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-[border-color,box-shadow] duration-200 ${
+        isSelected
+          ? "border-primary ring-2 ring-primary/20 shadow-md"
+          : "border-border hover:border-primary/30 hover:shadow-sm"
+      }`}
+    >
+      {isSelectionMode && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(style.id)}
+          aria-label={`選取風格 ${style.name}`}
+          className="h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-ring"
+        />
+      )}
+      <StylePreview style={style} className="h-20 w-28" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-foreground">{style.name}</h3>
+          <StyleStatusBadges style={style} />
+        </div>
+        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+          {style.description || "尚無描述"}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <StyleTags
+            style={style}
+            selectedTags={selectedTags}
+            onToggleTag={onToggleTag}
+            isSelectionMode={isSelectionMode}
+          />
+          {isShared && <span className="text-[11px] text-muted-foreground">共享人：{authorText}</span>}
+          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Clock3 className="h-3 w-3" aria-hidden="true" />
+            {formatStyleDate(style)}
+          </span>
+          {(style.usageCount > 0 || style.copyCount > 0) && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Eye className="h-3 w-3" aria-hidden="true" />
+              {style.usageCount || 0}
+              <Copy className="ml-1 h-3 w-3" aria-hidden="true" />
+              {style.copyCount || 0}
+            </span>
+          )}
+        </div>
+      </div>
+      {!isSelectionMode && (
+        <div className="flex w-full justify-end sm:w-auto">
+          <StyleActionButtons
+            style={style}
+            canManage={canManage}
+            onApply={onApply}
+            onDelete={onDelete}
+            onPublish={onPublish}
+            onUnpublish={onUnpublish}
+            onCopy={onCopy}
+            onEdit={onEdit}
+            compact
+          />
+        </div>
+      )}
+    </article>
+  );
+}
+
+function StyleTable({
+  styles,
+  getActions,
+  selectedTags,
+  onToggleTag,
+  isSelectionMode,
+  selectedIds,
+  onToggleSelect,
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <table className="w-full min-w-[1020px] text-sm">
+        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+          <tr>
+            {isSelectionMode && <th scope="col" className="w-12 px-4 py-3 font-medium">選取</th>}
+            <th scope="col" className="px-4 py-3 font-medium">風格</th>
+            <th scope="col" className="px-4 py-3 font-medium">狀態</th>
+            <th scope="col" className="px-4 py-3 font-medium">標籤</th>
+            <th scope="col" className="px-4 py-3 font-medium">使用情況</th>
+            <th scope="col" className="px-4 py-3 font-medium">更新時間</th>
+            <th scope="col" className="px-4 py-3 text-right font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {styles.map((style) => {
+            const actions = getActions(style);
+            return (
+              <tr
+                key={style.id}
+                className={`align-middle transition-colors ${
+                  selectedIds.has(style.id) ? "bg-primary/5" : "hover:bg-muted/30"
+                }`}
+              >
+                {isSelectionMode && (
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(style.id)}
+                      onChange={() => onToggleSelect(style.id)}
+                      aria-label={`選取風格 ${style.name}`}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                    />
+                  </td>
+                )}
+                <td className="px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <StylePreview style={style} className="h-12 w-16" />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{style.name}</p>
+                      <p className="mt-1 line-clamp-2 max-w-[280px] text-xs text-muted-foreground">
+                        {style.description || "尚無描述"}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <StyleStatusBadges style={style} />
+                </td>
+                <td className="max-w-[220px] px-4 py-3">
+                  <StyleTags
+                    style={style}
+                    selectedTags={selectedTags}
+                    onToggleTag={onToggleTag}
+                    isSelectionMode={isSelectionMode}
+                  />
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <Eye className="h-3 w-3" aria-hidden="true" />
+                    {style.usageCount || 0}
+                    <Copy className="ml-1 h-3 w-3" aria-hidden="true" />
+                    {style.copyCount || 0}
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                  {formatStyleDate(style)}
+                </td>
+                <td className="px-4 py-3">
+                  {!isSelectionMode && (
+                    <StyleActionButtons {...actions} compact />
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function StyleLibrary({
   savedStyles,
+  viewMode = "grid",
   isLoading,
   isSearching,
   error,
@@ -140,6 +519,20 @@ export default function StyleLibrary({
     : isMineScope
       ? "分析圖片風格後即可儲存到此處。"
       : "共享你的第一個風格，讓團隊成員可以一起套用。";
+
+  const getStyleActions = (style) => {
+    const canManage = isMineScope;
+    return {
+      style,
+      canManage,
+      onApply: onApplyStyle,
+      onDelete: canManage ? onDeleteStyle : undefined,
+      onEdit: canManage ? onEditStyle : undefined,
+      onPublish: canManage && style.visibility !== "shared" ? onPublishStyle : undefined,
+      onUnpublish: canManage && style.visibility === "shared" ? onUnpublishStyle : undefined,
+      onCopy: !canManage ? onCopyStyle : undefined,
+    };
+  };
 
   return (
     <div className="space-y-7">
@@ -387,20 +780,41 @@ export default function StyleLibrary({
             </Button>
           ) : null}
         </div>
+      ) : viewMode === "table" ? (
+        <StyleTable
+          styles={filtered}
+          getActions={getStyleActions}
+          selectedTags={selectedTags}
+          onToggleTag={toggleTag}
+          isSelectionMode={isSelectionMode}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+        />
+      ) : viewMode === "list" ? (
+        <div className="space-y-2">
+          {filtered.map((style) => {
+            const actions = getStyleActions(style);
+            return (
+              <StyleListRow
+                key={style.id}
+                {...actions}
+                selectedTags={selectedTags}
+                onToggleTag={toggleTag}
+                isSelectionMode={isSelectionMode}
+                isSelected={selectedIds.has(style.id)}
+                onToggleSelect={toggleSelect}
+              />
+            );
+          })}
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6">
           {filtered.map((style) => {
-            const canManage = isMineScope;
+            const actions = getStyleActions(style);
             return (
               <StyleCard
                 key={style.id}
-                style={style}
-                onApply={onApplyStyle}
-                onDelete={canManage ? onDeleteStyle : undefined}
-                onEdit={canManage ? onEditStyle : undefined}
-                onPublish={canManage && style.visibility !== "shared" ? onPublishStyle : undefined}
-                onUnpublish={canManage && style.visibility === "shared" ? onUnpublishStyle : undefined}
-                onCopy={!canManage ? onCopyStyle : undefined}
+                {...actions}
                 selectedTags={selectedTags}
                 onToggleTag={toggleTag}
                 isSelectionMode={isSelectionMode}
