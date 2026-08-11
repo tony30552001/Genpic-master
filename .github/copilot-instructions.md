@@ -14,6 +14,15 @@ These rules are mandatory for every change:
 - **Do not hide failures.** Surface errors through existing UI or API patterns; do not add silent catches or success-shaped fallbacks.
 - Treat current source code and this file as authoritative. Keep product and architecture documentation in `docs/`.
 
+## Repository investigation workflow
+
+Use this sequence when working on repository changes:
+
+1. Use relevant OpenWiki pages for quick orientation and to locate the likely files and subsystems.
+2. Confirm the current behavior, contracts, and edge cases in source code and tests.
+3. Implement the change only after that source and test confirmation.
+4. Before pushing, update OpenWiki and review the generated documentation for consistency.
+
 ## Commands
 
 ```powershell

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  FileText, Upload, X, FileType, Loader2,
+  FileText, Upload, X, FileType, Clock3,
   CheckCircle2, FileSearch, Brain, Sparkles, Clapperboard,
   ClipboardList, LayoutTemplate,
 } from "lucide-react";
@@ -177,125 +177,152 @@ function AnalysisProgress({ analysisPhase, fileName, mode = 'storyboard' }) {
     return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${s}s`;
   };
 
-  return (
-    <div className="w-full max-w-lg mx-auto space-y-6 py-4">
-      {/* 檔案名稱 */}
-      <div className="text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
-          <FileText className="h-4 w-4" />
-          {fileName}
-        </div>
-      </div>
+  const progressValue = Math.round(simulatedProgress);
+  const modeLabel = mode === 'presentation' ? '簡報分析' : '分鏡分析';
 
-      {/* 主要進度條 */}
-      <div className="space-y-2">
-        <div className="flex justify-between items-center text-xs text-muted-foreground">
-          <span>分析進度</span>
-          <span>{Math.round(simulatedProgress)}%</span>
-        </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-[width] duration-500 ease-out relative motion-reduce:transition-none"
-            style={{
-              width: `${simulatedProgress}%`,
-              background: "hsl(var(--primary))",
-            }}
-          >
-            {/* 光澤動畫 */}
+  return (
+    <section
+      aria-label="文件分析進度"
+      aria-live="polite"
+      className="w-full max-w-2xl mx-auto overflow-hidden rounded-[26px] border border-border/70 bg-background/95 shadow-[0_24px_70px_-38px_hsl(var(--primary)/0.45)] dark:bg-card/80"
+    >
+      <div className="p-5 sm:p-7">
+        {/* 標題與目前狀態 */}
+        <header className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/10">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                <span>{modeLabel}</span>
+                <span className="h-1 w-1 rounded-full bg-border" aria-hidden="true" />
+                <span className="inline-flex items-center gap-1.5 text-primary">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+                  處理中
+                </span>
+              </div>
+              <h2 className="mt-1.5 truncate text-lg font-semibold tracking-[-0.02em] text-foreground sm:text-xl">
+                正在整理你的{mode === 'presentation' ? '簡報' : '內容'}
+              </h2>
+              <p className="mt-1 max-w-[34rem] truncate text-sm text-muted-foreground" title={fileName}>
+                {fileName}
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="font-mono text-2xl font-semibold tabular-nums tracking-[-0.06em] text-foreground">
+              {progressValue}%
+            </p>
+            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              進度
+            </p>
+          </div>
+        </header>
+
+        {/* 主要進度條 */}
+        <div className="mt-7">
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted/80">
             <div
-              className="absolute inset-0 rounded-full"
-              style={{
-                background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)",
-                animation: "shimmer 2s infinite",
-              }}
+              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
+              style={{ width: `${simulatedProgress}%` }}
             />
           </div>
+          <div className="mt-2.5 flex items-center justify-between gap-4 text-xs text-muted-foreground">
+            <span className="font-mono tabular-nums">已花費 {formatTime(elapsedSeconds)}</span>
+            <span className="text-right">預估剩餘 ~{formatTime(Math.max(0, Math.ceil((100 - simulatedProgress) / 3)))}</span>
+          </div>
         </div>
-        <div className="flex justify-between items-center text-xs text-muted-foreground">
-          <span>已花費 {formatTime(elapsedSeconds)}</span>
-          <span>預估剩餘 ~{formatTime(Math.max(0, Math.ceil((100 - simulatedProgress) / 3)))}</span>
-        </div>
-      </div>
 
-      {/* 步驟列表 */}
-      <div className="space-y-1">
-        {steps.map((step, idx) => {
-          const StepIcon = step.icon;
-          const isCompleted = idx < currentStepIndex;
-          const isCurrent = idx === currentStepIndex;
+        {/* 分析工作流 */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              工作流程
+            </p>
+            <p className="font-mono text-xs tabular-nums text-muted-foreground">
+              {Math.min(currentStepIndex + 1, steps.length)} / {steps.length}
+            </p>
+          </div>
 
-          return (
-            <div
-              key={step.id}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-500 ${isCurrent
-                ? "bg-primary/5 border border-primary/20"
-                : isCompleted
-                  ? "opacity-70"
-                  : "opacity-40"
-                }`}
-            >
-              {/* 圖標 */}
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors duration-500 ${isCompleted
-                  ? "bg-success/10 text-success"
-                  : isCurrent
-                    ? "bg-primary/10 text-primary"
-                    : "bg-muted text-muted-foreground"
+          <ol className="mt-3 space-y-1" aria-label="分析步驟">
+            {steps.map((step, idx) => {
+              const StepIcon = step.icon;
+              const isCompleted = idx < currentStepIndex;
+              const isCurrent = idx === currentStepIndex;
+
+              return (
+                <li
+                  key={step.id}
+                  className={`relative flex gap-3 rounded-2xl px-3 py-3 transition-[background-color,opacity] duration-500 ${
+                    isCurrent
+                      ? "bg-primary/[0.055] ring-1 ring-primary/15"
+                      : isCompleted
+                        ? "bg-success/[0.035]"
+                        : "opacity-45"
                   }`}
-              >
-                {isCompleted ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : isCurrent ? (
-                  <StepIcon className="h-4 w-4 animate-pulse" />
-                ) : (
-                  <StepIcon className="h-4 w-4" />
-                )}
-              </div>
-
-              {/* 步驟文字 */}
-              <div className="flex-1 min-w-0">
-                <p
-                  className={`text-sm font-medium transition-colors ${isCurrent ? "text-foreground" : isCompleted ? "text-muted-foreground" : "text-muted-foreground"
-                    }`}
                 >
-                  {step.title}
-                  {isCompleted && (
-                    <span className="text-xs text-green-600 dark:text-green-400 ml-2">✓</span>
-                  )}
-                </p>
-                {isCurrent && (
-                  <p className="text-xs text-muted-foreground mt-0.5 animate-in fade-in duration-300">
-                    {analysisPhase || step.description}
-                  </p>
-                )}
-              </div>
+                  <div className="relative flex w-8 shrink-0 justify-center">
+                    <div
+                      className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-xl transition-colors duration-500 ${
+                        isCompleted
+                          ? "bg-success/10 text-success"
+                          : isCurrent
+                            ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+                            : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <StepIcon className={`h-4 w-4 ${isCurrent ? "animate-pulse" : ""}`} aria-hidden="true" />
+                      )}
+                    </div>
+                    {idx < steps.length - 1 && (
+                      <span
+                        className={`absolute left-1/2 top-8 h-[calc(100%+0.25rem)] w-px -translate-x-1/2 ${
+                          isCompleted ? "bg-success/25" : "bg-border/70"
+                        }`}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </div>
 
-              {/* 當前步驟的動畫指示器 */}
-              {isCurrent && (
-                <div className="flex gap-1 shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`text-sm font-semibold tracking-[-0.01em] ${
+                          isCurrent || isCompleted ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.title}
+                      </p>
+                      {isCurrent && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                          <span className="h-1 w-1 rounded-full bg-primary" aria-hidden="true" />
+                          進行中
+                        </span>
+                      )}
+                    </div>
+                    {isCurrent && (
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground animate-in fade-in duration-300">
+                        {analysisPhase || step.description}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        {/* 友善提示 */}
+        <div className="mt-6 flex items-start gap-2.5 border-t border-border/60 pt-4 text-xs leading-5 text-muted-foreground">
+          <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden="true" />
+          <p>大多數文件會在 15–45 秒內完成，文件越大所需時間越長。</p>
+        </div>
       </div>
-
-      {/* 友善提示 */}
-      <p className="text-center text-xs text-muted-foreground/70 pt-2">
-        💡 文件越大分析時間越長，通常需要 15-45 秒
-      </p>
-
-      {/* 光澤動畫 CSS */}
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
-      `}</style>
-    </div>
+    </section>
   );
 }
 
@@ -406,14 +433,12 @@ export default function DocumentUploader({
   // ──────── 分析中：顯示精美的進度面板 ────────
   if (isAnalyzing) {
     return (
-      <div className="space-y-4">
-        <div className="border-2 border-primary/30 rounded-lg p-6 bg-primary/5">
-          <AnalysisProgress
-            analysisPhase={analysisPhase}
-            fileName={inputMode === 'outline' ? '簡報大綱' : (selectedFile?.name || "文件")}
-            mode={inputMode === 'outline' ? 'presentation' : analysisMode}
-          />
-        </div>
+      <div className="py-2 sm:py-6">
+        <AnalysisProgress
+          analysisPhase={analysisPhase}
+          fileName={inputMode === 'outline' ? '簡報大綱' : (selectedFile?.name || "文件")}
+          mode={inputMode === 'outline' ? 'presentation' : analysisMode}
+        />
       </div>
     );
   }
