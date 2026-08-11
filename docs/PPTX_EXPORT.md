@@ -25,8 +25,9 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 4. 在**「分析模式」**下拉選單中選擇 **「簡報設計（PowerPoint）」**
 5. （可選）設定**投影片數量**：「自動（AI 決定）」或指定 1–10 張
 6. 點擊**「設計簡報投影片」**，等待 AI 分析（通常 15–45 秒）
-7. 分析完成後，點擊**「生成圖片」**為各投影片生成配圖
-8. 至少有一張圖片生成完成後，點擊工具列的**「匯出 PPTX」**按鈕下載
+7. 分析完成後，系統會先依簡報內容提供一套 AI 建議的圖片風格；若不符合需求，可在**「文件圖片風格」**面板選擇風格庫樣式取代
+8. 點擊**「生成圖片」**為各投影片生成配圖
+9. 至少有一張圖片生成完成後，點擊工具列的**「匯出 PPTX」**按鈕下載
 
 ### 方式二：貼上文字大綱（快速設計）
 
@@ -58,6 +59,11 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 
 | 欄位 | 類型 | 說明 |
 |------|------|------|
+| recommended_style | object | 依文件主題與受眾推薦的共用圖片風格；可由風格庫取代 |
+| recommended_style.name | string | AI 建議的風格名稱 |
+| recommended_style.description | string | AI 建議風格的中文說明 |
+| recommended_style.prompt | string | 套用於所有投影片配圖的英文風格 Prompt |
+| recommended_style.tags | string[] | 風格標籤 |
 | scene_title | string | 投影片標題（15 字內） |
 | bullet_points | string[] | 3–5 條重點項目，每條 20 字內 |
 | speaker_notes | string | 講者備注，補充演講要點（60 字內） |
@@ -171,6 +177,12 @@ pptxgenjs（動態 import，372 KB code-split chunk）
   "title": "簡報主題",
   "summary": "內容摘要",
   "analysis_mode": "presentation",
+  "recommended_style": {
+    "name": "理性科技編輯風",
+    "description": "以清晰的資訊層次與冷靜色彩呈現專業內容。",
+    "prompt": "Editorial technology illustration, cool blue and graphite palette, clean geometric composition, soft studio lighting, subtle paper texture, generous negative space for text-image layouts",
+    "tags": ["科技", "編輯", "專業"]
+  },
   "scenes": [
     {
       "scene_number": 1,
@@ -193,6 +205,7 @@ pptxgenjs（動態 import，372 KB code-split chunk）
 | DocumentUploader | src/components/create/DocumentUploader.jsx | 上傳 / 大綱輸入 UI，含模式切換 |
 | useDocumentAnalysis | src/hooks/useDocumentAnalysis.js | 文件分析狀態管理 |
 | aiService.analyzeDocument | src/services/aiService.js | API 呼叫封裝 |
+| 文件圖片風格面板 | src/components/create/DocumentScenes.jsx | 顯示 AI 建議風格，並可用風格庫樣式取代 |
 
 ### 依賴套件
 

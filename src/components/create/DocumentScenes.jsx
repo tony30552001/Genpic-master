@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
 import {
   Image as ImageIcon,
@@ -13,14 +13,14 @@ import {
   Wand2,
   Check,
   X,
-  ChevronLeft,
-  ChevronRight,
   Palette,
   ChevronDown,
   Sparkles,
   FileDown,
   ZoomIn,
   ZoomOut,
+  Maximize2,
+  SlidersHorizontal,
   BookOpen,
   Presentation,
   List,
@@ -173,6 +173,8 @@ function SceneModal({
   onUpdate,
   onGenerate,
   styleContext,
+  styleName,
+  onOpenStylePicker,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ ...scene });
@@ -198,6 +200,11 @@ function SceneModal({
   const saveEditing = () => {
     onUpdate(index, editForm);
     setIsEditing(false);
+  };
+
+  const handleOpenStylePicker = () => {
+    if (isEditing) saveEditing();
+    onOpenStylePicker?.();
   };
 
   // AI 優化場景
@@ -238,7 +245,7 @@ function SceneModal({
       onClick={handleOverlayClick}
       className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
     >
-      <div className="relative bg-background rounded-2xl shadow-2xl border border-border/60 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border/60 bg-background shadow-2xl animate-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="shrink-0 flex items-center gap-3 px-5 py-3.5 border-b border-border/50 bg-muted/30">
           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0">
@@ -246,9 +253,23 @@ function SceneModal({
           </span>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-sm text-foreground truncate">{scene.scene_title}</h3>
-            {scene.mood && (
-              <p className="text-[11px] text-muted-foreground">{scene.mood}</p>
-            )}
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {scene.mood && (
+                <p className="text-[11px] text-muted-foreground">{scene.mood}</p>
+              )}
+              {styleName && onOpenStylePicker && (
+                <button
+                  type="button"
+                  onClick={handleOpenStylePicker}
+                  className="inline-flex min-h-7 max-w-full items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title="調整文件圖片風格"
+                >
+                  <Palette className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{styleName}</span>
+                  <SlidersHorizontal className="h-3 w-3 shrink-0" aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {/* AI 優化按鈕 */}
@@ -382,7 +403,10 @@ function SceneModal({
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">英文 Prompt</label>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-xs font-medium text-muted-foreground">圖片提示詞</label>
+                      <span className="text-[10px] text-muted-foreground">會自動沿用文件圖片風格</span>
+                    </div>
                     <Textarea
                       value={editForm.visual_prompt || ""}
                       onChange={(e) => setEditForm((f) => ({ ...f, visual_prompt: e.target.value }))}
@@ -419,8 +443,22 @@ function SceneModal({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium text-muted-foreground mb-1">英文 Prompt</p>
-                    <p className="text-xs text-muted-foreground bg-muted/60 p-3 rounded-lg font-mono leading-relaxed whitespace-pre-wrap">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-medium text-muted-foreground">圖片提示詞</p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-primary hover:text-primary"
+                        onClick={() => {
+                          setEditForm({ ...scene });
+                          setIsEditing(true);
+                        }}
+                      >
+                        <Edit2 className="mr-1 h-3 w-3" /> 編輯提示詞
+                      </Button>
+                    </div>
+                    <p className="rounded-lg bg-muted/60 p-3 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
                       {scene.visual_prompt}
                     </p>
                   </div>
@@ -528,50 +566,25 @@ export default function DocumentScenes({
   isGenerating = false,
   // 風格相關 props
   savedStyles = [],
-  analyzedStyle = "",
+  documentStyle = null,
+  isDocumentStyleOverride = false,
   onApplyStyle,
   onClearStyle,
 }) {
   const [generatingIndex, setGeneratingIndex] = useState(null);
   const [modalScene, setModalScene] = useState(null); // { scene, index }
   const [showStylePicker, setShowStylePicker] = useState(false);
-  const [lightboxSrc, setLightboxSrc] = useState(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingPptx, setIsExportingPptx] = useState(false);
-  const scrollRef = useRef(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const checkScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 0);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-  }, []);
-
-  useEffect(() => {
-    checkScroll();
-    const el = scrollRef.current;
-    if (el) {
-      el.addEventListener("scroll", checkScroll);
-      const observer = new ResizeObserver(checkScroll);
-      observer.observe(el);
-      return () => {
-        el.removeEventListener("scroll", checkScroll);
-        observer.disconnect();
-      };
-    }
-  }, [documentResult?.scenes?.length, checkScroll]);
+  const stylePanelRef = useRef(null);
 
   if (!documentResult || !documentResult.scenes) return null;
 
   const { title, summary, scenes, characters, total_scenes, estimated_generation_time } = documentResult;
-
-  const scrollBy = (direction) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: direction * 320, behavior: "smooth" });
-  };
+  const stylePrompt = documentStyle?.prompt || "";
+  const styleName = documentStyle?.name || "AI 文件建議風格";
+  const styleDescription = documentStyle?.description || "";
+  const hasDocumentStyle = Boolean(stylePrompt);
 
   const handleGenerateScene = async (index) => {
     setGeneratingIndex(index);
@@ -837,7 +850,7 @@ export default function DocumentScenes({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 -mx-4 lg:-mx-8">
+    <div className="flex min-h-full flex-col -mx-4 lg:-mx-8">
 
       {/* ═══════ 文件資訊摘要 ═══════ */}
       <div className="shrink-0 px-4 lg:px-8 pb-3">
@@ -920,88 +933,124 @@ export default function DocumentScenes({
         </Card>
 
         {/* ═══════ 風格選擇面板 ═══════ */}
-        <div className="mt-3">
+        <section ref={stylePanelRef} className="mt-3 overflow-hidden rounded-2xl border border-border/70 bg-background shadow-sm">
           <button
+            type="button"
             onClick={() => setShowStylePicker((v) => !v)}
-            className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+            aria-expanded={showStylePicker}
+            aria-controls="document-style-picker"
+            className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           >
-            <Palette className="h-4 w-4" />
-            <span>套用風格</span>
-            {analyzedStyle && (
-              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-primary/90">
-                已套用
-              </Badge>
-            )}
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Palette className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-foreground">文件圖片風格</span>
+                {hasDocumentStyle && (
+                  <Badge variant="default" className="h-4 bg-primary/90 px-1.5 py-0 text-[10px]">
+                    {isDocumentStyleOverride ? "已套用風格庫" : "AI 建議"}
+                  </Badge>
+                )}
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                {hasDocumentStyle ? styleName : "尚未取得文件風格建議"}
+              </span>
+            </span>
+            <span className="hidden items-center gap-1.5 text-xs font-medium text-primary sm:flex">
+              <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+              {showStylePicker ? "收起調整" : "調整風格"}
+            </span>
             <ChevronDown
               className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${showStylePicker ? "rotate-180" : ""
                 }`}
+              aria-hidden="true"
             />
           </button>
 
-          {/* 目前套用的風格摘要（收合時也顯示） */}
-          {!showStylePicker && analyzedStyle && (
-            <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
-              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-              <p className="text-xs text-foreground truncate flex-1">
-                {analyzedStyle.length > 80 ? analyzedStyle.slice(0, 80) + "…" : analyzedStyle}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-destructive hover:text-destructive shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClearStyle?.();
-                }}
-              >
-                <X className="h-3 w-3" />
-              </Button>
+          {!showStylePicker && hasDocumentStyle && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium text-foreground">
+                  {isDocumentStyleOverride ? `風格庫：${styleName}` : `AI 建議：${styleName}`}
+                </p>
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                  {styleDescription || stylePrompt}
+                </p>
+              </div>
+              {isDocumentStyleOverride && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs text-primary hover:text-primary"
+                  onClick={onClearStyle}
+                >
+                  恢復 AI 建議
+                </Button>
+              )}
             </div>
           )}
 
-          {/* 展開的風格選擇器 */}
           {showStylePicker && (
-            <div className="mt-2 rounded-xl border border-border bg-background/80 backdrop-blur-sm shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-200">
-              {/* 已套用風格 */}
-              {analyzedStyle && (
-                <div className="px-4 py-3 bg-primary/5 border-b border-border/50">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <div id="document-style-picker" className="mt-2 overflow-hidden rounded-xl border border-border bg-background/80 shadow-lg backdrop-blur-sm animate-in slide-in-from-top-2 duration-200">
+              {hasDocumentStyle && (
+                <div className="border-b border-border/50 bg-primary/5 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-foreground">目前套用的風格</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                          {analyzedStyle}
+                        <p className="text-xs font-medium text-foreground">
+                          {isDocumentStyleOverride ? "目前套用的風格庫樣式" : "AI 根據文件內容推薦"}
                         </p>
+                        <p className="mt-0.5 text-sm font-semibold text-foreground">{styleName}</p>
+                        <p className="mt-1 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">
+                          {styleDescription || stylePrompt}
+                        </p>
+                        {Array.isArray(documentStyle?.tags) && documentStyle.tags.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {documentStyle.tags.slice(0, 5).map((tag) => (
+                              <Badge key={tag} variant="outline" className="border-primary/15 px-1.5 py-0 text-[10px] text-primary/80">
+                                #{tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs shrink-0 text-destructive border-destructive/30 hover:bg-destructive/10"
-                      onClick={() => {
-                        onClearStyle?.();
-                      }}
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      清除
-                    </Button>
+                    {isDocumentStyleOverride && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 shrink-0 px-2.5 text-xs text-primary"
+                        onClick={onClearStyle}
+                      >
+                        <X className="mr-1 h-3 w-3" aria-hidden="true" />
+                        恢復 AI 建議
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* 風格列表 */}
               <div className="p-3">
+                <p className="mb-3 text-[11px] text-muted-foreground">
+                  AI 已根據文件內容自動選擇風格；點選下方風格庫樣式即可取代。
+                </p>
                 {savedStyles.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <Palette className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <div className="py-6 text-center text-muted-foreground">
+                    <Palette className="mx-auto mb-2 h-8 w-8 opacity-30" aria-hidden="true" />
                     <p className="text-xs">尚無收藏的風格</p>
-                    <p className="text-[10px] mt-1 text-muted-foreground/70">請在「一般創作」或「風格庫」中分析並收藏風格</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground/70">
+                      請在「一般創作」或「風格庫」中分析並收藏風格
+                    </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                     {savedStyles.map((style) => {
-                      const isActive = analyzedStyle === style.prompt;
+                      const isActive = isDocumentStyleOverride && documentStyle?.id === style.id;
                       return (
                         <button
                           type="button"
@@ -1011,13 +1060,13 @@ export default function DocumentScenes({
                             setShowStylePicker(false);
                           }}
                           aria-pressed={isActive}
-                          className={`group/style relative flex flex-col rounded-lg border overflow-hidden text-left transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isActive
+                          aria-label={`套用風格 ${style.name}`}
+                          className={`group/style relative flex flex-col overflow-hidden rounded-lg border text-left transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isActive
                             ? "border-primary ring-2 ring-primary/20 shadow-md"
                             : "border-border/60 hover:border-primary/40 hover:shadow-md"
                             }`}
                         >
-                          {/* 預覽圖 */}
-                          <div className="aspect-[4/3] bg-muted/30 overflow-hidden">
+                          <div className="aspect-[4/3] overflow-hidden bg-muted/30">
                             {style.previewUrl ? (
                               <img
                                 src={style.previewUrl}
@@ -1026,29 +1075,28 @@ export default function DocumentScenes({
                                 height={240}
                                 loading="lazy"
                                 decoding="async"
-                                className="w-full h-full object-cover group-hover/style:scale-[1.02] transition-transform duration-300 motion-reduce:transform-none"
-                                onError={(e) => { e.target.style.display = 'none'; }}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover/style:scale-[1.02] motion-reduce:transform-none"
+                                onError={(e) => { e.target.style.display = "none"; }}
                               />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Palette className="w-6 h-6 text-muted-foreground/20" />
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Palette className="h-6 w-6 text-muted-foreground/20" aria-hidden="true" />
                               </div>
                             )}
                             {isActive && (
-                              <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                                <Check className="h-3 w-3 text-white" />
+                              <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                                <Check className="h-3 w-3 text-white" aria-hidden="true" />
                               </div>
                             )}
                           </div>
-                          {/* 名稱 */}
                           <div className="p-1.5">
-                            <p className={`text-[11px] font-medium truncate ${isActive ? "text-primary" : "text-foreground"
+                            <p className={`truncate text-[11px] font-medium ${isActive ? "text-primary" : "text-foreground"
                               }`}>
                               {style.name}
                             </p>
-                            {style.tags?.length > 0 && (
-                              <p className="text-[9px] text-muted-foreground truncate mt-0.5">
-                                {style.tags.slice(0, 3).map(t => `#${t}`).join(" ")}
+                            {Array.isArray(style.tags) && style.tags.length > 0 && (
+                              <p className="mt-0.5 truncate text-[9px] text-muted-foreground">
+                                {style.tags.slice(0, 3).map((tag) => `#${tag}`).join(" ")}
                               </p>
                             )}
                           </div>
@@ -1060,33 +1108,24 @@ export default function DocumentScenes({
               </div>
             </div>
           )}
-        </div>
+        </section>
       </div>
 
-      {/* ═══════ 場景看板 — 水平捲動 + 點擊 popup ═══════ */}
-      <div className="flex-1 min-h-0 relative">
-        {canScrollLeft && (
-          <button
-            onClick={() => scrollBy(-1)}
-            className="absolute left-1 lg:left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-background/90 border border-border shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5 text-foreground" />
-          </button>
-        )}
-        {canScrollRight && (
-          <button
-            onClick={() => scrollBy(1)}
-            className="absolute right-1 lg:right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-background/90 border border-border shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
-          >
-            <ChevronRight className="h-5 w-5 text-foreground" />
-          </button>
-        )}
+      {/* ═══════ 場景看板 — 圖片優先網格 ═══════ */}
+      <div className="px-4 pb-8 pt-4 lg:px-8">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">分鏡預覽</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              點擊圖片查看大圖，或直接編輯提示詞後重新生成。
+            </p>
+          </div>
+          <Badge variant="outline" className="shrink-0 gap-1 text-xs">
+            <Layers className="h-3 w-3" /> {scenes.length} 個分鏡
+          </Badge>
+        </div>
 
-        <div
-          ref={scrollRef}
-          className="flex gap-4 overflow-x-auto overflow-y-hidden h-full px-4 lg:px-8 pb-4 snap-x snap-mandatory scroll-smooth"
-          style={{ scrollbarWidth: "thin" }}
-        >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {scenes.map((scene, index) => {
             const isThisGenerating = generatingIndex === index;
             const sceneImage = scene.generatedImage;
@@ -1094,23 +1133,13 @@ export default function DocumentScenes({
             return (
               <div
                 key={index}
-                className="snap-start shrink-0 w-[280px] sm:w-[300px] md:w-[320px] flex flex-col"
+                className="min-w-0"
               >
                 <Card
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`開啟場景 ${scene.scene_number}：${scene.scene_title}`}
-                  className="flex flex-col h-full overflow-hidden transition-shadow hover:shadow-lg border-border/60 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  onClick={() => openModal(index)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openModal(index);
-                    }
-                  }}
+                  className="group flex h-full flex-col overflow-hidden border-border/60 transition-shadow hover:shadow-lg"
                 >
                   {/* 卡片標題 */}
-                  <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 bg-muted/30 border-b border-border/40">
+                  <div className="flex shrink-0 items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2.5">
                     <span className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0">
                       {scene.scene_number}
                     </span>
@@ -1120,10 +1149,10 @@ export default function DocumentScenes({
                         <p className="text-[10px] text-muted-foreground truncate">{scene.mood}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="flex shrink-0 items-center gap-0.5">
                       <Button
                         variant="ghost" size="icon"
-                        className="h-10 w-10 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
+                        className="h-10 w-10 text-destructive hover:text-destructive sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100"
                         onClick={(e) => { e.stopPropagation(); onRemoveScene(index); }}
                         title="刪除場景"
                         aria-label={`刪除場景 ${scene.scene_number}`}
@@ -1134,7 +1163,13 @@ export default function DocumentScenes({
                   </div>
 
                   {/* 預覽圖 */}
-                  <div className="shrink-0 relative aspect-video bg-muted/20 border-b border-border/30 overflow-hidden w-full">
+                  <button
+                    type="button"
+                    className="group/preview relative block aspect-video w-full shrink-0 overflow-hidden border-b border-border/30 bg-muted/20 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={() => openModal(index)}
+                    disabled={isThisGenerating}
+                    aria-label={`查看場景 ${scene.scene_number}：${scene.scene_title}`}
+                  >
                     {isThisGenerating ? (
                       <div className="absolute inset-0 p-3" aria-live="polite">
                         <Skeleton className="h-full w-full rounded-lg" />
@@ -1153,42 +1188,41 @@ export default function DocumentScenes({
                           decoding="async"
                           className="w-full h-full object-cover"
                         />
-                        {/* 卡片上的放大按鈕 */}
-                        <button
-                          type="button"
-                          className="absolute top-2 right-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover/img:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLightboxSrc(sceneImage);
-                          }}
-                          title="放大圖片"
-                          aria-label={`放大場景 ${scene.scene_number} 圖片`}
-                        >
-                          <ZoomIn className="h-3.5 w-3.5" />
-                        </button>
+                        <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2.5 pt-8 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover/preview:opacity-100 group-focus-visible/preview:opacity-100">
+                          <Maximize2 className="h-3 w-3" aria-hidden="true" /> 查看大圖與內容
+                        </span>
                       </div>
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40">
                         <ImageIcon className="w-8 h-8" />
-                        <p className="text-[10px]">尚未生成圖片</p>
+                        <p className="text-[11px]">尚未生成圖片，點擊查看設定</p>
                       </div>
                     )}
-                  </div>
+                  </button>
 
-                  {/* 場景摘要 — 精簡版，點擊才展開 */}
-                  <CardContent className="flex-1 p-3 min-h-0">
-                    <p className="text-[11px] text-muted-foreground mb-0.5 font-medium">場景描述</p>
-                    <p className="text-xs text-foreground leading-relaxed line-clamp-3">{scene.scene_description}</p>
+                  {/* 場景摘要 */}
+                  <CardContent className="min-h-0 flex-1 space-y-3 p-3.5">
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium text-muted-foreground">場景描述</p>
+                      <p className="line-clamp-2 text-xs leading-relaxed text-foreground">{scene.scene_description}</p>
+                    </div>
+
+                    <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-primary/80">
+                      <Palette className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span className="truncate">
+                        {isDocumentStyleOverride ? "風格庫" : "AI 風格"} · {styleName}
+                      </span>
+                    </div>
 
                     {/* 重點項目（簡報模式） */}
                     {Array.isArray(scene.bullet_points) && scene.bullet_points.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-[11px] text-muted-foreground mb-0.5 font-medium flex items-center gap-1">
+                      <div>
+                        <p className="mb-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
                           <List className="h-3 w-3" /> 重點項目
                         </p>
                         <ul className="space-y-0.5">
-                          {scene.bullet_points.slice(0, 3).map((point, i) => (
-                            <li key={i} className="text-[10px] text-foreground flex items-start gap-1.5">
+                          {scene.bullet_points.slice(0, 2).map((point, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-[10px] text-foreground">
                               <span className="text-primary shrink-0 mt-0.5">•</span>
                               <span className="line-clamp-1">{point}</span>
                             </li>
@@ -1197,30 +1231,48 @@ export default function DocumentScenes({
                       </div>
                     )}
 
-                    <p className="text-[11px] text-muted-foreground mt-2 mb-0.5 font-medium">Prompt</p>
-                    <p className="text-[10px] text-muted-foreground bg-muted/60 p-2 rounded font-mono line-clamp-2">
-                      {scene.visual_prompt}
-                    </p>
+                    <div className="rounded-xl border border-border/60 bg-muted/40 p-2.5">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-medium text-muted-foreground">圖片提示詞</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0 px-2 text-[11px] text-primary hover:text-primary"
+                          onClick={() => openModal(index)}
+                        >
+                          <Edit2 className="mr-1 h-3 w-3" /> 編輯
+                        </Button>
+                      </div>
+                      <p className="line-clamp-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+                        {scene.visual_prompt}
+                      </p>
+                    </div>
 
                     {/* 有原始文字時的指示 */}
                     {scene.source_text && (
-                      <div className="flex items-center gap-1 mt-2">
+                      <div className="mt-2 flex items-center gap-1">
                         <BookOpen className="h-3 w-3 text-amber-600/60" />
                         <span className="text-[10px] text-amber-600/60">附有原始文字對照</span>
                       </div>
                     )}
-
-                    <p className="text-[10px] text-primary font-medium mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      點擊查看完整內容 →
-                    </p>
                   </CardContent>
 
-                  {/* 生成按鈕 */}
-                  <div className="shrink-0 p-2 border-t border-border/30">
+                  {/* 快速操作 */}
+                  <div className="grid shrink-0 grid-cols-[auto_1fr] gap-2 border-t border-border/30 p-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-1.5 px-3 text-xs"
+                      onClick={() => openModal(index)}
+                    >
+                      <Edit2 className="h-3 w-3" /> 編輯分鏡
+                    </Button>
                     <Button
                       variant={sceneImage ? "outline" : "default"}
                       size="sm"
-                      className="w-full h-8 text-xs"
+                      className="h-9 text-xs"
                       onClick={(e) => { e.stopPropagation(); handleGenerateScene(index); }}
                       disabled={isGenerating}
                     >
@@ -1250,16 +1302,15 @@ export default function DocumentScenes({
           onClose={() => setModalScene(null)}
           onUpdate={handleModalUpdate}
           onGenerate={handleGenerateScene}
-          styleContext={analyzedStyle}
-        />
-      )}
-
-      {/* ═══════ 卡片圖片 Lightbox ═══════ */}
-      {lightboxSrc && (
-        <ImageLightbox
-          src={lightboxSrc}
-          alt="Scene Preview"
-          onClose={() => setLightboxSrc(null)}
+          styleContext={stylePrompt}
+          styleName={styleName}
+          onOpenStylePicker={() => {
+            setModalScene(null);
+            setShowStylePicker(true);
+            window.requestAnimationFrame(() => {
+              stylePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
+          }}
         />
       )}
     </div>

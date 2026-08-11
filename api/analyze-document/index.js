@@ -15,6 +15,30 @@ const {
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
 
+const safeString = (value, fallback = "") =>
+  value == null ? fallback : typeof value === "string" ? value : String(value);
+
+const normalizeTags = (raw) => {
+  if (Array.isArray(raw)) return raw.map((tag) => String(tag).trim()).filter(Boolean);
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean);
+  }
+  return [];
+};
+
+const normalizeRecommendedStyle = (raw) => {
+  const style = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw
+    : {};
+
+  return {
+    name: safeString(style.name).trim() || "AI 文件建議風格",
+    description: safeString(style.description).trim(),
+    prompt: safeString(style.prompt).trim(),
+    tags: normalizeTags(style.tags),
+  };
+};
+
 /**
  * 文件分析的系統提示詞（分鏡模式）
  * 要求 GPT 分析文件內容並回傳結構化的分鏡腳本
@@ -23,21 +47,27 @@ const DOCUMENT_ANALYSIS_PROMPT_BASE = `請擔任專業的文件分析師與視�
 
 1. "title": (string) 文件標題
 2. "summary": (string, 繁體中文) 核心摘要（50字內）
-3. "scenes": (array of objects) 分鏡腳本，依邏輯切分（3-10個）。每個場景包含：
+3. "recommended_style": (object) 根據文件主題、語氣、受眾與內容性質，為所有場景推薦一套最適合的文字與圖片視覺風格。這是文件分析的預設風格，請務必回傳：
+   - "name": (string, 繁體中文) 簡潔的風格名稱
+   - "description": (string, 繁體中文) 說明此風格為何適合這份文件，以及預期的視覺感受（50字內）
+   - "prompt": (string, 英文) 可直接用於 AI 生圖的共用風格 Prompt，描述藝術媒材、色彩、構圖、光影、材質與文字圖片搭配時的視覺方向（40-70字）
+   - "tags": (Array of Strings) 3-5 個繁體中文風格標籤
+4. "scenes": (array of objects) 分鏡腳本，依邏輯切分（3-10個）。每個場景包含：
    - "scene_number": (number) 編號
    - "scene_title": (string, 繁體中文) 簡短標題
    - "scene_description": (string, 繁體中文) 場景畫面描述與情緒氛圍（30-50字內）
    - "visual_prompt": (string, 英文) AI 生圖專用 Prompt。請直接列出構圖、主體、光影、風格等英文關鍵字，並以逗號分隔（50-80字內，極為重要）
    - "source_text": (string, 繁體中文) 擷取對應原文片段（30字內）
    
-4. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
+5. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
    - "name": (string) 名稱
    - "description": (string, 繁體中文) 外觀特徵（30字內）
 
 **重要規則：**
 - 敘事流暢，專注於將文字轉化為視覺畫面。
+- recommended_style 必須是完整且一致的文件級風格方向，不能只回傳抽象形容詞；prompt 必須能直接套用到每個場景的圖片生成。
 - visual_prompt 必須精簡有力，只保留視覺名詞與形容詞，不要寫完整的長句子。
-- scene_description 和 visual_prompt 絕對不可為空。
+- recommended_style.prompt、scene_description 和 visual_prompt 絕對不可為空。
 - 直接回傳 JSON，不要其他多餘對話。`;
 
 /**
@@ -48,7 +78,12 @@ const PRESENTATION_ANALYSIS_PROMPT_BASE = `請擔任專業的簡報設計師與�
 
 1. "title": (string) 簡報標題
 2. "summary": (string, 繁體中文) 核心摘要（50字內）
-3. "scenes": (array of objects) 投影片內容，依邏輯切分（3-10張）。每張投影片包含：
+3. "recommended_style": (object) 根據簡報主題、受眾、語氣與內容性質，為整份簡報推薦一套最適合的文字與圖片視覺風格。這是文件分析的預設風格，請務必回傳：
+   - "name": (string, 繁體中文) 簡潔的風格名稱
+   - "description": (string, 繁體中文) 說明此風格為何適合這份簡報，以及預期的視覺感受（50字內）
+   - "prompt": (string, 英文) 可直接用於 AI 生圖的共用風格 Prompt，描述藝術媒材、色彩、構圖、光影、材質與文字圖片搭配時的視覺方向（40-70字）
+   - "tags": (Array of Strings) 3-5 個繁體中文風格標籤
+4. "scenes": (array of objects) 投影片內容，依邏輯切分（3-10張）。每張投影片包含：
    - "scene_number": (number) 編號
    - "scene_title": (string, 繁體中文) 投影片標題（15字內，簡潔有力）
    - "scene_description": (string, 繁體中文) 這張投影片的核心主旨（30字內）
@@ -58,15 +93,16 @@ const PRESENTATION_ANALYSIS_PROMPT_BASE = `請擔任專業的簡報設計師與�
    - "source_text": (string, 繁體中文) 擷取對應原文片段（30字內）
    - "layout_type": (string) 投影片版面建議：「default」（標題+重點+圖片）
    
-4. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
+5. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
    - "name": (string) 名稱
    - "description": (string, 繁體中文) 描述（30字內）
 
 **重要規則：**
+- recommended_style 必須是完整且一致的簡報級風格方向，不能只回傳抽象形容詞；prompt 必須能直接套用到每張投影片的配圖生成。
 - bullet_points 每條必須是獨立、完整的重點，適合直接朗讀。
 - 第一張投影片通常是封面/簡介，可以是概述性內容。
 - visual_prompt 必須精簡有力，只保留視覺名詞與形容詞。
-- scene_description、bullet_points 和 visual_prompt 絕對不可為空。
+- recommended_style.prompt、scene_description、bullet_points 和 visual_prompt 絕對不可為空。
 - 直接回傳 JSON，不要其他多餘對話。`;
 
 /**
@@ -397,6 +433,17 @@ module.exports = async function (context, req) {
       return;
     }
 
+    const recommendedStyle = normalizeRecommendedStyle(data.recommended_style);
+    if (!recommendedStyle.prompt) {
+      context.log.warn("[analyze-document] Missing recommended document style.");
+      context.res = error(
+        "AI 回應缺少文件視覺風格，請稍後重試",
+        "invalid_response",
+        502
+      );
+      return;
+    }
+
     // 診斷：如果場景數量異常少，記錄詳情
     if (validatedScenes.length <= 1) {
       context.log.warn(
@@ -420,6 +467,7 @@ module.exports = async function (context, req) {
     const response = {
       title: data.title || fileName || "未命名文件",
       summary: data.summary || "",
+      recommended_style: recommendedStyle,
       content_type: data.content_type || data.contentType || "document",
       page_count: data.page_count || data.pageCount || validatedScenes.length,
       scenes: validatedScenes,

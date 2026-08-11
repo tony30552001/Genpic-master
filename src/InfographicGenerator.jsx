@@ -72,6 +72,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [compactNavSection, setCompactNavSection] = useState(null);
     const [paletteStyle, setPaletteStyle] = useState('');
+    const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
 
     useEffect(() => {
         if (!mobileMoreOpen && !compactNavSection) return undefined;
@@ -130,6 +131,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         documentResult, analyzeDocument, clearDocument, updateScene, removeScene,
         scenes,
     } = useDocumentAnalysis();
+    const documentStyle = documentStyleOverride || documentResult?.recommended_style || null;
 
     const {
         analyzedStyle, analysisResultData, generatedImage, generatedFilename,
@@ -461,6 +463,7 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         try {
             setErrorMsg('');
             const result = await analyzeDocument(file, sceneCount, mode);
+            setDocumentStyleOverride(null);
             return result;
         } catch (err) {
             console.error("Document Analysis Failed:", err);
@@ -469,18 +472,33 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
         }
     };
 
+    const handleClearDocument = () => {
+        clearDocument();
+        setDocumentStyleOverride(null);
+    };
+
+    const handleApplyDocumentStyle = (styleData) => {
+        setDocumentStyleOverride(styleData);
+    };
+
+    const handleClearDocumentStyle = () => {
+        setDocumentStyleOverride(null);
+    };
+
     const handleGenerateScene = async (sceneIndex) => {
         const scene = scenes[sceneIndex];
         if (!scene) return;
         try {
             setErrorMsg('');
+            const styleForDocument = documentStyle;
+            const stylePrompt = styleForDocument?.prompt || '';
             // 呼叫圖片生成（帶入語系設定）
             // 使用英文的 visual_prompt 作為生成提示詞，若無則退回使用 scene_description
             const promptToUse = scene.visual_prompt || scene.scene_description;
 
             const result = await generateImage({
                 userScript: promptToUse,
-                analyzedStyle,
+                analyzedStyle: stylePrompt,
                 aspectRatio,
                 imageSize,
                 imageLanguage,
@@ -506,12 +524,18 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
             await saveHistoryItem({
                 imageUrl: result.imageUrl,
                 userScript: scene.scene_description,
-                stylePrompt: analyzedStyle,
+                stylePrompt,
                 fullPrompt: result.finalPrompt,
+                styleId: styleForDocument?.id || null,
                 model: result.model || imageModel,
                 sceneNumber: scene.scene_number,
                 documentTitle: documentResult?.title
             });
+            if (styleForDocument?.id) {
+                markStyleUsed(styleForDocument.id).catch((err) => {
+                    console.warn("Style usage tracking failed:", err);
+                });
+            }
 
             setErrorMsg('');
         } catch (err) {
@@ -798,12 +822,13 @@ export default function InfographicGenerator({ initialTab = 'general' }) {
                                         onRemoveScene={removeScene}
                                         onGenerateScene={handleGenerateScene}
                                         onGenerateAll={handleGenerateAllScenes}
-                                        onClear={clearDocument}
+                                        onClear={handleClearDocument}
                                         isGenerating={isGenerating}
                                         savedStyles={savedStyles}
-                                        analyzedStyle={analyzedStyle}
-                                        onApplyStyle={applySavedStyle}
-                                        onClearStyle={handleClearStyle}
+                                        documentStyle={documentStyle}
+                                        isDocumentStyleOverride={Boolean(documentStyleOverride)}
+                                        onApplyStyle={handleApplyDocumentStyle}
+                                        onClearStyle={handleClearDocumentStyle}
                                     />
                                 ) : (
                                     <div className="max-w-3xl mx-auto py-8">

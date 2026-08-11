@@ -411,7 +411,7 @@ Authorization: Bearer <API_KEY>
 - [x] 使用 Azure OpenAI Responses API 與 `AZURE_OPENAI_DEPLOYMENT`
 - [x] 支援 PDF、Word、PowerPoint、Excel、OpenDocument、RTF、EPUB、CSV、TXT/MD 與圖片格式（Blob URL 輸入）
 - [x] 以固定版本 AnyDoc 將 Office、試算表與文字型 PDF 正規化為 Markdown；掃描 PDF 與圖片明確走 GPT multimodal input
-- [x] 回傳結構化分鏡 JSON
+- [x] 回傳結構化分鏡 JSON 與文件級 AI 建議視覺風格，並支援前端以風格庫樣式取代
 
 #### Step 3.2 — 圖片生成 Function
 - [ ] 實作 `api/generate-images/index.js`

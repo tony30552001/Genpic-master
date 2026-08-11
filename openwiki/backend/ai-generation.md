@@ -2,7 +2,15 @@
 type: backend workflow
 title: AI generation and durable image jobs
 description: Provider adapters, AI endpoint behavior, model policy, transformation, and the durable GPT image job lifecycle.
-tags: [backend, ai-generation]
+tags: [backend, ai-generation, document-analysis]
+openwiki:
+  roles: [workflow, integration]
+  change_kinds: [document-analysis, response-contract, provider-adapter]
+  source_paths: [api/analyze-document/index.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js]
+  symbols: [normalizeRecommendedStyle, buildAnalysisPrompt, generateJsonCompletion]
+  test_paths: [api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
+  invariants: [Document analysis rejects an AI response with no nonempty recommended_style.prompt.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/documentParser.test.js api/_shared/__tests__/azureOpenAI.test.js]
 ---
 
 # AI generation and durable image jobs
@@ -28,7 +36,9 @@ sequenceDiagram
   participant Azure as Azure OpenAI Responses
   Browser->>Blob: upload document
   Browser->>Handler: document URL or base64 and analysis options
-  Handler->>Blob: download same-account document
+  opt document URL is provided
+    Handler->>Blob: download same-account document
+  end
   Handler->>Parser: parse buffer and identify input kind
   alt text or converted document
     Parser-->>Handler: text and parser metadata
@@ -38,14 +48,16 @@ sequenceDiagram
     Handler->>Azure: JSON request with image or PDF file
   end
   Azure-->>Handler: structured analysis
-  Handler-->>Browser: normalized scenes and provenance
+  Handler-->>Browser: normalized scenes, style recommendation, and provenance
 ```
 
 This sequence shows the document-analysis request path; the handler downloads only when the request identifies a Blob URL.
 
-`parseDocumentBuffer` strips a text BOM and sends TXT/Markdown directly as text. It converts other recognized document formats to Markdown through `@firecrawl/anydoc`; a PDF that AnyDoc reports unsupported is instead sent as a PDF file for GPT vision. Images are sent as image input. The handler rejects empty or conversion failures with mapped `DocumentConversionError` status/code, and rejects text over `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it does not truncate. It then uses `_shared/azureOpenAI.js::generateJsonCompletion` against the configured Azure OpenAI deployment with JSON output and `maxOutputTokens: 8192`. The Responses adapter permits exactly one attached image or file input. Provider errors, missing scenes, and fully empty normalized scenes return distinct failure responses; valid output maps snake/camel fields and guards presentation fields, then returns title, summary, scenes, characters, total count, estimated time, mode, `analysis_provider`, `analysis_model`, `source_parser`, and `source_format`.
+`parseDocumentBuffer` strips a text BOM and sends TXT/Markdown directly as text. It converts other recognized document formats to Markdown through `@firecrawl/anydoc`; a PDF that AnyDoc reports unsupported is instead sent as a PDF file for GPT vision. Images are sent as image input. The handler rejects empty or conversion failures with mapped `DocumentConversionError` status/code, and rejects text over `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it does not truncate. It then uses `_shared/azureOpenAI.js::generateJsonCompletion` against the configured Azure OpenAI deployment with JSON output and `maxOutputTokens: 8192`. The Responses adapter permits exactly one attached image or file input.
 
-For a format, conversion, or Responses-input change, begin with `documentParser.js` and `azureOpenAI.js`, then trace the handler and browser policy in [creation workflows](../frontend/create-workflows.md). `api/_shared/__tests__/documentParser.test.js` covers extension/MIME recognition, direct text, CSV conversion, image routing, and conversion error mapping; `azureOpenAI.test.js` covers image/PDF Responses input and configured deployment output. Run `pnpm test --run api/_shared/__tests__/documentParser.test.js api/_shared/__tests__/azureOpenAI.test.js`. Handler-level route behavior and live conversion/provider behavior remain integration concerns; do not validate provider credentials for an adapter-only change.
+A valid model response must also supply `recommended_style.prompt`. `normalizeRecommendedStyle` converts the document-level recommendation to `{ name, description, prompt, tags }`: it stringifies scalar fields, splits string tags on ASCII or full-width commas, removes empty tags, and supplies the name `AI 文件建議風格` when absent. A missing or blank prompt is an `invalid_response` `502`; it is not silently replaced with an empty scene style. Provider errors, missing scenes, and fully empty normalized scenes return distinct failure responses. Valid output maps snake/camel scene fields and guards presentation fields, then returns title, summary, `recommended_style`, scenes, characters, total count, estimated time, mode, `analysis_provider`, `analysis_model`, `source_parser`, and `source_format`. [Creation workflows](../frontend/create-workflows.md) consumes that recommendation as the default shared style for every scene.
+
+For a format, conversion, Responses-input, or response-normalization change, begin with `documentParser.js`, `azureOpenAI.js`, and `analyze-document/index.js`, then trace the browser consumer in [creation workflows](../frontend/create-workflows.md). `api/_shared/__tests__/documentParser.test.js` covers extension/MIME recognition, direct text, CSV conversion, image routing, and conversion error mapping; `azureOpenAI.test.js` covers image/PDF Responses input and configured deployment output. Run `pnpm test --run api/_shared/__tests__/documentParser.test.js api/_shared/__tests__/azureOpenAI.test.js`. There is no focused handler test for `recommended_style` normalization or its required-prompt rejection, so a change there needs a targeted handler test or controlled API integration. Handler-level route behavior and live conversion/provider behavior remain integration concerns; do not validate provider credentials for an adapter-only change.
 
 Other AI routes: `analyze-style` returns style prompt/metadata, `optimize-scene` falls back to original fields if model JSON cannot parse, `optimize-prompt` requires Azure OpenAI JSON fields, embedding expects the configured vector dimension, and filename generation sanitizes/falls back rather than blocking creation.
 

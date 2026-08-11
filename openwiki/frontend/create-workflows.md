@@ -2,7 +2,15 @@
 type: frontend workflow
 title: Creation workspace, documents, and exports
 description: Main Pixora creation state, document-to-scene generation, transformations, persistence, and client-side exports.
-tags: [frontend, creation, export]
+tags: [frontend, creation, document-analysis, export]
+openwiki:
+  roles: [workflow, frontend]
+  change_kinds: [document-analysis, style-selection, client-progress]
+  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/hooks/useDocumentAnalysis.js]
+  symbols: [AnalysisProgress, handleGenerateScene, handleApplyDocumentStyle, handleClearDocumentStyle]
+  test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js]
+  invariants: [Document scene generation uses the AI recommendation unless a saved-style override is active.]
+  validation_commands: [pnpm test --run src/lib/__tests__/documentFormats.test.js src/services/__tests__/aiService.test.js]
 ---
 
 # Creation workspace, documents, and exports
@@ -19,9 +27,35 @@ tags: [frontend, creation, export]
 
 `DocumentUploader` and `useDocumentAnalysis` enforce the same 50 MB browser limit and extension allow-list in `src/lib/documentFormats.js`: PDF; Word, PowerPoint, and Excel variants; OpenDocument; RTF; EPUB; CSV; TXT/Markdown; and PNG/JPEG. The shared module builds the file-input `accept` value, validates extensions, and supplies a deterministic MIME type when the browser reports none or `application/octet-stream`; it is also used by `storageService.uploadFileToBlob`. It uploads first to Blob to avoid SWA body limits; only if upload fails and the file is at most 80 KB does it send base64. It sends filename, MIME, requested `sceneCount` (or `auto`), and `mode` (`storyboard` or `presentation`).
 
-The returned normalized object includes `title`, `summary`, `scenes`, `characters`, `total_scenes`, `estimated_generation_time`, `analysis_mode`, plus server provenance fields `analysis_provider`, `analysis_model`, `source_parser`, and `source_format`. Each scene has compatible snake/camel source fields mapped to `scene_number`, title, description, visual prompt, key elements, mood, source text, plus guarded array `bullet_points`, `speaker_notes`, and `layout_type`. Local scene edits and deletions renumber `scene_number`; consumers must preserve this ordering when generating/exporting scenes. Server parsing, conversion errors, and provider input selection are specified in [AI generation](../backend/ai-generation.md).
+```mermaid
+sequenceDiagram
+  participant Workspace
+  participant Blob as Azure Blob Storage
+  participant Handler as analyze-document
+  participant Azure as Azure OpenAI Responses
+  participant Scenes as DocumentScenes
+  Workspace->>Blob: upload selected document
+  alt upload succeeds
+    Workspace->>Handler: document URL and analysis options
+  else upload fails for file at most 80 KB
+    Workspace->>Handler: base64 content and analysis options
+  end
+  Handler->>Azure: analyze parsed document
+  Azure-->>Handler: scenes and recommended style
+  Handler-->>Workspace: normalized analysis response
+  Workspace->>Scenes: show AI recommendation as default style
+  Scenes->>Workspace: optionally choose saved-style override
+```
 
-When changing browser format support, update `documentFormats.js` first, then keep the server policy in [resources](../backend/resources.md) and [AI generation](../backend/ai-generation.md) aligned. `src/lib/__tests__/documentFormats.test.js` covers extension acceptance, MIME fallback, and the generated accept list; run `pnpm test --run src/lib/__tests__/documentFormats.test.js`. Do not treat this client check as proof that AnyDoc can convert a newly allowed format.
+This sequence shows client transport fallback and style ownership. Parsing, SSRF checks, response validation, and provider input adaptation remain server responsibilities in [AI generation](../backend/ai-generation.md).
+
+The returned normalized object includes `title`, `summary`, `recommended_style`, `scenes`, `characters`, `total_scenes`, `estimated_generation_time`, `analysis_mode`, plus server provenance fields `analysis_provider`, `analysis_model`, `source_parser`, and `source_format`. `recommended_style` is `{ name, description, prompt, tags }`; the server rejects a response without its nonempty `prompt`. `InfographicGenerator` uses it as the default document-wide image style. A saved style chosen in `DocumentScenes` becomes a local `documentStyleOverride`; clearing that override restores the AI recommendation, while clearing or successfully replacing the document clears the override. Every scene generation passes the current style `prompt` as `analyzedStyle`, saves that prompt to history, and—only for a saved-style override—saves `styleId` and calls `markStyleUsed` after the image succeeds. The same prompt is supplied to scene optimization. This document-specific selection does not change the general workspace's `analyzedStyle`.
+
+Each scene has compatible snake/camel source fields mapped to `scene_number`, title, description, visual prompt, key elements, mood, source text, plus guarded array `bullet_points`, `speaker_notes`, and `layout_type`. Local scene edits and deletions renumber `scene_number`; consumers must preserve this ordering when generating/exporting scenes. Server parsing, conversion errors, required recommendation, and provider input selection are specified in [AI generation](../backend/ai-generation.md). The feature-oriented `docs/PPTX_EXPORT.md` describes the style UX but currently calls the analysis provider Gemini; the handler and Azure Responses adapter show that current runtime analysis uses the configured Azure OpenAI deployment, so treat that provider statement as stale.
+
+While an analysis is pending, `DocumentUploader::AnalysisProgress` shows an accessible client-side progress panel. It begins at mount, advances its displayed stages from elapsed time (reading before 5 seconds, analysis before 15, generation thereafter) and the hook's coarse phase strings, and caps the simulated bar at 95%. It is user feedback rather than server-side parser/provider telemetry; do not use it to infer that a remote phase completed. Outline input reports presentation mode and its generated `outline.txt` label; file input uses the selected analysis mode and filename.
+
+When changing browser format support, update `documentFormats.js` first, then keep the server policy in [resources](../backend/resources.md) and [AI generation](../backend/ai-generation.md) aligned. `src/lib/__tests__/documentFormats.test.js` covers extension acceptance, MIME fallback, and the generated accept list; `src/services/__tests__/aiService.test.js` covers analysis request metadata. Run `pnpm test --run src/lib/__tests__/documentFormats.test.js src/services/__tests__/aiService.test.js`. No focused test covers document-style reset/override, per-scene style propagation, or the simulated progress panel; add component coverage when changing those behavior boundaries. Do not treat these client checks as proof that AnyDoc can convert a newly allowed format.
 
 ## Export boundary
 

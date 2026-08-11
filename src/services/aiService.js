@@ -79,7 +79,7 @@ export const generateFilename = async ({ userScript }) =>
  * @param {string} params.base64Content - Base64 編碼的文件內容（可選）
  * @param {number|'auto'} params.sceneCount - 場景/投影片數量
  * @param {'storyboard'|'presentation'} params.mode - 分析模式
- * @returns {Promise<Object>} 包含 title, summary, scenes, characters 的分析結果
+ * @returns {Promise<Object>} 包含 title, summary, recommended_style, scenes, characters 的分析結果
  */
 export const analyzeDocument = async ({ documentUrl, fileName, contentType, base64Content, sceneCount, mode }) =>
   apiPost(`${API_BASE_URL}/analyze-document`, { documentUrl, fileName, contentType, base64Content, sceneCount, mode });
