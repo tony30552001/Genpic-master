@@ -15,7 +15,8 @@ const {
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
 const {
-  normalizePresentationScene,
+  normalizeDocumentScene,
+  normalizePresentationSlides,
   PRESENTATION_SCHEMA_VERSION,
 } = require("../_shared/presentationSchema");
 
@@ -78,57 +79,45 @@ const DOCUMENT_ANALYSIS_PROMPT_BASE = `請擔任專業的文件分析師與視�
  * 簡報設計模式的系統提示詞
  * 要求 GPT 將文件/大綱轉換為適合簡報的結構化內容
  */
-const PRESENTATION_ANALYSIS_PROMPT_BASE = `請擔任專業的簡報設計師與內容策略師。分析提供的文件或大綱，將其轉換為精美的投影片結構，並以「最精簡有效」的 JSON 格式回傳：
+const PRESENTATION_ANALYSIS_PROMPT_BASE = `請擔任專業的簡報設計師與內容策略師。分析提供的文件或大綱，將其轉換為清晰、可直接編輯的投影片內容與版面結構，並以「最精簡有效」的 JSON 格式回傳：
 
 1. "title": (string) 簡報標題
 2. "summary": (string, 繁體中文) 核心摘要（50字內）
-3. "recommended_style": (object) 根據簡報主題、受眾、語氣與內容性質，為整份簡報推薦一套最適合的文字與圖片視覺風格。這是文件分析的預設風格，請務必回傳：
-   - "name": (string, 繁體中文) 簡潔的風格名稱
-   - "description": (string, 繁體中文) 說明此風格為何適合這份簡報，以及預期的視覺感受（50字內）
-   - "prompt": (string, 英文) 可直接用於 AI 生圖的共用風格 Prompt，描述藝術媒材、色彩、構圖、光影、材質與文字圖片搭配時的視覺方向（40-70字）
-   - "tags": (Array of Strings) 3-5 個繁體中文風格標籤
-4. "scenes": (array of objects) 投影片內容，依邏輯切分（3-10張）。每張投影片包含：
-   - "scene_number": (number) 編號
-   - "scene_title": (string, 繁體中文) 投影片標題（15字內，簡潔有力）
-   - "scene_description": (string, 繁體中文) 這張投影片的核心主旨（30字內）
-   - "bullet_points": (array of strings, 繁體中文) 3到5條重點項目，每條20字內，適合直接放入投影片
+3. "slides": (array of objects) 每個項目代表一張完整投影片，依內容邏輯規劃（1-10張），不要回傳 scenes。每張投影片包含：
+   - "slide_number": (number) 編號
+   - "slide_type": (string) 只能是 "cover"、"section"、"content" 或 "closing"
+   - "title": (string, 繁體中文) 投影片標題（20字內，簡潔有力）
+   - "subtitle": (string, 繁體中文) 標題下方的一句摘要，沒有需要時回傳空字串
+   - "body": (string, 繁體中文) 可直接放在投影片上的補充內容，若已使用 bullets 可回傳空字串
+   - "bullets": (array of strings, 繁體中文) 2到5條獨立、完整的重點，封面或結尾可為空陣列
    - "speaker_notes": (string, 繁體中文) 講者備注，補充說明這張投影片的演講要點（60字內）
-   - "visual_prompt": (string, 英文) AI 生圖專用 Prompt。描述這張投影片適合的配圖，列出構圖、主體、光影、風格等英文關鍵字，以逗號分隔（50-80字內）
-   - "source_text": (string, 繁體中文) 擷取對應原文片段（30字內）
-   - "layout_type": (string) 投影片版面建議：「default」、「title_content」、「two_column」、「table」、「chart」或「closing」
-   - "tables": (array) 若原文包含真正的表格資料，最多回傳1個表格；每個表格包含 "title"、"headers"（欄位名稱陣列）與 "rows"（字串陣列的陣列），最多8欄、10列；沒有表格時回傳 []
-   - "charts": (array) 若原文包含可量化的資料，最多回傳1個圖表；每個圖表包含 "type"（bar、line、pie 或 doughnut）、"title"、"labels"（分類陣列）與 "series"（含 name 與 values 數值陣列），沒有可靠數值時回傳 []
-   
-5. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
-   - "name": (string) 名稱
-   - "description": (string, 繁體中文) 描述（30字內）
-
+   - "source_excerpt": (string, 繁體中文) 擷取對應原文片段（30字內）
+   - "table": (object|null) 若原文包含真正的表格資料，最多回傳1個表格；包含 "title"、"headers" 與 "rows"，最多8欄、10列；沒有表格時回傳 null
+   - "chart": (object|null) 若原文包含可量化的資料，最多回傳1個圖表；包含 "type"、"title"、"labels" 與 "series"，沒有可靠數值時回傳 null
 **重要規則：**
-- recommended_style 必須是完整且一致的簡報級風格方向，不能只回傳抽象形容詞；prompt 必須能直接套用到每張投影片的配圖生成。
-- bullet_points 每條必須是獨立、完整的重點，適合直接朗讀。
-- 第一張投影片通常是封面/簡介，可以是概述性內容。
-- visual_prompt 必須精簡有力，只保留視覺名詞與形容詞。
-- recommended_style.prompt、scene_description、bullet_points 和 visual_prompt 絕對不可為空。
-- tables 與 charts 只能使用文件中實際存在的資料，不可臆造數字；沒有可靠資料時必須回傳空陣列。
-- 每張投影片最多提供一個 tables 項目與一個 charts 項目，優先選擇最能支撐該頁重點的資料視覺化。
+- 這是投影片內容生成流程，不是分鏡或故事板流程；不要產生 visual_prompt、scene_description 或 characters。
+- 第一張通常使用 cover，章節轉折可使用 section，一般內容使用 content，最後總結可使用 closing；不要產生圖片或分鏡內容。
+- bullets 必須是完整且可朗讀的重點，避免長篇段落與空泛描述。
+- table 與 chart 只能使用文件中實際存在的資料，不可臆造數字；沒有可靠資料時必須回傳 null。
+- 每張投影片最多提供一個 table 與一個 chart。
 - 直接回傳 JSON，不要其他多餘對話。`;
 
 /**
- * 根據 mode 與 sceneCount 參數建構完整的 Prompt
- * @param {number|string} sceneCount - 目標場景數量（'auto' 或數字）
+ * 根據 mode 與 itemCount 參數建構完整的 Prompt
+ * @param {number|string} itemCount - 目標場景或投影片數量（'auto' 或數字）
  * @param {'storyboard'|'presentation'} mode - 分析模式
  */
-const buildAnalysisPrompt = (sceneCount, mode = 'storyboard') => {
+const buildAnalysisPrompt = (itemCount, mode = 'storyboard') => {
   let prompt = mode === 'presentation'
     ? PRESENTATION_ANALYSIS_PROMPT_BASE
     : DOCUMENT_ANALYSIS_PROMPT_BASE;
 
-  if (sceneCount && sceneCount !== 'auto' && !isNaN(Number(sceneCount))) {
-    // 限制最大分鏡數量為 10
-    const count = Math.min(Math.max(1, Math.floor(Number(sceneCount))), 10);
+  if (itemCount && itemCount !== 'auto' && !isNaN(Number(itemCount))) {
+    const count = Math.min(Math.max(1, Math.floor(Number(itemCount))), 10);
 
     const modeLabel = mode === 'presentation' ? '投影片' : '場景';
-    prompt += `\n\n**重要：使用者指定參考的${modeLabel}數量約為 ${count} 個，請盡可能以這個數量為基準進行拆分。若文件長度無法完美契合該數量，可容許依據邏輯自然增減，但請以 ${count} 個作為目標。**`;
+    const actionLabel = mode === 'presentation' ? '規劃' : '拆分';
+    prompt += `\n\n**重要：使用者指定參考的${modeLabel}數量約為 ${count} 個，請以 ${count} 個作為目標${actionLabel}內容。若文件長度無法完美契合，可依內容邏輯自然增減，但不可超過 10 個。**`;
   }
   return prompt;
 };
@@ -223,15 +212,24 @@ module.exports = async function (context, req) {
     }
 
     // 取得請求參數
-    const { documentUrl, fileName, contentType, base64Content, sceneCount, mode } = req.body || {};
+    const {
+      documentUrl,
+      fileName,
+      contentType,
+      base64Content,
+      sceneCount,
+      slideCount,
+      mode,
+    } = req.body || {};
     const analysisMode = (mode === 'presentation') ? 'presentation' : 'storyboard';
+    const itemCount = analysisMode === 'presentation' ? slideCount : sceneCount;
     context.log("[analyze-document] Step 2: Params -",
       "fileName:", fileName,
       "contentType:", contentType,
       "hasBase64:", !!base64Content,
       "base64Len:", base64Content?.length || 0,
       "hasUrl:", !!documentUrl,
-      "sceneCount:", sceneCount || "auto",
+      "itemCount:", itemCount || "auto",
       "mode:", analysisMode
     );
 
@@ -320,7 +318,7 @@ module.exports = async function (context, req) {
       parsedDocument.mimeType
     );
 
-    const analysisPrompt = buildAnalysisPrompt(sceneCount, analysisMode);
+    const analysisPrompt = buildAnalysisPrompt(itemCount, analysisMode);
     let userMessage;
     let imageDataUrl;
     let fileDataUrl;
@@ -384,13 +382,64 @@ module.exports = async function (context, req) {
       );
       return;
     }
-    context.log("[analyze-document] Step 6: Parse OK, scenes:", data?.scenes?.length);
+    context.log(
+      "[analyze-document] Step 6: Parse OK, items:",
+      analysisMode === "presentation" ? data?.slides?.length : data?.scenes?.length
+    );
 
     // 驗證必要欄位
     // 模型有時會直接回傳 scenes 陣列而非物件
     if (Array.isArray(data)) {
       context.log("[analyze-document] data is array, wrapping...");
-      data = { scenes: data, title: fileName || "未命名文件", summary: "" };
+      data = analysisMode === "presentation"
+        ? { slides: data, title: fileName || "未命名文件", summary: "" }
+        : { scenes: data, title: fileName || "未命名文件", summary: "" };
+    }
+
+    if (!data || typeof data !== "object") {
+      data = {};
+    }
+
+    if (analysisMode === "presentation") {
+      const slides = normalizePresentationSlides(data.slides);
+      if (slides.length === 0) {
+        context.log.error(
+          "[analyze-document] Missing slides. data keys:",
+          Object.keys(data),
+          "data preview:",
+          JSON.stringify(data).substring(0, 500)
+        );
+        context.res = error(
+          "AI 回應缺少投影片內容，請稍後重試或減少投影片數量",
+          "invalid_response",
+          502
+        );
+        return;
+      }
+
+      const response = {
+        title: data.title || fileName || "未命名簡報",
+        summary: data.summary || "",
+        recommended_style: null,
+        content_type: data.content_type || data.contentType || "presentation",
+        page_count: data.page_count || data.pageCount || slides.length,
+        slides,
+        total_slides: slides.length,
+        estimated_generation_time: slides.length * 3,
+        analysis_mode: analysisMode,
+        analysis_provider: "azure_openai",
+        analysis_model: modelName,
+        source_parser: parsedDocument.parser,
+        source_format: parsedDocument.format,
+        presentation_schema_version: PRESENTATION_SCHEMA_VERSION,
+      };
+
+      context.log(
+        "[analyze-document] Step 7: Success, total_slides:",
+        response.total_slides
+      );
+      context.res = ok(response);
+      return;
     }
 
     if (!data.scenes || !Array.isArray(data.scenes) || data.scenes.length === 0) {
@@ -406,7 +455,7 @@ module.exports = async function (context, req) {
     }
 
     // 確保每個場景都有必要欄位，過濾掉完全空白的場景
-    const rawScenes = data.scenes.map(normalizePresentationScene);
+    const rawScenes = data.scenes.map(normalizeDocumentScene);
 
     // 過濾掉 scene_description 和 visual_prompt 都為空的場景
     const validatedScenes = rawScenes.filter((scene) =>

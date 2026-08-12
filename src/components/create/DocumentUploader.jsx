@@ -76,14 +76,14 @@ const ANALYSIS_STEPS_PRESENTATION = [
     id: "analyzing",
     icon: Brain,
     title: "規劃投影片",
-    description: "分析大綱結構、配置投影片佈局與視覺方向…",
+    description: "分析大綱結構、配置投影片佈局與內容層級…",
     weight: 35,
   },
   {
     id: "generating",
     icon: LayoutTemplate,
     title: "設計投影片與風格",
-    description: "生成項目符號、配圖提示詞與共用視覺風格…",
+    description: "整理每張投影片的標題、重點、表格與圖表…",
     weight: 15,
   },
   {
@@ -342,7 +342,7 @@ export default function DocumentUploader({
   const [inputMode, setInputMode] = useState('file'); // 'file' | 'outline'
   const [selectedFile, setSelectedFile] = useState(null);
   const [outlineText, setOutlineText] = useState('');
-  const [sceneCount, setSceneCount] = useState('auto');
+  const [itemCount, setItemCount] = useState('auto');
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef(null);
 
@@ -405,14 +405,14 @@ export default function DocumentUploader({
       const blob = new Blob([trimmed], { type: 'text/plain' });
       const file = new File([blob], 'outline.txt', { type: 'text/plain' });
       try {
-        await onAnalyze(file, sceneCount, 'presentation');
+        await onAnalyze(file, itemCount, 'presentation');
       } catch {
         // 錯誤已在父層處理
       }
     } else {
       if (!selectedFile) return;
       try {
-        await onAnalyze(selectedFile, sceneCount, analysisMode);
+        await onAnalyze(selectedFile, itemCount, analysisMode);
       } catch {
         // 錯誤已在父層處理
       }
@@ -544,21 +544,23 @@ export default function DocumentUploader({
         {selectedFile && (
           <div className="space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
-              {/* 場景數量 */}
+              {/* 內容頁數量 */}
               <div className="flex items-center gap-2">
-                <Label htmlFor="file-scene-count" className="text-sm font-medium whitespace-nowrap">
+                <Label htmlFor="file-item-count" className="text-sm font-medium whitespace-nowrap">
                   {analysisMode === 'presentation' ? '投影片數' : '分鏡數量'}
                 </Label>
                 <select
-                  id="file-scene-count"
-                  value={sceneCount}
-                  onChange={(e) => setSceneCount(e.target.value)}
+                  id="file-item-count"
+                  value={itemCount}
+                  onChange={(e) => setItemCount(e.target.value)}
                   className="h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   disabled={disabled}
                 >
                   <option value="auto">自動（AI 決定）</option>
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                    <option key={n} value={n}>{n} 個</option>
+                    <option key={n} value={n}>
+                      {n} {analysisMode === "presentation" ? "張" : "個"}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -590,15 +592,15 @@ export default function DocumentUploader({
             disabled={disabled}
           />
           <p className="text-xs text-muted-foreground">
-            AI 將自動將大綱轉換為投影片結構，並生成每張投影片的重點與配圖提示詞。
+            AI 將自動將大綱轉換為投影片結構，整理每頁可直接編輯的內容，最後套用公司簡報範本。
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Label htmlFor="outline-scene-count" className="text-sm font-medium whitespace-nowrap">投影片數</Label>
+          <Label htmlFor="outline-slide-count" className="text-sm font-medium whitespace-nowrap">投影片數</Label>
           <select
-            id="outline-scene-count"
-            value={sceneCount}
-            onChange={(e) => setSceneCount(e.target.value)}
+            id="outline-slide-count"
+            value={itemCount}
+            onChange={(e) => setItemCount(e.target.value)}
             className="h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             disabled={disabled}
           >

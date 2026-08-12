@@ -24,6 +24,7 @@ import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
 import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
+import PresentationGenerator from './components/create/PresentationGenerator';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import ImageTransformPanel from './components/create/ImageTransformPanel';
@@ -139,9 +140,12 @@ export default function InfographicGenerator({
     const {
         isAnalyzing: isAnalyzingDocument, analysisPhase: documentAnalysisPhase,
         documentResult, analyzeDocument, clearDocument, updateScene, removeScene,
-        scenes,
+        updateSlide, removeSlide, scenes,
     } = useDocumentAnalysis();
-    const documentStyle = documentStyleOverride || documentResult?.recommended_style || null;
+    const documentStyle =
+        documentAnalysisMode === "storyboard"
+            ? documentStyleOverride || documentResult?.recommended_style || null
+            : null;
     const hasActiveDocumentResult =
         Boolean(documentResult) &&
         documentResult.analysis_mode === documentAnalysisMode;
@@ -472,10 +476,10 @@ export default function InfographicGenerator({
         document.body.removeChild(link);
     };
 
-    const handleAnalyzeDocument = async (file, sceneCount, mode) => {
+    const handleAnalyzeDocument = async (file, itemCount, mode) => {
         try {
             setErrorMsg('');
-            const result = await analyzeDocument(file, sceneCount, mode);
+            const result = await analyzeDocument(file, itemCount, mode);
             setDocumentStyleOverride(null);
             return result;
         } catch (err) {
@@ -569,20 +573,29 @@ export default function InfographicGenerator({
     };
 
     const activeDocumentPanel = hasActiveDocumentResult ? (
-        <DocumentScenes
-            documentResult={documentResult}
-            onUpdateScene={updateScene}
-            onRemoveScene={removeScene}
-            onGenerateScene={handleGenerateScene}
-            onGenerateAll={handleGenerateAllScenes}
-            onClear={handleClearDocument}
-            isGenerating={isGenerating}
-            savedStyles={savedStyles}
-            documentStyle={documentStyle}
-            isDocumentStyleOverride={Boolean(documentStyleOverride)}
-            onApplyStyle={handleApplyDocumentStyle}
-            onClearStyle={handleClearDocumentStyle}
-        />
+        documentAnalysisMode === "presentation" ? (
+            <PresentationGenerator
+                documentResult={documentResult}
+                onUpdateSlide={updateSlide}
+                onRemoveSlide={removeSlide}
+                onClear={handleClearDocument}
+            />
+        ) : (
+            <DocumentScenes
+                documentResult={documentResult}
+                onUpdateScene={updateScene}
+                onRemoveScene={removeScene}
+                onGenerateScene={handleGenerateScene}
+                onGenerateAll={handleGenerateAllScenes}
+                onClear={handleClearDocument}
+                isGenerating={isGenerating}
+                savedStyles={savedStyles}
+                documentStyle={documentStyle}
+                isDocumentStyleOverride={Boolean(documentStyleOverride)}
+                onApplyStyle={handleApplyDocumentStyle}
+                onClearStyle={handleClearDocumentStyle}
+            />
+        )
     ) : (
         <DocumentUploader
             onAnalyze={handleAnalyzeDocument}
@@ -968,7 +981,8 @@ export default function InfographicGenerator({
                         )}
 
                         {/* Fixed Bottom Generate Bar */}
-                        {(activeTab === 'general' || hasActiveDocumentResult) && (
+                        {(activeTab === 'general' ||
+                            (hasActiveDocumentResult && documentAnalysisMode === "storyboard")) && (
                             <GenerateBar
                                 aspectRatio={aspectRatio}
                                 onAspectRatioChange={setAspectRatio}

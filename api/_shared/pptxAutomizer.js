@@ -1,46 +1,51 @@
-const PptxGenJS = require("pptxgenjs");
-const { Automizer } = require("pptx-automizer");
+const fs = require("fs");
+const path = require("path");
+const { Automizer, ModifyTextHelper } = require("pptx-automizer");
 const {
-  normalizePresentationScene,
   normalizeChartType,
+  normalizePresentationSlides,
+  PRESENTATION_MAX_SLIDES,
 } = require("./presentationSchema");
 
-const ROOT_TEMPLATE_NAME = "pixora-generated-template";
-const MAX_SCENES = 10;
+const COMPANY_TEMPLATE_NAME = "pixora-company-template";
+const COMPANY_TEMPLATE_PATH = path.resolve(
+  __dirname,
+  "../assets/2026_ppt_template_16.9.pptx"
+);
+const PPTX_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 const COLORS = {
   title: "1E293B",
   body: "475569",
   accent: "6366F1",
   border: "CBD5E1",
-  placeholder: "F8FAFC",
 };
 
-let rootTemplateBufferPromise;
-
-const createRootTemplateBuffer = async () => {
-  const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_16x9";
-  pptx.author = "Pixora 智繪";
-  pptx.addSlide().background = { color: "FFFFFF" };
-  return pptx.write({ outputType: "nodebuffer" });
+const getTemplateSlideNumber = (slide) => {
+  if (slide.slide_type === "cover") return 1;
+  if (slide.slide_type === "section") return 2;
+  if (slide.slide_type === "closing") return 5;
+  return slide.table || slide.chart ? 4 : 3;
 };
 
-const getRootTemplateBuffer = () => {
-  if (!rootTemplateBufferPromise) {
-    rootTemplateBufferPromise = createRootTemplateBuffer();
-  }
-  return rootTemplateBufferPromise;
+const setNamedText = (slide, name, nameIndex, value) => {
+  slide.modify((document) => {
+    const matches = Array.from(document.getElementsByTagName("p:cNvPr"))
+      .filter((element) => element.getAttribute("name") === name)
+      .map((element) => element.parentNode?.parentNode)
+      .filter(Boolean);
+    const target = matches[nameIndex];
+    if (!target) {
+      throw new Error(`公司範本缺少文字元素：${name}（第 ${nameIndex + 1} 個）`);
+    }
+    ModifyTextHelper.setText(value || "")(target);
+  });
 };
-
-const toDataImage = (value) =>
-  typeof value === "string" && /^data:image\/[a-z0-9.+-]+;base64,/i.test(value)
-    ? value
-    : null;
 
 const addTable = (slide, table, bounds) => {
   const titleHeight = table.title ? 0.28 : 0;
-  const cellBorder = { color: COLORS.border, pt: 0.5 };
   const columnWidth = bounds.w / table.headers.length;
+  const cellBorder = { color: COLORS.border, pt: 0.5 };
   const rows = [
     table.headers.map((text) => ({
       text,
@@ -71,7 +76,7 @@ const addTable = (slide, table, bounds) => {
       y: bounds.y,
       w: bounds.w,
       h: titleHeight,
-      fontSize: 12,
+      fontSize: 11,
       bold: true,
       color: COLORS.title,
       margin: 0,
@@ -111,7 +116,7 @@ const addChart = (slide, chart, bounds, pptxGenJs) => {
       showTitle: Boolean(chart.title),
       title: chart.title,
       titleColor: COLORS.title,
-      titleFontSize: 12,
+      titleFontSize: 11,
       showLegend: chart.series.length > 1,
       legendPos: "b",
       legendFontSize: 8,
@@ -126,118 +131,130 @@ const addChart = (slide, chart, bounds, pptxGenJs) => {
   );
 };
 
-const addScene = (slide, pptxGenJs, scene) => {
-  const tables = scene.tables || [];
-  const charts = scene.charts || [];
-  const hasNativeVisual = tables.length > 0 || charts.length > 0;
-  const imageData = toDataImage(scene.generatedImage);
-  const isContentOnlyLayout =
-    !hasNativeVisual &&
-    !imageData &&
-    (scene.layout_type === "title_content" || scene.layout_type === "closing");
-  const isClosingLayout = scene.layout_type === "closing";
-  const bullets = scene.bullet_points.length > 0
-    ? scene.bullet_points
-    : scene.scene_description
-      ? [scene.scene_description]
-      : [];
+const addContent = (slide, presentationSlide) => {
+  const hasVisual = Boolean(presentationSlide.table || presentationSlide.chart);
+  const bodyText = presentationSlide.body.trim();
+  const bullets = presentationSlide.bullets;
+  const contentBounds = hasVisual
+    ? { x: 0.8, y: 1.45, w: 4.45, h: 3.55 }
+    : { x: 3.75, y: 1.55, w: 5.05, h: 3.5 };
 
-  slide.addText(`${scene.scene_number}`, {
-    x: 0.2,
-    y: 0.15,
-    w: 0.38,
-    h: 0.38,
-    fontSize: 10,
-    bold: true,
-    color: "FFFFFF",
-    fill: { color: COLORS.accent },
-    align: "center",
-    valign: "mid",
-    rectRadius: 0.05,
-  });
-  slide.addText(scene.scene_title, {
-    x: isClosingLayout ? 0.6 : 0.68,
-    y: 0.1,
-    w: isClosingLayout ? 8.7 : 5.7,
-    h: 0.6,
-    fontSize: 20,
-    bold: true,
-    color: COLORS.title,
-    align: isClosingLayout ? "center" : "left",
-    valign: "mid",
-  });
-
-  if (bullets.length > 0) {
-    slide.addText(
-      bullets.map((text) => ({
-        text,
-        options: {
-          bullet: { type: "bullet" },
-          paraSpaceAfter: 6,
-          color: COLORS.body,
-        },
-      })),
-      {
-        x: isContentOnlyLayout ? 0.6 : 0.3,
-        y: 0.85,
-        w: isContentOnlyLayout ? 8.8 : 5.5,
-        h: 4.35,
-        fontSize: 13,
+  slide.generate((pptxSlide, generatedPptxGenJs) => {
+    if (bullets.length > 0) {
+      pptxSlide.addText(
+        bullets.map((text) => ({
+          text,
+          options: {
+            bullet: { type: "bullet" },
+            paraSpaceAfterPt: 8,
+            color: COLORS.body,
+          },
+        })),
+        {
+          ...contentBounds,
+          fontSize: 14,
+          valign: "top",
+          breakLine: false,
+          margin: 0.04,
+          fit: "shrink",
+          lineSpacingMultiple: 1.1,
+        }
+      );
+    } else if (bodyText) {
+      pptxSlide.addText(bodyText, {
+        ...contentBounds,
+        fontSize: 15,
+        color: COLORS.body,
         valign: "top",
-        lineSpacingMultiple: 1.4,
-        wrap: true,
-      }
-    );
-  }
+        margin: 0.04,
+        fit: "shrink",
+        breakLine: false,
+      });
+    }
 
-  const visualBounds = { x: 6, y: 0.8, w: 3.75, h: 4.45 };
-  if (tables.length > 0 && charts.length > 0) {
-    addTable(slide, tables[0], { ...visualBounds, h: 2.1 });
-    addChart(slide, charts[0], { ...visualBounds, y: 3.08, h: 2.17 }, pptxGenJs);
-  } else if (tables.length > 0) {
-    addTable(slide, tables[0], visualBounds);
-  } else if (charts.length > 0) {
-    addChart(slide, charts[0], visualBounds, pptxGenJs);
-  } else if (imageData) {
-    slide.addImage({
-      data: imageData,
-      x: visualBounds.x,
-      y: visualBounds.y,
-      w: visualBounds.w,
-      h: visualBounds.h,
-    });
-  } else if (!isContentOnlyLayout) {
-    slide.addText("尚未生成配圖\n可在 Pixora 中生成或自行替換", {
-      ...visualBounds,
-      fontSize: 13,
-      color: "64748B",
-      align: "center",
-      valign: "mid",
-      margin: 0.2,
-      fill: { color: COLORS.placeholder, transparency: 4 },
-      line: { color: COLORS.border, pt: 1 },
-    });
+    if (presentationSlide.table && presentationSlide.chart) {
+      addTable(pptxSlide, presentationSlide.table, {
+        x: 5.55,
+        y: 1.5,
+        w: 3.75,
+        h: 1.85,
+      });
+      addChart(
+        pptxSlide,
+        presentationSlide.chart,
+        { x: 5.55, y: 3.55, w: 3.75, h: 1.7 },
+        generatedPptxGenJs
+      );
+    } else if (presentationSlide.table) {
+      addTable(pptxSlide, presentationSlide.table, {
+        x: 5.55,
+        y: 1.5,
+        w: 3.75,
+        h: 3.7,
+      });
+    } else if (presentationSlide.chart) {
+      addChart(
+        pptxSlide,
+        presentationSlide.chart,
+        { x: 5.55, y: 1.5, w: 3.75, h: 3.7 },
+        generatedPptxGenJs
+      );
+    }
+  });
+};
+
+const applyCoverSlide = (slide, presentationSlide) => {
+  setNamedText(slide, "TextBox 16", 0, presentationSlide.title);
+  setNamedText(slide, "TextBox 17", 0, presentationSlide.subtitle);
+  setNamedText(slide, "Date Placeholder 3", 0, "");
+  setNamedText(slide, "Date Placeholder 3", 1, "");
+};
+
+const applySectionSlide = (slide, presentationSlide) => {
+  setNamedText(slide, "TextBox 16", 0, presentationSlide.subtitle || "重點整理");
+  setNamedText(slide, "TextBox 21", 0, presentationSlide.title);
+};
+
+const applyContentSlide = (slide, presentationSlide) => {
+  setNamedText(slide, "Subtitle 2", 0, presentationSlide.title);
+  setNamedText(slide, "Subtitle 2", 1, presentationSlide.subtitle);
+};
+
+const applyClosingSlide = (slide, presentationSlide) => {
+  setNamedText(slide, "Text Placeholder 4", 0, presentationSlide.title || "謝謝聆聽");
+  setNamedText(slide, "Date Placeholder 3", 0, "");
+};
+
+const applySlideContent = (slide, presentationSlide) => {
+  switch (presentationSlide.slide_type) {
+    case "cover":
+      applyCoverSlide(slide, presentationSlide);
+      return;
+    case "section":
+      applySectionSlide(slide, presentationSlide);
+      return;
+    case "closing":
+      applyClosingSlide(slide, presentationSlide);
+      return;
+    default:
+      applyContentSlide(slide, presentationSlide);
+      addContent(slide, presentationSlide);
   }
 };
 
-const normalizeScenes = (scenes) =>
-  scenes
-    .slice(0, MAX_SCENES)
-    .map((scene, index) => ({
-      ...normalizePresentationScene(scene, index),
-      ...(typeof scene?.generatedImage === "string"
-        ? { generatedImage: scene.generatedImage }
-        : {}),
-    }))
-    .filter((scene) => scene.scene_description.trim() || scene.visual_prompt.trim());
-
-const generatePresentationPptx = async ({ scenes }) => {
-  const normalizedScenes = normalizeScenes(scenes);
-  if (normalizedScenes.length === 0) {
-    throw new Error("沒有可匯出的投影片內容");
+const generatePresentationPptx = async ({ slides }) => {
+  if (!fs.existsSync(COMPANY_TEMPLATE_PATH)) {
+    throw new Error(`找不到公司簡報範本：${COMPANY_TEMPLATE_PATH}`);
   }
 
-  const rootTemplateBuffer = await getRootTemplateBuffer();
+  const normalizedSlides = normalizePresentationSlides(slides);
+  if (normalizedSlides.length === 0) {
+    throw new Error("沒有可匯出的投影片內容");
+  }
+  if (normalizedSlides.length > PRESENTATION_MAX_SLIDES) {
+    throw new Error(`投影片數量不可超過 ${PRESENTATION_MAX_SLIDES} 張`);
+  }
+
   const automizer = new Automizer({
     removeExistingSlides: true,
     autoImportSlideMasters: true,
@@ -246,15 +263,18 @@ const generatePresentationPptx = async ({ scenes }) => {
   });
 
   automizer
-    .loadRoot(rootTemplateBuffer)
-    .load(rootTemplateBuffer, ROOT_TEMPLATE_NAME);
+    .loadRoot(COMPANY_TEMPLATE_PATH)
+    .load(COMPANY_TEMPLATE_PATH, COMPANY_TEMPLATE_NAME);
 
-  normalizedScenes.forEach((scene) => {
-    automizer.addSlide(ROOT_TEMPLATE_NAME, 1, (slide) => {
-      slide.generate((pptxSlide, pptxGenJs) => {
-        addScene(pptxSlide, pptxGenJs, scene);
-      });
-    });
+  normalizedSlides.forEach((presentationSlide) => {
+    const templateSlideNumber = getTemplateSlideNumber(presentationSlide);
+    automizer.addSlide(
+      COMPANY_TEMPLATE_NAME,
+      templateSlideNumber,
+      (slide) => {
+        applySlideContent(slide, presentationSlide);
+      }
+    );
   });
 
   const archive = await automizer.getJSZip();
@@ -266,7 +286,8 @@ const generatePresentationPptx = async ({ scenes }) => {
 };
 
 module.exports = {
+  COMPANY_TEMPLATE_PATH,
+  COMPANY_TEMPLATE_NAME,
+  PPTX_CONTENT_TYPE,
   generatePresentationPptx,
-  normalizeScenes,
-  toDataImage,
 };

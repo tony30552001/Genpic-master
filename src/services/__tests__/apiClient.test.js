@@ -93,12 +93,12 @@ describe("apiClient", () => {
       blob: vi.fn().mockResolvedValue(blob),
     });
 
-    await expect(apiPostBlob("/generate-presentation", { scenes: [] })).resolves.toBe(blob);
+    await expect(apiPostBlob("/generate-presentation", { slides: [] })).resolves.toBe(blob);
     expect(global.fetch.mock.calls[0][1]).toEqual(
       expect.objectContaining({
         method: "POST",
         credentials: "include",
-        body: JSON.stringify({ scenes: [] }),
+        body: JSON.stringify({ slides: [] }),
       })
     );
   });

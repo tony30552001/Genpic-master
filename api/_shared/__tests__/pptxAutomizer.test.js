@@ -2,46 +2,50 @@ import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { generatePresentationPptx, normalizeScenes } = require("../pptxAutomizer");
+const { generatePresentationPptx } = require("../pptxAutomizer");
+const { normalizePresentationSlides } = require("../presentationSchema");
 
 describe("pptxAutomizer", () => {
-  it("keeps embedded images while normalizing export scenes", () => {
-    const scenes = normalizeScenes([
+  it("normalizes presentation slides for company template export", () => {
+    const slides = normalizePresentationSlides([
       {
-        scene_number: 1,
-        scene_title: "封面",
-        scene_description: "簡報摘要",
-        generatedImage: "data:image/png;base64,AAAA",
+        slide_number: 1,
+        slide_type: "cover",
+        title: "公司簡報",
+        subtitle: "年度摘要",
       },
     ]);
 
-    expect(scenes[0]).toMatchObject({
-      scene_number: 1,
-      generatedImage: "data:image/png;base64,AAAA",
+    expect(slides[0]).toMatchObject({
+      slide_number: 1,
+      slide_type: "cover",
+      title: "公司簡報",
     });
   });
 
   it("generates a valid PPTX archive with native visuals", async () => {
     const buffer = await generatePresentationPptx({
-      scenes: [
+      slides: [
         {
-          scene_number: 1,
-          scene_title: "營收概覽",
-          scene_description: "季度營收持續成長",
-          bullet_points: ["Q2 高於 Q1"],
-          tables: [
-            {
-              headers: ["季度", "營收"],
-              rows: [["Q1", "100"], ["Q2", "120"]],
-            },
-          ],
-          charts: [
-            {
-              type: "bar",
-              labels: ["Q1", "Q2"],
-              series: [{ name: "營收", values: [100, 120] }],
-            },
-          ],
+          slide_number: 1,
+          slide_type: "cover",
+          title: "營收概覽",
+          subtitle: "季度營收持續成長",
+        },
+        {
+          slide_number: 2,
+          slide_type: "content",
+          title: "營收趨勢",
+          bullets: ["Q2 高於 Q1"],
+          table: {
+            headers: ["季度", "營收"],
+            rows: [["Q1", "100"], ["Q2", "120"]],
+          },
+          chart: {
+            type: "bar",
+            labels: ["Q1", "Q2"],
+            series: [{ name: "營收", values: [100, 120] }],
+          },
         },
       ],
     });

@@ -31,7 +31,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { generatePresentationPptx, optimizeScene } from "@/services/aiService";
+import { optimizeScene } from "@/services/aiService";
 import {
   extractPptxBullets,
   getPptxCharts,
@@ -674,7 +674,6 @@ export default function DocumentScenes({
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingPptx, setIsExportingPptx] = useState(false);
-  const [isExportingAutomizer, setIsExportingAutomizer] = useState(false);
   const stylePanelRef = useRef(null);
 
   if (!documentResult || !documentResult.scenes) return null;
@@ -1001,46 +1000,6 @@ export default function DocumentScenes({
     }
   };
 
-  const exportWithAutomizer = async () => {
-    const exportScenes = getPptxScenes(scenes);
-    if (exportScenes.length === 0) return;
-
-    setIsExportingAutomizer(true);
-    try {
-      const imageBase64List = await Promise.all(
-        exportScenes.map((scene) =>
-          scene.generatedImage ? fetchImageAsBase64(scene.generatedImage) : Promise.resolve(null)
-        )
-      );
-      const failedImages = imageBase64List.filter(
-        (base64, index) => exportScenes[index].generatedImage && base64 === null
-      ).length;
-      const blob = await generatePresentationPptx({
-        scenes: exportScenes.map((scene, index) => ({
-          ...scene,
-          generatedImage: imageBase64List[index],
-        })),
-      });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${sanitizePptxFilename(title)}-automizer-${Date.now()}.pptx`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-
-      if (failedImages > 0) {
-        alert(`Automizer PPTX 已匯出，但 ${failedImages} 張配圖尚未嵌入。`);
-      }
-    } catch (err) {
-      console.error("Automizer PPTX export failed:", err);
-      alert("Automizer PPTX 匯出失敗，請稍後再試。");
-    } finally {
-      setIsExportingAutomizer(false);
-    }
-  };
-
   // 打開 modal 時使用最新的 scene 資料
   const openModal = (index) => {
     setModalScene({ scene: scenes[index], index });
@@ -1091,7 +1050,7 @@ export default function DocumentScenes({
                     variant="outline"
                     size="sm"
                     onClick={exportToPdf}
-                    disabled={isGenerating || isExportingPdf || isExportingPptx || isExportingAutomizer}
+                    disabled={isGenerating || isExportingPdf || isExportingPptx}
                     className="text-xs h-8 gap-1"
                   >
                     {isExportingPdf ? (
@@ -1106,29 +1065,13 @@ export default function DocumentScenes({
                     variant="outline"
                     size="sm"
                     onClick={exportToPptx}
-                    disabled={isGenerating || isExportingPdf || isExportingPptx || isExportingAutomizer}
+                    disabled={isGenerating || isExportingPdf || isExportingPptx}
                     className="text-xs h-8 gap-1"
                   >
                     {isExportingPptx ? (
                       <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
                     ) : (
                       <><Presentation className="h-3 w-3" /> 匯出 PPTX</>
-                    )}
-                  </Button>
-                )}
-                {scenes.length > 0 && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={exportWithAutomizer}
-                    disabled={isGenerating || isExportingPdf || isExportingPptx || isExportingAutomizer}
-                    className="text-xs h-8 gap-1"
-                    title="使用伺服器端 pptx-automizer 產生 PowerPoint；動態講者備注仍請使用一般匯出"
-                  >
-                    {isExportingAutomizer ? (
-                      <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
-                    ) : (
-                      <><Layers className="h-3 w-3" /> Automizer PPTX</>
                     )}
                   </Button>
                 )}
@@ -1335,17 +1278,14 @@ export default function DocumentScenes({
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {documentResult.analysis_mode === "presentation" ? "投影片預覽" : "分鏡預覽"}
+              分鏡預覽
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {documentResult.analysis_mode === "presentation"
-                ? "分析完成即可匯出 PPTX，配圖可稍後生成或自行替換。"
-                : "點擊圖片查看大圖，或直接編輯提示詞後重新生成。"}
+              點擊圖片查看大圖，或直接編輯提示詞後重新生成。
             </p>
           </div>
           <Badge variant="outline" className="shrink-0 gap-1 text-xs">
-            <Layers className="h-3 w-3" /> {scenes.length}{" "}
-            {documentResult.analysis_mode === "presentation" ? "張投影片" : "個分鏡"}
+            <Layers className="h-3 w-3" /> {scenes.length} 個分鏡
           </Badge>
         </div>
 

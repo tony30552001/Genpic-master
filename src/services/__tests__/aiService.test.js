@@ -53,7 +53,7 @@ describe("aiService", () => {
       fileName: "report.docx",
       contentType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      sceneCount: 6,
+      slideCount: 6,
       mode: "presentation",
     });
 
@@ -63,19 +63,20 @@ describe("aiService", () => {
       contentType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       base64Content: undefined,
-      sceneCount: 6,
+      sceneCount: undefined,
+      slideCount: 6,
       mode: "presentation",
     });
   });
 
   it("requests a server-generated presentation as a blob", async () => {
-    const scenes = [{ scene_title: "Overview" }];
+    const slides = [{ title: "Overview", slide_type: "cover" }];
 
-    await generatePresentationPptx({ scenes, signal: "abort-signal" });
+    await generatePresentationPptx({ slides, signal: "abort-signal" });
 
     expect(apiPostBlob).toHaveBeenCalledWith(
       "/api/generate-presentation",
-      { scenes },
+      { slides },
       { signal: "abort-signal" }
     );
   });

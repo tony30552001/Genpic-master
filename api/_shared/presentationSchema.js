@@ -2,7 +2,8 @@ const MAX_TABLE_COLUMNS = 8;
 const MAX_TABLE_ROWS = 10;
 const MAX_CHART_LABELS = 12;
 const MAX_CHART_SERIES = 4;
-const PRESENTATION_SCHEMA_VERSION = 1;
+const PRESENTATION_SCHEMA_VERSION = 2;
+const PRESENTATION_MAX_SLIDES = 10;
 
 const LAYOUT_TYPES = new Set([
   "default",
@@ -10,6 +11,13 @@ const LAYOUT_TYPES = new Set([
   "two_column",
   "table",
   "chart",
+  "closing",
+]);
+
+const PRESENTATION_SLIDE_TYPES = new Set([
+  "cover",
+  "section",
+  "content",
   "closing",
 ]);
 
@@ -41,6 +49,11 @@ const toFiniteNumber = (value) => {
 const normalizeLayoutType = (value) => {
   const layoutType = toText(value).toLowerCase();
   return LAYOUT_TYPES.has(layoutType) ? layoutType : "default";
+};
+
+const normalizeSlideType = (value) => {
+  const slideType = toText(value).toLowerCase();
+  return PRESENTATION_SLIDE_TYPES.has(slideType) ? slideType : "content";
 };
 
 const normalizeChartType = (value) =>
@@ -159,7 +172,7 @@ const normalizeChart = (rawChart) => {
   };
 };
 
-const normalizePresentationScene = (scene, index = 0) => {
+const normalizeDocumentScene = (scene, index = 0) => {
   const rawScene =
     scene && typeof scene === "object" && !Array.isArray(scene) ? scene : {};
   const rawSceneNumber = Number(rawScene.scene_number ?? rawScene.sceneNumber);
@@ -217,6 +230,63 @@ const normalizePresentationScene = (scene, index = 0) => {
   };
 };
 
+const normalizePresentationSlide = (slide, index = 0) => {
+  const rawSlide =
+    slide && typeof slide === "object" && !Array.isArray(slide) ? slide : {};
+  const rawSlideNumber = Number(rawSlide.slide_number);
+  const title = toText(rawSlide.title) || `投影片 ${index + 1}`;
+  const subtitle = toText(rawSlide.subtitle);
+  const body = toText(rawSlide.body);
+  const bullets = normalizeTextArray(rawSlide.bullets);
+  const table = normalizeTable(rawSlide.table);
+  const chart = normalizeChart(rawSlide.chart);
+
+  return {
+    slide_number:
+      Number.isInteger(rawSlideNumber) && rawSlideNumber > 0
+        ? rawSlideNumber
+        : index + 1,
+    slide_type: normalizeSlideType(
+      rawSlide.slide_type
+    ),
+    title,
+    subtitle,
+    body,
+    bullets,
+    speaker_notes: toText(rawSlide.speaker_notes),
+    source_excerpt: toText(rawSlide.source_excerpt),
+    table,
+    chart,
+  };
+};
+
+const normalizePresentationSlides = (slides) =>
+  (Array.isArray(slides) ? slides : [])
+    .slice(0, PRESENTATION_MAX_SLIDES)
+    .map((rawSlide, index) => {
+      const slide = normalizePresentationSlide(rawSlide, index);
+      const source =
+        rawSlide && typeof rawSlide === "object" && !Array.isArray(rawSlide)
+          ? rawSlide
+          : {};
+      const hasText = [
+        source.title,
+        source.subtitle,
+        source.body,
+        source.speaker_notes,
+        source.source_excerpt,
+      ].some((value) => toText(value).length > 0);
+
+      return hasText || slide.bullets.length > 0 || slide.table || slide.chart
+        ? slide
+        : null;
+    })
+    .filter(Boolean)
+    .map((slide, index) => ({
+      ...slide,
+      slide_number: index + 1,
+    }));
+
 module.exports = {
   CHART_TYPE_ALIASES,
   LAYOUT_TYPES,
@@ -224,10 +294,15 @@ module.exports = {
   MAX_CHART_SERIES,
   MAX_TABLE_COLUMNS,
   MAX_TABLE_ROWS,
+  PRESENTATION_MAX_SLIDES,
+  PRESENTATION_SLIDE_TYPES,
   PRESENTATION_SCHEMA_VERSION,
   normalizeChart,
   normalizeChartType,
   normalizeLayoutType,
-  normalizePresentationScene,
+  normalizeDocumentScene,
+  normalizePresentationSlide,
+  normalizePresentationSlides,
+  normalizeSlideType,
   normalizeTable,
 };
