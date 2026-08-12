@@ -34,10 +34,108 @@ import { Badge } from "@/components/ui/badge";
 import { optimizeScene } from "@/services/aiService";
 import {
   extractPptxBullets,
+  getPptxCharts,
   getPptxScenes,
+  getPptxTables,
   sanitizePptxFilename,
 } from "@/utils/pptxExport";
 import ImageGeneratingState from "./ImageGeneratingState";
+
+const PPTX_CHART_TYPES = {
+  bar: "bar",
+  line: "line",
+  pie: "pie",
+  doughnut: "doughnut",
+};
+
+const addPptxTable = (slide, table, bounds, colors) => {
+  const titleHeight = table.title ? 0.28 : 0;
+  const columnWidth = bounds.w / table.headers.length;
+  const cellBorder = { color: "CBD5E1", pt: 0.5 };
+  const tableRows = [
+    table.headers.map((text) => ({
+      text,
+      options: {
+        bold: true,
+        color: "FFFFFF",
+        fill: { color: colors.accent },
+        align: "center",
+        valign: "mid",
+        border: cellBorder,
+      },
+    })),
+    ...table.rows.map((row) =>
+      row.map((text) => ({
+        text,
+        options: {
+          color: colors.body,
+          valign: "mid",
+          border: cellBorder,
+        },
+      }))
+    ),
+  ];
+
+  if (table.title) {
+    slide.addText(table.title, {
+      x: bounds.x,
+      y: bounds.y,
+      w: bounds.w,
+      h: titleHeight,
+      fontSize: 12,
+      bold: true,
+      color: colors.title,
+      margin: 0,
+    });
+  }
+
+  slide.addTable(tableRows, {
+    x: bounds.x,
+    y: bounds.y + titleHeight,
+    w: bounds.w,
+    h: Math.max(0.6, bounds.h - titleHeight),
+    colW: Array.from({ length: table.headers.length }, () => columnWidth),
+    rowH: 0.31,
+    fontSize: 8,
+    margin: 0.05,
+    autoPage: false,
+    valign: "mid",
+  });
+};
+
+const addPptxChart = (slide, chart, bounds, colors) => {
+  const chartType = PPTX_CHART_TYPES[chart.type] || PPTX_CHART_TYPES.bar;
+  const isCircular = chartType === "pie" || chartType === "doughnut";
+
+  slide.addChart(
+    chartType,
+    chart.series.map((series) => ({
+      name: series.name,
+      labels: chart.labels,
+      values: series.values,
+    })),
+    {
+      x: bounds.x,
+      y: bounds.y,
+      w: bounds.w,
+      h: bounds.h,
+      showTitle: Boolean(chart.title),
+      title: chart.title,
+      titleColor: colors.title,
+      titleFontSize: 12,
+      showLegend: chart.series.length > 1,
+      legendPos: "b",
+      legendFontSize: 8,
+      chartColors: [colors.accent, "0EA5E9", "F59E0B", "10B981"],
+      showValue: isCircular,
+      showPercent: isCircular,
+      catAxisLabelColor: colors.body,
+      catAxisLabelFontSize: 8,
+      valAxisLabelColor: colors.body,
+      valAxisLabelFontSize: 8,
+    }
+  );
+};
 
 
 /* ────────────────────────────────────────────
@@ -729,6 +827,7 @@ export default function DocumentScenes({
    * 使用 pptxgenjs 將場景匯出為可編輯的 PowerPoint 簡報
    * - 每個分析後的場景對應一張投影片
    * - 有 bullet_points 時顯示項目符號；否則 fallback 到 scene_description
+   * - 結構化表格與圖表以原生 PowerPoint 元件匯出
    * - 已生成的圖片以 base64 嵌入（避免 SAS token 過期）
    * - speaker_notes 寫入投影片備注區
    */
@@ -795,28 +894,83 @@ export default function DocumentScenes({
           rectRadius: 0.05,
         });
 
+        const tables = getPptxTables(scene);
+        const charts = getPptxCharts(scene);
+        const hasNativeVisual = tables.length > 0 || charts.length > 0;
+        const isContentOnlyLayout =
+          !hasNativeVisual &&
+          !imageBase64 &&
+          (scene.layout_type === "title_content" || scene.layout_type === "closing");
+        const isClosingLayout = scene.layout_type === "closing";
+
         // Slide title
         slide.addText(scene.scene_title || "", {
-          x: 0.68, y: 0.1, w: 5.7, h: 0.6,
+          x: isClosingLayout ? 0.6 : 0.68,
+          y: 0.1,
+          w: isClosingLayout ? 8.7 : 5.7,
+          h: 0.6,
           fontSize: 20, bold: true, color: C_TITLE,
+          align: isClosingLayout ? "center" : "left",
           valign: "middle",
         });
 
         // Bullet points (or scene_description fallback)
         const bullets = extractPptxBullets(scene);
 
-        slide.addText(
-          bullets.map((text) => ({
-            text,
-            options: { bullet: { type: "bullet" }, paraSpaceAfter: 6, color: C_BODY },
-          })),
-          { x: 0.3, y: 0.85, w: 5.5, h: 4.35, fontSize: 13, valign: "top", lineSpacingMultiple: 1.4, wrap: true }
-        );
+        if (bullets.length > 0) {
+          slide.addText(
+            bullets.map((text) => ({
+              text,
+              options: { bullet: { type: "bullet" }, paraSpaceAfter: 6, color: C_BODY },
+            })),
+            {
+              x: isContentOnlyLayout ? 0.6 : 0.3,
+              y: 0.85,
+              w: isContentOnlyLayout ? 8.8 : 5.5,
+              h: 4.35,
+              fontSize: 13,
+              valign: "top",
+              lineSpacingMultiple: 1.4,
+              wrap: true,
+            }
+          );
+        }
 
-        // AI-generated image on the right
-        if (imageBase64) {
+        if (hasNativeVisual) {
+          const visualBounds = { x: 6.0, y: 0.8, w: 3.75, h: 4.45 };
+
+          if (tables.length > 0 && charts.length > 0) {
+            addPptxTable(
+              slide,
+              tables[0],
+              { ...visualBounds, h: 2.1 },
+              { title: C_TITLE, body: C_BODY, accent: C_ACCENT }
+            );
+            addPptxChart(
+              slide,
+              charts[0],
+              { ...visualBounds, y: 3.08, h: 2.17 },
+              { title: C_TITLE, body: C_BODY, accent: C_ACCENT }
+            );
+          } else if (tables.length > 0) {
+            addPptxTable(
+              slide,
+              tables[0],
+              visualBounds,
+              { title: C_TITLE, body: C_BODY, accent: C_ACCENT }
+            );
+          } else {
+            addPptxChart(
+              slide,
+              charts[0],
+              visualBounds,
+              { title: C_TITLE, body: C_BODY, accent: C_ACCENT }
+            );
+          }
+        } else if (imageBase64) {
+          // AI-generated image on the right
           slide.addImage({ data: imageBase64, x: 6.0, y: 0.8, w: 3.75, h: 4.45 });
-        } else {
+        } else if (!isContentOnlyLayout) {
           slide.addText("尚未生成配圖\n可在 Pixora 中生成或自行替換", {
             x: 6.0, y: 0.8, w: 3.75, h: 4.45,
             fontSize: 13, color: "64748B",
@@ -1237,6 +1391,21 @@ export default function DocumentScenes({
                             </li>
                           ))}
                         </ul>
+                      </div>
+                    )}
+
+                    {(getPptxTables(scene).length > 0 || getPptxCharts(scene).length > 0) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {getPptxTables(scene).length > 0 && (
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            原生表格
+                          </Badge>
+                        )}
+                        {getPptxCharts(scene).length > 0 && (
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            原生圖表
+                          </Badge>
+                        )}
                       </div>
                     )}
 

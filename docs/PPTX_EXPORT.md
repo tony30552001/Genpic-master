@@ -69,7 +69,9 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 | speaker_notes | string | 講者備注，補充演講要點（60 字內） |
 | visual_prompt | string | AI 生圖 Prompt（英文關鍵字，用於生成配圖） |
 | scene_description | string | 投影片核心主旨（30 字內） |
-| layout_type | string | 版面建議（目前固定為 default） |
+| layout_type | string | 版面建議：default、title_content、two_column、table、chart 或 closing |
+| tables | object[] | 最多一個可編輯原生表格；每個表格最多 8 欄、10 列 |
+| charts | object[] | 最多一個可編輯原生圖表；支援 bar、line、pie、doughnut |
 
 ---
 
@@ -79,7 +81,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 |------|----|
 | 投影片比例 | 16:9（10 × 5.625 英吋） |
 | 檔案命名 | {簡報標題}-{時間戳}.pptx |
-| 每張投影片 | 序號徽章 + 標題 + 重點列表 + 可選 AI 配圖 |
+| 每張投影片 | 序號徽章 + 標題 + 重點列表 + 原生表格/圖表或可選 AI 配圖 |
 | 講者備注 | 嵌入於投影片備注區，PowerPoint 可直接查看 |
 | 圖片格式 | PNG（base64 嵌入，無需網路即可開啟） |
 
@@ -99,7 +101,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 `
 
 - **左側（62.5% 寬）**：序號徽章（紫色）、標題、重點項目列表
-- **右側（37.5% 寬）**：AI 生成配圖；尚未生成時顯示可替換的提示區塊
+- **右側（37.5% 寬）**：優先放置可編輯原生表格或圖表；沒有結構化資料時使用 AI 配圖，尚未生成時顯示可替換的提示區塊
 - **備注區**：speaker_notes 內容（隱藏在備注面板，演講時可參考）
 
 ---
@@ -139,8 +141,8 @@ useDocumentAnalysis.js -> aiService.analyzeDocument()
          |  POST /api/analyze-document   body: { mode: "presentation" }
 api/analyze-document/index.js（Azure Function）
          |  PRESENTATION_ANALYSIS_PROMPT_BASE
-Gemini（gemini-1.5-flash）
-         |  JSON 回應（scenes[] + bullet_points / speaker_notes）
+Gemini（Azure OpenAI deployment）
+         | JSON 回應（scenes[] + bullet_points / speaker_notes / tables / charts）
 DocumentScenes.jsx  <--- 投影片卡片 + 可選生成圖片
          |  exportToPptx()（分析完成即可執行）
 pptxgenjs（動態 import，372 KB code-split chunk）
@@ -191,7 +193,18 @@ pptxgenjs（動態 import，372 KB code-split chunk）
       "bullet_points": ["重點一", "重點二", "重點三"],
       "speaker_notes": "講者備注內容",
       "visual_prompt": "English image generation prompt...",
-      "layout_type": "default"
+      "layout_type": "chart",
+      "tables": [],
+      "charts": [
+        {
+          "type": "bar",
+          "title": "季度營收",
+          "labels": ["Q1", "Q2"],
+          "series": [
+            { "name": "營收", "values": [100, 120] }
+          ]
+        }
+      ]
     }
   ]
 }
@@ -202,7 +215,7 @@ pptxgenjs（動態 import，372 KB code-split chunk）
 | 函式 / 元件 | 檔案 | 說明 |
 |-------------|------|------|
 | exportToPptx() | src/components/create/DocumentScenes.jsx | PPTX 生成與下載邏輯 |
-| PPTX 純函式 | src/utils/pptxExport.js | 投影片選取、重點 fallback 與檔名清理 |
+| PPTX 純函式 | src/utils/pptxExport.js | 投影片選取、重點 fallback、表格/圖表資料正規化與檔名清理 |
 | DocumentUploader | src/components/create/DocumentUploader.jsx | 上傳 / 大綱輸入 UI，含模式切換 |
 | useDocumentAnalysis | src/hooks/useDocumentAnalysis.js | 文件分析狀態管理 |
 | aiService.analyzeDocument | src/services/aiService.js | API 呼叫封裝 |
@@ -212,7 +225,7 @@ pptxgenjs（動態 import，372 KB code-split chunk）
 
 | 套件 | 版本 | 用途 |
 |------|------|------|
-| pptxgenjs | ^3.x | 前端純 JS PPTX 生成 |
+| pptxgenjs | ^4.0.1 | 前端純 JS PPTX 生成，包含原生表格與圖表 |
 
 pptxgenjs 採用**動態 import**（import('pptxgenjs')），僅在使用者點擊匯出時才載入，不影響首頁載入效能。
 
@@ -224,7 +237,7 @@ pptxgenjs 採用**動態 import**（import('pptxgenjs')），僅在使用者點�
 |------|------|------|
 | CORS 圖片嵌入 | Azure Blob Storage 未正確設定 CORS 時，圖片無法嵌入 | 投影片有文字無圖，可手動補上 |
 | Null bullet point | 極少數情況下 Gemini 回傳 null 項目，會顯示為字串 "null" | 視覺上可能出現 "null" 文字，可手動刪除 |
-| 版面範本 | 目前固定為預設版面（文字左、圖片右） | 尚不支援全圖、文字置中等變體版面 |
+| 版面範本 | Phase 1 支援預設雙欄與資料視覺化右欄 | 尚不支援使用者上傳的 PowerPoint Master/Layout |
 | 自訂主題色 | 目前固定為 Pixora 預設配色（紫色徽章、黑色文字） | 尚不支援品牌色彩自訂 |
 | 配圖生成 | 配圖不是匯出前置條件 | 未生成配圖時需在 PowerPoint 中自行替換 |
 

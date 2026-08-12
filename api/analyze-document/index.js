@@ -14,6 +14,10 @@ const {
 } = require("../_shared/azureOpenAI");
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
+const {
+  normalizePresentationScene,
+  PRESENTATION_SCHEMA_VERSION,
+} = require("../_shared/presentationSchema");
 
 const safeString = (value, fallback = "") =>
   value == null ? fallback : typeof value === "string" ? value : String(value);
@@ -91,7 +95,9 @@ const PRESENTATION_ANALYSIS_PROMPT_BASE = `請擔任專業的簡報設計師與�
    - "speaker_notes": (string, 繁體中文) 講者備注，補充說明這張投影片的演講要點（60字內）
    - "visual_prompt": (string, 英文) AI 生圖專用 Prompt。描述這張投影片適合的配圖，列出構圖、主體、光影、風格等英文關鍵字，以逗號分隔（50-80字內）
    - "source_text": (string, 繁體中文) 擷取對應原文片段（30字內）
-   - "layout_type": (string) 投影片版面建議：「default」（標題+重點+圖片）
+   - "layout_type": (string) 投影片版面建議：「default」、「title_content」、「two_column」、「table」、「chart」或「closing」
+   - "tables": (array) 若原文包含真正的表格資料，最多回傳1個表格；每個表格包含 "title"、"headers"（欄位名稱陣列）與 "rows"（字串陣列的陣列），最多8欄、10列；沒有表格時回傳 []
+   - "charts": (array) 若原文包含可量化的資料，最多回傳1個圖表；每個圖表包含 "type"（bar、line、pie 或 doughnut）、"title"、"labels"（分類陣列）與 "series"（含 name 與 values 數值陣列），沒有可靠數值時回傳 []
    
 5. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
    - "name": (string) 名稱
@@ -103,6 +109,8 @@ const PRESENTATION_ANALYSIS_PROMPT_BASE = `請擔任專業的簡報設計師與�
 - 第一張投影片通常是封面/簡介，可以是概述性內容。
 - visual_prompt 必須精簡有力，只保留視覺名詞與形容詞。
 - recommended_style.prompt、scene_description、bullet_points 和 visual_prompt 絕對不可為空。
+- tables 與 charts 只能使用文件中實際存在的資料，不可臆造數字；沒有可靠資料時必須回傳空陣列。
+- 每張投影片最多提供一個 tables 項目與一個 charts 項目，優先選擇最能支撐該頁重點的資料視覺化。
 - 直接回傳 JSON，不要其他多餘對話。`;
 
 /**
@@ -397,20 +405,8 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // 確保每個場景都有必要欄位，過濾掉完全空白的場景（向下相容駝峰命名）
-    const rawScenes = data.scenes.map((scene, index) => ({
-      scene_number: scene.scene_number || scene.sceneNumber || index + 1,
-      scene_title: scene.scene_title || scene.sceneTitle || `場景 ${index + 1}`,
-      scene_description: scene.scene_description || scene.sceneDescription || scene.description || "",
-      visual_prompt: scene.visual_prompt || scene.visualPrompt || scene.prompt || scene.scene_description || scene.sceneDescription || scene.description || "",
-      key_elements: scene.key_elements || scene.keyElements || [],
-      mood: scene.mood || "",
-      source_text: scene.source_text || scene.sourceText || "",
-      // 簡報模式新增欄位（分鏡模式下可能為空，保持向後相容）
-      bullet_points: Array.isArray(scene.bullet_points) ? scene.bullet_points.map(String).filter(Boolean) : [],
-      speaker_notes: typeof scene.speaker_notes === 'string' ? scene.speaker_notes : "",
-      layout_type: typeof scene.layout_type === 'string' ? scene.layout_type : "default",
-    }));
+    // 確保每個場景都有必要欄位，過濾掉完全空白的場景
+    const rawScenes = data.scenes.map(normalizePresentationScene);
 
     // 過濾掉 scene_description 和 visual_prompt 都為空的場景
     const validatedScenes = rawScenes.filter((scene) =>
@@ -479,6 +475,8 @@ module.exports = async function (context, req) {
       analysis_model: modelName,
       source_parser: parsedDocument.parser,
       source_format: parsedDocument.format,
+      presentation_schema_version:
+        analysisMode === "presentation" ? PRESENTATION_SCHEMA_VERSION : null,
     };
 
     context.log("[analyze-document] Step 7: Success, total_scenes:", response.total_scenes);

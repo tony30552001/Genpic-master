@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   extractPptxBullets,
+  getPptxCharts,
   getPptxScenes,
+  getPptxTables,
+  normalizePptxChart,
+  normalizePptxTable,
   sanitizePptxFilename,
 } from "../pptxExport";
 
@@ -121,5 +125,62 @@ describe("PPTX export — filename sanitization", () => {
 
   it("preserves hyphens and underscores", () => {
     expect(sanitizePptxFilename("my_deck-v2")).toBe("my_deck-v2");
+  });
+});
+
+describe("PPTX export — native table and chart data", () => {
+  it("normalizes a table to bounded rectangular rows", () => {
+    expect(
+      normalizePptxTable({
+        title: "Revenue",
+        headers: ["Quarter", "Amount"],
+        rows: [["Q1", 100], ["Q2"], ["", ""]],
+      })
+    ).toEqual({
+      title: "Revenue",
+      headers: ["Quarter", "Amount"],
+      rows: [["Q1", "100"], ["Q2", ""]],
+    });
+  });
+
+  it("drops malformed tables and limits table size", () => {
+    const table = normalizePptxTable({
+      headers: Array.from({ length: 10 }, (_, index) => `H${index}`),
+      rows: Array.from({ length: 14 }, (_, rowIndex) =>
+        Array.from({ length: 10 }, (_, columnIndex) => `${rowIndex}-${columnIndex}`)
+      ),
+    });
+
+    expect(table.headers).toHaveLength(8);
+    expect(table.rows).toHaveLength(10);
+    expect(normalizePptxTable({ rows: [["", null]] })).toBeNull();
+  });
+
+  it("normalizes chart aliases, numeric values, and missing labels", () => {
+    expect(
+      normalizePptxChart({
+        type: "column",
+        series: [{ name: "Sales", values: ["10", "bad", 30] }],
+      })
+    ).toEqual({
+      type: "bar",
+      title: "",
+      labels: ["項目 1", "項目 2", "項目 3"],
+      series: [{ name: "Sales", values: [10, 0, 30] }],
+    });
+  });
+
+  it("returns only valid native visuals from a scene", () => {
+    const scene = {
+      tables: [{ headers: ["A"], rows: [["1"]] }, { headers: ["B"], rows: [["2"]] }],
+      charts: [
+        { type: "line", labels: ["A"], series: [{ name: "S", values: [1] }] },
+      ],
+    };
+
+    expect(getPptxTables(scene)).toHaveLength(1);
+    expect(getPptxCharts(scene)[0].type).toBe("line");
+    expect(getPptxTables({})).toEqual([]);
+    expect(getPptxCharts({ charts: [{ labels: [], series: [] }] })).toEqual([]);
   });
 });
