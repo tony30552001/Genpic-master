@@ -19,6 +19,8 @@
     "dotenv": "^17.3.1",
     "express": "^5.1.0",
     "google-auth-library": "^10.5.0",
-    "pg": "^8.13.3"
+    "pg": "^8.13.3",
+    "pptx-automizer": "^0.8.2",
+    "pptxgenjs": "^3.12.0"
   }
 }

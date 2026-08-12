@@ -6,11 +6,11 @@ tags: [backend, ai-generation, document-analysis]
 openwiki:
   roles: [workflow, integration]
   change_kinds: [document-analysis, response-contract, provider-adapter]
-  source_paths: [api/analyze-document/index.js, api/_shared/presentationSchema.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js]
-  symbols: [normalizeRecommendedStyle, normalizePresentationScene, normalizeTable, normalizeChart, buildAnalysisPrompt, generateJsonCompletion]
-  test_paths: [api/_shared/__tests__/presentationSchema.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
-  invariants: [Document analysis rejects an AI response with no nonempty recommended_style.prompt., Presentation visual data is bounded and normalized before it leaves the handler.]
-  validation_commands: [pnpm test --run api/_shared/__tests__/presentationSchema.test.js]
+  source_paths: [api/analyze-document/index.js, api/generate-presentation/index.js, api/_shared/presentationSchema.js, api/_shared/pptxAutomizer.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js]
+  symbols: [normalizeRecommendedStyle, normalizePresentationScene, normalizeTable, normalizeChart, buildAnalysisPrompt, generateJsonCompletion, generatePresentationPptx, normalizeScenes, toDataImage]
+  test_paths: [api/_shared/__tests__/presentationSchema.test.js, api/_shared/__tests__/pptxAutomizer.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
+  invariants: [Document analysis rejects an AI response with no nonempty recommended_style.prompt., Presentation visual data is bounded and normalized before it leaves the handler., Server PPTX export accepts no more than ten normalized scenes and only embedded image data URLs.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/pptxAutomizer.test.js]
 ---
 
 # AI generation and durable image jobs
@@ -64,6 +64,35 @@ Valid output returns title, summary, `recommended_style`, scenes, characters, to
 For a format, conversion, Responses-input, or response-normalization change, begin with `documentParser.js`, `azureOpenAI.js`, `presentationSchema.js`, and `analyze-document/index.js`, then trace the browser consumer in [creation workflows](../frontend/create-workflows.md). `api/_shared/__tests__/presentationSchema.test.js` covers scene fallback, aliases, preservation of valid visuals, and rejection of empty/non-numeric visual data; run `pnpm test --run api/_shared/__tests__/presentationSchema.test.js` for schema-only work. `documentParser.test.js` covers extension/MIME recognition, direct text, CSV conversion, image routing, and conversion error mapping; `azureOpenAI.test.js` covers image/PDF Responses input and configured deployment output. Run `pnpm test --run api/_shared/__tests__/documentParser.test.js api/_shared/__tests__/azureOpenAI.test.js` only when parser or provider-input behavior changes. There is no focused handler test for `recommended_style` normalization or its required-prompt rejection, so a change there needs a targeted handler test or controlled API integration. Handler-level route behavior and live conversion/provider behavior remain integration concerns; do not validate provider credentials for an adapter-only change.
 
 Other AI routes: `analyze-style` returns style prompt/metadata, `optimize-scene` falls back to original fields if model JSON cannot parse, `optimize-prompt` requires Azure OpenAI JSON fields, embedding expects the configured vector dimension, and filename generation sanitizes/falls back rather than blocking creation.
+
+### Server-rendered PowerPoint export
+
+`POST /generate-presentation` is an authenticated, rate-limited, CSRF-protected binary endpoint. It rejects a missing/empty `scenes` array and more than ten supplied scenes with `400 bad_request`; it first calls `_shared/pptxAutomizer.js::normalizeScenes`, rejects a result with no usable description/prompt, and rejects any retained `generatedImage` that is not a `data:image/...;base64,` URL with `400 invalid_image`. It returns a no-store `.pptx` attachment with the Office presentation content type. The public route and OpenAPI binary response declaration are kept in [HTTP API](http-api.md); the browser conversion and download lifecycle is owned by [creation workflows](../frontend/create-workflows.md).
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant Client as apiPostBlob
+  participant Handler as generate-presentation
+  participant Renderer as pptxAutomizer
+  Browser->>Client: normalized scenes and embedded images
+  Client->>Handler: cookie and CSRF protected POST
+  Handler->>Handler: validate and normalize scenes
+  Handler->>Renderer: create presentation archive
+  Renderer-->>Handler: PPTX buffer
+  Handler-->>Client: binary attachment
+  Client-->>Browser: Blob download
+```
+
+This sequence shows the export boundary: browser code converts usable images before the request, while server code re-normalizes presentation data and never fetches client-supplied URLs. `generatePresentationPptx` memoizes an in-memory 16:9 root template, then has `pptx-automizer` load it as both root and named source. It removes the template slide and adds one generated slide per normalized scene. `addScene` repeats the local exporter’s visual precedence: native table/chart data beats an embedded image, and an image beats the placeholder. It accepts only the normalized layouts and rendering data from `presentationSchema`; speaker notes are not added by this bridge.
+
+For server-export work, change `api/generate-presentation/index.js` for request/response policy and `_shared/pptxAutomizer.js` for normalization, root-template lifecycle, or slide rendering. `api/_shared/__tests__/pptxAutomizer.test.js` verifies embedded-image preservation and creates an actual ZIP-based PPTX with native visuals; run:
+
+```sh
+pnpm test --run api/_shared/__tests__/pptxAutomizer.test.js
+```
+
+Run the client blob checks in [creation workflows](../frontend/create-workflows.md) when the browser contract changes. There is no focused handler test for authentication, CSRF, rate limits, validation status codes, or attachment headers; add one before changing those handler branches. Do not run a provider check: this export has no AI-provider call or external storage fetch.
 
 ## Job state machine
 

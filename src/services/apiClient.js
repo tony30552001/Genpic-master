@@ -54,12 +54,13 @@ const stripClientOptions = (options) => {
     auth: _auth,
     csrf: _csrf,
     _retried: _retried,
+    responseType: _responseType,
     ...fetchOptions
   } = options;
   return fetchOptions;
 };
 
-const parseResponse = async (response) => {
+const parseResponse = async (response, responseType = "json") => {
   if (!response.ok) {
     const text = typeof response.text === "function"
       ? await response.text()
@@ -77,6 +78,13 @@ const parseResponse = async (response) => {
   }
 
   if (response.status === 204) return null;
+
+  if (responseType === "blob") {
+    if (typeof response.blob === "function") return response.blob();
+    if (typeof response.arrayBuffer === "function") {
+      return new Blob([await response.arrayBuffer()]);
+    }
+  }
 
   if (typeof response.text !== "function") {
     return typeof response.json === "function" ? response.json() : null;
@@ -101,6 +109,14 @@ export async function apiPost(url, body, options = {}) {
     url,
     { method: "POST", body: JSON.stringify(body ?? {}) },
     options
+  );
+}
+
+export async function apiPostBlob(url, body, options = {}) {
+  return requestWithRetry(
+    url,
+    { method: "POST", body: JSON.stringify(body ?? {}) },
+    { ...options, responseType: "blob" }
   );
 }
 
@@ -149,5 +165,5 @@ const requestWithRetry = async (url, baseOptions, options) => {
     throw new AuthExpiredError();
   }
 
-  return parseResponse(response);
+  return parseResponse(response, options.responseType);
 };

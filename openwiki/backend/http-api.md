@@ -6,9 +6,9 @@ tags: [backend, api, openapi, scalar, sessions]
 openwiki:
   roles: [integration, operations, workflow]
   change_kinds: [api-routing, api-reference, public-api, authentication]
-  source_paths: [api/server.js, api/openapi.js, api/_shared/http.js, api/auth/index.js]
-  symbols: [invokeFunction, registerRoute, registerRoutes, operation, addOperation]
-  invariants: ["The OpenAPI catalog and Express route registry are separate declarations that must describe the same public adapter surface.", "Protected unsafe operations require the session cookie plus X-CSRF-Token."]
+  source_paths: [api/server.js, api/openapi.js, api/generate-presentation/index.js, api/_shared/http.js, api/auth/index.js]
+  symbols: [invokeFunction, registerRoute, registerRoutes, operation, addOperation, response]
+  invariants: ["The OpenAPI catalog and Express route registry are separate declarations that must describe the same public adapter surface.", "Protected unsafe operations require the session cookie plus X-CSRF-Token.", "Binary success responses must preserve their declared content type through the Express function adapter."]
   validation_commands: [cd api && node --check server.js && node --check openapi.js]
 ---
 
@@ -37,12 +37,12 @@ The catalog and `registerRoutes` are separate declarations. When adding, removin
 | `GET /auth/entra/start`, `GET /auth/entra/callback`, `POST /auth/google`, `GET /auth/session`, `POST /auth/logout` | [server sessions](sessions.md) |
 | `GET /me` | [authentication and administration](auth-tenancy-admin.md) |
 | `POST /analyze-document`, `/analyze-style`, `/optimize-prompt`, `/optimize-scene`, `/generate-filename`, `/embeddings` | [AI generation](ai-generation.md) |
-| `POST /generate-images`, `/image-transform`; `GET /image-jobs/:id` | [AI generation](ai-generation.md) |
+| `POST /generate-images`, `/image-transform`, `/generate-presentation`; `GET /image-jobs/:id` | [AI generation](ai-generation.md) |
 | `/styles`, `/styles/search`, `/styles/backfill-embeddings`, `/history`, `/templates`, `/blob-sas` | [resources](resources.md) |
 | `/line-config`, `/send-line-image` | [resources](resources.md) |
 | `/management/*` | [authentication and administration](auth-tenancy-admin.md) |
 
-All listed function registrations also accept `OPTIONS`. New protected unsafe operations must have a browser-acquirable CSRF token path and a `csrf: true` catalog declaration, not only a cookie security declaration.
+All listed function registrations also accept `OPTIONS`. New protected unsafe operations must have a browser-acquirable CSRF token path and a `csrf: true` catalog declaration, not only a cookie security declaration. `POST /api/generate-presentation` is the current non-JSON success case: `operation` and `response` accept a success content type/schema so its OpenAPI success body is binary Office presentation data, while its ordinary error responses remain JSON. `sendFunctionResponse` sets handler headers first and sends a Buffer with `res.send`, preserving that attachment rather than JSON-serializing it.
 
 ## Change and validation guide
 

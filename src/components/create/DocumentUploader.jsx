@@ -329,22 +329,28 @@ function AnalysisProgress({ analysisPhase, fileName, mode = 'storyboard' }) {
 /**
  * 文件上傳與分析元件
  * 支援兩種輸入模式：
- *   - file: 上傳文件（分鏡/簡報皆可）
- *   - outline: 貼上文字大綱（自動使用簡報設計模式）
+ *   - file: 上傳文件
+ *   - outline: 貼上文字大綱（僅簡報生成分頁可用）
  */
 export default function DocumentUploader({
   onAnalyze,
   isAnalyzing,
   analysisPhase,
+  analysisMode = "storyboard",
   disabled = false,
 }) {
   const [inputMode, setInputMode] = useState('file'); // 'file' | 'outline'
   const [selectedFile, setSelectedFile] = useState(null);
   const [outlineText, setOutlineText] = useState('');
   const [sceneCount, setSceneCount] = useState('auto');
-  const [analysisMode, setAnalysisMode] = useState('storyboard'); // 'storyboard' | 'presentation'
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (analysisMode === "presentation" || inputMode !== "outline") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setInputMode("file");
+  }, [analysisMode, inputMode]);
 
   const handleFile = useCallback((file) => {
     if (file.size > MAX_DOCUMENT_FILE_SIZE) {
@@ -452,7 +458,11 @@ export default function DocumentUploader({
           <Upload className="h-4 w-4" />
           上傳文件
         </TabsTrigger>
-        <TabsTrigger value="outline" className="flex-1 gap-2" disabled={disabled}>
+        <TabsTrigger
+          value="outline"
+          className="flex-1 gap-2"
+          disabled={disabled || analysisMode !== "presentation"}
+        >
           <ClipboardList className="h-4 w-4" />
           貼上大綱
         </TabsTrigger>
@@ -534,20 +544,6 @@ export default function DocumentUploader({
         {selectedFile && (
           <div className="space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
-              {/* 分析模式 */}
-              <div className="flex items-center gap-2">
-                <Label htmlFor="analysis-mode" className="text-sm font-medium whitespace-nowrap">分析模式</Label>
-                <select
-                  id="analysis-mode"
-                  value={analysisMode}
-                  onChange={(e) => setAnalysisMode(e.target.value)}
-                  className="h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  disabled={disabled}
-                >
-                  <option value="storyboard">分鏡腳本（AI 圖像）</option>
-                  <option value="presentation">簡報設計（PowerPoint）</option>
-                </select>
-              </div>
               {/* 場景數量 */}
               <div className="flex items-center gap-2">
                 <Label htmlFor="file-scene-count" className="text-sm font-medium whitespace-nowrap">

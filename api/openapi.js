@@ -28,11 +28,14 @@ const csrfHeaderParameter = {
   description: "CSRF token returned by GET /api/auth/session.",
 };
 
-const response = (description) => ({
+const response = (
+  description,
+  { contentType = "application/json", schema = jsonObjectSchema } = {}
+) => ({
   description,
   content: {
-    "application/json": {
-      schema: jsonObjectSchema,
+    [contentType]: {
+      schema,
     },
   },
 });
@@ -44,6 +47,8 @@ const operation = ({
   body = false,
   csrf = false,
   successStatuses = [200],
+  successContentType = "application/json",
+  successSchema = jsonObjectSchema,
   parameters = [],
 }) => ({
   summary,
@@ -67,7 +72,10 @@ const operation = ({
         status,
         status === 204 || status === 302 || status === 304
           ? { description: status === 302 ? "Redirect" : "No content" }
-          : response(status === 202 ? "Accepted" : "Successful response"),
+          : response(
+              status === 202 ? "Accepted" : "Successful response",
+              { contentType: successContentType, schema: successSchema }
+            ),
       ])
     ),
     400: response("Invalid request"),
@@ -173,6 +181,19 @@ addOperation("/api/generate-images", "post", {
   body: true,
   csrf: true,
   successStatuses: [200, 202],
+});
+
+addOperation("/api/generate-presentation", "post", {
+  summary: "Generate an editable PowerPoint presentation with pptx-automizer",
+  tags: ["AI"],
+  body: true,
+  csrf: true,
+  successContentType:
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  successSchema: {
+    type: "string",
+    format: "binary",
+  },
 });
 
 addOperation("/api/image-jobs/{id}", "get", {

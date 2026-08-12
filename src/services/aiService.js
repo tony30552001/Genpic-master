@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import { apiGet, apiPost } from "./apiClient";
+import { apiGet, apiPost, apiPostBlob } from "./apiClient";
 
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
@@ -83,6 +83,13 @@ export const generateFilename = async ({ userScript }) =>
  */
 export const analyzeDocument = async ({ documentUrl, fileName, contentType, base64Content, sceneCount, mode }) =>
   apiPost(`${API_BASE_URL}/analyze-document`, { documentUrl, fileName, contentType, base64Content, sceneCount, mode });
+
+export const generatePresentationPptx = async ({ scenes, signal }) =>
+  apiPostBlob(
+    `${API_BASE_URL}/generate-presentation`,
+    { scenes },
+    { signal }
+  );
 
 /**
  * AI 優化單一場景的標題、描述和英文 Prompt

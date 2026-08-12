@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, Wand2,
-    FileText, LogIn, LogOut, User, Settings, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown, Library
+    FileText, LogIn, LogOut, User, Settings, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown, Library, Presentation
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -36,6 +36,7 @@ export default function InfographicGenerator({
 }) {
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);
+    const [documentAnalysisMode, setDocumentAnalysisMode] = useState('storyboard');
 
     // Input States
     const [, setReferenceImage] = useState(null);
@@ -141,6 +142,9 @@ export default function InfographicGenerator({
         scenes,
     } = useDocumentAnalysis();
     const documentStyle = documentStyleOverride || documentResult?.recommended_style || null;
+    const hasActiveDocumentResult =
+        Boolean(documentResult) &&
+        documentResult.analysis_mode === documentAnalysisMode;
 
     const {
         analyzedStyle, analysisResultData, generatedImage, generatedFilename,
@@ -564,6 +568,31 @@ export default function InfographicGenerator({
         }
     };
 
+    const activeDocumentPanel = hasActiveDocumentResult ? (
+        <DocumentScenes
+            documentResult={documentResult}
+            onUpdateScene={updateScene}
+            onRemoveScene={removeScene}
+            onGenerateScene={handleGenerateScene}
+            onGenerateAll={handleGenerateAllScenes}
+            onClear={handleClearDocument}
+            isGenerating={isGenerating}
+            savedStyles={savedStyles}
+            documentStyle={documentStyle}
+            isDocumentStyleOverride={Boolean(documentStyleOverride)}
+            onApplyStyle={handleApplyDocumentStyle}
+            onClearStyle={handleClearDocumentStyle}
+        />
+    ) : (
+        <DocumentUploader
+            onAnalyze={handleAnalyzeDocument}
+            isAnalyzing={isAnalyzingDocument}
+            analysisPhase={documentAnalysisPhase}
+            analysisMode={documentAnalysisMode}
+            disabled={isAnalyzingDocument}
+        />
+    );
+
     // --- Tab 定義 ---
     const tabs = [
         { id: 'general', label: '一般創作', shortLabel: '創作', icon: Wand2 },
@@ -807,32 +836,42 @@ export default function InfographicGenerator({
 
                         {/* ─── Document Sub-Tab: Full-Width Layout ─── */}
                         {activeTab === 'document' && (
-                            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 lg:px-8 py-3">
-                                {documentResult ? (
-                                    <DocumentScenes
-                                        documentResult={documentResult}
-                                        onUpdateScene={updateScene}
-                                        onRemoveScene={removeScene}
-                                        onGenerateScene={handleGenerateScene}
-                                        onGenerateAll={handleGenerateAllScenes}
-                                        onClear={handleClearDocument}
-                                        isGenerating={isGenerating}
-                                        savedStyles={savedStyles}
-                                        documentStyle={documentStyle}
-                                        isDocumentStyleOverride={Boolean(documentStyleOverride)}
-                                        onApplyStyle={handleApplyDocumentStyle}
-                                        onClearStyle={handleClearDocumentStyle}
-                                    />
-                                ) : (
-                                    <div className="max-w-3xl mx-auto py-8">
-                                        <DocumentUploader
-                                            onAnalyze={handleAnalyzeDocument}
-                                            isAnalyzing={isAnalyzingDocument}
-                                            analysisPhase={documentAnalysisPhase}
-                                            disabled={isAnalyzingDocument}
-                                        />
+                            <div className="flex-1 min-h-0 px-4 lg:px-8 py-3">
+                                <Tabs
+                                    value={documentAnalysisMode}
+                                    onValueChange={setDocumentAnalysisMode}
+                                    className="flex h-full min-h-0 flex-col"
+                                >
+                                    <div className="shrink-0">
+                                        <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
+                                            <TabsTrigger value="storyboard" className="gap-2 text-xs sm:text-sm">
+                                                <FileText className="h-4 w-4" aria-hidden="true" />
+                                                文件分析
+                                            </TabsTrigger>
+                                            <TabsTrigger value="presentation" className="gap-2 text-xs sm:text-sm">
+                                                <Presentation className="h-4 w-4" aria-hidden="true" />
+                                                簡報生成
+                                            </TabsTrigger>
+                                        </TabsList>
+                                        <p className="mt-2 text-xs text-muted-foreground">
+                                            {documentAnalysisMode === "presentation"
+                                                ? "將文件或大綱轉換成可編輯的 PowerPoint 投影片。"
+                                                : "分析文件內容並提取可生成圖片的分鏡腳本。"}
+                                        </p>
                                     </div>
-                                )}
+                                    <TabsContent
+                                        value="storyboard"
+                                        className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
+                                    >
+                                        {documentAnalysisMode === "storyboard" && activeDocumentPanel}
+                                    </TabsContent>
+                                    <TabsContent
+                                        value="presentation"
+                                        className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
+                                    >
+                                        {documentAnalysisMode === "presentation" && activeDocumentPanel}
+                                    </TabsContent>
+                                </Tabs>
                             </div>
                         )}
 
@@ -929,35 +968,38 @@ export default function InfographicGenerator({
                         )}
 
                         {/* Fixed Bottom Generate Bar */}
-                        <GenerateBar
-                            aspectRatio={aspectRatio}
-                            onAspectRatioChange={setAspectRatio}
-                            imageSize={imageSize}
-                            onImageSizeChange={setImageSize}
-                            imageModel={imageModel}
-                            isGenerating={isGenerating}
-                            generationStatus={generationStatus}
-                            onCancelGeneration={activeTab === 'general' ? cancelGeneration : undefined}
-                            onGenerate={
-                                activeTab === 'document' && documentResult
-                                    ? handleGenerateAllScenes
-                                    : generateInfographic
-                            }
-                            buttonText={
-                                activeTab === 'document' && documentResult
-                                    ? `批次生成所有圖片 (${scenes?.length || 0})`
-                                    : "開始生成圖片"
-                            }
-                            isGeneratingText={
-                                activeTab === 'document' && documentResult
-                                    ? "批次生成中…"
-                                    : "AI 生成中…"
-                            }
-                            disabled={
-                                (activeTab === 'document' && (!scenes || scenes.length === 0)) ||
-                                (activeTab === 'general' && !userScript && !contentImagePreview)
-                            }
-                        />
+                        {(activeTab === 'general' || hasActiveDocumentResult) && (
+                            <GenerateBar
+                                aspectRatio={aspectRatio}
+                                onAspectRatioChange={setAspectRatio}
+                                imageSize={imageSize}
+                                onImageSizeChange={setImageSize}
+                                imageModel={imageModel}
+                                isGenerating={isGenerating}
+                                generationStatus={generationStatus}
+                                onCancelGeneration={activeTab === 'general' ? cancelGeneration : undefined}
+                                onGenerate={
+                                    hasActiveDocumentResult
+                                        ? handleGenerateAllScenes
+                                        : generateInfographic
+                                }
+                                buttonText={
+                                    hasActiveDocumentResult
+                                        ? `批次生成所有圖片 (${scenes?.length || 0})`
+                                        : "開始生成圖片"
+                                }
+                                isGeneratingText={
+                                    hasActiveDocumentResult
+                                        ? "批次生成中…"
+                                        : "AI 生成中…"
+                                }
+                                disabled={
+                                    hasActiveDocumentResult
+                                        ? !scenes || scenes.length === 0
+                                        : !userScript && !contentImagePreview
+                                }
+                            />
+                        )}
                     </div>
                 )}
 

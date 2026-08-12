@@ -1,6 +1,6 @@
 # PowerPoint 簡報匯出功能
 
-> 版本 v1.0 | 最後更新：2025-04-16
+> 版本 v1.1 | 最後更新：2026-05-03
 
 ---
 
@@ -22,10 +22,10 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 1. 前往**「建立」**頁面
 2. 在文件上傳區選擇**「上傳文件」**分頁
 3. 拖曳或點擊上傳支援的格式：PDF、Office、OpenDocument、RTF、EPUB、CSV、TXT、MD、PNG、JPG（最大 50 MB）
-4. 在**「分析模式」**下拉選單中選擇 **「簡報設計（PowerPoint）」**
-5. （可選）設定**投影片數量**：「自動（AI 決定）」或指定 1–10 張
-6. 點擊**「設計簡報投影片」**，等待 AI 分析（通常 15–45 秒）
-7. 分析完成後即可點擊工具列的**「匯出 PPTX」**下載可編輯簡報；尚未生成配圖也能先匯出文字內容
+4. 在**「文件分析」**分頁設定分析內容與投影片數量，完成後切換到**「簡報生成」**分頁
+5. 點擊**「設計簡報投影片」**，等待 AI 分析（通常 15–45 秒）
+6. 分析完成後可使用**「匯出 PPTX」**直接下載；尚未生成配圖也能先匯出文字內容
+7. 若要使用伺服器端 `pptx-automizer`，點擊**「Automizer PPTX」**；此匯出會產生相同的可編輯內容，但目前不包含動態講者備注
 8. （可選）系統會依簡報內容提供一套 AI 建議的圖片風格；若不符合需求，可在**「文件圖片風格」**面板選擇風格庫樣式取代
 9. （可選）點擊**「批次生成所有圖片」**為各投影片生成配圖，再次匯出即可將配圖嵌入簡報
 
@@ -47,7 +47,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 
 4. （可選）設定**投影片數量**：「自動」或指定 3–10 張
 5. 點擊**「AI 設計簡報投影片」**按鈕
-6. 後續步驟同方式一（可直接匯出，或先生成圖片再匯出）
+6. 切換到**「簡報生成」**分頁，後續步驟同方式一（可直接匯出，或先生成圖片再匯出）
 
 > **提示：** 大綱分頁固定使用簡報設計模式，無需另行選擇分析模式。
 
@@ -82,7 +82,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 | 投影片比例 | 16:9（10 × 5.625 英吋） |
 | 檔案命名 | {簡報標題}-{時間戳}.pptx |
 | 每張投影片 | 序號徽章 + 標題 + 重點列表 + 原生表格/圖表或可選 AI 配圖 |
-| 講者備注 | 嵌入於投影片備注區，PowerPoint 可直接查看 |
+| 講者備注 | 一般瀏覽器匯出會嵌入；Automizer 匯出目前不包含動態講者備注 |
 | 圖片格式 | PNG（base64 嵌入，無需網路即可開啟） |
 
 ### 投影片版面示意
@@ -143,7 +143,11 @@ api/analyze-document/index.js（Azure Function）
          |  PRESENTATION_ANALYSIS_PROMPT_BASE
 Gemini（Azure OpenAI deployment）
          | JSON 回應（scenes[] + bullet_points / speaker_notes / tables / charts）
-DocumentScenes.jsx  <--- 投影片卡片 + 可選生成圖片
+DocumentScenes.jsx  <--- 投影片卡片 + 可選生成圖片 + 匯出按鈕
+         |  exportToPptx()（瀏覽器端）或 exportWithAutomizer()（伺服器端）
+         |  POST /api/generate-presentation
+         |  pptx-automizer + pptxgenjs（Node.js）
+         |
          |  exportToPptx()（分析完成即可執行）
 pptxgenjs（動態 import，372 KB code-split chunk）
          |
@@ -210,6 +214,30 @@ pptxgenjs（動態 import，372 KB code-split chunk）
 }
 `
 
+### 伺服器端 Automizer 匯出
+
+**端點：** POST `/api/generate-presentation`
+
+前端會先將可取得的投影片圖片轉成 base64，再提交：
+
+`json
+{
+  "scenes": [
+    {
+      "scene_number": 1,
+      "scene_title": "投影片標題",
+      "scene_description": "主旨摘要",
+      "bullet_points": ["重點一"],
+      "generatedImage": "data:image/png;base64,...",
+      "tables": [],
+      "charts": []
+    }
+  ]
+}
+`
+
+API 回傳 `application/vnd.openxmlformats-officedocument.presentationml.presentation` 二進位內容。現階段使用伺服器端動態產生的預設 root template，未開放任意伺服器檔案路徑或使用者自訂範本。
+
 ### 前端核心函式
 
 | 函式 / 元件 | 檔案 | 說明 |
@@ -219,6 +247,7 @@ pptxgenjs（動態 import，372 KB code-split chunk）
 | DocumentUploader | src/components/create/DocumentUploader.jsx | 上傳 / 大綱輸入 UI，含模式切換 |
 | useDocumentAnalysis | src/hooks/useDocumentAnalysis.js | 文件分析狀態管理 |
 | aiService.analyzeDocument | src/services/aiService.js | API 呼叫封裝 |
+| aiService.generatePresentationPptx | src/services/aiService.js | 呼叫伺服器端 Automizer 二進位匯出 API |
 | 文件圖片風格面板 | src/components/create/DocumentScenes.jsx | 顯示 AI 建議風格，並可用風格庫樣式取代 |
 
 ### 依賴套件
@@ -226,6 +255,8 @@ pptxgenjs（動態 import，372 KB code-split chunk）
 | 套件 | 版本 | 用途 |
 |------|------|------|
 | pptxgenjs | ^4.0.1 | 前端純 JS PPTX 生成，包含原生表格與圖表 |
+| pptx-automizer | ^0.8.2 | 後端 Node.js PPTX 範本與投影片組合 |
+| pptxgenjs（api） | ^3.12.0 | Automizer 的伺服器端 PptxGenJS bridge |
 
 pptxgenjs 採用**動態 import**（import('pptxgenjs')），僅在使用者點擊匯出時才載入，不影響首頁載入效能。
 
@@ -237,7 +268,8 @@ pptxgenjs 採用**動態 import**（import('pptxgenjs')），僅在使用者點�
 |------|------|------|
 | CORS 圖片嵌入 | Azure Blob Storage 未正確設定 CORS 時，圖片無法嵌入 | 投影片有文字無圖，可手動補上 |
 | Null bullet point | 極少數情況下 Gemini 回傳 null 項目，會顯示為字串 "null" | 視覺上可能出現 "null" 文字，可手動刪除 |
-| 版面範本 | Phase 1 支援預設雙欄與資料視覺化右欄 | 尚不支援使用者上傳的 PowerPoint Master/Layout |
+| 版面範本 | Automizer 目前使用伺服器端動態建立的預設 root template | 尚不支援使用者上傳的 PowerPoint Master/Layout |
+| Automizer 講者備注 | Automizer 公開 bridge 沒有動態 `addNotes()` API | 需要講者備注時使用一般「匯出 PPTX」 |
 | 自訂主題色 | 目前固定為 Pixora 預設配色（紫色徽章、黑色文字） | 尚不支援品牌色彩自訂 |
 | 配圖生成 | 配圖不是匯出前置條件 | 未生成配圖時需在 PowerPoint 中自行替換 |
 

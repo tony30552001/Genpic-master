@@ -3,13 +3,15 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("../apiClient", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(() => Promise.resolve({ ok: true })),
+  apiPostBlob: vi.fn(() => Promise.resolve(new Blob(["pptx"]))),
 }));
 
-import { apiGet, apiPost } from "../apiClient";
+import { apiGet, apiPost, apiPostBlob } from "../apiClient";
 import {
   analyzeDocument,
   analyzeStyle,
   generateImage,
+  generatePresentationPptx,
   waitForImageJob,
 } from "../aiService";
 
@@ -64,6 +66,18 @@ describe("aiService", () => {
       sceneCount: 6,
       mode: "presentation",
     });
+  });
+
+  it("requests a server-generated presentation as a blob", async () => {
+    const scenes = [{ scene_title: "Overview" }];
+
+    await generatePresentationPptx({ scenes, signal: "abort-signal" });
+
+    expect(apiPostBlob).toHaveBeenCalledWith(
+      "/api/generate-presentation",
+      { scenes },
+      { signal: "abort-signal" }
+    );
   });
 
   it("waits for queued image jobs until the result is ready", async () => {
