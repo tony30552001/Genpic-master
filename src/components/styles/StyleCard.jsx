@@ -56,6 +56,14 @@ export default function StyleCard({
   const canPublish = Boolean(onPublish);
   const canUnpublish = Boolean(onUnpublish);
   const canEdit = Boolean(onEdit);
+  const hasShareAction = canCopy || canPublish || canUnpublish;
+  const secondaryActionCount = [canEdit, hasShareAction, Boolean(onDelete)].filter(Boolean).length;
+  const secondaryActionColumns =
+    secondaryActionCount === 1
+      ? "grid-cols-1"
+      : secondaryActionCount === 2
+        ? "grid-cols-2"
+        : "grid-cols-3";
 
   const handleSelectionClick = () => {
     if (isSelectionMode) {
@@ -246,17 +254,18 @@ export default function StyleCard({
             套用風格
           </Button>
           {(canCopy || canPublish || canUnpublish || canEdit || onDelete) && (
-            <div className="flex w-full gap-2">
+            <div className={`grid w-full ${secondaryActionColumns} gap-1.5`}>
               {canEdit && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => onEdit(style)}
-                  className="flex-1 gap-1.5"
+                  className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
+                  title={`編輯風格 ${style.name}`}
                 >
                   <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                  編輯
+                  <span className="min-w-0 truncate">編輯</span>
                 </Button>
               )}
               {canCopy ? (
@@ -265,10 +274,11 @@ export default function StyleCard({
                   variant="outline"
                   size="sm"
                   onClick={() => onCopy(style.id)}
-                  className="flex-1 gap-1.5"
+                  className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
+                  title={`複製風格 ${style.name}`}
                 >
                   <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  複製
+                  <span className="min-w-0 truncate">複製</span>
                 </Button>
               ) : canPublish ? (
                 <Button
@@ -276,10 +286,11 @@ export default function StyleCard({
                   variant="outline"
                   size="sm"
                   onClick={() => onPublish(style.id)}
-                  className="flex-1 gap-1.5"
+                  className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
+                  title={`共享風格 ${style.name}`}
                 >
                   <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  共享
+                  <span className="min-w-0 truncate">共享</span>
                 </Button>
               ) : canUnpublish ? (
                 <Button
@@ -287,10 +298,11 @@ export default function StyleCard({
                   variant="secondary"
                   size="sm"
                   onClick={() => onUnpublish(style.id)}
-                  className="flex-1 gap-1.5"
+                  className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
+                  title={`取消共享風格 ${style.name}`}
                 >
                   <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                  取消共享
+                  <span className="min-w-0 truncate">取消共享</span>
                 </Button>
               ) : null}
               {onDelete && (
@@ -299,10 +311,11 @@ export default function StyleCard({
                   variant="destructive"
                   size="sm"
                   onClick={(e) => onDelete(style.id, e)}
-                  className="flex-1 gap-1.5"
+                  className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
+                  title={`刪除風格 ${style.name}`}
                 >
                   <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  刪除
+                  <span className="min-w-0 truncate">刪除</span>
                 </Button>
               )}
             </div>
