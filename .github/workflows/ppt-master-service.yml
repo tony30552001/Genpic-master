@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE_NAME: pixora-ppt-master
+  IMAGE_NAME: ppt-master-service
 
 jobs:
   build_and_deploy:
@@ -52,22 +52,39 @@ jobs:
             --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
             --image "${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${IMAGE_NAME}:${{ github.sha }}"
 
-      - name: Verify the integrity gate passes on the deployed revision
+      # The skill integrity gate runs inside the Dockerfile, so a tampered skill
+      # already fails `az acr build`. Ingress only accepts the App Service
+      # outbound IPs, so a runner cannot reach /health; assert on the control
+      # plane that the new revision actually started instead.
+      - name: Verify the new revision starts
         run: |
-          fqdn=$(az containerapp show \
+          revision=$(az containerapp show \
             --name "${{ secrets.AZURE_PPT_MASTER_CONTAINER_APP }}" \
             --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            --query properties.configuration.ingress.fqdn -o tsv)
+            --query properties.latestRevisionName -o tsv)
+          echo "watching revision ${revision}"
 
           for attempt in $(seq 1 20); do
-            status=$(curl -sS --max-time 20 "https://${fqdn}/health" | jq -r '.status // "unreachable"')
-            if [ "$status" = "ok" ]; then
-              echo "ppt-master sidecar healthy at https://${fqdn}"
-              exit 0
-            fi
-            echo "attempt ${attempt}: status=${status}"
+            state=$(az containerapp revision show \
+              --name "${{ secrets.AZURE_PPT_MASTER_CONTAINER_APP }}" \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+              --revision "${revision}" \
+              --query properties.runningState -o tsv)
+
+            case "${state}" in
+              Running|RunningAtMaxScale)
+                echo "revision ${revision} is ${state}"
+                exit 0
+                ;;
+              Failed|Degraded)
+                echo "revision ${revision} failed to start: ${state}" >&2
+                exit 1
+                ;;
+            esac
+
+            echo "attempt ${attempt}: state=${state}"
             sleep 15
           done
 
-          echo "ppt-master sidecar did not become healthy" >&2
+          echo "revision ${revision} did not start in time" >&2
           exit 1
