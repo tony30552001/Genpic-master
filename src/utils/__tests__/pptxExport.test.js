@@ -1,23 +1,10 @@
 import { describe, it, expect } from "vitest";
+import {
+  extractPptxBullets,
+  getPptxScenes,
+  sanitizePptxFilename,
+} from "../pptxExport";
 
-/**
- * Tests for PPTX export bullet_points logic.
- *
- * The core logic lives inline in DocumentScenes.jsx::exportToPptx().
- * We test the pure business rules here to avoid needing a full DOM/canvas environment.
- */
-
-/** Mirror of the bullet extraction logic in exportToPptx */
-const extractBullets = (scene) =>
-  Array.isArray(scene.bullet_points) && scene.bullet_points.length > 0
-    ? scene.bullet_points
-    : [scene.scene_description || ""].filter(Boolean);
-
-/**
- * Mirror of the API-level defensive field guard (api/analyze-document/index.js line 499)
- * Note: .map(String) coerces numbers/booleans to strings.
- *       .filter(Boolean) removes empty strings — but NOT null/undefined (they become "null"/"undefined").
- */
 const guardBulletPoints = (raw) =>
   Array.isArray(raw.bullet_points)
     ? raw.bullet_points.map(String).filter(Boolean)
@@ -26,27 +13,31 @@ const guardBulletPoints = (raw) =>
 describe("PPTX export — bullet_points logic", () => {
   it("uses bullet_points when present", () => {
     const scene = { bullet_points: ["Point A", "Point B"], scene_description: "Desc" };
-    expect(extractBullets(scene)).toEqual(["Point A", "Point B"]);
+    expect(extractPptxBullets(scene)).toEqual(["Point A", "Point B"]);
   });
 
   it("falls back to scene_description when bullet_points is empty array", () => {
     const scene = { bullet_points: [], scene_description: "Fallback desc" };
-    expect(extractBullets(scene)).toEqual(["Fallback desc"]);
+    expect(extractPptxBullets(scene)).toEqual(["Fallback desc"]);
   });
 
   it("falls back to scene_description when bullet_points is undefined", () => {
     const scene = { scene_description: "Only desc" };
-    expect(extractBullets(scene)).toEqual(["Only desc"]);
+    expect(extractPptxBullets(scene)).toEqual(["Only desc"]);
   });
 
   it("returns empty array when both bullet_points and scene_description are missing", () => {
     const scene = {};
-    expect(extractBullets(scene)).toEqual([]);
+    expect(extractPptxBullets(scene)).toEqual([]);
   });
 
   it("ignores non-array bullet_points and uses scene_description", () => {
     const scene = { bullet_points: "not an array", scene_description: "Desc" };
-    expect(extractBullets(scene)).toEqual(["Desc"]);
+    expect(extractPptxBullets(scene)).toEqual(["Desc"]);
+  });
+
+  it("removes empty and null bullet points", () => {
+    expect(extractPptxBullets({ bullet_points: ["a", "", null, " b "] })).toEqual(["a", "b"]);
   });
 });
 
@@ -63,7 +54,7 @@ describe("API defensive guard — bullet_points field", () => {
     expect(guardBulletPoints({ bullet_points: null })).toEqual([]);
   });
 
-  it("returns [] when bullet_points is a string (Gemini hallucination)", () => {
+  it("returns [] when bullet_points is a string", () => {
     expect(guardBulletPoints({ bullet_points: "bullet one, bullet two" })).toEqual([]);
   });
 
@@ -75,7 +66,7 @@ describe("API defensive guard — bullet_points field", () => {
     expect(guardBulletPoints({ bullet_points: [] })).toEqual([]);
   });
 
-  it("coerces numbers to strings (Gemini hallucination)", () => {
+  it("coerces numbers to strings", () => {
     expect(guardBulletPoints({ bullet_points: [1, 2, 3] })).toEqual(["1", "2", "3"]);
   });
 
@@ -84,42 +75,51 @@ describe("API defensive guard — bullet_points field", () => {
   });
 });
 
-/**
- * Mirror of filename sanitization in exportToPptx()
- * src/components/create/DocumentScenes.jsx: safeTitle logic
- */
-const sanitizeFilename = (title) =>
-  (title || "presentation")
-    .replace(/[^\w\u4e00-\u9fff\s-]/g, "")
-    .trim() || "presentation";
+describe("PPTX export — analyzed scene selection", () => {
+  it("keeps every analyzed scene even when no image exists", () => {
+    const scenes = [
+      { scene_number: 1, scene_title: "Cover" },
+      { scene_number: 2, scene_title: "Plan", generatedImage: "data:image/png;base64,abc" },
+    ];
+
+    expect(getPptxScenes(scenes)).toEqual(scenes);
+  });
+
+  it("returns an empty list for invalid input", () => {
+    expect(getPptxScenes(null)).toEqual([]);
+    expect(getPptxScenes([null, "invalid", { scene_title: "Valid" }])).toEqual([
+      { scene_title: "Valid" },
+    ]);
+  });
+});
 
 describe("PPTX export — filename sanitization", () => {
   it("preserves ASCII alphanumeric and spaces", () => {
-    expect(sanitizeFilename("My Presentation 2024")).toBe("My Presentation 2024");
+    expect(sanitizePptxFilename("My Presentation 2024")).toBe("My Presentation 2024");
   });
 
   it("preserves CJK characters", () => {
-    expect(sanitizeFilename("投影片主題")).toBe("投影片主題");
+    expect(sanitizePptxFilename("投影片主題")).toBe("投影片主題");
   });
 
   it("strips special characters like ! ( ) .", () => {
-    expect(sanitizeFilename("My Plan! (v2)")).toBe("My Plan v2");
+    expect(sanitizePptxFilename("My Plan! (v2)")).toBe("My Plan v2");
   });
 
   it("falls back to 'presentation' when title is empty string", () => {
-    expect(sanitizeFilename("")).toBe("presentation");
+    expect(sanitizePptxFilename("")).toBe("presentation");
   });
 
   it("falls back to 'presentation' when title is all special chars", () => {
-    expect(sanitizeFilename("!!!")).toBe("presentation");
+    expect(sanitizePptxFilename("!!!")).toBe("presentation");
   });
 
   it("falls back to 'presentation' when title is null/undefined", () => {
-    expect(sanitizeFilename(null)).toBe("presentation");
-    expect(sanitizeFilename(undefined)).toBe("presentation");
+    expect(sanitizePptxFilename(null)).toBe("presentation");
+    expect(sanitizePptxFilename(undefined)).toBe("presentation");
   });
 
   it("preserves hyphens and underscores", () => {
-    expect(sanitizeFilename("my_deck-v2")).toBe("my_deck-v2");
+    expect(sanitizePptxFilename("my_deck-v2")).toBe("my_deck-v2");
   });
 });

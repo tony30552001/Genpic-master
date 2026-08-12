@@ -5,12 +5,12 @@ description: Main Pixora creation state, document-to-scene generation, transform
 tags: [frontend, creation, document-analysis, export]
 openwiki:
   roles: [workflow, frontend]
-  change_kinds: [document-analysis, style-selection, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/ImagePreview.jsx, src/components/create/ImageGeneratingState.jsx, src/hooks/useDocumentAnalysis.js]
-  symbols: [AnalysisProgress, ImageGeneratingState, handleGenerateScene, handleApplyDocumentStyle, handleClearDocumentStyle]
-  test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js]
-  invariants: [Document scene generation uses the AI recommendation unless a saved-style override is active., General and document-scene generation states use the same visual feedback component without sharing generation state.]
-  validation_commands: [pnpm exec eslint src/components/create/ImagePreview.jsx src/components/create/DocumentScenes.jsx src/components/create/ImageGeneratingState.jsx]
+  change_kinds: [document-analysis, style-selection, client-progress, client-export]
+  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/utils/pptxExport.js, src/components/create/ImagePreview.jsx, src/components/create/ImageGeneratingState.jsx, src/hooks/useDocumentAnalysis.js]
+  symbols: [AnalysisProgress, ImageGeneratingState, handleGenerateScene, handleApplyDocumentStyle, handleClearDocumentStyle, exportToPptx, getPptxScenes, extractPptxBullets, sanitizePptxFilename]
+  test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/utils/__tests__/pptxExport.test.js]
+  invariants: [Document scene generation uses the AI recommendation unless a saved-style override is active., General and document-scene generation states use the same visual feedback component without sharing generation state., PPTX export includes each valid analyzed scene whether or not it has a generated image.]
+  validation_commands: [pnpm test --run src/utils/__tests__/pptxExport.test.js]
 ---
 
 # Creation workspace, documents, and exports
@@ -61,6 +61,14 @@ When changing browser format support, update `documentFormats.js` first, then ke
 
 ## Export boundary
 
-Image, PDF, and PowerPoint output are browser artifacts, not API records. `DocumentScenes.jsx::exportToPptx()` excludes scenes without `generatedImage`; if none qualify it reports rather than writes a deck. It creates a 16:9 deck, one slide per included scene, with scene number/title, editable bullet text, generated image on the right, and optional speaker notes. Bullets use `bullet_points` when nonempty, otherwise `scene_description`. It loads/embed-converts images in parallel; a failed/CORS-blocked image becomes `null`, produces a partial-image warning, and does not discard other slides. Export-level errors remain visible. Filename sanitization permits word/CJK/space/hyphen characters with `presentation` fallback. Keep client-only download failures visible to the user; no server cleanup occurs. `jspdf` is the PDF dependency.
+Image, PDF, and PowerPoint output are browser artifacts, not API records. `DocumentScenes.jsx::exportToPptx()` is available once `scenes.length > 0`; unlike PDF export, it does not require `generatedCount > 0`. It passes valid object scenes through `src/utils/pptxExport.js::getPptxScenes`, creates a 16:9 deck with one slide per returned scene, and renders scene number/title, editable bullet text, optional speaker notes, plus either the generated image or a replacement-image placeholder. Thus, a missing `generatedImage` does not exclude the analyzed slide. `extractPptxBullets` trims and drops empty/null bullet values, then falls back to a nonempty `scene_description`; `sanitizePptxFilename` permits word/CJK/space/hyphen characters with a `presentation` fallback.
 
-Focused tests: `generationProgress.test.js` validates time/model progress phases; `pptxExport.test.js` mirrors bullet fallback, API bullet guards, and filename sanitization. Service tests validate request contracts. Run `pnpm test`; browser-test actual export downloads after layout changes.
+`exportToPptx` dynamically loads `pptxgenjs`, fetches and base64-embeds only scenes that have a `generatedImage`, and does so in parallel. A failed/CORS-blocked fetch of an existing image becomes `null`, leaves that slide's text and replacement placeholder intact, and increments the partial-image warning; intentionally image-less scenes do not increment it. Export-level errors remain visible. Keep client-only download failures visible to the user; no server cleanup occurs. `jspdf` remains the PDF dependency.
+
+For a PPTX rule change, start with the pure helper when selection, bullet normalization, or filename behavior changes; change `exportToPptx` only for browser I/O, deck layout, embedding, or download behavior. `src/utils/__tests__/pptxExport.test.js` directly covers bullet fallback/normalization, valid-scene selection including image-less scenes, and filename sanitization. Run:
+
+```sh
+pnpm test --run src/utils/__tests__/pptxExport.test.js
+```
+
+`generationProgress.test.js` validates time/model progress phases, and service tests validate request contracts. Browser-test an actual export only after changing deck layout, dynamic loading, image embedding, or download behavior; test both image-less and image-bearing scenes and an existing image that cannot be embedded.

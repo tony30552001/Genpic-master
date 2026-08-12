@@ -32,6 +32,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { optimizeScene } from "@/services/aiService";
+import {
+  extractPptxBullets,
+  getPptxScenes,
+  sanitizePptxFilename,
+} from "@/utils/pptxExport";
 import ImageGeneratingState from "./ImageGeneratingState";
 
 
@@ -722,14 +727,14 @@ export default function DocumentScenes({
 
   /**
    * 使用 pptxgenjs 將場景匯出為可編輯的 PowerPoint 簡報
-   * - 每個已生成的場景對應一張投影片
+   * - 每個分析後的場景對應一張投影片
    * - 有 bullet_points 時顯示項目符號；否則 fallback 到 scene_description
-   * - 圖片以 base64 嵌入（避免 SAS token 過期）
+   * - 已生成的圖片以 base64 嵌入（避免 SAS token 過期）
    * - speaker_notes 寫入投影片備注區
    */
   const exportToPptx = async () => {
-    const generatedScenes = scenes.filter((s) => s.generatedImage);
-    if (generatedScenes.length === 0) return;
+    const exportScenes = getPptxScenes(scenes);
+    if (exportScenes.length === 0) return;
 
     setIsExportingPptx(true);
     try {
@@ -768,12 +773,16 @@ export default function DocumentScenes({
 
       // Fetch all images in parallel to reduce total export time
       const imageBase64List = await Promise.all(
-        generatedScenes.map((scene) => fetchBase64(scene.generatedImage))
+        exportScenes.map((scene) =>
+          scene.generatedImage ? fetchBase64(scene.generatedImage) : Promise.resolve(null)
+        )
       );
-      const failedImages = imageBase64List.filter((b) => b === null).length;
+      const failedImages = imageBase64List.filter(
+        (base64, index) => exportScenes[index].generatedImage && base64 === null
+      ).length;
 
-      for (let i = 0; i < generatedScenes.length; i++) {
-        const scene = generatedScenes[i];
+      for (let i = 0; i < exportScenes.length; i++) {
+        const scene = exportScenes[i];
         const imageBase64 = imageBase64List[i];
         const slide = pptx.addSlide();
 
@@ -794,9 +803,7 @@ export default function DocumentScenes({
         });
 
         // Bullet points (or scene_description fallback)
-        const bullets = Array.isArray(scene.bullet_points) && scene.bullet_points.length > 0
-          ? scene.bullet_points
-          : [scene.scene_description || ""].filter(Boolean);
+        const bullets = extractPptxBullets(scene);
 
         slide.addText(
           bullets.map((text) => ({
@@ -809,6 +816,15 @@ export default function DocumentScenes({
         // AI-generated image on the right
         if (imageBase64) {
           slide.addImage({ data: imageBase64, x: 6.0, y: 0.8, w: 3.75, h: 4.45 });
+        } else {
+          slide.addText("尚未生成配圖\n可在 Pixora 中生成或自行替換", {
+            x: 6.0, y: 0.8, w: 3.75, h: 4.45,
+            fontSize: 13, color: "64748B",
+            align: "center", valign: "mid",
+            margin: 0.2,
+            fill: { color: "F8FAFC", transparency: 4 },
+            line: { color: "CBD5E1", pt: 1 },
+          });
         }
 
         // Speaker notes
@@ -817,13 +833,11 @@ export default function DocumentScenes({
         }
       }
 
-      const safeTitle = (title || "presentation")
-        .replace(/[^\w\u4e00-\u9fff\s-]/g, "")
-        .trim() || "presentation";
+      const safeTitle = sanitizePptxFilename(title);
       await pptx.writeFile({ fileName: `${safeTitle}-${Date.now()}.pptx` });
 
       if (failedImages > 0) {
-        alert(`PPTX 已匯出，但 ${failedImages} 張圖片因網路或權限問題未能嵌入。投影片內容完整，建議手動補充圖片。`);
+        alert(`PPTX 已匯出，但 ${failedImages} 張配圖尚未嵌入。投影片文字內容完整，可稍後補上圖片。`);
       }
     } catch (err) {
       console.error("PPTX export failed:", err);
@@ -879,34 +893,34 @@ export default function DocumentScenes({
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {generatedCount > 0 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={exportToPdf}
-                      disabled={isGenerating || isExportingPdf || isExportingPptx}
-                      className="text-xs h-8 gap-1"
-                    >
-                      {isExportingPdf ? (
-                        <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
-                      ) : (
-                        <><FileDown className="h-3 w-3" /> 匯出 PDF</>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={exportToPptx}
-                      disabled={isGenerating || isExportingPdf || isExportingPptx}
-                      className="text-xs h-8 gap-1"
-                    >
-                      {isExportingPptx ? (
-                        <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
-                      ) : (
-                        <><Presentation className="h-3 w-3" /> 匯出 PPTX</>
-                      )}
-                    </Button>
-                  </>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportToPdf}
+                    disabled={isGenerating || isExportingPdf || isExportingPptx}
+                    className="text-xs h-8 gap-1"
+                  >
+                    {isExportingPdf ? (
+                      <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
+                    ) : (
+                      <><FileDown className="h-3 w-3" /> 匯出 PDF</>
+                    )}
+                  </Button>
+                )}
+                {scenes.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportToPptx}
+                    disabled={isGenerating || isExportingPdf || isExportingPptx}
+                    className="text-xs h-8 gap-1"
+                  >
+                    {isExportingPptx ? (
+                      <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
+                    ) : (
+                      <><Presentation className="h-3 w-3" /> 匯出 PPTX</>
+                    )}
+                  </Button>
                 )}
                 <Button variant="outline" size="sm" onClick={onClear} disabled={isGenerating} className="text-xs h-8">
                   清除分析
@@ -1110,13 +1124,18 @@ export default function DocumentScenes({
       <div className="px-4 pb-8 pt-4 lg:px-8">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-foreground">分鏡預覽</p>
+            <p className="text-sm font-semibold text-foreground">
+              {documentResult.analysis_mode === "presentation" ? "投影片預覽" : "分鏡預覽"}
+            </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              點擊圖片查看大圖，或直接編輯提示詞後重新生成。
+              {documentResult.analysis_mode === "presentation"
+                ? "分析完成即可匯出 PPTX，配圖可稍後生成或自行替換。"
+                : "點擊圖片查看大圖，或直接編輯提示詞後重新生成。"}
             </p>
           </div>
           <Badge variant="outline" className="shrink-0 gap-1 text-xs">
-            <Layers className="h-3 w-3" /> {scenes.length} 個分鏡
+            <Layers className="h-3 w-3" /> {scenes.length}{" "}
+            {documentResult.analysis_mode === "presentation" ? "張投影片" : "個分鏡"}
           </Badge>
         </div>
 

@@ -8,7 +8,7 @@
 
 Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 
-1. **上傳文件** → AI 分析內容 → 生成每張投影片的重點與配圖 → 下載 .pptx 檔案
+1. **上傳文件** → AI 分析內容 → 直接下載投影片文字內容，配圖可選 → 下載 .pptx 檔案
 2. **貼上大綱** → AI 直接將文字大綱設計為投影片結構 → 下載 .pptx 檔案
 
 產出的 .pptx 可直接用 Microsoft PowerPoint、Keynote 或 Google Slides 開啟並進行二次編輯，支援中英文混排與 AI 生成配圖嵌入。
@@ -21,13 +21,13 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 
 1. 前往**「建立」**頁面
 2. 在文件上傳區選擇**「上傳文件」**分頁
-3. 拖曳或點擊上傳支援的格式：PDF、TXT、MD、PNG、JPG（最大 50 MB）
+3. 拖曳或點擊上傳支援的格式：PDF、Office、OpenDocument、RTF、EPUB、CSV、TXT、MD、PNG、JPG（最大 50 MB）
 4. 在**「分析模式」**下拉選單中選擇 **「簡報設計（PowerPoint）」**
 5. （可選）設定**投影片數量**：「自動（AI 決定）」或指定 1–10 張
 6. 點擊**「設計簡報投影片」**，等待 AI 分析（通常 15–45 秒）
-7. 分析完成後，系統會先依簡報內容提供一套 AI 建議的圖片風格；若不符合需求，可在**「文件圖片風格」**面板選擇風格庫樣式取代
-8. 點擊**「生成圖片」**為各投影片生成配圖
-9. 至少有一張圖片生成完成後，點擊工具列的**「匯出 PPTX」**按鈕下載
+7. 分析完成後即可點擊工具列的**「匯出 PPTX」**下載可編輯簡報；尚未生成配圖也能先匯出文字內容
+8. （可選）系統會依簡報內容提供一套 AI 建議的圖片風格；若不符合需求，可在**「文件圖片風格」**面板選擇風格庫樣式取代
+9. （可選）點擊**「批次生成所有圖片」**為各投影片生成配圖，再次匯出即可將配圖嵌入簡報
 
 ### 方式二：貼上文字大綱（快速設計）
 
@@ -47,7 +47,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 
 4. （可選）設定**投影片數量**：「自動」或指定 3–10 張
 5. 點擊**「AI 設計簡報投影片」**按鈕
-6. 後續步驟同方式一（生成圖片 → 匯出 PPTX）
+6. 後續步驟同方式一（可直接匯出，或先生成圖片再匯出）
 
 > **提示：** 大綱分頁固定使用簡報設計模式，無需另行選擇分析模式。
 
@@ -79,7 +79,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 |------|----|
 | 投影片比例 | 16:9（10 × 5.625 英吋） |
 | 檔案命名 | {簡報標題}-{時間戳}.pptx |
-| 每張投影片 | 序號徽章 + 標題 + 重點列表 + AI 配圖 |
+| 每張投影片 | 序號徽章 + 標題 + 重點列表 + 可選 AI 配圖 |
 | 講者備注 | 嵌入於投影片備注區，PowerPoint 可直接查看 |
 | 圖片格式 | PNG（base64 嵌入，無需網路即可開啟） |
 
@@ -99,7 +99,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 `
 
 - **左側（62.5% 寬）**：序號徽章（紫色）、標題、重點項目列表
-- **右側（37.5% 寬）**：AI 生成配圖
+- **右側（37.5% 寬）**：AI 生成配圖；尚未生成時顯示可替換的提示區塊
 - **備注區**：speaker_notes 內容（隱藏在備注面板，演講時可參考）
 
 ---
@@ -110,7 +110,7 @@ Pixora 智繪的 **PowerPoint 匯出功能**讓你可以：
 
 - PPTX 匯出時，系統會將 AI 生成的圖片透過 Canvas API 轉換為 base64 並嵌入至投影片中，確保離線也能正常顯示
 - 若網路問題或 CORS 設定導致圖片無法讀取，系統會在匯出後提示「N 張圖片未能嵌入」，投影片文字內容仍完整保留
-- 建議在所有圖片生成完成後再進行匯出
+- 配圖不是匯出前置條件；尚未生成時，簡報會保留文字內容並顯示可替換的提示區塊
 
 ### CORS 設定（圖片無法嵌入時）
 
@@ -141,8 +141,8 @@ api/analyze-document/index.js（Azure Function）
          |  PRESENTATION_ANALYSIS_PROMPT_BASE
 Gemini（gemini-1.5-flash）
          |  JSON 回應（scenes[] + bullet_points / speaker_notes）
-DocumentScenes.jsx  <--- 場景卡片 + 生成圖片
-         |  exportToPptx()
+DocumentScenes.jsx  <--- 投影片卡片 + 可選生成圖片
+         |  exportToPptx()（分析完成即可執行）
 pptxgenjs（動態 import，372 KB code-split chunk）
          |
 .pptx 下載至本機
@@ -202,6 +202,7 @@ pptxgenjs（動態 import，372 KB code-split chunk）
 | 函式 / 元件 | 檔案 | 說明 |
 |-------------|------|------|
 | exportToPptx() | src/components/create/DocumentScenes.jsx | PPTX 生成與下載邏輯 |
+| PPTX 純函式 | src/utils/pptxExport.js | 投影片選取、重點 fallback 與檔名清理 |
 | DocumentUploader | src/components/create/DocumentUploader.jsx | 上傳 / 大綱輸入 UI，含模式切換 |
 | useDocumentAnalysis | src/hooks/useDocumentAnalysis.js | 文件分析狀態管理 |
 | aiService.analyzeDocument | src/services/aiService.js | API 呼叫封裝 |
@@ -225,6 +226,7 @@ pptxgenjs 採用**動態 import**（import('pptxgenjs')），僅在使用者點�
 | Null bullet point | 極少數情況下 Gemini 回傳 null 項目，會顯示為字串 "null" | 視覺上可能出現 "null" 文字，可手動刪除 |
 | 版面範本 | 目前固定為預設版面（文字左、圖片右） | 尚不支援全圖、文字置中等變體版面 |
 | 自訂主題色 | 目前固定為 Pixora 預設配色（紫色徽章、黑色文字） | 尚不支援品牌色彩自訂 |
+| 配圖生成 | 配圖不是匯出前置條件 | 未生成配圖時需在 PowerPoint 中自行替換 |
 
 ---
 
