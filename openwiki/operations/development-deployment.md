@@ -1,13 +1,13 @@
 ---
 type: operations guide
 title: Development, migrations, and deployment
-description: Local commands, API entrypoints, BFF session configuration, migration procedure, and deployment validation boundaries.
-tags: [operations, development, deployment, sessions, entra]
+description: Local commands, API entrypoints, BFF session and PPT Master sidecar configuration, migration procedure, and deployment validation boundaries.
+tags: [operations, development, deployment, sessions, entra, ppt-master]
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations]
-  source_paths: [package.json, api/package.json, api/_shared/http.js, api/_shared/session.js, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
-  validation_commands: [pnpm lint && pnpm build]
+  source_paths: [package.json, api/package.json, api/_shared/http.js, api/_shared/session.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  validation_commands: [pnpm lint && pnpm build, pnpm test --run api/_shared/__tests__/deckContract.test.js]
 ---
 
 # Development, migrations, and deployment
@@ -31,6 +31,20 @@ For browser-only changes, use the focused test from the owning wiki page, then `
 For schema changes, run `cd api && npm run migrate` only against a disposable database and check the owning API behavior. `010_auth_sessions.sql` is required for the BFF session implementation; see [schema](../data/schema.md). Do not run migrations against production as routine validation.
 
 For a session/authentication change, run the focused browser and API tests documented by [browser application](../frontend/application.md) and [server sessions](../backend/sessions.md), then use non-production configuration to check this sequence: BFF login returns to the requested local route, `GET /api/auth/session` reports a user and CSRF value, a mutation includes cookie plus CSRF, logout clears the session, and an expired/revoked session produces recovery UI. This is conditional integration validation, not a baseline for unrelated frontend work.
+
+## PPT Master sidecar
+
+The optional PPT Master workflow uses a separately deployed FastAPI container because the immutable upstream Python skill performs source conversion, SVG quality checks, and deterministic SVG-to-native-PPTX compilation. The Node API remains responsible for model calls and durable jobs; the sidecar is called through `api/_shared/pptMasterClient.js` with `X-Pixora-Service-Key`. See [PPT Master deck jobs](../backend/ppt-master-decks.md) for the runtime lifecycle and [schema](../data/schema.md) for its migration.
+
+The API always registers the public deck routes, but creation and template lookup return unavailable when `PPT_MASTER_SERVICE_URL` and `PPT_MASTER_SERVICE_KEY` are absent; the standalone worker does not start without them. Other non-secret configuration categories are request timeout, worker poll interval, lock timeout, and the optional brand-catalog flag; use the source/defaults rather than placing these values in browser configuration. The sidecar requires the same service key, a Python work directory, and its command timeout. No model credential belongs in the sidecar.
+
+For a container or upstream-skill change, build and run the zero-AI smoke pipeline from `services/ppt-master-service/README.md`; it writes a minimal SVG, runs the authoritative gate, and exports a PPTX. This is conditional and more expensive than the Node contract test. For API outline/SVG validation changes, run the narrow check:
+
+```sh
+pnpm test --run api/_shared/__tests__/deckContract.test.js
+```
+
+`.github/workflows/ppt-master-service.yml` builds in Azure Container Registry and updates a distinct Azure Container App for `main` pushes that touch the service/workflow paths. It then polls unauthenticated `/health`; `status: ok` means the skill integrity check passed. The service should be internally reachable only by the API; do not expose the shared-key control plane as a browser API.
 
 ## Deployment boundaries
 

@@ -1,6 +1,6 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel } = require("../_shared/gemini");
+const { generateGeminiImage } = require("../_shared/geminiImage");
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
 const { resolveIdentity } = require("../_shared/identity");
@@ -71,13 +71,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
-    const model = getModel(modelName);
-    const textPrompt = aspectRatio
-      ? `${prompt}\nAspect ratio: ${aspectRatio}.`
-      : prompt;
-
-    const parts = [{ text: textPrompt }];
+    const parts = [];
 
     if (imageUrl) {
       // SSRF 防護：驗證 imageUrl 是否在允許的白名單內
@@ -90,88 +84,27 @@ module.exports = async function (context, req) {
         const imageResponse = await fetch(imageUrl);
         if (!imageResponse.ok) throw new Error("Failed to fetch image");
         const arrayBuffer = await imageResponse.arrayBuffer();
-        const base64Image = Buffer.from(arrayBuffer).toString("base64");
-        const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
-
         parts.push({
-          inlineData: {
-            mimeType: contentType,
-            data: base64Image,
-          },
+          base64: Buffer.from(arrayBuffer).toString("base64"),
+          mimeType: imageResponse.headers.get("content-type") || "image/jpeg",
         });
       } catch (imgErr) {
         context.log.warn("Failed to fetch reference image:", imgErr);
-        // Continue without image or return error? 
-        // Let's continue with just text but log warning
       }
     }
 
-    const config = {
-      responseModalities: ["TEXT", "IMAGE"],
-      imageConfig: {
-        ...(aspectRatio ? { aspectRatio } : {}),
-        ...(imageSize ? { imageSize } : {}),
-      },
-    };
-
-    let result;
-    const maxRetries = 2; // 最多重試 2 次
-    let delayMs = 2000;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        result = await model.generateContent(parts, config);
-        break; // 成功則跳出迴圈
-      } catch (apiErr) {
-        const errStr = String(apiErr.message || apiErr);
-        const isOverloaded =
-          errStr.includes("503") ||
-          errStr.includes("429") ||
-          errStr.includes("UNAVAILABLE") ||
-          errStr.includes("high demand");
-
-        if (attempt < maxRetries && isOverloaded) {
-          context.log.warn(`AI API overload (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          delayMs *= 2; // 指數退避
-        } else {
-          // 非過載錯誤或是已達重試上限，直接拋出讓外層 Catch 處理
-          throw apiErr;
-        }
-      }
-    }
-
-    const responseParts =
-      result?.candidates?.[0]?.content?.parts ||
-      result?.parts ||
-      result?.response?.candidates?.[0]?.content?.parts ||
-      [];
-    let base64Image = null;
-    let mimeType = "image/png";
-    for (const part of responseParts) {
-      const inlineData = part.inlineData || part.inline_data;
-      if (inlineData?.data) {
-        base64Image = inlineData.data;
-        mimeType = inlineData.mimeType || inlineData.mime_type || mimeType;
-        break;
-      }
-    }
-
-    if (!base64Image) {
-      context.log.warn("No image data returned", {
-        partsCount: parts.length,
-        hasInlineData: parts.some(
-          (part) => (part.inlineData || part.inline_data)?.data
-        ),
-      });
-      context.res = error("模型未回傳圖片資料", "no_image", 502);
-      return;
-    }
+    const image = await generateGeminiImage({
+      prompt,
+      aspectRatio,
+      imageSize,
+      referenceImage: parts[0],
+      logger: context.log,
+    });
 
     context.res = ok({
-      imageUrl: `data:${mimeType};base64,${base64Image}`,
+      imageUrl: `data:${image.mimeType};base64,${image.base64}`,
       aspectRatio: aspectRatio || "16:9",
-      prompt: textPrompt,
+      prompt: image.prompt,
       model: selectedModel,
     });
   } catch (err) {

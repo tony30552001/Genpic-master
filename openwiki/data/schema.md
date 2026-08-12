@@ -1,13 +1,13 @@
 ---
 type: data model
 title: PostgreSQL schema and migrations
-description: Tenant-scoped persistence model, ordered SQL evolution, vector search, durable image jobs, and opaque authentication sessions.
-tags: [database, postgres, migrations, sessions]
+description: Tenant-scoped persistence model, ordered SQL evolution, vector search, durable image and PPT Master deck jobs, and opaque authentication sessions.
+tags: [database, postgres, migrations, sessions, deck-jobs]
 openwiki:
   roles: [domain, operations, testing]
   change_kinds: [schema, migrations, session-lifecycle]
-  source_paths: [db/migrations, db/migrations/010_auth_sessions.sql, api/scripts/migrate.cjs]
-  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "Authentication session records store token hashes, never raw browser tokens."]
+  source_paths: [db/migrations, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, api/scripts/migrate.cjs]
+  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "Authentication session records store token hashes, never raw browser tokens.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states."]
   validation_commands: [cd api && npm run migrate]
 ---
 
@@ -24,6 +24,8 @@ erDiagram
   users ||--o{ history : creates
   users ||--o{ templates : creates
   users ||--o{ image_generation_jobs : owns
+  tenants ||--o{ deck_generation_jobs : scopes
+  users ||--o{ deck_generation_jobs : owns
   users ||--o| line_configs : configures
   styles ||--o{ history : referenced
   styles ||--o{ templates : referenced
@@ -34,6 +36,12 @@ This diagram includes the durable session relationship used by [server sessions 
 `001_init.sql` creates tenants, users, projects, styles, scenes, and history. All primary operational records carry `tenant_id`; user-scoped records also carry an owner. Styles contain `vector(1536)` embedding and a cosine ivfflat index. `002` adds prompt snapshots to history, `003` adds templates, `005` evolves styles into shared/private catalog records, `006` adds tenant model settings and history model audit data, and `009` adds durable image jobs with `queued|processing|succeeded|failed`, attempts, lock/timing fields, and queue/user indexes.
 
 `004_line_config.sql` defines encrypted credential text columns and a unique `(user_id, tenant_id)` binding. Encryption happens in application code, never SQL. `008` adds `users.is_active`.
+
+## PPT Master deck jobs
+
+`011_deck_generation_jobs.sql` adds the durable queue behind [PPT Master deck jobs](../backend/ppt-master-decks.md). Every row has tenant and user foreign keys with cascade deletion, an `input_kind` of `topic` or `document`, optional source/topic/template fields, and a requested slide count. Its status constraint permits only `queued`, `processing`, `succeeded`, or `failed`; phase, progress, attempts, availability/lock timestamps, output Blob/file names, and terminal error fields support asynchronous processing rather than browser-held work.
+
+The worker claims in creation order with `FOR UPDATE SKIP LOCKED`; the `(status, available_at, created_at)` index supports that query, while `(tenant_id, user_id, created_at DESC)` supports authorized status/download lookup. Do not add an externally observable status without changing the SQL constraint, `deckJobs.js` transitions, handler response, and polling client together. These rows contain Blob names and source URLs, not the deck bytes; the generated container remains the output owner.
 
 ## Opaque session records
 

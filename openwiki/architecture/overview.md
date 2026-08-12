@@ -35,7 +35,7 @@ This shows the normal browser-to-API ownership boundary. Detailed sign-in and ex
 
 - `src/main.jsx` mounts `GoogleOAuthProvider` and `AuthProvider` around `App`; `AuthProvider` bootstraps its user from `GET /api/auth/session`.
 - `src/App.jsx` maps `/`, `/library`, `/admin`, and `/login`; all but login are protected, and `/admin` additionally waits for `/api/me` role data. `LibraryPage` starts the library tab from its optional `section` query parameter; `AssetCenter` owns the live `section` and `view` URL state described in [Asset Center](../frontend/asset-center.md).
-- `api/server.js` maps `/api/*` routes to function-style handlers through `invokeFunction`, applies JSON parsing, translates `context.res` as JSON or Buffer, registers the server PPTX route, and starts `startImageJobWorker()` when the standalone API process starts. The browser-to-server export split is detailed in [creation workflows](../frontend/create-workflows.md) and [AI generation](../backend/ai-generation.md).
+- `api/server.js` maps `/api/*` routes to function-style handlers through `invokeFunction`, applies JSON parsing, translates `context.res` as JSON or Buffer, registers the server PPTX and deck-job routes, and starts image and configured PPT Master workers when the standalone API process starts. The browser-to-server export split is detailed in [creation workflows](../frontend/create-workflows.md), [AI generation](../backend/ai-generation.md), and [PPT Master deck jobs](../backend/ppt-master-decks.md).
 - `api/auth/index.js` exchanges Entra authorization codes or Google credentials for opaque cookies; `api/_shared/auth.js` checks each protected request before its resource handler executes.
 - `staticwebapp.config.json` lets anonymous/authenticated users reach `/api/*` and rewrites non-asset, non-API navigation to `index.html`.
 
@@ -49,6 +49,7 @@ This shows the normal browser-to-API ownership boundary. Detailed sign-in and ex
 | Tenant identity, roles, model policy | API | [authentication and administration](../backend/auth-tenancy-admin.md) |
 | Creation, documents, transforms, exports | React hooks/components | [creation workflows](../frontend/create-workflows.md) |
 | AI providers and image-job state machine | API | [AI generation](../backend/ai-generation.md) |
+| PPT Master durable deck jobs and native PPTX compilation | API worker plus Python sidecar | [PPT Master deck jobs](../backend/ppt-master-decks.md) |
 | Styles, history, templates, uploads, LINE | API and Postgres | [resources](../backend/resources.md) |
 | Database evolution | ordered SQL migrations | [schema](../data/schema.md) |
 

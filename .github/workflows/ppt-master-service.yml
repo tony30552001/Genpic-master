@@ -1,0 +1,73 @@
+name: Deploy ppt-master sidecar
+
+# The sidecar wraps the vendored ppt-master skill and only changes when this
+# directory changes. It deploys to Azure Container Apps, separately from the
+# Static Web App and App Service pipeline.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/ppt-master-service/**'
+      - '.github/workflows/ppt-master-service.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pixora-ppt-master-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: pixora-ppt-master
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build image in Azure Container Registry
+        run: |
+          az acr build \
+            --registry "${{ secrets.AZURE_CONTAINER_REGISTRY }}" \
+            --image "${IMAGE_NAME}:${{ github.sha }}" \
+            --image "${IMAGE_NAME}:latest" \
+            --file services/ppt-master-service/Dockerfile \
+            services/ppt-master-service
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name "${{ secrets.AZURE_PPT_MASTER_CONTAINER_APP }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${IMAGE_NAME}:${{ github.sha }}"
+
+      - name: Verify the integrity gate passes on the deployed revision
+        run: |
+          fqdn=$(az containerapp show \
+            --name "${{ secrets.AZURE_PPT_MASTER_CONTAINER_APP }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+
+          for attempt in $(seq 1 20); do
+            status=$(curl -sS --max-time 20 "https://${fqdn}/health" | jq -r '.status // "unreachable"')
+            if [ "$status" = "ok" ]; then
+              echo "ppt-master sidecar healthy at https://${fqdn}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: status=${status}"
+            sleep 15
+          done
+
+          echo "ppt-master sidecar did not become healthy" >&2
+          exit 1

@@ -1,0 +1,9 @@
+# Service-level dependencies. The ppt-master skill installs its own
+# requirements.txt unchanged during the image build.
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.9
+pydantic>=2.9.0
+# register_template.py parses design_spec.md frontmatter but PyYAML is missing
+# from the upstream requirements.
+pyyaml>=6.0.2

@@ -6,10 +6,10 @@ tags: [frontend, creation, document-analysis, presentation, export]
 openwiki:
   roles: [workflow, frontend]
   change_kinds: [document-analysis, presentation-workflow, client-export, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PresentationGenerator.jsx, src/hooks/useDocumentAnalysis.js, src/services/aiService.js, src/services/apiClient.js, src/utils/pptxExport.js]
-  symbols: [AnalysisProgress, handleGenerateScene, useDocumentAnalysis, updateSlide, removeSlide, PresentationGenerator, exportToPptx, generatePresentationPptx, apiPostBlob]
-  test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/services/__tests__/apiClient.test.js, src/utils/__tests__/pptxExport.test.js]
-  invariants: [Storyboard and presentation results are separate mode-specific contracts and views., Presentation mode sends slideCount and exports editable slides through the server company-template renderer., Deleting a presentation slide re-numbers its slide_number and updates total_slides., Storyboard local PPTX export includes each valid analyzed scene whether or not it has a generated image.]
+  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PresentationGenerator.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/services/apiClient.js, src/utils/pptxExport.js]
+  symbols: [AnalysisProgress, handleGenerateScene, useDocumentAnalysis, updateSlide, removeSlide, PresentationGenerator, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx, generatePresentationPptx, apiPostBlob]
+  test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/services/__tests__/apiClient.test.js, src/utils/__tests__/pptxExport.test.js, api/_shared/__tests__/deckContract.test.js]
+  invariants: [Storyboard, company-template presentation, and PPT Master results are separate workflows., Presentation mode sends slideCount and exports editable slides through the server company-template renderer., PPT Master upload/poll cancellation does not cancel a server job., Deleting a presentation slide re-numbers its slide_number and updates total_slides., Storyboard local PPTX export includes each valid analyzed scene whether or not it has a generated image.]
   validation_commands: [pnpm test --run src/services/__tests__/aiService.test.js src/services/__tests__/apiClient.test.js]
 ---
 
@@ -27,7 +27,7 @@ openwiki:
 
 ## Document input and mode boundary
 
-Document mode chooses one of two independent paths: **Document analysis** fixes `DocumentUploader` to `storyboard`; **Presentation generation** fixes it to `presentation`. `InfographicGenerator` renders a result only when `documentResult.analysis_mode` matches the selected tab, so switching tabs cannot reinterpret a previous response. It renders `DocumentScenes` only for storyboard results and `PresentationGenerator` only for presentation results. The general bottom `GenerateBar` is likewise excluded from presentation mode.
+The document area now has three independent paths: **Document analysis** fixes `DocumentUploader` to `storyboard`; **Presentation generation** fixes it to `presentation`; and **PPT Master** renders `PptMasterStudio` without `useDocumentAnalysis`. `InfographicGenerator` renders an analyzed result only when `documentResult.analysis_mode` matches the selected tab, so switching storyboard/presentation tabs cannot reinterpret a previous response. It renders `DocumentScenes` only for storyboard results and `PresentationGenerator` only for presentation results. PPT Master owns separate local job state, and the general bottom `GenerateBar` is excluded from both presentation-oriented tabs.
 
 `DocumentUploader` permits pasted outlines only in presentation mode and resets an open outline tab to file input when its parent mode changes. It and `useDocumentAnalysis` enforce the same 50 MB browser limit and `src/lib/documentFormats.js` extension allow-list: PDF; Word, PowerPoint, and Excel variants; OpenDocument; RTF; EPUB; CSV; TXT/Markdown; and PNG/JPEG. The shared module supplies the input `accept` value, validates extensions, and determines a MIME fallback; `storageService.uploadFileToBlob` also uses it.
 
@@ -109,6 +109,38 @@ pnpm test --run src/services/__tests__/aiService.test.js src/services/__tests__/
 
 `aiService.test.js` verifies `slides` reaches `/api/generate-presentation`; `apiClient.test.js` verifies the credentialed binary parser and serialized payload. There is no focused `PresentationGenerator` test for editable fields, deletion/re-numbering, disabled export, or a download error. Add one before changing those behaviors. Run the server schema/renderer tests from [AI generation](../backend/ai-generation.md) when changing slide fields or template rendering; service tests alone do not prove the public download works.
 
+## PPT Master design-deck workflow
+
+`PptMasterStudio` is a topic-or-document deck generator, distinct from the editable company-template presentation flow. It accepts a topic of at least four characters or an optional supported file, limits the file to 50 MB using the shared document-format rules, lets the user select a sidecar-provided style and layout, and permits 4–12 slides. The selected file is uploaded to `uploads` before the job request. `PptTemplatePicker` is controlled: a null style/layout means AI selection, not a default client template.
+
+```mermaid
+sequenceDiagram
+  participant Studio as PptMasterStudio
+  participant Hook as usePptMasterDeck
+  participant Blob as Azure Blob Storage
+  participant Api as Deck job API
+  Studio->>Hook: topic or file and template choices
+  opt file selected
+    Hook->>Blob: upload source document
+  end
+  Hook->>Api: create deck job
+  loop every four seconds up to forty minutes
+    Hook->>Api: get deck job
+    Api-->>Hook: phase and progress
+  end
+  Hook->>Api: download successful PPTX
+```
+
+This is the browser portion of the durable deck workflow. Its queue, tenant authorization, SVG authoring, sidecar quality gate, and output Blob behavior are canonical in [PPT Master deck jobs](../backend/ppt-master-decks.md).
+
+`usePptMasterDeck` loads the template catalog on mount, starts a new `AbortController` for upload/create/poll work, polls through `waitForDeckJob` every 4 seconds for at most 40 minutes, and creates a browser object URL only after the job reports success. `cancel` aborts client I/O and resets local progress but cannot cancel a database job or sidecar work. The hook surfaces template, generation, and download errors separately. Do not reuse `useDocumentAnalysis` state or the synchronous `generatePresentationPptx` call for this route.
+
+For a studio/hook contract change, begin with `PptMasterStudio.jsx`, `usePptMasterDeck.js`, then the `aiService` methods (`listPptTemplates`, `createDeckJob`, `waitForDeckJob`, `downloadDeckJobPptx`) and [PPT Master deck jobs](../backend/ppt-master-decks.md). No focused hook or component test exists. `api/_shared/__tests__/deckContract.test.js` validates the shared server grammar but does not prove browser upload, polling, cancellation, selection, or download. Add a focused React/service test before changing those behaviors; use its narrow command. For the existing client binary transport, run:
+
+```sh
+pnpm test --run src/services/__tests__/aiService.test.js src/services/__tests__/apiClient.test.js
+```
+
 ## Change navigation
 
-Consult this page for browser composition, document upload/fallback, the mode boundary, editing state, or any export initiated in React. Start from `InfographicGenerator.jsx` to determine the active mode, then follow the selected component and hook. Keep storyboard `scenes` and presentation `slides` separate through request, state, and API payloads. Use [HTTP API](../backend/http-api.md) for route/OpenAPI/adapter changes and [operations](../operations/development-deployment.md) only for deployment or configuration work.
+Consult this page for browser composition, document upload/fallback, the mode boundary, editing state, or any export initiated in React. Start from `InfographicGenerator.jsx` to determine the active mode, then follow the selected component and hook. Keep storyboard `scenes`, company-template `slides`, and PPT Master job state separate through request, state, and API payloads. Use [HTTP API](../backend/http-api.md) for route/OpenAPI/adapter changes and [operations](../operations/development-deployment.md) only for deployment or configuration work.

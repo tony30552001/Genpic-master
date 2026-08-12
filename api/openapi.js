@@ -202,6 +202,37 @@ addOperation("/api/image-jobs/{id}", "get", {
   parameters: pathParameters("id"),
 });
 
+addOperation("/api/deck-jobs", "post", {
+  summary: "Queue a PPT Master deck generation job",
+  tags: ["AI"],
+  body: true,
+  csrf: true,
+  successStatuses: [202],
+});
+
+addOperation("/api/deck-jobs/{id}", "get", {
+  summary: "Get the status of a PPT Master deck generation job",
+  tags: ["AI"],
+  parameters: pathParameters("id"),
+});
+
+addOperation("/api/deck-jobs/{id}/download", "get", {
+  summary: "Download the generated PPT Master presentation",
+  tags: ["AI"],
+  parameters: pathParameters("id"),
+  successContentType:
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  successSchema: {
+    type: "string",
+    format: "binary",
+  },
+});
+
+addOperation("/api/ppt-templates", "get", {
+  summary: "List the available PPT Master style and layout templates",
+  tags: ["Templates"],
+});
+
 addOperation("/api/image-transform", "post", {
   summary: "Transform an image",
   tags: ["AI"],

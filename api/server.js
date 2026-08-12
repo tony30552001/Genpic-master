@@ -8,6 +8,8 @@ const analyzeDocument = require("./analyze-document");
 const analyzeStyle = require("./analyze-style");
 const auth = require("./auth");
 const blobSas = require("./blob-sas");
+const deckJobs = require("./deck-jobs");
+const { startDeckJobWorker } = require("./_shared/deckJobs");
 const embeddings = require("./embeddings");
 const generateFilename = require("./generate-filename");
 const generateImages = require("./generate-images");
@@ -21,6 +23,7 @@ const lineConfig = require("./line-config");
 const me = require("./me");
 const optimizePrompt = require("./optimize-prompt");
 const optimizeScene = require("./optimize-scene");
+const pptTemplates = require("./ppt-templates");
 const sendLineImage = require("./send-line-image");
 const styles = require("./styles");
 const stylesBackfill = require("./styles-backfill");
@@ -120,6 +123,13 @@ registerRoutes(["/api/me"], ["GET", "OPTIONS"], me);
 registerRoutes(["/api/analyze-document"], ["POST", "OPTIONS"], analyzeDocument);
 registerRoutes(["/api/analyze-style"], ["POST", "OPTIONS"], analyzeStyle);
 registerRoutes(["/api/blob-sas"], ["POST", "OPTIONS"], blobSas);
+registerRoutes(["/api/deck-jobs"], ["POST", "OPTIONS"], deckJobs);
+registerRoutes(
+  ["/api/deck-jobs/:id", "/api/deck-jobs/:id/:action"],
+  ["GET", "OPTIONS"],
+  deckJobs
+);
+registerRoutes(["/api/ppt-templates"], ["GET", "OPTIONS"], pptTemplates);
 registerRoutes(["/api/embeddings"], ["POST", "OPTIONS"], embeddings);
 registerRoutes(["/api/generate-filename"], ["GET", "POST", "OPTIONS"], generateFilename);
 registerRoutes(["/api/generate-images"], ["POST", "OPTIONS"], generateImages);
@@ -204,6 +214,7 @@ const start = () => {
     console.log(`[api] App Service server listening on port ${port}`);
   });
   startImageJobWorker();
+  startDeckJobWorker();
   return server;
 };
 

@@ -25,6 +25,7 @@ import ImagePreview from './components/create/ImagePreview';
 import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
 import PresentationGenerator from './components/create/PresentationGenerator';
+import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import ImageTransformPanel from './components/create/ImageTransformPanel';
@@ -856,7 +857,7 @@ export default function InfographicGenerator({
                                     className="flex h-full min-h-0 flex-col"
                                 >
                                     <div className="shrink-0">
-                                        <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
+                                        <TabsList className="grid h-10 w-full max-w-2xl grid-cols-3">
                                             <TabsTrigger value="storyboard" className="gap-2 text-xs sm:text-sm">
                                                 <FileText className="h-4 w-4" aria-hidden="true" />
                                                 文件分析
@@ -865,9 +866,15 @@ export default function InfographicGenerator({
                                                 <Presentation className="h-4 w-4" aria-hidden="true" />
                                                 簡報生成
                                             </TabsTrigger>
+                                            <TabsTrigger value="pptmaster" className="gap-2 text-xs sm:text-sm">
+                                                <Wand2 className="h-4 w-4" aria-hidden="true" />
+                                                設計簡報
+                                            </TabsTrigger>
                                         </TabsList>
                                         <p className="mt-2 text-xs text-muted-foreground">
-                                            {documentAnalysisMode === "presentation"
+                                            {documentAnalysisMode === "pptmaster"
+                                                ? "由 AI 逐頁設計版面，直接產出套用專業模板的 PowerPoint。"
+                                                : documentAnalysisMode === "presentation"
                                                 ? "將文件或大綱轉換成可編輯的 PowerPoint 投影片。"
                                                 : "分析文件內容並提取可生成圖片的分鏡腳本。"}
                                         </p>
@@ -883,6 +890,12 @@ export default function InfographicGenerator({
                                         className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
                                     >
                                         {documentAnalysisMode === "presentation" && activeDocumentPanel}
+                                    </TabsContent>
+                                    <TabsContent
+                                        value="pptmaster"
+                                        className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
+                                    >
+                                        {documentAnalysisMode === "pptmaster" && <PptMasterStudio />}
                                     </TabsContent>
                                 </Tabs>
                             </div>

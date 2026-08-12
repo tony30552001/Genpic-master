@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import { apiGet, apiPost, apiPostBlob } from "./apiClient";
+import { apiGet, apiGetBlob, apiPost, apiPostBlob } from "./apiClient";
 
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
@@ -107,6 +107,60 @@ export const generatePresentationPptx = async ({ slides, signal }) =>
     { slides },
     { signal }
   );
+
+export const listPptTemplates = async ({ signal } = {}) =>
+  apiGet(`${API_BASE_URL}/ppt-templates`, { signal });
+
+export const createDeckJob = async ({
+  topic,
+  documentUrl,
+  fileName,
+  slideCount,
+  styleId,
+  layoutId,
+  signal,
+}) =>
+  apiPost(
+    `${API_BASE_URL}/deck-jobs`,
+    { topic, documentUrl, fileName, slideCount, styleId, layoutId },
+    { signal }
+  );
+
+export const getDeckJob = async ({ jobId, signal }) =>
+  apiGet(`${API_BASE_URL}/deck-jobs/${encodeURIComponent(jobId)}`, { signal });
+
+export const downloadDeckJobPptx = async ({ jobId, signal }) =>
+  apiGetBlob(`${API_BASE_URL}/deck-jobs/${encodeURIComponent(jobId)}/download`, {
+    signal,
+  });
+
+/**
+ * 輪詢簡報生成工作，直到成功或失敗。
+ * 每頁投影片都要經過 LLM 手寫 SVG 與品質閘門，因此逾時設定得比圖片長。
+ */
+export const waitForDeckJob = async ({
+  jobId,
+  signal,
+  onProgress,
+  pollIntervalMs = 4000,
+  timeoutMs = 40 * 60 * 1000,
+}) => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const job = await getDeckJob({ jobId, signal });
+    onProgress?.(job);
+
+    if (job?.status === "succeeded") return job;
+    if (job?.status === "failed") {
+      throw new Error(job.error?.message || "簡報生成失敗，請稍後重試");
+    }
+
+    await abortableDelay(pollIntervalMs, signal);
+  }
+
+  throw new Error("簡報生成工作逾時，請稍後重試");
+};
 
 /**
  * AI 優化單一場景的標題、描述和英文 Prompt

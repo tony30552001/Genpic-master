@@ -30,3 +30,8 @@ api/*.settings.*.json
 *.njsproj
 *.sln
 *.sw?
+
+# Python sidecar
+__pycache__/
+*.py[cod]
+.venv/

@@ -49,8 +49,7 @@ const fetchImageSource = async (source) => {
   };
 };
 
-const uploadGeneratedImage = async ({ blobName, source }) => {
-  const { buffer, contentType } = await fetchImageSource(source);
+const uploadGeneratedBlob = async ({ blobName, buffer, contentType }) => {
   const containerName = process.env.BLOB_CONTAINER_GENERATED || "generated";
   const containerClient = await getContainerClient(containerName);
   const blobClient = containerClient.getBlockBlobClient(blobName);
@@ -65,15 +64,24 @@ const uploadGeneratedImage = async ({ blobName, source }) => {
   return { blobName, contentType };
 };
 
-const downloadGeneratedImage = async ({ blobName }) => {
+const downloadGeneratedBlob = async ({ blobName }) => {
   const containerName = process.env.BLOB_CONTAINER_GENERATED || "generated";
   const containerClient = await getContainerClient(containerName);
   const blobClient = containerClient.getBlockBlobClient(blobName);
   return blobClient.downloadToBuffer();
 };
 
+const uploadGeneratedImage = async ({ blobName, source }) => {
+  const { buffer, contentType } = await fetchImageSource(source);
+  return uploadGeneratedBlob({ blobName, buffer, contentType });
+};
+
+const downloadGeneratedImage = async ({ blobName }) => downloadGeneratedBlob({ blobName });
+
 module.exports = {
+  downloadGeneratedBlob,
   downloadGeneratedImage,
   fetchImageSource,
+  uploadGeneratedBlob,
   uploadGeneratedImage,
 };

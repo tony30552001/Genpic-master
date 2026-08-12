@@ -104,6 +104,10 @@ export async function apiGet(url, options = {}) {
   return requestWithRetry(url, { method: "GET" }, options);
 }
 
+export async function apiGetBlob(url, options = {}) {
+  return requestWithRetry(url, { method: "GET" }, { ...options, responseType: "blob" });
+}
+
 export async function apiPost(url, body, options = {}) {
   return requestWithRetry(
     url,
