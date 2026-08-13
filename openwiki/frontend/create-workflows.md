@@ -6,11 +6,11 @@ tags: [frontend, creation, document-analysis, presentation, export]
 openwiki:
   roles: [workflow, frontend]
   change_kinds: [document-analysis, presentation-workflow, client-export, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PresentationGenerator.jsx, src/components/create/PptMasterStudio.jsx, src/components/create/pptTemplateCopy.js, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/services/apiClient.js, src/utils/pptxExport.js]
-  symbols: [AnalysisProgress, handleGenerateScene, useDocumentAnalysis, updateSlide, removeSlide, PresentationGenerator, PptMasterStudio, usePptMasterDeck, stopWatching, waitForDeckJob, describeStyle, describeLayout, exportToPptx, generatePresentationPptx, apiPostBlob]
-  test_paths: [src/lib/__tests__/documentFormats.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/services/__tests__/aiService.test.js, src/services/__tests__/apiClient.test.js, src/utils/__tests__/pptxExport.test.js, api/_shared/__tests__/deckContract.test.js]
-  invariants: [Storyboard, company-template presentation, and PPT Master results are separate workflows., Presentation mode sends slideCount and exports editable slides through the server company-template renderer., PPT Master persists its active job ID and resumes it on mount; stopping local tracking does not cancel server work., Deck polling keeps the stored job ID through transient errors but clears it for a missing or terminally failed server job., Deleting a presentation slide re-numbers its slide_number and updates total_slides., Storyboard local PPTX export includes each valid analyzed scene whether or not it has a generated image.]
-  validation_commands: [pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js]
+  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PresentationGenerator.jsx, src/components/create/PptMasterStudio.jsx, src/components/create/DeckProgress.jsx, src/components/create/DeckTimeline.jsx, src/components/create/deckSteps.js, src/components/create/pptTemplateCopy.js, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/services/apiClient.js, src/utils/pptxExport.js]
+  symbols: [AnalysisProgress, handleGenerateScene, useDocumentAnalysis, updateSlide, removeSlide, PresentationGenerator, PptMasterStudio, DeckTimeline, buildTimeline, usePptMasterDeck, stopWatching, waitForDeckJob, describeStyle, describeLayout, exportToPptx, generatePresentationPptx, apiPostBlob]
+  test_paths: [src/lib/__tests__/documentFormats.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/services/__tests__/aiService.test.js, src/services/__tests__/apiClient.test.js, src/components/create/__tests__/deckSteps.test.js, src/components/create/__tests__/DeckTimeline.test.jsx, src/utils/__tests__/pptxExport.test.js, api/_shared/__tests__/deckContract.test.js]
+  invariants: [Storyboard, company-template presentation, and PPT Master results are separate workflows., Presentation mode sends slideCount and exports editable slides through the server company-template renderer., PPT Master persists its active job ID and resumes it on mount; stopping local tracking does not cancel server work., Deck polling keeps the stored job ID through transient errors but clears it for a missing or terminally failed server job., Timeline reduction uses the newest event per step and per slide in event-ID order., Deleting a presentation slide re-numbers its slide_number and updates total_slides., Storyboard local PPTX export includes each valid analyzed scene whether or not it has a generated image.]
+  validation_commands: [pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js src/components/create/__tests__/DeckTimeline.test.jsx]
 ---
 
 # Creation workspace, documents, and exports
@@ -130,7 +130,7 @@ sequenceDiagram
   Hook->>Store: persist job ID
   loop every four seconds up to forty minutes
     Hook->>Api: get deck job
-    Api-->>Hook: phase and progress
+    Api-->>Hook: phase progress and ordered events
   end
   Hook->>Api: download successful PPTX
 ```
@@ -141,13 +141,19 @@ This is the browser portion of the durable deck workflow. Its queue, tenant auth
 
 `waitForDeckJob` polls every 4 seconds for at most 40 minutes. It immediately propagates `AbortError`, `AuthExpiredError`, and `404`; other poll errors are retried until five consecutive failures. A server `failed` status becomes an error marked `jobFailed`. The hook retains the ID after transient/network failure so a later mount can resume, but clears it after a missing or terminally failed job. `stopWatching` aborts only the current browser upload/create/poll I/O, clears local continuation state and progress, and does not cancel the database job or sidecar work. The progress card uses `startedAt` when supplied to show elapsed time. Do not reuse `useDocumentAnalysis` state or the synchronous `generatePresentationPptx` call for this route.
 
-For a studio/hook contract change, begin with `PptMasterStudio.jsx`, `usePptMasterDeck.js`, `pptTemplateCopy.js`, then the `aiService` methods (`listPptTemplates`, `createDeckJob`, `getDeckJob`, `waitForDeckJob`, `downloadDeckJobPptx`) and [PPT Master deck jobs](../backend/ppt-master-decks.md). `src/hooks/__tests__/usePptMasterDeck.test.jsx` has retrievable cases for restoring running/succeeded jobs, clearing a missing/failed job, keeping an ID after a connection failure, and stop tracking; `src/services/__tests__/aiService.test.js` covers transient polling, immediate 404 handling, and exhaustion after five failures. These mocks do not prove authenticated API, Blob upload/download, or worker behavior. Run the focused lifecycle check:
+### Step timeline
+
+Each status response now includes the server's append-only event trace. `usePptMasterDeck` replaces its local `events` state from every polling update, from initial resume, and from the completed job; it clears that state only when beginning a new job, stopping tracking, or clearing the studio. This lets both a resumed successful result and a failed job render the same latest trace. `DeckProgress` displays the timeline while work is active, while `PptMasterStudio` displays it under a terminal error after polling stops.
+
+`deckSteps.js::buildTimeline` is the presentation-only reducer: it sorts by event ID, initializes all six known steps as pending, lets the latest step-level event determine each step status/detail, and lets the latest event per `slideNumber` determine nested slide state. `DeckTimeline` initially expands a running step's items and permits users to collapse/expand them. Keep these rules aligned with the server `DECK_STEPS`/statuses in [PPT Master deck jobs](../backend/ppt-master-decks.md); a new event step is a cross-boundary schema, worker, client reducer, visual-label, and test change rather than a UI-only change.
+
+For a studio/hook or timeline contract change, begin with `PptMasterStudio.jsx`, `usePptMasterDeck.js`, `DeckProgress.jsx`, `DeckTimeline.jsx`, `deckSteps.js`, `pptTemplateCopy.js`, then the `aiService` methods (`listPptTemplates`, `createDeckJob`, `getDeckJob`, `waitForDeckJob`, `downloadDeckJobPptx`) and [PPT Master deck jobs](../backend/ppt-master-decks.md). `src/hooks/__tests__/usePptMasterDeck.test.jsx` has retrievable cases for restoring running/succeeded jobs, clearing a missing/failed job, keeping an ID after a connection failure, and stop tracking; `src/services/__tests__/aiService.test.js` covers transient polling, immediate 404 handling, and exhaustion after five failures. `deckSteps.test.js` verifies all-pending initialization, newest event state, ID ordering, nested slide grouping, skipped steps, and unknown-step exclusion; `DeckTimeline.test.jsx` verifies all labels, running-step expansion, and collapse. These mocks do not prove authenticated API, Blob upload/download, event persistence, or worker behavior. Run the focused lifecycle and timeline check:
 
 ```sh
-pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js
+pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js src/components/create/__tests__/DeckTimeline.test.jsx
 ```
 
-Add `src/services/__tests__/apiClient.test.js` when changing binary transport, error parsing, session credentials, or CSRF behavior. Add a catalog handler test before changing layout filtering, cache behavior, authentication, or service-unavailable behavior; no focused API test exists for that handler.
+Add `src/services/__tests__/apiClient.test.js` when changing binary transport, error parsing, session credentials, or CSRF behavior. Add a catalog handler test before changing layout filtering, cache behavior, authentication, or service-unavailable behavior; add handler/database coverage before changing event authorization, status serialization, or the event migration. No focused API test exists for those handler contracts.
 
 ## Change navigation
 

@@ -6,8 +6,8 @@ tags: [database, postgres, migrations, sessions, deck-jobs]
 openwiki:
   roles: [domain, operations, testing]
   change_kinds: [schema, migrations, session-lifecycle]
-  source_paths: [db/migrations, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, api/scripts/migrate.cjs]
-  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "Authentication session records store token hashes, never raw browser tokens.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states."]
+  source_paths: [db/migrations, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, api/_shared/deckJobs.js, api/scripts/migrate.cjs]
+  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "Authentication session records store token hashes, never raw browser tokens.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck job events are append-only, constrained to known steps and statuses, and cascade with their job."]
   validation_commands: [cd api && npm run migrate]
 ---
 
@@ -26,6 +26,7 @@ erDiagram
   users ||--o{ image_generation_jobs : owns
   tenants ||--o{ deck_generation_jobs : scopes
   users ||--o{ deck_generation_jobs : owns
+  deck_generation_jobs ||--o{ deck_job_events : traces
   users ||--o| line_configs : configures
   styles ||--o{ history : referenced
   styles ||--o{ templates : referenced
@@ -42,6 +43,8 @@ This diagram includes the durable session relationship used by [server sessions 
 `011_deck_generation_jobs.sql` adds the durable queue behind [PPT Master deck jobs](../backend/ppt-master-decks.md). Every row has tenant and user foreign keys with cascade deletion, an `input_kind` of `topic` or `document`, optional source/topic/template fields, and a requested slide count. Its status constraint permits only `queued`, `processing`, `succeeded`, or `failed`; phase, progress, attempts, availability/lock timestamps, output Blob/file names, and terminal error fields support asynchronous processing rather than browser-held work.
 
 The worker claims in creation order with `FOR UPDATE SKIP LOCKED`; the `(status, available_at, created_at)` index supports that query, while `(tenant_id, user_id, created_at DESC)` supports authorized status/download lookup. Do not add an externally observable status without changing the SQL constraint, `deckJobs.js` transitions, handler response, and polling client together. These rows contain Blob names and source URLs, not the deck bytes; the generated container remains the output owner.
+
+`012_deck_job_events.sql` adds the replayable progress trace used by [PPT Master deck jobs](../backend/ppt-master-decks.md). Every event belongs to one job through an `ON DELETE CASCADE` foreign key; its `step` is constrained to `source`, `outline`, `images`, `slides`, `quality`, or `export`, and its status is constrained to `running`, `succeeded`, `failed`, or `skipped`. `slide_number` and `detail` are optional, so a step-level event describes the headline while a per-slide event provides nested detail. The `(job_id, id)` index supports the handler's `ORDER BY id` chronology. Events are intentionally append-only: `deckJobs.js::recordDeckJobEvent` may fail without interrupting deck generation, but the deployed API must not query this table before the migration has been applied. Altering steps, statuses, or ordering crosses this SQL constraint, server reporter/serializer, and the client timeline reducer/tests.
 
 ## Opaque session records
 

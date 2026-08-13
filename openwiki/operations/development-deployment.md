@@ -28,7 +28,7 @@ Register the Entra callback as a **Web** redirect URI, for example `http://local
 
 For browser-only changes, use the focused test from the owning wiki page, then `pnpm lint && pnpm build` when the changed surface needs a build check. For API route wiring, use the syntax and adapter smoke checks in [HTTP API](../backend/http-api.md). Avoid running the whole suite by default.
 
-For schema changes, run `cd api && npm run migrate` only against a disposable database and check the owning API behavior. `010_auth_sessions.sql` is required for the BFF session implementation; see [schema](../data/schema.md). Do not run migrations against production as routine validation.
+For schema changes, run `cd api && npm run migrate` only against a disposable database and check the owning API behavior. `010_auth_sessions.sql` is required for the BFF session implementation; `012_deck_job_events.sql` is required before deploying the event-aware deck-status handler because `GET /api/deck-jobs/:id` queries that table. See [schema](../data/schema.md). Do not run migrations against production as routine validation.
 
 For a session/authentication change, run the focused browser and API tests documented by [browser application](../frontend/application.md) and [server sessions](../backend/sessions.md), then use non-production configuration to check this sequence: BFF login returns to the requested local route, `GET /api/auth/session` reports a user and CSRF value, a mutation includes cookie plus CSRF, logout clears the session, and an expired/revoked session produces recovery UI. This is conditional integration validation, not a baseline for unrelated frontend work.
 
