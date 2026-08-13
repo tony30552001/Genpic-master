@@ -6,11 +6,11 @@ tags: [frontend, creation, document-analysis, presentation, export]
 openwiki:
   roles: [workflow, frontend]
   change_kinds: [document-analysis, presentation-workflow, client-export, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PresentationGenerator.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/services/apiClient.js, src/utils/pptxExport.js]
-  symbols: [AnalysisProgress, handleGenerateScene, useDocumentAnalysis, updateSlide, removeSlide, PresentationGenerator, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx, generatePresentationPptx, apiPostBlob]
-  test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/services/__tests__/apiClient.test.js, src/utils/__tests__/pptxExport.test.js, api/_shared/__tests__/deckContract.test.js]
-  invariants: [Storyboard, company-template presentation, and PPT Master results are separate workflows., Presentation mode sends slideCount and exports editable slides through the server company-template renderer., PPT Master upload/poll cancellation does not cancel a server job., Deleting a presentation slide re-numbers its slide_number and updates total_slides., Storyboard local PPTX export includes each valid analyzed scene whether or not it has a generated image.]
-  validation_commands: [pnpm test --run src/services/__tests__/aiService.test.js src/services/__tests__/apiClient.test.js]
+  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PresentationGenerator.jsx, src/components/create/PptMasterStudio.jsx, src/components/create/pptTemplateCopy.js, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/services/apiClient.js, src/utils/pptxExport.js]
+  symbols: [AnalysisProgress, handleGenerateScene, useDocumentAnalysis, updateSlide, removeSlide, PresentationGenerator, PptMasterStudio, usePptMasterDeck, stopWatching, waitForDeckJob, describeStyle, describeLayout, exportToPptx, generatePresentationPptx, apiPostBlob]
+  test_paths: [src/lib/__tests__/documentFormats.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/services/__tests__/aiService.test.js, src/services/__tests__/apiClient.test.js, src/utils/__tests__/pptxExport.test.js, api/_shared/__tests__/deckContract.test.js]
+  invariants: [Storyboard, company-template presentation, and PPT Master results are separate workflows., Presentation mode sends slideCount and exports editable slides through the server company-template renderer., PPT Master persists its active job ID and resumes it on mount; stopping local tracking does not cancel server work., Deck polling keeps the stored job ID through transient errors but clears it for a missing or terminally failed server job., Deleting a presentation slide re-numbers its slide_number and updates total_slides., Storyboard local PPTX export includes each valid analyzed scene whether or not it has a generated image.]
+  validation_commands: [pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js]
 ---
 
 # Creation workspace, documents, and exports
@@ -113,10 +113,13 @@ pnpm test --run src/services/__tests__/aiService.test.js src/services/__tests__/
 
 `PptMasterStudio` is a topic-or-document deck generator, distinct from the editable company-template presentation flow. It accepts a topic of at least four characters or an optional supported file, limits the file to 50 MB using the shared document-format rules, lets the user select a sidecar-provided style and layout, and permits 4–12 slides. The selected file is uploaded to `uploads` before the job request. `PptTemplatePicker` is controlled: a null style/layout means AI selection, not a default client template.
 
+The catalog consumer renders `pptTemplateCopy.js` copy for known style/layout IDs and falls back to the sidecar summary and keywords for unknown IDs, so an upstream template remains selectable before localized copy is added. Layout entries carry `pageCount`; the API supplies only `ppt169` entries, making the picker’s 16:9 claim a server-enforced contract rather than a display preference. The filtering and shared SVG canvas are defined in [PPT Master deck jobs](../backend/ppt-master-decks.md).
+
 ```mermaid
 sequenceDiagram
   participant Studio as PptMasterStudio
   participant Hook as usePptMasterDeck
+  participant Store as localStorage
   participant Blob as Azure Blob Storage
   participant Api as Deck job API
   Studio->>Hook: topic or file and template choices
@@ -124,6 +127,7 @@ sequenceDiagram
     Hook->>Blob: upload source document
   end
   Hook->>Api: create deck job
+  Hook->>Store: persist job ID
   loop every four seconds up to forty minutes
     Hook->>Api: get deck job
     Api-->>Hook: phase and progress
@@ -131,15 +135,19 @@ sequenceDiagram
   Hook->>Api: download successful PPTX
 ```
 
-This is the browser portion of the durable deck workflow. Its queue, tenant authorization, SVG authoring, sidecar quality gate, and output Blob behavior are canonical in [PPT Master deck jobs](../backend/ppt-master-decks.md).
+This is the browser portion of the durable deck workflow. Its queue, tenant authorization, SVG authoring, sidecar quality gate, output Blob behavior, and template-canvas contract are canonical in [PPT Master deck jobs](../backend/ppt-master-decks.md).
 
-`usePptMasterDeck` loads the template catalog on mount, starts a new `AbortController` for upload/create/poll work, polls through `waitForDeckJob` every 4 seconds for at most 40 minutes, and creates a browser object URL only after the job reports success. `cancel` aborts client I/O and resets local progress but cannot cancel a database job or sidecar work. The hook surfaces template, generation, and download errors separately. Do not reuse `useDocumentAnalysis` state or the synchronous `generatePresentationPptx` call for this route.
+`usePptMasterDeck` loads the template catalog on mount and persists a created job ID under `genpic_deck_job`. On mount it looks up that ID: a queued/processing job resumes polling; a succeeded job restores the download card; a `404` clears the stored ID without surfacing an error; and a failed server job clears it with the server message. Local-storage failures only remove continuation capability, not server work.
 
-For a studio/hook contract change, begin with `PptMasterStudio.jsx`, `usePptMasterDeck.js`, then the `aiService` methods (`listPptTemplates`, `createDeckJob`, `waitForDeckJob`, `downloadDeckJobPptx`) and [PPT Master deck jobs](../backend/ppt-master-decks.md). No focused hook or component test exists. `api/_shared/__tests__/deckContract.test.js` validates the shared server grammar but does not prove browser upload, polling, cancellation, selection, or download. Add a focused React/service test before changing those behaviors; use its narrow command. For the existing client binary transport, run:
+`waitForDeckJob` polls every 4 seconds for at most 40 minutes. It immediately propagates `AbortError`, `AuthExpiredError`, and `404`; other poll errors are retried until five consecutive failures. A server `failed` status becomes an error marked `jobFailed`. The hook retains the ID after transient/network failure so a later mount can resume, but clears it after a missing or terminally failed job. `stopWatching` aborts only the current browser upload/create/poll I/O, clears local continuation state and progress, and does not cancel the database job or sidecar work. The progress card uses `startedAt` when supplied to show elapsed time. Do not reuse `useDocumentAnalysis` state or the synchronous `generatePresentationPptx` call for this route.
+
+For a studio/hook contract change, begin with `PptMasterStudio.jsx`, `usePptMasterDeck.js`, `pptTemplateCopy.js`, then the `aiService` methods (`listPptTemplates`, `createDeckJob`, `getDeckJob`, `waitForDeckJob`, `downloadDeckJobPptx`) and [PPT Master deck jobs](../backend/ppt-master-decks.md). `src/hooks/__tests__/usePptMasterDeck.test.jsx` has retrievable cases for restoring running/succeeded jobs, clearing a missing/failed job, keeping an ID after a connection failure, and stop tracking; `src/services/__tests__/aiService.test.js` covers transient polling, immediate 404 handling, and exhaustion after five failures. These mocks do not prove authenticated API, Blob upload/download, or worker behavior. Run the focused lifecycle check:
 
 ```sh
-pnpm test --run src/services/__tests__/aiService.test.js src/services/__tests__/apiClient.test.js
+pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js
 ```
+
+Add `src/services/__tests__/apiClient.test.js` when changing binary transport, error parsing, session credentials, or CSRF behavior. Add a catalog handler test before changing layout filtering, cache behavior, authentication, or service-unavailable behavior; no focused API test exists for that handler.
 
 ## Change navigation
 

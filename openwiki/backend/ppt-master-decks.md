@@ -6,11 +6,11 @@ tags: [backend, ppt-master, deck-jobs, presentation, async-jobs]
 openwiki:
   roles: [workflow, integration, operations]
   change_kinds: [async-jobs, presentation-generation, provider-adapter, public-api, lifecycle]
-  source_paths: [api/deck-jobs/index.js, api/_shared/deckJobs.js, api/_shared/deckAuthor.js, api/_shared/deckContract.js, api/_shared/pptMasterClient.js, api/ppt-templates/index.js]
-  symbols: [createDeckJob, startDeckJobWorker, processDeckJob, authorDeck, inspectSlideSvg, normalizeSlideCount, createDeck, checkDeck]
-  test_paths: [api/_shared/__tests__/deckContract.test.js, services/ppt-master-service/smoke.py]
-  invariants: [Deck jobs are tenant and user scoped for status and download., A deck job has queued processing succeeded or failed status and gets at most two worker attempts., PPT Master slides use a 1280x720 SVG contract and the sidecar quality report is authoritative., A PPTX is downloadable only after a successful job has a result Blob.]
-  validation_commands: [pnpm test --run api/_shared/__tests__/deckContract.test.js, cd api && node --check server.js && node --check openapi.js]
+  source_paths: [api/deck-jobs/index.js, api/_shared/deckJobs.js, api/_shared/deckAuthor.js, api/_shared/deckContract.js, api/_shared/pptMasterClient.js, api/_shared/azureOpenAI.js, api/ppt-templates/index.js]
+  symbols: [createDeckJob, startDeckJobWorker, processDeckJob, generateOutline, authorDeck, getDeckDeployment, inspectSlideSvg, normalizeSlideCount, DECK_CANVAS_FORMAT, createDeck, checkDeck]
+  test_paths: [api/_shared/__tests__/deckContract.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/services/__tests__/aiService.test.js, services/ppt-master-service/smoke.py]
+  invariants: [Deck jobs are tenant and user scoped for status and download., A deck job has queued processing succeeded or failed status and gets at most two worker attempts., PPT Master slides use the ppt169 1280x720 SVG contract and the sidecar quality report is authoritative., The template catalog exposes only layout entries matching the shared deck canvas., A PPTX is downloadable only after a successful job has a result Blob.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/deckContract.test.js, pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js, cd api && node --check server.js && node --check openapi.js]
 ---
 
 # PPT Master asynchronous deck generation
@@ -23,7 +23,7 @@ PPT Master is the third document-area workflow: unlike the editable fixed-compan
 
 A status response contains input kind, count, phase, current/total progress and timestamps. Only `succeeded` responses contain a filename and download path; failure responses contain an error. Download before success is `409 not_ready`; a ready response is an Office PPTX attachment with `no-store` and Blob-backed bytes. The adapter registrations and OpenAPI binary declaration are owned by [HTTP API](http-api.md).
 
-`GET /api/ppt-templates` is also authenticated and rate-limited. It gets the sidecar catalog, exposes sorted style/layout summaries and keywords, and caches it in process for ten minutes. Brands are omitted unless `PPT_MASTER_INCLUDE_BRANDS` is exactly `true`.
+`GET /api/ppt-templates` is also authenticated and rate-limited. It gets the sidecar catalog and caches it in process for ten minutes. Styles are normalized to nonempty ID, trimmed summary, stringified keywords, and ID order. Layouts receive the same normalization plus `pageCount`, but are exposed only when their upstream `canvas_format` exactly matches `deckContract.js::DECK_CANVAS_FORMAT` (`ppt169`). This prevents a 4:3, square, or vertical layout specification from conflicting with the fixed 1280x720 authoring contract and failing the quality gate. Brands are omitted unless `PPT_MASTER_INCLUDE_BRANDS` is exactly `true`. The browser picker adds local display copy with an upstream fallback in [creation workflows](../frontend/create-workflows.md); it must not weaken this server filter.
 
 ```mermaid
 sequenceDiagram
@@ -77,6 +77,8 @@ The state machine is persisted in `deck_generation_jobs`, described in [schema](
 
 The sidecar client uses `PPT_MASTER_SERVICE_URL` and `PPT_MASTER_SERVICE_KEY`, sends the key only as `X-Pixora-Service-Key`, and applies `PPT_MASTER_TIMEOUT_MS` (default 900,000 ms) per call. It must not receive model credentials: Node retains the model-policy boundary and calls the shared `geminiImage.js` adapter used by `/generate-images` as well.
 
+`deckAuthor.js::generateOutline` and `authorSlideSvg` explicitly select `azureOpenAI.js::getDeckDeployment`. That resolver uses `AZURE_OPENAI_DECK_DEPLOYMENT`, or `gpt-5.6-sol` when it is unset; it is intentionally independent of `AZURE_OPENAI_DEPLOYMENT`, which powers interactive/document-analysis Responses work described in [AI generation](ai-generation.md). This background SVG-authoring and repair path accepts higher latency for stricter layout reasoning. Keep this explicit deployment argument when changing the shared `generateJsonCompletion` adapter, and configure the deck deployment on the Node API only—not on the sidecar.
+
 ## Change and validation guide
 
 Consult this page for the async job API, job lifecycle, tenant isolation, SVG authoring/repair, template catalog, sidecar client, or generated-deck Blob path. Start according to the change:
@@ -85,12 +87,19 @@ Consult this page for the async job API, job lifecycle, tenant isolation, SVG au
 - **Queue, retry, progress, or result storage:** `api/_shared/deckJobs.js` and [schema](../data/schema.md). Keep status, lock, attempt, and result updates coherent; test stale-lock and first/second failure behavior with a new worker test before altering them.
 - **Outline or SVG grammar:** `deckContract.js`, `deckAuthor.js`, and `svgAuthoringPrompt.js`. `deckContract.test.js` has retrievable suites for slide-count clamping, malformed-outline fallback, deterministic filenames, and rejected SVG canvas/role/bounds/forbidden constructs.
 - **Sidecar HTTP or compilation behavior:** `pptMasterClient.js` and `services/ppt-master-service/app/main.py`. The public API is not a browser surface; retain the service-key boundary and workspace cleanup.
-- **Template visibility/metadata:** `api/ppt-templates/index.js`, then the browser picker in [creation workflows](../frontend/create-workflows.md). Template IDs are constrained to 1–64 ASCII alphanumeric, dot, underscore, or hyphen characters.
+- **Template visibility/metadata:** `api/ppt-templates/index.js`, then `PptTemplatePicker.jsx` and `pptTemplateCopy.js` in [creation workflows](../frontend/create-workflows.md). Preserve the `ppt169` filter; changing canvas support is a cross-boundary change to `DECK_CANVAS_FORMAT`, SVG authoring, sidecar validation, and client copy, not a catalog-only edit. Template IDs are constrained to 1–64 ASCII alphanumeric, dot, underscore, or hyphen characters.
+- **Browser continuation/polling:** `usePptMasterDeck.js`, `aiService.js::waitForDeckJob`, and `apiClient.js::parseResponse`. Preserve the distinction between a missing/terminal job, which clears `genpic_deck_job`, and a transient polling failure, which retains it for recovery. `stopWatching` is local only.
 
-Run the narrow contract check first:
+Run the narrow contract check first for SVG/geometry work:
 
 ```sh
 pnpm test --run api/_shared/__tests__/deckContract.test.js
 ```
 
-For route wiring, additionally run `cd api && node --check server.js && node --check openapi.js`. There are no focused handler, worker, client-hook, component, sidecar-unit, or end-to-end tenant/download tests. Add the narrow missing test before changing their behavioral contracts. The sidecar's source-backed, no-AI integration check is conditional on Docker or a sidecar change: build the container and run `python smoke.py` inside it as documented in [development, migrations, and deployment](../operations/development-deployment.md). Do not run provider work for a grammar-only change.
+For browser continuation or poll semantics, run:
+
+```sh
+pnpm test --run src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js
+```
+
+The hook/service tests cover mocked resumption, terminal/missing-job cleanup, transient-error retention, stop tracking, and five-failure polling exhaustion; they do not prove authenticated API, actual persistence across a browser reload, Blob transport, or worker/sidecar behavior. There is no focused template-catalog handler, worker, component, sidecar-unit, or end-to-end tenant/download test. Add the narrow missing test before changing those behavioral contracts. For route wiring, additionally run `cd api && node --check server.js && node --check openapi.js`. The sidecar's source-backed, no-AI integration check is conditional on Docker or a sidecar change: build the container and run `python smoke.py` inside it as documented in [development, migrations, and deployment](../operations/development-deployment.md). Do not run provider work for a grammar-only change.

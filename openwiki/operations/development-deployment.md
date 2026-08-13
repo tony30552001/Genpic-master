@@ -6,7 +6,7 @@ tags: [operations, development, deployment, sessions, entra, ppt-master]
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations]
-  source_paths: [package.json, api/package.json, api/_shared/http.js, api/_shared/session.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  source_paths: [package.json, api/package.json, api/_shared/http.js, api/_shared/session.js, api/_shared/azureOpenAI.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
   validation_commands: [pnpm lint && pnpm build, pnpm test --run api/_shared/__tests__/deckContract.test.js]
 ---
 
@@ -36,7 +36,7 @@ For a session/authentication change, run the focused browser and API tests docum
 
 The optional PPT Master workflow uses a separately deployed FastAPI container because the immutable upstream Python skill performs source conversion, SVG quality checks, and deterministic SVG-to-native-PPTX compilation. The Node API remains responsible for model calls and durable jobs; the sidecar is called through `api/_shared/pptMasterClient.js` with `X-Pixora-Service-Key`. See [PPT Master deck jobs](../backend/ppt-master-decks.md) for the runtime lifecycle and [schema](../data/schema.md) for its migration.
 
-The API always registers the public deck routes, but creation and template lookup return unavailable when `PPT_MASTER_SERVICE_URL` and `PPT_MASTER_SERVICE_KEY` are absent; the standalone worker does not start without them. Other non-secret configuration categories are request timeout, worker poll interval, lock timeout, and the optional brand-catalog flag; use the source/defaults rather than placing these values in browser configuration. The sidecar requires the same service key, a Python work directory, and its command timeout. No model credential belongs in the sidecar.
+The API always registers the public deck routes, but creation and template lookup return unavailable when `PPT_MASTER_SERVICE_URL` and `PPT_MASTER_SERVICE_KEY` are absent; the standalone worker does not start without them. Other non-secret configuration categories are request timeout, worker poll interval, lock timeout, and the optional brand-catalog flag; use the source/defaults rather than placing these values in browser configuration. `AZURE_OPENAI_DECK_DEPLOYMENT` is an optional Node-side override for deck outline/SVG authoring and defaults to `gpt-5.6-sol`; it is distinct from `AZURE_OPENAI_DEPLOYMENT` for interactive/document-analysis Responses calls. The sidecar requires the same service key, a Python work directory, and its command timeout. No model credential belongs in the sidecar; see [PPT Master deck jobs](../backend/ppt-master-decks.md) for the model boundary.
 
 For a container or upstream-skill change, build and run the zero-AI smoke pipeline from `services/ppt-master-service/README.md`; it writes a minimal SVG, runs the authoritative gate, and exports a PPTX. This is conditional and more expensive than the Node contract test. For API outline/SVG validation changes, run the narrow check:
 
@@ -44,9 +44,11 @@ For a container or upstream-skill change, build and run the zero-AI smoke pipeli
 pnpm test --run api/_shared/__tests__/deckContract.test.js
 ```
 
-`.github/workflows/ppt-master-service.yml` builds in Azure Container Registry and updates a distinct Azure Container App for `main` pushes that touch the service/workflow paths. It then polls unauthenticated `/health`; `status: ok` means the skill integrity check passed. The service should be internally reachable only by the API; do not expose the shared-key control plane as a browser API.
+`.github/workflows/ppt-master-service.yml` builds in Azure Container Registry and updates a distinct Azure Container App for `main` pushes that touch the service/workflow paths. The Docker build runs the skill-integrity gate. Because ingress accepts only App Service outbound IPs, the GitHub runner cannot poll `/health`; instead, the workflow retrieves the latest revision and polls its Azure Container Apps `runningState` for `Running` or `RunningAtMaxScale`, failing on `Failed`, `Degraded`, or a timeout. The service should be internally reachable only by the API; do not expose the shared-key control plane as a browser API.
 
 ## Deployment boundaries
+
+OpenWiki has no scheduled GitHub Actions refresh workflow. Run `openwiki --update` locally when the generated repository wiki needs maintenance; the deleted scheduled workflow is not a deployment dependency.
 
 `staticwebapp.config.json` supplies API route allowance and SPA fallback. On a `main` push, the Azure Static Web Apps workflow builds the frontend, syntax-checks `api/server.js`, deploys the `api` directory to App Service, and configures SWA with no managed Functions `api_location`; it therefore expects the linked App Service to serve the BFF/API. It deliberately ignores `**/*.md`, `docs/**`, and `openwiki/**` on pushes, so documentation-only pushes do not deploy. Pull requests still run the SWA preview workflow. App Service Oryx—not the GitHub Actions job—installs API production dependencies from `api/package-lock.json`; keep that lockfile synchronized with `api/package.json` and do not package local `api/node_modules`. Treat API and Static Web App deployment as a coupled operational boundary when changing proxy behavior, callback URL, CORS, or API dependencies.
 
