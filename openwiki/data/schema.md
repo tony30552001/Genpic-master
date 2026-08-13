@@ -7,13 +7,13 @@ openwiki:
   roles: [domain, operations, testing]
   change_kinds: [schema, migrations, session-lifecycle]
   source_paths: [db/migrations, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, api/_shared/deckJobs.js, api/scripts/migrate.cjs]
-  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "Authentication session records store token hashes, never raw browser tokens.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck job events are append-only, constrained to known steps and statuses, and cascade with their job."]
-  validation_commands: [cd api && npm run migrate]
+  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "An optional migrator argument must exactly name an existing .sql migration; selected files still execute in lexicographic order.", "Authentication session records store token hashes, never raw browser tokens.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck job events are append-only, constrained to known steps and statuses, and cascade with their job."]
+  validation_commands: [cd api && npm run migrate, node api/scripts/migrate.cjs 012_deck_job_events.sql]
 ---
 
 # PostgreSQL schema and migrations
 
-Migrations in `db/migrations` are the schema authority. `api/scripts/migrate.cjs` sorts and executes every `.sql` file on each run; migrations therefore must be idempotent (`IF NOT EXISTS`) or safely repeatable.
+Migrations in `db/migrations` are the schema authority. With no arguments, `api/scripts/migrate.cjs` sorts and executes every `.sql` file. Supplying one or more exact migration filenames limits that run to the selected files, still in lexicographic order; an unknown filename exits with an error. Migrations therefore must be idempotent (`IF NOT EXISTS`) or safely repeatable.
 
 ```mermaid
 erDiagram
@@ -60,4 +60,4 @@ Cascading tenant/user foreign keys remove sessions when their owner is deleted. 
 
 Consult this page for tables, constraints, migrations, or persistence behind authentication, resources, jobs, and model policy. Add a new migration rather than changing an already-applied numbered migration. A session schema change crosses `010_auth_sessions.sql`, `api/_shared/session.js`, auth middleware, and the browser/API flow; see [server sessions](../backend/sessions.md).
 
-There are no migration integration tests. Run the migration against a disposable database, check compatibility with existing rows and foreign-key rewrites, then exercise the owning API behavior. For session changes, run `api/_shared/__tests__/session.test.js` and `auth.test.js`; for resource ownership, use [resources](../backend/resources.md) to identify handler checks. Production database credentials are never needed for ordinary validation.
+There are no migration integration tests. Run the migration against a disposable database, check compatibility with existing rows and foreign-key rewrites, then exercise the owning API behavior. For a newly deployed migration, select only its exact filename—for example `node api/scripts/migrate.cjs 012_deck_job_events.sql`—rather than replaying the full directory as a routine check. Use `cd api && npm run migrate` only when validating full ordered replay. For session changes, run `api/_shared/__tests__/session.test.js` and `auth.test.js`; for resource ownership, use [resources](../backend/resources.md) to identify handler checks. Production database credentials are never needed for ordinary validation.

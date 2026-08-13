@@ -6,15 +6,15 @@ tags: [operations, development, deployment, sessions, entra, ppt-master]
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations]
-  source_paths: [package.json, api/package.json, api/_shared/http.js, api/_shared/session.js, api/_shared/azureOpenAI.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
-  validation_commands: [pnpm lint && pnpm build, pnpm test --run api/_shared/__tests__/deckContract.test.js]
+  source_paths: [package.json, api/package.json, api/scripts/migrate.cjs, api/_shared/http.js, api/_shared/session.js, api/_shared/azureOpenAI.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 012_deck_job_events.sql, pnpm test --run api/_shared/__tests__/deckContract.test.js]
 ---
 
 # Development, migrations, and deployment
 
 The root package requires Node `>=22.22.0` and pnpm `>=10`; use `corepack pnpm@10.33.2 install`. Root scripts are `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, and `pnpm preview`. Vite listens on 5175 and uses `@` for `src`.
 
-The API is a separate Node package requiring Node `>=22.22.0`: run its `start` script to execute `server.js`. Standalone startup also starts the in-process image job polling worker. The API migration command runs `api/scripts/migrate.cjs`, which needs database connection configuration and executes SQL files in lexicographic order.
+The API is a separate Node package requiring Node `>=22.22.0`: run its `start` script to execute `server.js`. Standalone startup also starts the in-process image job polling worker. The API migration command runs `api/scripts/migrate.cjs`, which needs database connection configuration. With no arguments it executes all SQL files in lexicographic order; with exact `.sql` filenames it executes only those files (also ordered), and rejects unknown names.
 
 ## BFF session configuration
 
@@ -28,7 +28,7 @@ Register the Entra callback as a **Web** redirect URI, for example `http://local
 
 For browser-only changes, use the focused test from the owning wiki page, then `pnpm lint && pnpm build` when the changed surface needs a build check. For API route wiring, use the syntax and adapter smoke checks in [HTTP API](../backend/http-api.md). Avoid running the whole suite by default.
 
-For schema changes, run `cd api && npm run migrate` only against a disposable database and check the owning API behavior. `010_auth_sessions.sql` is required for the BFF session implementation; `012_deck_job_events.sql` is required before deploying the event-aware deck-status handler because `GET /api/deck-jobs/:id` queries that table. See [schema](../data/schema.md). Do not run migrations against production as routine validation.
+For schema changes, run migrations only against a disposable database and check the owning API behavior. Use `node api/scripts/migrate.cjs <exact-migration.sql>` for a narrow new-migration check (for example, `node api/scripts/migrate.cjs 012_deck_job_events.sql`); use `cd api && npm run migrate` only when validating full ordered replay. `010_auth_sessions.sql` is required for the BFF session implementation; `012_deck_job_events.sql` is required before deploying the event-aware deck-status handler because `GET /api/deck-jobs/:id` queries that table. See [schema](../data/schema.md). Do not run migrations against production as routine validation.
 
 For a session/authentication change, run the focused browser and API tests documented by [browser application](../frontend/application.md) and [server sessions](../backend/sessions.md), then use non-production configuration to check this sequence: BFF login returns to the requested local route, `GET /api/auth/session` reports a user and CSRF value, a mutation includes cookie plus CSRF, logout clears the session, and an expired/revoked session produces recovery UI. This is conditional integration validation, not a baseline for unrelated frontend work.
 
