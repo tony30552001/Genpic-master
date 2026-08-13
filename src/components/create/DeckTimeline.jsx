@@ -27,7 +27,7 @@ function StatusIcon({ status, className }) {
 
 function StepItems({ items }) {
   return (
-    <ul className="mt-1 space-y-1 border-l border-border pl-4">
+    <ul className="mt-1 space-y-1 border-l border-border pl-4 ml-1.5">
       {items.map((item) => (
         <li key={item.slideNumber} className="flex min-w-0 items-center gap-1.5">
           {item.status === "failed" ? (
@@ -73,17 +73,12 @@ export default function DeckTimeline({ events }) {
               <StatusIcon status={step.status} />
               <span
                 className={cn(
-                  "shrink-0 text-xs font-medium",
+                  "min-w-0 flex-1 truncate text-xs font-medium",
                   isMuted ? "text-muted-foreground" : "text-foreground"
                 )}
               >
                 {step.label}
               </span>
-              {step.detail && (
-                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                  {step.detail}
-                </span>
-              )}
               {hasItems && (
                 <button
                   type="button"
@@ -99,6 +94,9 @@ export default function DeckTimeline({ events }) {
                 </button>
               )}
             </div>
+            {step.detail && (
+              <p className="line-clamp-2 pl-5.5 text-xs text-muted-foreground">{step.detail}</p>
+            )}
             {hasItems && isOpen && <StepItems items={step.items} />}
           </li>
         );

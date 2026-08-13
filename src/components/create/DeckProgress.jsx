@@ -37,12 +37,14 @@ export default function DeckProgress({ phase, current, total, startedAt, events 
       role="status"
       aria-live="polite"
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
-        <span className="min-w-0 truncate text-sm font-medium text-foreground">
-          {events?.length > 0 ? "AI 正在設計你的簡報" : phase || "準備中"}
+      <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+            {events?.length > 0 ? "AI 正在設計你的簡報" : phase || "準備中"}
+          </span>
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-2 pl-6 text-xs tabular-nums text-muted-foreground sm:ml-auto sm:pl-0">
           {elapsed && <span>已耗時 {elapsed}</span>}
           {total > 0 && (
             <span>

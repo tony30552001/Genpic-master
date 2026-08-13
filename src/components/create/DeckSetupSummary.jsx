@@ -18,9 +18,9 @@ export default function DeckSetupSummary({ title, meta, expanded, onToggle, chil
         >
           <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-foreground">{title}</span>
+            <span className="line-clamp-2 text-sm font-medium text-foreground">{title}</span>
             {meta && (
-              <span className="block truncate text-xs text-muted-foreground">{meta}</span>
+              <span className="line-clamp-2 text-xs text-muted-foreground">{meta}</span>
             )}
           </span>
           <span className="shrink-0 text-xs text-muted-foreground">

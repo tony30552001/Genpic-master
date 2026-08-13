@@ -254,7 +254,7 @@ export default function PptMasterStudio() {
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-6">
             <Presentation className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{deck.title}</p>
+              <p className="line-clamp-2 text-sm font-medium">{deck.title}</p>
               <p className="text-xs text-muted-foreground">
                 共 {deck.slideCount} 頁，已是可直接編輯的原生 PowerPoint 投影片。
               </p>
