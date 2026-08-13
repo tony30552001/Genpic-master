@@ -81,6 +81,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `src/components/create/pptTemplateCopy.js` | 模板 id → 繁體中文名稱、說明與標籤 |
 | `src/components/create/DeckProgress.jsx` | 階段式進度、已耗時與背景執行說明 |
 | `src/components/create/DeckTimeline.jsx` | 可展開的步驟時間軸（含逐頁明細） |
+| `src/components/create/DeckSetupSummary.jsx` | 生成中／生成後把設定收合成一行摘要 |
 | `src/components/create/deckSteps.js` | 步驟中文名稱與事件流 → 時間軸的推導 |
 | `src/hooks/usePptMasterDeck.js` | 建立 job、輪詢、續傳、下載 |
 
@@ -131,6 +132,11 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
   （同一層取最後一筆決定狀態），由 `DeckTimeline.jsx` 渲染；
   `running` 的步驟預設展開，其餘可自行點開。
 - 失敗時 `usePptMasterDeck` 會保留 events，錯誤訊息下方直接顯示斷在哪一步。
+- 生成中與生成後，主題／文件／頁數與風格骨架會收合成 `DeckSetupSummary` 的一行摘要
+  （`{頁數} · {風格} · {骨架}`），把版位讓給進度；點「查看設定」可展開核對。
+  等待期間輸入欄位本來就是唯讀的，留在畫面上只會把進度卡推到摺線以下。
+- 進度卡標題在有事件之後固定為「AI 正在設計你的簡報」，步驟名稱交給時間軸，
+  避免同一句話出現兩次；`phase` 只用於建立工作前的本機階段（準備、上傳文件）。
 
 ---
 

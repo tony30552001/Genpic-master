@@ -18,8 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { DOCUMENT_ACCEPT } from "@/lib/documentFormats";
 import usePptMasterDeck from "@/hooks/usePptMasterDeck";
 import DeckProgress from "./DeckProgress";
+import DeckSetupSummary from "./DeckSetupSummary";
 import DeckTimeline from "./DeckTimeline";
 import PptTemplatePicker from "./PptTemplatePicker";
+import { describeLayout, describeStyle } from "./pptTemplateCopy";
 
 const MIN_SLIDES = 4;
 const MAX_SLIDES = 12;
@@ -34,6 +36,7 @@ export default function PptMasterStudio() {
   const [styleId, setStyleId] = useState(null);
   const [layoutId, setLayoutId] = useState(null);
   const [downloadError, setDownloadError] = useState(null);
+  const [showSetup, setShowSetup] = useState(false);
   const fileInputRef = useRef(null);
 
   const {
@@ -52,8 +55,23 @@ export default function PptMasterStudio() {
 
   const canGenerate = Boolean(file) || topic.trim().length >= 4;
 
+  /** 設定已定案（生成中或已產出）時收合，把版位讓給進度與結果。 */
+  const isSetupLocked = isGenerating || Boolean(deck);
+  const selectedStyle = templates.styles.find((option) => option.id === styleId);
+  const selectedLayout = templates.layouts.find((option) => option.id === layoutId);
+  const setupTitle = topic.trim() || file?.name || "尚未填寫主題";
+  const setupMeta = [
+    `${slideCount} 頁`,
+    selectedStyle ? describeStyle(selectedStyle).name : "預設風格",
+    selectedLayout ? describeLayout(selectedLayout).name : "預設骨架",
+    file && topic.trim() ? `參考文件：${file.name}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const handleGenerate = async () => {
     setDownloadError(null);
+    setShowSetup(false);
     try {
       await generate({ topic, file, slideCount, styleId, layoutId });
     } catch (generationError) {
@@ -75,10 +93,11 @@ export default function PptMasterStudio() {
   const handleStartOver = () => {
     reset();
     setDownloadError(null);
+    setShowSetup(false);
   };
 
-  return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 pb-6">
+  const setupCards = (
+    <>
       <Card>
         <CardContent className="space-y-4 p-4 sm:p-6">
           <div className="space-y-2">
@@ -185,6 +204,23 @@ export default function PptMasterStudio() {
           )}
         </CardContent>
       </Card>
+    </>
+  );
+
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-4 pb-6">
+      {isSetupLocked ? (
+        <DeckSetupSummary
+          title={setupTitle}
+          meta={setupMeta}
+          expanded={showSetup}
+          onToggle={() => setShowSetup((current) => !current)}
+        >
+          {setupCards}
+        </DeckSetupSummary>
+      ) : (
+        setupCards
+      )}
 
       {isGenerating && (
         <DeckProgress

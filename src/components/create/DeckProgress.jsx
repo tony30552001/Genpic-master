@@ -13,6 +13,9 @@ const formatElapsed = (ms) => {
 /**
  * 簡報生成的階段式進度。工作跑在伺服器上，所以這裡同時告訴使用者
  * 「可以安心離開這個頁面」，避免長時間等待造成的焦慮與誤操作。
+ *
+ * 有事件之後，步驟名稱由時間軸負責，標題不再重複同一句話；
+ * `phase` 只用來說明建立工作之前的本機階段（準備、上傳文件）。
  */
 export default function DeckProgress({ phase, current, total, startedAt, events }) {
   const [now, setNow] = useState(() => Date.now());
@@ -37,7 +40,7 @@ export default function DeckProgress({ phase, current, total, startedAt, events 
       <div className="flex min-w-0 items-center gap-2">
         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
         <span className="min-w-0 truncate text-sm font-medium text-foreground">
-          {phase || "準備中"}
+          {events?.length > 0 ? "AI 正在設計你的簡報" : phase || "準備中"}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
           {elapsed && <span>已耗時 {elapsed}</span>}
