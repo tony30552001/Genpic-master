@@ -137,7 +137,11 @@ export const downloadDeckJobPptx = async ({ jobId, signal }) =>
 /**
  * 輪詢簡報生成工作，直到成功或失敗。
  * 每頁投影片都要經過 LLM 手寫 SVG 與品質閘門，因此逾時設定得比圖片長。
+ * 生成期間使用者可能休眠電腦或切換網路，單次輪詢失敗不代表工作失敗，
+ * 因此連續失敗超過 MAX_POLL_FAILURES 次才視為中斷；伺服器上的工作狀態永遠是權威。
  */
+const MAX_POLL_FAILURES = 5;
+
 export const waitForDeckJob = async ({
   jobId,
   signal,
@@ -146,14 +150,35 @@ export const waitForDeckJob = async ({
   timeoutMs = 40 * 60 * 1000,
 }) => {
   const startedAt = Date.now();
+  let consecutiveFailures = 0;
 
   while (Date.now() - startedAt <= timeoutMs) {
-    const job = await getDeckJob({ jobId, signal });
+    let job;
+    try {
+      job = await getDeckJob({ jobId, signal });
+      consecutiveFailures = 0;
+    } catch (pollError) {
+      if (
+        pollError?.name === "AbortError" ||
+        pollError?.name === "AuthExpiredError" ||
+        pollError?.status === 404
+      ) {
+        throw pollError;
+      }
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= MAX_POLL_FAILURES) throw pollError;
+      await abortableDelay(pollIntervalMs, signal);
+      continue;
+    }
+
     onProgress?.(job);
 
     if (job?.status === "succeeded") return job;
     if (job?.status === "failed") {
-      throw new Error(job.error?.message || "簡報生成失敗，請稍後重試");
+      const failure = new Error(job.error?.message || "簡報生成失敗，請稍後重試");
+      failure.jobFailed = true;
+      failure.code = job.error?.code || "deck_generation_failed";
+      throw failure;
     }
 
     await abortableDelay(pollIntervalMs, signal);

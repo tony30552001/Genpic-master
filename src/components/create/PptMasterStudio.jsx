@@ -43,7 +43,7 @@ export default function PptMasterStudio() {
     deck,
     error,
     generate,
-    cancel,
+    stopWatching,
     download,
     reset,
   } = usePptMasterDeck();
@@ -189,6 +189,7 @@ export default function PptMasterStudio() {
           phase={progress.phase}
           current={progress.current}
           total={progress.total}
+          startedAt={progress.startedAt}
         />
       )}
 
@@ -231,9 +232,14 @@ export default function PptMasterStudio() {
       ) : (
         <div className="flex justify-end gap-2">
           {isGenerating && (
-            <Button type="button" variant="outline" onClick={cancel}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={stopWatching}
+              aria-label="停止追蹤這份簡報；雲端上的生成不會因此中止"
+            >
               <X className="mr-2 h-4 w-4" aria-hidden="true" />
-              取消
+              停止追蹤
             </Button>
           )}
           <Button type="button" onClick={handleGenerate} disabled={!canGenerate || isGenerating}>

@@ -68,13 +68,18 @@ const parseResponse = async (response, responseType = "json") => {
         ? JSON.stringify(await response.json())
         : "";
     let message = `Request failed: ${response.status}`;
+    let code = null;
     try {
       const json = JSON.parse(text);
       message = json?.error?.message || json?.message || text || message;
+      code = json?.error?.code || null;
     } catch {
       message = text || message;
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    if (code) error.code = code;
+    throw error;
   }
 
   if (response.status === 204) return null;

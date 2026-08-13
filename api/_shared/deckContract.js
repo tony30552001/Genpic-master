@@ -2,6 +2,8 @@ const DECK_MIN_SLIDES = 4;
 const DECK_MAX_SLIDES = 12;
 const DECK_CANVAS_WIDTH = 1280;
 const DECK_CANVAS_HEIGHT = 720;
+/** The sidecar renders every deck on this canvas, so 1280x720 is the only geometry we author. */
+const DECK_CANVAS_FORMAT = "ppt169";
 const DECK_MAX_REPAIR_ROUNDS = 3;
 
 const PAGE_ROLES = new Set(["cover", "toc", "section", "content", "ending"]);
@@ -189,6 +191,7 @@ const inspectSlideSvg = (svg) => {
 };
 
 module.exports = {
+  DECK_CANVAS_FORMAT,
   DECK_CANVAS_HEIGHT,
   DECK_CANVAS_WIDTH,
   DECK_MAX_REPAIR_ROUNDS,

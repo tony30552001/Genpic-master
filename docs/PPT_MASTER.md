@@ -1,6 +1,6 @@
 # 設計簡報（PPT Master）
 
-> 最後更新：2026-05-05
+> 最後更新：2026-08-13
 
 ---
 
@@ -74,15 +74,46 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `api/_shared/geminiImage.js` | 共用的 Gemini 圖片生成（`/api/generate-images` 也用它） |
 | `api/_shared/deckJobs.js` | 佇列、worker、進度回報 |
 | `api/deck-jobs/index.js` | `POST` 建立、`GET /:id` 查詢、`GET /:id/download` 下載 |
-| `api/ppt-templates/index.js` | template 目錄（快取 10 分鐘） |
+| `api/ppt-templates/index.js` | template 目錄（快取 10 分鐘，只回傳與畫布格式相符的版型） |
 | `src/components/create/PptMasterStudio.jsx` | 「設計簡報」子頁籤主面板 |
 | `src/components/create/PptTemplatePicker.jsx` | 風格／版型選擇器（受控元件） |
-| `src/components/create/DeckProgress.jsx` | 階段式進度 |
-| `src/hooks/usePptMasterDeck.js` | 建立 job、輪詢、下載、取消 |
+| `src/components/create/pptTemplateCopy.js` | 模板 id → 繁體中文名稱、說明與標籤 |
+| `src/components/create/DeckProgress.jsx` | 階段式進度、已耗時與背景執行說明 |
+| `src/hooks/usePptMasterDeck.js` | 建立 job、輪詢、續傳、下載 |
 
 ---
 
-## 4. 每頁 SVG 必須成立的硬性條件
+## 4. 模板選擇與長時間等待
+
+### 模板
+
+`GET /api/ppt-templates` 只回傳 **`canvas_format` 等於 `DECK_CANVAS_FORMAT`（`ppt169`）** 的版型。
+畫布固定是 1280×720，4:3、1:1、9:16 的版型 spec 會與授稿契約互相矛盾並在品質閘門失敗，
+所以它們不該出現在選單裡。
+
+上游索引只有英文摘要，因此 `src/components/create/pptTemplateCopy.js` 維護
+模板 id → 繁體中文名稱／說明／標籤的對照。**上游新增模板時不會壞掉**：
+找不到對照就退回英文摘要與 id。新增模板後請補上中文文案。
+
+### 生成期間的追蹤
+
+一份簡報要 5–15 分鐘，工作**完全跑在伺服器上**（`deck_generation_jobs` + worker），
+瀏覽器只是輪詢者。因此：
+
+- `usePptMasterDeck` 會把進行中的 `jobId` 存進 `localStorage`（`genpic_deck_job`），
+  掛載時自動接回，切換頁籤、重新整理、關閉瀏覽器都不會弄丟工作。
+- 工作成功後 `jobId` 仍保留，直到使用者按「重新產生」為止，重新整理後照樣能下載。
+- 伺服器已不認得該 job（`404`）時就清掉本機紀錄，不視為錯誤。
+- `waitForDeckJob()` 容忍連續 4 次輪詢失敗（休眠、換網路、暫時性 5xx），
+  第 5 次才中止；**伺服器上的 job 狀態永遠是權威**。
+- 只有「伺服器判定工作失敗」（`error.jobFailed`）或「工作不存在」（`404`）才會清掉本機的
+  `jobId`。純粹的連線中斷會保留 `jobId` 並提示「回到此頁會自動接續」。
+- 介面上的「停止追蹤」只停止這台裝置的輪詢，伺服器上的生成不會中止，這一點在按鈕的
+  `aria-label` 與進度卡片文案中都有明說。
+
+---
+
+## 5. 每頁 SVG 必須成立的硬性條件
 
 以下全部是 **error 級**，違反就無法匯出。完整規則實作於 `api/_shared/svgAuthoringPrompt.js`，
 前置健檢實作於 `api/_shared/deckContract.js` 的 `inspectSlideSvg()`，**Python 閘門永遠是最終權威**。
@@ -108,7 +139,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 
 ---
 
-## 5. 環境變數
+## 6. 環境變數
 
 | 變數 | 位置 | 說明 |
 | --- | --- | --- |
@@ -125,7 +156,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 
 ---
 
-## 6. 部署
+## 7. 部署
 
 - sidecar 由 `.github/workflows/ppt-master-service.yml` 部署到 Azure Container Apps，
   只在 `services/ppt-master-service/**` 變動時觸發。
@@ -136,11 +167,11 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 
 ---
 
-## 7. 驗證
+## 8. 驗證
 
 ```powershell
 # 前端與共用契約
-corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js
+corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js
 corepack pnpm lint
 corepack pnpm build
 
@@ -154,9 +185,11 @@ docker run --rm -e PPT_MASTER_SERVICE_KEY=dev pixora-ppt-master:dev python smoke
 
 ---
 
-## 8. 已知限制
+## 9. 已知限制
 
 - 一份簡報 4–12 頁，實際耗時約 5–15 分鐘（逐頁 LLM 授稿 + 品質閘門修補）。
+  生成期間可以離開頁面，回來會自動接續。
+- 版型只開放 16:9（`ppt169`）；要支援其他比例必須同時改畫布常數、授稿契約與品質檢查。
 - 品牌 template 帶有第三方商標，預設不開放，需要時才用 `PPT_MASTER_INCLUDE_BRANDS` 開啟。
 - 使用者上傳自家 `.pptx` 萃取 template 尚未實作，需要先掛載 Azure Files 永續磁碟
   （容器檔案系統是暫時的，註冊的 template 會在重啟後消失）。

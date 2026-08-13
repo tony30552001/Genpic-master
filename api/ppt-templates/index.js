@@ -2,29 +2,49 @@ const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { getCatalog, isConfigured } = require("../_shared/pptMasterClient");
+const { DECK_CANVAS_FORMAT } = require("../_shared/deckContract");
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const INCLUDE_BRANDS = process.env.PPT_MASTER_INCLUDE_BRANDS === "true";
 
 let cache = null;
 
+const normalizeEntry = (entry) => ({
+  id: String(entry?.id || ""),
+  summary: String(entry?.summary || "").trim(),
+  keywords: Array.isArray(entry?.keywords)
+    ? entry.keywords.map((keyword) => String(keyword))
+    : [],
+});
+
+const byId = (a, b) => a.id.localeCompare(b.id);
+
 const toList = (entries) =>
   (Array.isArray(entries) ? entries : [])
+    .map(normalizeEntry)
+    .filter((entry) => entry.id)
+    .sort(byId);
+
+/**
+ * Layout templates carry page geometry, so only the ones authored for the deck
+ * canvas can be offered. A 4:3, 1:1 or 9:16 layout spec would fight the
+ * 1280x720 authoring contract and fail the quality gate.
+ */
+const toLayoutList = (entries) =>
+  (Array.isArray(entries) ? entries : [])
+    .filter((entry) => String(entry?.canvas_format || "") === DECK_CANVAS_FORMAT)
     .map((entry) => ({
-      id: String(entry?.id || ""),
-      summary: String(entry?.summary || "").trim(),
-      keywords: Array.isArray(entry?.keywords)
-        ? entry.keywords.map((keyword) => String(keyword))
-        : [],
+      ...normalizeEntry(entry),
+      pageCount: Number(entry?.page_count) || 0,
     }))
     .filter((entry) => entry.id)
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .sort(byId);
 
 const buildCatalog = async () => {
   const raw = await getCatalog();
   const catalog = {
     styles: toList(raw?.style),
-    layouts: toList(raw?.layout),
+    layouts: toLayoutList(raw?.layout),
   };
   if (INCLUDE_BRANDS) {
     catalog.brands = toList(raw?.brand);

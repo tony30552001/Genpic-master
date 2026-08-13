@@ -1,11 +1,39 @@
-import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CloudCheck, Loader2 } from "lucide-react";
+
+const PHASE_SEQUENCE = [
+  "解析素材",
+  "規劃簡報大綱",
+  "產生配圖",
+  "逐頁設計版面",
+  "匯出 PowerPoint",
+];
+
+const formatElapsed = (ms) => {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
 
 /**
- * 簡報生成的階段式進度：解析素材 → 規劃大綱 → 逐頁設計 → 品質檢查 → 匯出。
+ * 簡報生成的階段式進度。工作跑在伺服器上，所以這裡同時告訴使用者
+ * 「可以安心離開這個頁面」，避免長時間等待造成的焦慮與誤操作。
  */
-export default function DeckProgress({ phase, current, total }) {
+export default function DeckProgress({ phase, current, total, startedAt }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const percent =
     total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+  const startedMs = startedAt ? new Date(startedAt).getTime() : null;
+  const elapsed =
+    startedMs && Number.isFinite(startedMs) ? formatElapsed(now - startedMs) : null;
+  const stepIndex = PHASE_SEQUENCE.indexOf(phase);
 
   return (
     <div
@@ -18,11 +46,19 @@ export default function DeckProgress({ phase, current, total }) {
         <span className="min-w-0 truncate text-sm font-medium text-foreground">
           {phase || "準備中"}
         </span>
-        {total > 0 && (
-          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
-            {current}/{total}
+        {stepIndex >= 0 && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            步驟 {stepIndex + 1}/{PHASE_SEQUENCE.length}
           </span>
         )}
+        <span className="ml-auto flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
+          {elapsed && <span>已耗時 {elapsed}</span>}
+          {total > 0 && (
+            <span>
+              {current}/{total} 頁
+            </span>
+          )}
+        </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
         <div
@@ -30,8 +66,12 @@ export default function DeckProgress({ phase, current, total }) {
           style={{ width: `${percent}%` }}
         />
       </div>
-      <p className="text-xs text-muted-foreground">
-        每一頁都由 AI 逐頁設計並通過版面品質檢查，整份簡報約需 5–15 分鐘。
+      <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+        <CloudCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="min-w-0">
+          每一頁都由 AI 逐頁設計並通過版面品質檢查，整份簡報約需 5–15 分鐘。
+          生成在雲端進行，你可以切換頁籤、重新整理或關閉瀏覽器，回到這裡會自動接續進度。
+        </span>
       </p>
     </div>
   );
