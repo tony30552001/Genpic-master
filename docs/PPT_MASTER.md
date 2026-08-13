@@ -185,9 +185,9 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 - 需要的 GitHub secrets：`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、
   `AZURE_RESOURCE_GROUP`、`AZURE_CONTAINER_REGISTRY`、`AZURE_PPT_MASTER_CONTAINER_APP`。
 - Container Apps 的 ingress 應設為 **internal**，只讓 App Service 連得到。
-- 資料庫 migration 是手動執行的（`npm --prefix api run migrate`）。
-  `012_deck_job_events.sql` 必須在部署新版 API 之前跑完，否則 `GET /api/deck-jobs/:id`
-  會因為查不到 `deck_job_events` 而失敗。
+- 資料庫 migration 是手動執行的。`012_deck_job_events.sql` 必須在部署新版 API 之前跑完，
+  否則 `GET /api/deck-jobs/:id` 會因為查不到 `deck_job_events` 而失敗：
+  `node api/scripts/migrate.cjs 012_deck_job_events.sql`（已於 2026-08-13 套用到 `db-genpic`）。
 
 ---
 

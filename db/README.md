@@ -10,23 +10,19 @@ Set `DATABASE_URL` in your Functions settings (local or Azure). Example:
 postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require
 ```
 
-## Apply (manual)
+## Apply
 
-1. Connect to the PostgreSQL Flexible Server.
-2. Run the migration scripts in order.
+`api/scripts/migrate.cjs` reads `DATABASE_URL`（`DATABASE_SSL=true` 時啟用 SSL）。
 
-Example:
+```powershell
+# 全部依序執行
+npm --prefix api run migrate
 
-```sql
-\i db/migrations/001_init.sql
-\i db/migrations/002_add_history_fields.sql
-\i db/migrations/003_add_templates.sql
-\i db/migrations/004_line_config.sql
-\i db/migrations/005_shared_styles.sql
-\i db/migrations/006_administrator_mode.sql
-\i db/migrations/007_dedupe_users.sql
-\i db/migrations/008_user_status.sql
+# 只執行指定檔案（部署新功能時常用）
+node api/scripts/migrate.cjs 012_deck_job_events.sql
 ```
+
+所有 migration 都應可重複執行（`IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`）。
 
 Notes:
 - The schema uses `pgvector` and expects the `vector` extension.

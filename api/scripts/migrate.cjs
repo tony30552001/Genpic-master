@@ -9,10 +9,17 @@ if (!connectionString) {
 }
 
 const migrationsDir = path.resolve(__dirname, "..", "..", "db", "migrations");
+const only = process.argv.slice(2);
 const files = fs
   .readdirSync(migrationsDir)
   .filter((file) => file.endsWith(".sql"))
+  .filter((file) => only.length === 0 || only.includes(file))
   .sort();
+
+if (only.length > 0 && files.length !== only.length) {
+  console.error(`Unknown migration: ${only.filter((file) => !files.includes(file)).join(", ")}`);
+  process.exit(1);
+}
 
 const run = async () => {
   const client = new Client({
