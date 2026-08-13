@@ -81,9 +81,18 @@ const authorDeck = async ({
   const totalSlides = outline.slides.length;
   const authored = [];
 
+  await onProgress?.({
+    step: "slides",
+    detail: `逐頁設計版面，共 ${totalSlides} 頁`,
+    current: 0,
+    total: totalSlides,
+  });
+
   for (const [index, slide] of outline.slides.entries()) {
     await onProgress?.({
-      phase: `設計第 ${slide.slide_number} 頁，共 ${totalSlides} 頁`,
+      step: "slides",
+      slideNumber: slide.slide_number,
+      detail: `設計第 ${slide.slide_number} 頁：${slide.title}`,
       current: index,
       total: totalSlides,
     });
@@ -115,6 +124,12 @@ const authorDeck = async ({
       localProblems = inspectSlideSvg(svg);
     }
     if (localProblems.length > 0) {
+      await onProgress?.({
+        step: "slides",
+        status: "failed",
+        slideNumber: slide.slide_number,
+        detail: `第 ${slide.slide_number} 頁不符合 SVG 規範`,
+      });
       throw new Error(
         `第 ${slide.slide_number} 頁不符合 SVG 規範：${localProblems.join("；")}`
       );
@@ -122,10 +137,31 @@ const authorDeck = async ({
 
     await pptMaster.writeSlide({ deckId, name: fileName, content: svg });
     authored.push({ slide, fileName, svg });
+
+    await onProgress?.({
+      step: "slides",
+      status: "succeeded",
+      slideNumber: slide.slide_number,
+      detail:
+        attempt > 0
+          ? `第 ${slide.slide_number} 頁完成（自我修正 ${attempt} 次）`
+          : `第 ${slide.slide_number} 頁完成`,
+      current: index + 1,
+      total: totalSlides,
+    });
   }
 
   await onProgress?.({
-    phase: "品質檢查中",
+    step: "slides",
+    status: "succeeded",
+    detail: `${totalSlides} 頁版面完成`,
+    current: totalSlides,
+    total: totalSlides,
+  });
+
+  await onProgress?.({
+    step: "quality",
+    detail: "版面品質檢查",
     current: totalSlides,
     total: totalSlides,
   });
@@ -138,7 +174,8 @@ const authorDeck = async ({
     if (failing.length === 0) break;
 
     await onProgress?.({
-      phase: `修正 ${failing.length} 頁（第 ${round} 輪）`,
+      step: "quality",
+      detail: `修正 ${failing.length} 頁（第 ${round} 輪）`,
       current: totalSlides,
       total: totalSlides,
     });
@@ -155,6 +192,12 @@ const authorDeck = async ({
       });
       item.svg = repaired;
       await pptMaster.writeSlide({ deckId, name: item.fileName, content: repaired });
+      await onProgress?.({
+        step: "quality",
+        status: "succeeded",
+        slideNumber: item.slide.slide_number,
+        detail: `第 ${item.slide.slide_number} 頁已修正（第 ${round} 輪）`,
+      });
     }
 
     report = await pptMaster.checkDeck({ deckId });
@@ -168,6 +211,12 @@ const authorDeck = async ({
       .join("；");
     throw new Error(`投影片品質檢查未通過：${details || "未知錯誤"}`);
   }
+
+  await onProgress?.({
+    step: "quality",
+    status: "succeeded",
+    detail: "全部通過品質檢查",
+  });
 
   return { report, slideCount: authored.length };
 };

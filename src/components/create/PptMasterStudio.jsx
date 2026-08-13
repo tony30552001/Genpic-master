@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DOCUMENT_ACCEPT } from "@/lib/documentFormats";
 import usePptMasterDeck from "@/hooks/usePptMasterDeck";
 import DeckProgress from "./DeckProgress";
+import DeckTimeline from "./DeckTimeline";
 import PptTemplatePicker from "./PptTemplatePicker";
 
 const MIN_SLIDES = 4;
@@ -40,6 +41,7 @@ export default function PptMasterStudio() {
     templatesError,
     isGenerating,
     progress,
+    events,
     deck,
     error,
     generate,
@@ -190,13 +192,17 @@ export default function PptMasterStudio() {
           current={progress.current}
           total={progress.total}
           startedAt={progress.startedAt}
+          events={events}
         />
       )}
 
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
-          <span className="min-w-0 text-sm text-foreground">{error}</span>
+        <div className="space-y-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+            <span className="min-w-0 text-sm text-foreground">{error}</span>
+          </div>
+          {!isGenerating && events.length > 0 && <DeckTimeline events={events} />}
         </div>
       )}
 

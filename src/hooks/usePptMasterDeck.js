@@ -73,6 +73,7 @@ export default function usePptMasterDeck() {
   const [templatesError, setTemplatesError] = useState(null);
   const [isGenerating, setIsGenerating] = useState(() => Boolean(readActiveJobId()));
   const [progress, setProgress] = useState(INITIAL_PROGRESS);
+  const [events, setEvents] = useState([]);
   const [deck, setDeck] = useState(null);
   const [error, setError] = useState(null);
   const abortRef = useRef(null);
@@ -105,11 +106,15 @@ export default function usePptMasterDeck() {
     const finished = await waitForDeckJob({
       jobId,
       signal,
-      onProgress: (update) => setProgress(toProgress(update, slideCount)),
+      onProgress: (update) => {
+        setProgress(toProgress(update, slideCount));
+        setEvents(update?.events || []);
+      },
     });
 
     const result = toDeck(finished);
     setDeck(result);
+    setEvents(finished.events || []);
     setProgress({
       phase: "已完成",
       current: finished.progress?.total || 0,
@@ -144,6 +149,8 @@ export default function usePptMasterDeck() {
       }
 
       if (cancelled) return;
+
+      setEvents(job?.events || []);
 
       if (job?.status === "succeeded") {
         setDeck(toDeck(job));
@@ -202,6 +209,7 @@ export default function usePptMasterDeck() {
       setIsGenerating(true);
       setError(null);
       setDeck(null);
+      setEvents([]);
       setProgress({
         phase: "準備中",
         current: 0,
@@ -256,6 +264,7 @@ export default function usePptMasterDeck() {
     writeActiveJobId(null);
     setIsGenerating(false);
     setProgress(INITIAL_PROGRESS);
+    setEvents([]);
   }, []);
 
   const download = useCallback(async () => {
@@ -276,6 +285,7 @@ export default function usePptMasterDeck() {
     setDeck(null);
     setError(null);
     setProgress(INITIAL_PROGRESS);
+    setEvents([]);
   }, []);
 
   return {
@@ -283,6 +293,7 @@ export default function usePptMasterDeck() {
     templatesError,
     isGenerating,
     progress,
+    events,
     deck,
     error,
     generate,

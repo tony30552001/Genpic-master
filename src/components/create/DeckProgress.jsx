@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { CloudCheck, Loader2 } from "lucide-react";
 
-const PHASE_SEQUENCE = [
-  "解析素材",
-  "規劃簡報大綱",
-  "產生配圖",
-  "逐頁設計版面",
-  "匯出 PowerPoint",
-];
+import DeckTimeline from "./DeckTimeline";
 
 const formatElapsed = (ms) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -20,7 +14,7 @@ const formatElapsed = (ms) => {
  * 簡報生成的階段式進度。工作跑在伺服器上，所以這裡同時告訴使用者
  * 「可以安心離開這個頁面」，避免長時間等待造成的焦慮與誤操作。
  */
-export default function DeckProgress({ phase, current, total, startedAt }) {
+export default function DeckProgress({ phase, current, total, startedAt, events }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -33,11 +27,10 @@ export default function DeckProgress({ phase, current, total, startedAt }) {
   const startedMs = startedAt ? new Date(startedAt).getTime() : null;
   const elapsed =
     startedMs && Number.isFinite(startedMs) ? formatElapsed(now - startedMs) : null;
-  const stepIndex = PHASE_SEQUENCE.indexOf(phase);
 
   return (
     <div
-      className="space-y-2 rounded-lg border border-border bg-muted/40 p-4"
+      className="space-y-3 rounded-lg border border-border bg-muted/40 p-4"
       role="status"
       aria-live="polite"
     >
@@ -46,11 +39,6 @@ export default function DeckProgress({ phase, current, total, startedAt }) {
         <span className="min-w-0 truncate text-sm font-medium text-foreground">
           {phase || "準備中"}
         </span>
-        {stepIndex >= 0 && (
-          <span className="shrink-0 text-xs text-muted-foreground">
-            步驟 {stepIndex + 1}/{PHASE_SEQUENCE.length}
-          </span>
-        )}
         <span className="ml-auto flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
           {elapsed && <span>已耗時 {elapsed}</span>}
           {total > 0 && (
@@ -66,6 +54,7 @@ export default function DeckProgress({ phase, current, total, startedAt }) {
           style={{ width: `${percent}%` }}
         />
       </div>
+      <DeckTimeline events={events} />
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <CloudCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0">

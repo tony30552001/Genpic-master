@@ -6,6 +6,18 @@ const DECK_CANVAS_HEIGHT = 720;
 const DECK_CANVAS_FORMAT = "ppt169";
 const DECK_MAX_REPAIR_ROUNDS = 3;
 
+/** The stages the worker reports and the browser renders as a timeline. */
+const DECK_STEPS = ["source", "outline", "images", "slides", "quality", "export"];
+
+const DECK_STEP_LABELS = {
+  source: "解析素材",
+  outline: "規劃簡報大綱",
+  images: "產生配圖",
+  slides: "逐頁設計版面",
+  quality: "版面品質檢查",
+  export: "匯出 PowerPoint",
+};
+
 const PAGE_ROLES = new Set(["cover", "toc", "section", "content", "ending"]);
 
 const toText = (value, fallback = "") =>
@@ -194,6 +206,8 @@ module.exports = {
   DECK_CANVAS_FORMAT,
   DECK_CANVAS_HEIGHT,
   DECK_CANVAS_WIDTH,
+  DECK_STEPS,
+  DECK_STEP_LABELS,
   DECK_MAX_REPAIR_ROUNDS,
   DECK_MAX_SLIDES,
   DECK_MIN_SLIDES,

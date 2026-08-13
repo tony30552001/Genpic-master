@@ -66,19 +66,22 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | --- | --- |
 | `services/ppt-master-service/` | Python sidecar（FastAPI），詳見該目錄的 `README.md` |
 | `db/migrations/011_deck_generation_jobs.sql` | `deck_generation_jobs` 佇列表 |
+| `db/migrations/012_deck_job_events.sql` | `deck_job_events` 步驟事件表（時間軸資料來源） |
 | `api/_shared/pptMasterClient.js` | Node → sidecar 的 HTTP 客戶端 |
 | `api/_shared/deckContract.js` | 大綱正規化、頁數上限、SVG 前置健檢 |
 | `api/_shared/svgAuthoringPrompt.js` | 蒸餾文法卡 + `design_spec` + 可用字型 → system prompt |
 | `api/_shared/deckAuthor.js` | 大綱 → 逐頁 SVG → 品質閘門修補迴圈 |
 | `api/_shared/deckImages.js` | 依大綱產生 AI 配圖並上傳到 deck 工作區 |
 | `api/_shared/geminiImage.js` | 共用的 Gemini 圖片生成（`/api/generate-images` 也用它） |
-| `api/_shared/deckJobs.js` | 佇列、worker、進度回報 |
+| `api/_shared/deckJobs.js` | 佇列、worker、進度與步驟事件回報 |
 | `api/deck-jobs/index.js` | `POST` 建立、`GET /:id` 查詢、`GET /:id/download` 下載 |
 | `api/ppt-templates/index.js` | template 目錄（快取 10 分鐘，只回傳與畫布格式相符的版型） |
 | `src/components/create/PptMasterStudio.jsx` | 「設計簡報」子頁籤主面板 |
 | `src/components/create/PptTemplatePicker.jsx` | 風格／版型選擇器（受控元件） |
 | `src/components/create/pptTemplateCopy.js` | 模板 id → 繁體中文名稱、說明與標籤 |
 | `src/components/create/DeckProgress.jsx` | 階段式進度、已耗時與背景執行說明 |
+| `src/components/create/DeckTimeline.jsx` | 可展開的步驟時間軸（含逐頁明細） |
+| `src/components/create/deckSteps.js` | 步驟中文名稱與事件流 → 時間軸的推導 |
 | `src/hooks/usePptMasterDeck.js` | 建立 job、輪詢、續傳、下載 |
 
 ---
@@ -110,6 +113,24 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
   `jobId`。純粹的連線中斷會保留 `jobId` 並提示「回到此頁會自動接續」。
 - 介面上的「停止追蹤」只停止這台裝置的輪詢，伺服器上的生成不會中止，這一點在按鈕的
   `aria-label` 與進度卡片文案中都有明說。
+
+### 步驟時間軸
+
+`phase` 只有一句話，說不出「現在做到第幾頁、上一頁過了沒」。因此 worker 另外把每一個
+步驟寫進 `deck_job_events`（append-only），`GET /api/deck-jobs/:id` 會連同 job 一起回傳。
+
+- 步驟集合定義在 `api/_shared/deckContract.js` 的 `DECK_STEPS`：
+  `source`、`outline`、`images`、`slides`、`quality`、`export`。
+- 事件狀態為 `running`、`succeeded`、`failed`、`skipped`。
+- `slide_number IS NULL` 的事件代表**步驟本身**的狀態；帶 `slide_number` 的是該步驟底下的
+  逐頁明細（第 N 頁設計完成、第 N 頁已修正、第 N 張配圖失敗）。
+- 事件寫入失敗只會留下 warning，不會中斷生成——追蹤不該拖垮產出。
+- 只有步驟層事件會更新 job 的 `phase`，逐頁事件僅推進 `progress_current`，
+  避免標題文字在頁與頁之間跳動。
+- 前端在 `src/components/create/deckSteps.js` 用 `buildTimeline()` 把事件流摺疊成步驟清單
+  （同一層取最後一筆決定狀態），由 `DeckTimeline.jsx` 渲染；
+  `running` 的步驟預設展開，其餘可自行點開。
+- 失敗時 `usePptMasterDeck` 會保留 events，錯誤訊息下方直接顯示斷在哪一步。
 
 ---
 
@@ -164,6 +185,9 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 - 需要的 GitHub secrets：`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、
   `AZURE_RESOURCE_GROUP`、`AZURE_CONTAINER_REGISTRY`、`AZURE_PPT_MASTER_CONTAINER_APP`。
 - Container Apps 的 ingress 應設為 **internal**，只讓 App Service 連得到。
+- 資料庫 migration 是手動執行的（`npm --prefix api run migrate`）。
+  `012_deck_job_events.sql` 必須在部署新版 API 之前跑完，否則 `GET /api/deck-jobs/:id`
+  會因為查不到 `deck_job_events` 而失敗。
 
 ---
 
@@ -171,7 +195,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 
 ```powershell
 # 前端與共用契約
-corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js
+corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js
 corepack pnpm lint
 corepack pnpm build
 

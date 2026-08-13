@@ -2,7 +2,7 @@ const { corsHeaders, ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
-const { createDeckJob, getDeckJobForUser } = require("../_shared/deckJobs");
+const { createDeckJob, getDeckJobForUser, listDeckJobEvents } = require("../_shared/deckJobs");
 const { downloadGeneratedBlob } = require("../_shared/blobStorage");
 const { isConfigured, PPTX_CONTENT_TYPE } = require("../_shared/pptMasterClient");
 const { normalizeSlideCount } = require("../_shared/deckContract");
@@ -20,7 +20,7 @@ const normalizeTemplateId = (value) => {
   return TEMPLATE_ID.test(id) ? id : null;
 };
 
-const buildJobBody = (job) => {
+const buildJobBody = (job, events = []) => {
   const body = {
     jobId: job.id,
     status: job.status,
@@ -32,6 +32,14 @@ const buildJobBody = (job) => {
       current: job.progress_current,
       total: job.progress_total,
     },
+    events: events.map((event) => ({
+      id: Number(event.id),
+      step: event.step,
+      status: event.status,
+      slideNumber: event.slide_number,
+      detail: event.detail,
+      at: event.created_at,
+    })),
     createdAt: job.created_at,
     startedAt: job.started_at,
     completedAt: job.completed_at,
@@ -122,7 +130,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    context.res = ok(buildJobBody(job), 200, req);
+    context.res = ok(buildJobBody(job, await listDeckJobEvents({ jobId })), 200, req);
     return;
   }
 

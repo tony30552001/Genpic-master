@@ -12,6 +12,7 @@ const pptMaster = require("./pptMasterClient");
 const { authorDeck, generateOutline } = require("./deckAuthor");
 const { generateDeckImages } = require("./deckImages");
 const { buildAuthoringSystemPrompt } = require("./svgAuthoringPrompt");
+const { DECK_STEP_LABELS: STEP_LABELS } = require("./deckContract");
 
 const MAX_ATTEMPTS = 2;
 const LOCK_TIMEOUT_MINUTES = Number(process.env.DECK_JOB_TIMEOUT_MINUTES || 40);
@@ -63,6 +64,35 @@ const getDeckJobForUser = async ({ jobId, tenantId, userId }) => {
     [jobId, tenantId, userId]
   );
   return result.rows[0] || null;
+};
+
+/** Append one step to the job trace. Never let tracing break generation. */
+const recordDeckJobEvent = async ({ jobId, step, status, slideNumber, detail }) => {
+  try {
+    await query(
+      `INSERT INTO deck_job_events (job_id, step, status, slide_number, detail)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [jobId, step, status, slideNumber ?? null, detail || null]
+    );
+  } catch (error) {
+    console.warn("[deck-jobs] Failed to record job event:", {
+      jobId,
+      step,
+      status,
+      message: error.message,
+    });
+  }
+};
+
+const listDeckJobEvents = async ({ jobId }) => {
+  const result = await query(
+    `SELECT id, step, status, slide_number, detail, created_at
+     FROM deck_job_events
+     WHERE job_id = $1
+     ORDER BY id`,
+    [jobId]
+  );
+  return result.rows;
 };
 
 const claimNextDeckJob = async () => {
@@ -127,13 +157,13 @@ const claimNextDeckJob = async () => {
 const updateDeckJobProgress = async ({ jobId, phase, current, total }) => {
   await query(
     `UPDATE deck_generation_jobs
-     SET phase = $2,
+     SET phase = COALESCE($2, phase),
          progress_current = COALESCE($3, progress_current),
          progress_total = COALESCE($4, progress_total),
          locked_at = now(),
          updated_at = now()
      WHERE id = $1 AND status = 'processing'`,
-    [jobId, phase, current ?? null, total ?? null]
+    [jobId, phase ?? null, current ?? null, total ?? null]
   );
 };
 
@@ -278,76 +308,134 @@ const resolveTemplateSpecs = async ({ styleId, layoutId, brandId }) => {
 };
 
 const processDeckJob = async (job) => {
-  const report = (phase, current, total) =>
-    updateDeckJobProgress({ jobId: job.id, phase, current, total });
+  let currentStep = "source";
 
-  await report("解析素材", 0, job.slide_count);
-  const sourceMarkdown =
-    job.input_kind === "document"
-      ? await extractSourceMarkdown({
-          documentUrl: job.source_document_url,
-          fileName: job.source_file_name,
-        })
-      : null;
-
-  await report("規劃簡報大綱", 0, job.slide_count);
-  const outline = await generateOutline({
-    topic: job.topic,
-    sourceMarkdown,
-    slideCount: job.slide_count,
-  });
-
-  const [fonts, templateSpecs] = await Promise.all([
-    pptMaster.getFonts(),
-    resolveTemplateSpecs({
-      styleId: job.style_id,
-      layoutId: job.layout_id,
-      brandId: job.brand_id,
-    }),
-  ]);
-
-  const deck = await pptMaster.createDeck({ name: "pixora_deck" });
-  try {
-    const imagesBySlide = await generateDeckImages({
-      deckId: deck.deckId,
-      outline,
-      onProgress: ({ phase }) => report(phase, 0, outline.slides.length),
-    });
-
-    await authorDeck({
-      deckId: deck.deckId,
-      outline,
-      imagesBySlide,
-      systemMessage: buildAuthoringSystemPrompt({
-        fontFamilies: fonts?.families,
-        templateSpecs,
-      }),
-      onProgress: ({ phase, current, total }) => report(phase, current, total),
-    });
-
-    await report("匯出 PowerPoint", outline.slides.length, outline.slides.length);
-    const pptx = await pptMaster.exportDeck({ deckId: deck.deckId, fileStem: "pixora_deck" });
-
-    const blobName = `decks/${job.id}.pptx`;
-    await uploadGeneratedBlob({
-      blobName,
-      buffer: pptx,
-      contentType: pptMaster.PPTX_CONTENT_TYPE,
-    });
-
-    await markDeckJobSucceeded({
+  /**
+   * One reporter for both surfaces: the job row carries the headline phase and
+   * page counter, the event log carries the step-by-step trace the UI renders.
+   * Per-slide events only move the counter so the headline stays readable.
+   */
+  const report = async ({ step, status = "running", detail, slideNumber, current, total }) => {
+    currentStep = step;
+    await updateDeckJobProgress({
       jobId: job.id,
-      blobName,
-      fileName: `${outline.title}.pptx`,
-      deckTitle: outline.title,
-      slideCount: outline.slides.length,
+      phase: slideNumber == null ? detail || STEP_LABELS[step] || null : null,
+      current,
+      total,
     });
-  } finally {
-    await pptMaster
-      .deleteDeck({ deckId: deck.deckId })
-      .catch((error) =>
-        console.warn("[deck-jobs] Failed to clean up deck workspace:", error.message)
-      );
+    await recordDeckJobEvent({ jobId: job.id, step, status, slideNumber, detail });
+  };
+
+  try {
+    let sourceMarkdown = null;
+    if (job.input_kind === "document") {
+      await report({ step: "source", detail: "解析素材", current: 0, total: job.slide_count });
+      sourceMarkdown = await extractSourceMarkdown({
+        documentUrl: job.source_document_url,
+        fileName: job.source_file_name,
+      });
+      await report({
+        step: "source",
+        status: "succeeded",
+        detail: `已讀取 ${job.source_file_name || "參考文件"}`,
+      });
+    } else {
+      await report({
+        step: "source",
+        status: "skipped",
+        detail: "直接依主題生成，未使用參考文件",
+        current: 0,
+        total: job.slide_count,
+      });
+    }
+
+    await report({ step: "outline", detail: "規劃簡報大綱", current: 0, total: job.slide_count });
+    const outline = await generateOutline({
+      topic: job.topic,
+      sourceMarkdown,
+      slideCount: job.slide_count,
+    });
+    await report({
+      step: "outline",
+      status: "succeeded",
+      detail: `《${outline.title}》共 ${outline.slides.length} 頁`,
+      current: 0,
+      total: outline.slides.length,
+    });
+
+    const [fonts, templateSpecs] = await Promise.all([
+      pptMaster.getFonts(),
+      resolveTemplateSpecs({
+        styleId: job.style_id,
+        layoutId: job.layout_id,
+        brandId: job.brand_id,
+      }),
+    ]);
+
+    const deck = await pptMaster.createDeck({ name: "pixora_deck" });
+    try {
+      const imagesBySlide = await generateDeckImages({
+        deckId: deck.deckId,
+        outline,
+        onProgress: report,
+      });
+
+      await authorDeck({
+        deckId: deck.deckId,
+        outline,
+        imagesBySlide,
+        systemMessage: buildAuthoringSystemPrompt({
+          fontFamilies: fonts?.families,
+          templateSpecs,
+        }),
+        onProgress: report,
+      });
+
+      await report({
+        step: "export",
+        detail: "匯出 PowerPoint",
+        current: outline.slides.length,
+        total: outline.slides.length,
+      });
+      const pptx = await pptMaster.exportDeck({
+        deckId: deck.deckId,
+        fileStem: "pixora_deck",
+      });
+
+      const blobName = `decks/${job.id}.pptx`;
+      await uploadGeneratedBlob({
+        blobName,
+        buffer: pptx,
+        contentType: pptMaster.PPTX_CONTENT_TYPE,
+      });
+      await report({
+        step: "export",
+        status: "succeeded",
+        detail: `${outline.title}.pptx`,
+      });
+
+      await markDeckJobSucceeded({
+        jobId: job.id,
+        blobName,
+        fileName: `${outline.title}.pptx`,
+        deckTitle: outline.title,
+        slideCount: outline.slides.length,
+      });
+    } finally {
+      await pptMaster
+        .deleteDeck({ deckId: deck.deckId })
+        .catch((error) =>
+          console.warn("[deck-jobs] Failed to clean up deck workspace:", error.message)
+        );
+    }
+  } catch (error) {
+    await recordDeckJobEvent({
+      jobId: job.id,
+      step: currentStep,
+      status: "failed",
+      detail: error.message,
+    });
+    throw error;
   }
 };
 
@@ -398,5 +486,6 @@ const startDeckJobWorker = () => {
 module.exports = {
   createDeckJob,
   getDeckJobForUser,
+  listDeckJobEvents,
   startDeckJobWorker,
 };
