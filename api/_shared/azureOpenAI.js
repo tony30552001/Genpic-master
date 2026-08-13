@@ -1,5 +1,9 @@
 const DEFAULT_DEPLOYMENT = "gpt-5.6-luna";
 
+// Deck authoring emits strict, structurally validated SVG and runs inside the
+// background worker, so it trades latency for a deeper reasoning deployment.
+const DEFAULT_DECK_DEPLOYMENT = "gpt-5.6-sol";
+
 const getConfiguredEndpoint = () =>
   process.env.AZURE_OPENAI_ENDPOINT ||
   process.env.AZURE_OPENAI_BASE_URL ||
@@ -24,6 +28,9 @@ const getApiKey = () =>
 
 const getDeployment = () =>
   process.env.AZURE_OPENAI_DEPLOYMENT || DEFAULT_DEPLOYMENT;
+
+const getDeckDeployment = () =>
+  process.env.AZURE_OPENAI_DECK_DEPLOYMENT || DEFAULT_DECK_DEPLOYMENT;
 
 const getResponsesEndpoint = () => {
   const configuredEndpoint = getConfiguredEndpoint();
@@ -141,6 +148,7 @@ const generateJsonCompletion = async ({
   fileDataUrl,
   fileName,
   maxOutputTokens,
+  deployment,
 }) => {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -156,7 +164,7 @@ const generateJsonCompletion = async ({
       "api-key": apiKey,
     },
     body: JSON.stringify({
-      model: getDeployment(),
+      model: deployment || getDeployment(),
       instructions: systemMessage,
       input: buildResponseInput({
         userMessage,
@@ -205,4 +213,5 @@ module.exports = {
   parseJsonContent,
   getResponsesEndpoint,
   getDeployment,
+  getDeckDeployment,
 };

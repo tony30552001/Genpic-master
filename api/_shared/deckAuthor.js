@@ -1,4 +1,4 @@
-const { generateJsonCompletion } = require("./azureOpenAI");
+const { generateJsonCompletion, getDeckDeployment } = require("./azureOpenAI");
 const pptMaster = require("./pptMasterClient");
 const {
   DECK_MAX_REPAIR_ROUNDS,
@@ -34,6 +34,7 @@ const generateOutline = async ({ topic, sourceMarkdown, slideCount }) => {
     systemMessage: buildOutlineSystemPrompt(),
     userMessage: `${material}\n\n請規劃 ${slideCount} 頁的簡報大綱。`,
     maxOutputTokens: 8000,
+    deployment: getDeckDeployment(),
   });
 
   const normalized = normalizeOutline(outline, { slideCount });
@@ -48,6 +49,7 @@ const authorSlideSvg = async ({ systemMessage, userMessage }) => {
     systemMessage,
     userMessage,
     maxOutputTokens: 16000,
+    deployment: getDeckDeployment(),
   });
   const svg = stripSvgWrapper(result?.svg ?? result?.content ?? "");
   if (!svg.startsWith("<svg")) {

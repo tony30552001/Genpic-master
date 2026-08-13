@@ -34,6 +34,7 @@
 - `GOOGLE_API_KEY`、`GEMINI_MODEL_ANALYSIS`、`GEMINI_MODEL_GENERATION`
 - `DOCUMENT_ANALYSIS_MAX_CHARS=500000`（AnyDoc 解析後可交給同步 GPT 分析的最大字元數；超過時回傳 413，不會靜默截斷）
 - `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_DEPLOYMENT`
+- `AZURE_OPENAI_DECK_DEPLOYMENT`（可選；PPT Master 簡報生成專用，預設 `gpt-5.6-sol`）
 - `GPT_IMAGE_ENDPOINT`、`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`
 - `BLOB_CONTAINER_GENERATED=generated`
 - `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`
@@ -54,6 +55,11 @@ GPT Image 2 會由 `POST /api/generate-images` 建立 queued job，App Service
 `POST /api/analyze-document` 的文字、圖片與掃描型 PDF 分析都使用
 `AZURE_OPENAI_DEPLOYMENT`。該 deployment 必須支援 Responses API、image input
 與 PDF file input；未設定時程式預設使用 `gpt-5.6-luna`。
+
+PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）改用
+`AZURE_OPENAI_DECK_DEPLOYMENT`，未設定時預設 `gpt-5.6-sol`。這條路徑跑在背景
+worker，可接受較長延遲以換取更嚴謹的 SVG 版面推理；互動式功能仍使用
+`AZURE_OPENAI_DEPLOYMENT`。
 
 ## 3. 連結 Static Web App
 
