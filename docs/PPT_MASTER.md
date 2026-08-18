@@ -234,7 +234,14 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 - 該 workflow 會在部署後輪詢 `/health`，`status` 必須是 `ok`（代表 `attribution_guard.py` exit 0）才算成功。
 - 需要的 GitHub secrets：`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、
   `AZURE_RESOURCE_GROUP`、`AZURE_CONTAINER_REGISTRY`、`AZURE_PPT_MASTER_CONTAINER_APP`。
-- Container Apps 的 ingress 應設為 **internal**，只讓 App Service 連得到。
+- Container Apps 的環境 `cae-genpic` 沒有掛 VNet，App Service 也沒有 VNet 整合，
+  因此 ingress 是 **external**，改成 internal 會直接切斷 App Service 的連線。
+  實際的隔離手段是 **ingress IP 允許清單**：`ca-ppt-master` 只放行 `app-genpic-api`
+  的 20 個 outbound IP，其餘來源一律 `403 RBAC: access denied`，再加上
+  `X-Pixora-Service-Key` 這層共用密鑰。
+- **升級或搬移 App Service plan 會換掉 outbound IP**，允許清單沒同步更新的話，
+  sidecar 會開始回 `403`。改動 plan 後要重新比對
+  `az webapp show --query possibleOutboundIpAddresses` 與 ingress 的 IP 規則。
 - 資料庫 migration 是手動執行的。`012_deck_job_events.sql` 必須在部署新版 API 之前跑完，
   否則 `GET /api/deck-jobs/:id` 會因為查不到 `deck_job_events` 而失敗：
   `node api/scripts/migrate.cjs 012_deck_job_events.sql`（已於 2026-08-13 套用到 `db-genpic`）。
@@ -274,3 +281,8 @@ docker run --rm -e PPT_MASTER_SERVICE_KEY=dev pixora-ppt-master:dev python smoke
   仍會失敗，而且整個 job 會依 `MAX_ATTEMPTS` 從「解析素材」重跑，大綱與配圖都會重做。
 - 生成中的預覽用的是**瀏覽器本機的字型**，容器裡是 `fc-list` 回報的那一組。
   版面骨架、配色與比例與最終 PPTX 一致，中文字型可能被替換，實際字面以下載的檔案為準。
+- **sidecar 是單副本且 workspace 沒有持久化**（`min=max=1`、無 volume、workspace 在容器的
+  `/tmp`）。容器一旦重啟，進行中的簡報 workspace 就消失，該 job 會在下一次 sidecar 呼叫時失敗。
+  目前沒有設 liveness/readiness probe、也沒有 scale rule，所以不會有探針或縮放造成的重啟；
+  實際的重啟來源只有**部署新 revision** 與平台維護。
+  部署 `services/ppt-master-service/**` 之前，先確認沒有 `processing` 中的 deck job。
