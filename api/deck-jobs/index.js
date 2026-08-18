@@ -2,10 +2,25 @@ const { corsHeaders, ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
-const { createDeckJob, getDeckJobForUser, listDeckJobEvents } = require("../_shared/deckJobs");
+const {
+  createDeckJob,
+  getDeckJobForUser,
+  getDeckSlidePreview,
+  listDeckJobEvents,
+  listDeckSlidePreviews,
+} = require("../_shared/deckJobs");
 const { downloadGeneratedBlob } = require("../_shared/blobStorage");
+const { deckImageBlobName } = require("../_shared/deckImages");
+const { inlineSlideImages } = require("../_shared/deckPreview");
 const { isConfigured, PPTX_CONTENT_TYPE } = require("../_shared/pptMasterClient");
 const { normalizeSlideCount } = require("../_shared/deckContract");
+
+const IMAGE_CONTENT_TYPES = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+};
 
 const isUuid = (value) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -20,7 +35,7 @@ const normalizeTemplateId = (value) => {
   return TEMPLATE_ID.test(id) ? id : null;
 };
 
-const buildJobBody = (job, events = []) => {
+const buildJobBody = (job, events = [], slides = []) => {
   const body = {
     jobId: job.id,
     status: job.status,
@@ -40,6 +55,11 @@ const buildJobBody = (job, events = []) => {
       detail: event.detail,
       at: event.created_at,
     })),
+    slides: slides.map((slide) => ({
+      slideNumber: slide.slide_number,
+      revision: slide.revision,
+      title: slide.title,
+    })),
     createdAt: job.created_at,
     startedAt: job.started_at,
     completedAt: job.completed_at,
@@ -56,6 +76,40 @@ const buildJobBody = (job, events = []) => {
   }
 
   return body;
+};
+
+/**
+ * Serve one authored slide as a standalone SVG preview.
+ *
+ * The browser renders it inside `<img>`, so the illustration has to be inlined
+ * here: that sandbox cannot load external resources. Caching is left to the
+ * client, which keys previews by the slide's revision.
+ */
+const handleSlidePreview = async (context, req, job, slideNumber) => {
+  const preview = await getDeckSlidePreview({ jobId: job.id, slideNumber });
+  if (!preview) {
+    context.res = error("這一頁尚未產出", "not_found", 404, req);
+    return;
+  }
+
+  const svg = await inlineSlideImages(preview.svg, async (name) => {
+    const suffix = name.split(".").pop().toLowerCase();
+    const buffer = await downloadGeneratedBlob({
+      blobName: deckImageBlobName({ jobId: job.id, name }),
+    });
+    return { buffer, contentType: IMAGE_CONTENT_TYPES[suffix] || "image/png" };
+  });
+
+  context.res = {
+    status: 200,
+    headers: {
+      ...corsHeaders(req),
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+    },
+    body: svg,
+  };
 };
 
 const handleDownload = async (context, req, job) => {
@@ -109,8 +163,15 @@ module.exports = async function (context, req) {
       return;
     }
 
+    const slideParam = req.params?.slideNumber;
+    const slideNumber = slideParam == null ? null : Number(slideParam);
+    if (slideParam != null && !Number.isInteger(slideNumber)) {
+      context.res = error("投影片頁碼格式無效", "bad_request", 400, req);
+      return;
+    }
+
     const action = req.params?.action;
-    if (action && action !== "download") {
+    if (slideNumber == null && action && action !== "download") {
       context.res = error("不支援的操作", "not_found", 404, req);
       return;
     }
@@ -125,12 +186,25 @@ module.exports = async function (context, req) {
       return;
     }
 
+    if (slideNumber != null) {
+      await handleSlidePreview(context, req, job, slideNumber);
+      return;
+    }
+
     if (action === "download") {
       await handleDownload(context, req, job);
       return;
     }
 
-    context.res = ok(buildJobBody(job, await listDeckJobEvents({ jobId })), 200, req);
+    context.res = ok(
+      buildJobBody(
+        job,
+        await listDeckJobEvents({ jobId }),
+        await listDeckSlidePreviews({ jobId })
+      ),
+      200,
+      req
+    );
     return;
   }
 

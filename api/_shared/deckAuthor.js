@@ -77,6 +77,7 @@ const authorDeck = async ({
   systemMessage,
   imagesBySlide = {},
   onProgress,
+  onSlidePreview,
 }) => {
   const totalSlides = outline.slides.length;
   const authored = [];
@@ -137,6 +138,11 @@ const authorDeck = async ({
 
     await pptMaster.writeSlide({ deckId, name: fileName, content: svg });
     authored.push({ slide, fileName, svg });
+    await onSlidePreview?.({
+      slideNumber: slide.slide_number,
+      title: slide.title,
+      svg,
+    });
 
     await onProgress?.({
       step: "slides",
@@ -192,6 +198,11 @@ const authorDeck = async ({
       });
       item.svg = repaired;
       await pptMaster.writeSlide({ deckId, name: item.fileName, content: repaired });
+      await onSlidePreview?.({
+        slideNumber: item.slide.slide_number,
+        title: item.slide.title,
+        svg: repaired,
+      });
       await onProgress?.({
         step: "quality",
         status: "succeeded",

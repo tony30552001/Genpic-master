@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 
 vi.mock("../../services/aiService", () => ({
   createDeckJob: vi.fn(),
   downloadDeckJobPptx: vi.fn(),
   getDeckJob: vi.fn(),
+  getDeckSlidePreview: vi.fn(),
   listPptTemplates: vi.fn(() => Promise.resolve({ styles: [], layouts: [] })),
   waitForDeckJob: vi.fn(),
 }));
@@ -13,7 +14,12 @@ vi.mock("../../services/storageService", () => ({
   uploadFileToBlob: vi.fn(),
 }));
 
-import { createDeckJob, getDeckJob, waitForDeckJob } from "../../services/aiService";
+import {
+  createDeckJob,
+  getDeckJob,
+  getDeckSlidePreview,
+  waitForDeckJob,
+} from "../../services/aiService";
 import usePptMasterDeck from "../usePptMasterDeck";
 
 const STORAGE_KEY = "genpic_deck_job";
@@ -156,5 +162,130 @@ describe("usePptMasterDeck", () => {
 
     await waitFor(() => expect(result.current.isGenerating).toBe(false));
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  describe("slide previews", () => {
+    let created;
+    let revoked;
+
+    beforeEach(() => {
+      created = 0;
+      revoked = [];
+      URL.createObjectURL = vi.fn(() => `blob:preview-${(created += 1)}`);
+      URL.revokeObjectURL = vi.fn((url) => revoked.push(url));
+    });
+
+    /** 讓輪詢在測試中可控：每次回傳一份 job 快照。 */
+    const watchWithSnapshots = (snapshots) =>
+      waitForDeckJob.mockImplementation(async ({ onProgress }) => {
+        for (const snapshot of snapshots) onProgress?.(snapshot);
+        return snapshots.at(-1);
+      });
+
+    const runningJob = (slides) => ({
+      jobId: "deck-preview",
+      status: "processing",
+      slideCount: 4,
+      progress: { current: slides.length, total: 4 },
+      events: [],
+      slides,
+    });
+
+    it("fetches each authored slide once and keeps its object URL", async () => {
+      localStorage.setItem(STORAGE_KEY, "deck-preview");
+      getDeckJob.mockResolvedValue(runningJob([]));
+      getDeckSlidePreview.mockResolvedValue(new Blob(["<svg/>"]));
+      watchWithSnapshots([
+        runningJob([{ slideNumber: 1, revision: 1, title: "封面" }]),
+        runningJob([{ slideNumber: 1, revision: 1, title: "封面" }]),
+        {
+          ...runningJob([{ slideNumber: 1, revision: 1, title: "封面" }]),
+          status: "succeeded",
+          deckTitle: "AI 導入策略",
+        },
+      ]);
+
+      const { result } = renderHook(() => usePptMasterDeck());
+
+      await waitFor(() =>
+        expect(result.current.slidePreviews[1]?.url).toBe("blob:preview-1")
+      );
+      expect(getDeckSlidePreview).toHaveBeenCalledTimes(1);
+      expect(getDeckSlidePreview).toHaveBeenCalledWith({
+        jobId: "deck-preview",
+        slideNumber: 1,
+      });
+    });
+
+    it("refetches and releases the old preview when a slide is repaired", async () => {
+      localStorage.setItem(STORAGE_KEY, "deck-preview");
+      getDeckJob.mockResolvedValue(runningJob([]));
+      getDeckSlidePreview.mockResolvedValue(new Blob(["<svg/>"]));
+
+      let emit = null;
+      waitForDeckJob.mockImplementation(
+        ({ onProgress }) =>
+          new Promise(() => {
+            emit = onProgress;
+          })
+      );
+
+      const { result } = renderHook(() => usePptMasterDeck());
+      await waitFor(() => expect(emit).not.toBeNull());
+
+      act(() => emit(runningJob([{ slideNumber: 1, revision: 1, title: "封面" }])));
+      await waitFor(() =>
+        expect(result.current.slidePreviews[1]?.url).toBe("blob:preview-1")
+      );
+
+      act(() => emit(runningJob([{ slideNumber: 1, revision: 2, title: "封面" }])));
+      await waitFor(() =>
+        expect(result.current.slidePreviews[1]?.url).toBe("blob:preview-2")
+      );
+      expect(getDeckSlidePreview).toHaveBeenCalledTimes(2);
+      expect(revoked).toContain("blob:preview-1");
+    });
+
+    it("keeps previews after a failure and releases them on reset", async () => {
+      localStorage.setItem(STORAGE_KEY, "deck-preview");
+      getDeckJob.mockResolvedValue(runningJob([]));
+      getDeckSlidePreview.mockResolvedValue(new Blob(["<svg/>"]));
+      const failure = new Error("版面品質檢查未通過");
+      failure.jobFailed = true;
+      waitForDeckJob.mockImplementation(async ({ onProgress }) => {
+        onProgress?.(runningJob([{ slideNumber: 1, revision: 1, title: "封面" }]));
+        throw failure;
+      });
+
+      const { result } = renderHook(() => usePptMasterDeck());
+
+      await waitFor(() => expect(result.current.error).toBe("版面品質檢查未通過"));
+      expect(result.current.slidePreviews[1]?.url).toBe("blob:preview-1");
+
+      result.current.reset();
+
+      await waitFor(() => expect(result.current.slidePreviews).toEqual({}));
+      expect(revoked).toContain("blob:preview-1");
+    });
+
+    it("leaves the slide without a preview when the request fails", async () => {
+      localStorage.setItem(STORAGE_KEY, "deck-preview");
+      getDeckJob.mockResolvedValue(runningJob([]));
+      getDeckSlidePreview.mockRejectedValue(new Error("網路請求失敗"));
+      watchWithSnapshots([
+        runningJob([{ slideNumber: 1, revision: 1, title: "封面" }]),
+        {
+          ...runningJob([{ slideNumber: 1, revision: 1, title: "封面" }]),
+          status: "succeeded",
+          deckTitle: "AI 導入策略",
+        },
+      ]);
+
+      const { result } = renderHook(() => usePptMasterDeck());
+
+      await waitFor(() => expect(result.current.deck?.title).toBe("AI 導入策略"));
+      expect(result.current.slidePreviews[1]).toBeUndefined();
+      expect(result.current.error).toBeNull();
+    });
   });
 });

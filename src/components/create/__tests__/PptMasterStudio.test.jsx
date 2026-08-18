@@ -19,6 +19,8 @@ const baseState = {
   isGenerating: false,
   progress: { phase: "", current: 0, total: 0, startedAt: null },
   events: [],
+  slides: [],
+  slidePreviews: {},
   deck: null,
   error: null,
   generate: vi.fn(),
@@ -83,5 +85,56 @@ describe("PptMasterStudio setup collapsing", () => {
 
     expect(screen.queryByLabelText("簡報主題")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /下載 PPTX/ })).toBeInTheDocument();
+  });
+});
+
+describe("PptMasterStudio slide previews", () => {
+  beforeEach(() => {
+    deckState.current = { ...baseState };
+  });
+
+  afterEach(() => cleanup());
+
+  it("hides the rail until a deck is being generated", () => {
+    render(<PptMasterStudio />);
+
+    expect(screen.queryByText("投影片預覽")).not.toBeInTheDocument();
+  });
+
+  it("shows the rail with a placeholder for every planned page while generating", () => {
+    deckState.current = {
+      ...baseState,
+      isGenerating: true,
+      progress: { phase: "逐頁設計版面", current: 1, total: 4, startedAt: null },
+      events: [{ id: 1, step: "slides", status: "running", slideNumber: 2, detail: "設計第 2 頁" }],
+      slides: [{ slideNumber: 1, revision: 1, title: "封面" }],
+      slidePreviews: { 1: { revision: 1, title: "封面", url: "blob:slide-1" } },
+    };
+
+    render(<PptMasterStudio />);
+
+    expect(screen.getByText("投影片預覽")).toBeInTheDocument();
+    expect(screen.getByText("1/4")).toBeInTheDocument();
+    expect(screen.getByAltText("第 1 頁預覽")).toHaveAttribute("src", "blob:slide-1");
+  });
+
+  it("enlarges the chosen page next to the progress card", async () => {
+    const user = userEvent.setup();
+    deckState.current = {
+      ...baseState,
+      isGenerating: true,
+      progress: { phase: "逐頁設計版面", current: 1, total: 2, startedAt: null },
+      slides: [{ slideNumber: 1, revision: 1, title: "封面" }],
+      slidePreviews: { 1: { revision: 1, title: "封面", url: "blob:slide-1" } },
+    };
+
+    render(<PptMasterStudio />);
+    await user.click(screen.getByRole("button", { name: "第 1 頁：封面" }));
+
+    expect(screen.getAllByAltText("第 1 頁預覽")).toHaveLength(2);
+    expect(screen.getByText("第 1 頁：封面")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "關閉放大預覽" }));
+    expect(screen.getAllByAltText("第 1 頁預覽")).toHaveLength(1);
   });
 });

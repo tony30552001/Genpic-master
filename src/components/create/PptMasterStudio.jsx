@@ -19,8 +19,10 @@ import { DOCUMENT_ACCEPT } from "@/lib/documentFormats";
 import usePptMasterDeck from "@/hooks/usePptMasterDeck";
 import DeckProgress from "./DeckProgress";
 import DeckSetupSummary from "./DeckSetupSummary";
+import DeckSlideRail from "./DeckSlideRail";
 import DeckTimeline from "./DeckTimeline";
 import PptTemplatePicker from "./PptTemplatePicker";
+import { authoringSlideNumber } from "./deckSteps";
 import { describeLayout, describeStyle } from "./pptTemplateCopy";
 
 const MIN_SLIDES = 4;
@@ -37,6 +39,7 @@ export default function PptMasterStudio() {
   const [layoutId, setLayoutId] = useState(null);
   const [downloadError, setDownloadError] = useState(null);
   const [showSetup, setShowSetup] = useState(false);
+  const [selectedSlide, setSelectedSlide] = useState(null);
   const fileInputRef = useRef(null);
 
   const {
@@ -45,6 +48,8 @@ export default function PptMasterStudio() {
     isGenerating,
     progress,
     events,
+    slides,
+    slidePreviews,
     deck,
     error,
     generate,
@@ -72,6 +77,7 @@ export default function PptMasterStudio() {
   const handleGenerate = async () => {
     setDownloadError(null);
     setShowSetup(false);
+    setSelectedSlide(null);
     try {
       await generate({ topic, file, slideCount, styleId, layoutId });
     } catch (generationError) {
@@ -94,6 +100,7 @@ export default function PptMasterStudio() {
     reset();
     setDownloadError(null);
     setShowSetup(false);
+    setSelectedSlide(null);
   };
 
   const setupCards = (
@@ -207,87 +214,145 @@ export default function PptMasterStudio() {
     </>
   );
 
+  const railTotal = Math.max(progress.total || 0, slides.length, deck?.slideCount || 0);
+  const showRail = railTotal > 0 && (isGenerating || slides.length > 0);
+  const activeSlide = authoringSlideNumber(events);
+  const selectedPreview = selectedSlide ? slidePreviews[selectedSlide] : null;
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 pb-6">
-      {isSetupLocked ? (
-        <DeckSetupSummary
-          title={setupTitle}
-          meta={setupMeta}
-          expanded={showSetup}
-          onToggle={() => setShowSetup((current) => !current)}
-        >
-          {setupCards}
-        </DeckSetupSummary>
-      ) : (
-        setupCards
-      )}
+    <div className="mx-auto w-full max-w-6xl pb-6 lg:grid lg:grid-cols-5 lg:items-start lg:gap-4">
+      <div className="space-y-4 lg:col-span-3">
+        {isSetupLocked ? (
+          <DeckSetupSummary
+            title={setupTitle}
+            meta={setupMeta}
+            expanded={showSetup}
+            onToggle={() => setShowSetup((current) => !current)}
+          >
+            {setupCards}
+          </DeckSetupSummary>
+        ) : (
+          setupCards
+        )}
 
-      {isGenerating && (
-        <DeckProgress
-          phase={progress.phase}
-          current={progress.current}
-          total={progress.total}
-          startedAt={progress.startedAt}
-          events={events}
-        />
-      )}
+        {isGenerating && (
+          <DeckProgress
+            phase={progress.phase}
+            current={progress.current}
+            total={progress.total}
+            startedAt={progress.startedAt}
+            events={events}
+          />
+        )}
 
-      {error && (
-        <div className="space-y-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
-            <span className="min-w-0 text-sm text-foreground">{error}</span>
-          </div>
-          {!isGenerating && events.length > 0 && <DeckTimeline events={events} />}
-        </div>
-      )}
-
-      {downloadError && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
-          <span className="min-w-0 text-sm text-foreground">{downloadError}</span>
-        </div>
-      )}
-
-      {deck && !isGenerating ? (
-        <Card>
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-6">
-            <Presentation className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 text-sm font-medium">{deck.title}</p>
-              <p className="text-xs text-muted-foreground">
-                共 {deck.slideCount} 頁，已是可直接編輯的原生 PowerPoint 投影片。
+        {selectedPreview && (
+          <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+            <div className="flex items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                第 {selectedSlide} 頁
+                {selectedPreview.title ? `：${selectedPreview.title}` : ""}
               </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <Button type="button" variant="outline" onClick={handleStartOver}>
-                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-                重新產生
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={() => setSelectedSlide(null)}
+                aria-label="關閉放大預覽"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
-              <Button type="button" onClick={handleDownload}>
-                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                下載 PPTX
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="flex justify-end gap-2">
-          {isGenerating && (
+            <img
+              src={selectedPreview.url}
+              alt={`第 ${selectedSlide} 頁預覽`}
+              className="w-full rounded border border-border bg-background"
+            />
+          </div>
+        )}
+
+        {error && (
+          <div className="space-y-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5">
+            <div className="flex items-start gap-2">
+              <AlertCircle
+                className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
+                aria-hidden="true"
+              />
+              <span className="min-w-0 text-sm text-foreground">{error}</span>
+            </div>
+            {!isGenerating && events.length > 0 && <DeckTimeline events={events} />}
+          </div>
+        )}
+
+        {downloadError && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5">
+            <AlertCircle
+              className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
+              aria-hidden="true"
+            />
+            <span className="min-w-0 text-sm text-foreground">{downloadError}</span>
+          </div>
+        )}
+
+        {deck && !isGenerating ? (
+          <Card>
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-6">
+              <Presentation className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-sm font-medium">{deck.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  共 {deck.slideCount} 頁，已是可直接編輯的原生 PowerPoint 投影片。
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button type="button" variant="outline" onClick={handleStartOver}>
+                  <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                  重新產生
+                </Button>
+                <Button type="button" onClick={handleDownload}>
+                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                  下載 PPTX
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex justify-end gap-2">
+            {isGenerating && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={stopWatching}
+                aria-label="停止追蹤這份簡報；雲端上的生成不會因此中止"
+              >
+                <X className="mr-2 h-4 w-4" aria-hidden="true" />
+                停止追蹤
+              </Button>
+            )}
             <Button
               type="button"
-              variant="outline"
-              onClick={stopWatching}
-              aria-label="停止追蹤這份簡報；雲端上的生成不會因此中止"
+              onClick={handleGenerate}
+              disabled={!canGenerate || isGenerating}
             >
-              <X className="mr-2 h-4 w-4" aria-hidden="true" />
-              停止追蹤
+              <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
+              產生簡報
             </Button>
-          )}
-          <Button type="button" onClick={handleGenerate} disabled={!canGenerate || isGenerating}>
-            <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
-            產生簡報
-          </Button>
+          </div>
+        )}
+      </div>
+
+      {showRail && (
+        <div className="mt-4 lg:col-span-2 lg:mt-0">
+          <div className="lg:sticky lg:top-4">
+            <DeckSlideRail
+              total={railTotal}
+              slides={slides}
+              previews={slidePreviews}
+              activeSlideNumber={activeSlide}
+              selectedSlideNumber={selectedSlide}
+              onSelect={setSelectedSlide}
+            />
+          </div>
         </div>
       )}
     </div>

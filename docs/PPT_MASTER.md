@@ -1,6 +1,6 @@
 # 設計簡報（PPT Master）
 
-> 最後更新：2026-08-13
+> 最後更新：2026-08-18
 
 ---
 
@@ -73,8 +73,10 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `api/_shared/deckAuthor.js` | 大綱 → 逐頁 SVG → 品質閘門修補迴圈 |
 | `api/_shared/deckImages.js` | 依大綱產生 AI 配圖並上傳到 deck 工作區 |
 | `api/_shared/geminiImage.js` | 共用的 Gemini 圖片生成（`/api/generate-images` 也用它） |
-| `api/_shared/deckJobs.js` | 佇列、worker、進度與步驟事件回報 |
-| `api/deck-jobs/index.js` | `POST` 建立、`GET /:id` 查詢、`GET /:id/download` 下載 |
+| `api/_shared/deckJobs.js` | 佇列、worker、進度、步驟事件與逐頁預覽的保存 |
+| `api/_shared/deckPreview.js` | 把預覽 SVG 內的 `../images/xxx` 換成內嵌 data URL |
+| `api/deck-jobs/index.js` | `POST` 建立、`GET /:id` 查詢、`GET /:id/download` 下載、`GET /:id/slides/:n` 預覽 |
+| `db/migrations/013_deck_slide_previews.sql` | `deck_slide_previews` 逐頁預覽表 |
 | `api/ppt-templates/index.js` | template 目錄（快取 10 分鐘，只回傳與畫布格式相符的版型） |
 | `src/components/create/PptMasterStudio.jsx` | 「設計簡報」子頁籤主面板 |
 | `src/components/create/PptTemplatePicker.jsx` | 風格／版型選擇器（受控元件） |
@@ -82,8 +84,9 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `src/components/create/DeckProgress.jsx` | 階段式進度、已耗時與背景執行說明 |
 | `src/components/create/DeckTimeline.jsx` | 可展開的步驟時間軸（含逐頁明細） |
 | `src/components/create/DeckSetupSummary.jsx` | 生成中／生成後把設定收合成一行摘要 |
-| `src/components/create/deckSteps.js` | 步驟中文名稱與事件流 → 時間軸的推導 |
-| `src/hooks/usePptMasterDeck.js` | 建立 job、輪詢、續傳、下載 |
+| `src/components/create/DeckSlideRail.jsx` | 右側的垂直投影片縮圖列（PowerPoint 式） |
+| `src/components/create/deckSteps.js` | 步驟中文名稱、事件流 → 時間軸、目前正在設計的頁碼 |
+| `src/hooks/usePptMasterDeck.js` | 建立 job、輪詢、續傳、逐頁預覽快取、下載 |
 
 ---
 
@@ -137,6 +140,31 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
   等待期間輸入欄位本來就是唯讀的，留在畫面上只會把進度卡推到摺線以下。
 - 進度卡標題在有事件之後固定為「AI 正在設計你的簡報」，步驟名稱交給時間軸，
   避免同一句話出現兩次；`phase` 只用於建立工作前的本機階段（準備、上傳文件）。
+
+### 生成中的逐頁預覽
+
+文字進度說不出「畫出來長什麼樣」。授稿產生的 SVG 就是匯出器唯一的輸入，
+所以把它保存下來給瀏覽器看，就是所見即所得的預覽，不需要額外的渲染器。
+
+- worker 每寫完一頁（初次授稿與**每一輪品質修正**）就把 SVG 存進 `deck_slide_previews`
+  （一頁一列，`revision` 遞增）。保存比照事件記錄是 best-effort：預覽寫失敗只留 warning，
+  絕不中斷生成。
+- `GET /api/deck-jobs/:id` 會多回一份輕量的 `slides`（`slideNumber`、`revision`、`title`），
+  SVG 本身走 `GET /api/deck-jobs/:id/slides/:n`，兩者都是 tenant + user 範圍。
+- 瀏覽器用 **`<img>`** 渲染預覽，不把 SVG 放進 DOM——SVG 是模型輸出，不該當成信任邊界。
+  `<img>` 是沙盒模式：沒有 script，**也不能載入外部資源**。因此授稿用的
+  `href="../images/xxx.png"` 在預覽裡永遠是空白，配圖必須內嵌。
+- 所以 `deckImages.js` 在把配圖送進 sidecar 的同時，另外存一份到
+  `decks/<jobId>/images/<name>`（sidecar 工作區匯出後就被刪除），
+  預覽端點再用 `deckPreview.js::inlineSlideImages()` 把它換成 data URL。
+  換不到的圖片保持原樣：預覽留白，不讓整頁失敗。
+- 前端以 `revision` 當快取鍵：只抓沒看過或被修正過的頁，換掉舊圖時
+  `URL.revokeObjectURL`，`reset` 與 unmount 時全部釋放。
+  預覽抓取失敗只讓那一格維持骨架，不影響生成流程與續傳語意。
+- 版面是兩欄（`lg:grid-cols-5`）：左欄 `lg:col-span-3` 是設定／進度／結果，
+  右欄 `lg:col-span-2` 是 `DeckSlideRail` 的垂直縮圖列，`lg` 以上 sticky。
+  尚未產出的頁以骨架佔位，正在設計的那一頁有載入指示；
+  點某一頁會在左欄放大顯示。成功與失敗都保留預覽。
 
 ---
 
@@ -194,6 +222,8 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 - 資料庫 migration 是手動執行的。`012_deck_job_events.sql` 必須在部署新版 API 之前跑完，
   否則 `GET /api/deck-jobs/:id` 會因為查不到 `deck_job_events` 而失敗：
   `node api/scripts/migrate.cjs 012_deck_job_events.sql`（已於 2026-08-13 套用到 `db-genpic`）。
+- `013_deck_slide_previews.sql` 同樣必須先於 API 部署執行，否則同一個端點會查不到
+  `deck_slide_previews`：`node api/scripts/migrate.cjs 013_deck_slide_previews.sql`。
 
 ---
 
@@ -201,7 +231,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 
 ```powershell
 # 前端與共用契約
-corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js
+corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckPreview.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js src/components/create/__tests__/DeckSlideRail.test.jsx src/components/create/__tests__/PptMasterStudio.test.jsx
 corepack pnpm lint
 corepack pnpm build
 
@@ -224,3 +254,5 @@ docker run --rm -e PPT_MASTER_SERVICE_KEY=dev pixora-ppt-master:dev python smoke
 - 使用者上傳自家 `.pptx` 萃取 template 尚未實作，需要先掛載 Azure Files 永續磁碟
   （容器檔案系統是暫時的，註冊的 template 會在重啟後消失）。
 - 配圖失敗不會讓整份簡報失敗，該頁會改以純版面呈現，原因記在伺服器日誌。
+- 生成中的預覽用的是**瀏覽器本機的字型**，容器裡是 `fc-list` 回報的那一組。
+  版面骨架、配色與比例與最終 PPTX 一致，中文字型可能被替換，實際字面以下載的檔案為準。

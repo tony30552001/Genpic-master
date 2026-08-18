@@ -95,6 +95,55 @@ const listDeckJobEvents = async ({ jobId }) => {
   return result.rows;
 };
 
+/**
+ * Keep the authored SVG so the browser can preview the page while the job is
+ * still running. A quality repair rewrites the same page, so `revision` bumps
+ * and becomes the client's cache key. Like the event trace, this is
+ * best-effort: losing a preview must never break generation.
+ */
+const saveDeckSlidePreview = async ({ jobId, slideNumber, title, svg }) => {
+  try {
+    await query(
+      `INSERT INTO deck_slide_previews (job_id, slide_number, title, svg)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (job_id, slide_number) DO UPDATE
+         SET title = EXCLUDED.title,
+             svg = EXCLUDED.svg,
+             revision = deck_slide_previews.revision + 1,
+             updated_at = now()`,
+      [jobId, slideNumber, title || null, svg]
+    );
+  } catch (error) {
+    console.warn("[deck-jobs] Failed to save slide preview:", {
+      jobId,
+      slideNumber,
+      message: error.message,
+    });
+  }
+};
+
+const listDeckSlidePreviews = async ({ jobId }) => {
+  const result = await query(
+    `SELECT slide_number, revision, title
+     FROM deck_slide_previews
+     WHERE job_id = $1
+     ORDER BY slide_number`,
+    [jobId]
+  );
+  return result.rows;
+};
+
+const getDeckSlidePreview = async ({ jobId, slideNumber }) => {
+  const result = await query(
+    `SELECT slide_number, revision, title, svg
+     FROM deck_slide_previews
+     WHERE job_id = $1 AND slide_number = $2
+     LIMIT 1`,
+    [jobId, slideNumber]
+  );
+  return result.rows[0] || null;
+};
+
 const claimNextDeckJob = async () => {
   const client = await getPool().connect();
   try {
@@ -376,6 +425,7 @@ const processDeckJob = async (job) => {
     try {
       const imagesBySlide = await generateDeckImages({
         deckId: deck.deckId,
+        jobId: job.id,
         outline,
         onProgress: report,
       });
@@ -389,6 +439,8 @@ const processDeckJob = async (job) => {
           templateSpecs,
         }),
         onProgress: report,
+        onSlidePreview: ({ slideNumber, title, svg }) =>
+          saveDeckSlidePreview({ jobId: job.id, slideNumber, title, svg }),
       });
 
       await report({
@@ -486,6 +538,8 @@ const startDeckJobWorker = () => {
 module.exports = {
   createDeckJob,
   getDeckJobForUser,
+  getDeckSlidePreview,
   listDeckJobEvents,
+  listDeckSlidePreviews,
   startDeckJobWorker,
 };

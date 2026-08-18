@@ -1,4 +1,5 @@
 const { generateGeminiImage } = require("./geminiImage");
+const { uploadGeneratedBlob } = require("./blobStorage");
 const pptMaster = require("./pptMasterClient");
 
 const MIME_SUFFIXES = {
@@ -6,6 +7,9 @@ const MIME_SUFFIXES = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
 };
+
+/** Blob copy of a deck illustration, used to inline images into slide previews. */
+const deckImageBlobName = ({ jobId, name }) => `decks/${jobId}/images/${name}`;
 
 /**
  * Generate the illustrations the outline asked for and upload them into the
@@ -15,7 +19,7 @@ const MIME_SUFFIXES = {
  * authored without an image, and the reason is reported as a failed step event
  * so the user can see which page lost its illustration.
  */
-const generateDeckImages = async ({ deckId, outline, onProgress }) => {
+const generateDeckImages = async ({ deckId, jobId, outline, onProgress }) => {
   const wanted = outline.slides.filter(
     (slide) => slide.needs_image && slide.image_prompt
   );
@@ -52,13 +56,30 @@ const generateDeckImages = async ({ deckId, outline, onProgress }) => {
       });
       const suffix = MIME_SUFFIXES[image.mimeType] || "png";
       const name = `slide_${String(slide.slide_number).padStart(2, "0")}.${suffix}`;
+      const buffer = Buffer.from(image.base64, "base64");
 
       await pptMaster.writeImage({
         deckId,
         name,
-        buffer: Buffer.from(image.base64, "base64"),
+        buffer,
         contentType: image.mimeType,
       });
+
+      /**
+       * The sidecar workspace is deleted once the deck is exported, but the
+       * preview endpoint still has to inline this image. Keep a copy in Blob
+       * Storage; failing to do so only costs the preview its illustration.
+       */
+      await uploadGeneratedBlob({
+        blobName: deckImageBlobName({ jobId, name }),
+        buffer,
+        contentType: image.mimeType,
+      }).catch((uploadError) =>
+        console.warn("[deck-jobs] Failed to store illustration for preview:", {
+          slide: slide.slide_number,
+          message: uploadError.message,
+        })
+      );
 
       imagesBySlide[slide.slide_number] = [name];
       await onProgress?.({
@@ -94,4 +115,4 @@ const generateDeckImages = async ({ deckId, outline, onProgress }) => {
   return imagesBySlide;
 };
 
-module.exports = { generateDeckImages };
+module.exports = { deckImageBlobName, generateDeckImages };

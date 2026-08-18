@@ -1,8 +1,37 @@
 import { describe, expect, it } from "vitest";
 
-import { DECK_STEPS, activeStepIndex, buildTimeline } from "../deckSteps";
+import { DECK_STEPS, activeStepIndex, authoringSlideNumber, buildTimeline } from "../deckSteps";
 
 const event = (id, step, status, extra = {}) => ({ id, step, status, ...extra });
+
+describe("authoringSlideNumber", () => {
+  it("has no active page before any slide event", () => {
+    expect(authoringSlideNumber([])).toBeNull();
+    expect(authoringSlideNumber([event(1, "outline", "running")])).toBeNull();
+  });
+
+  it("reports the page whose latest event is still running", () => {
+    const events = [
+      event(1, "slides", "running", { slideNumber: 1 }),
+      event(2, "slides", "succeeded", { slideNumber: 1 }),
+      event(3, "slides", "running", { slideNumber: 2 }),
+    ];
+    expect(authoringSlideNumber(events)).toBe(2);
+  });
+
+  it("clears the active page once it succeeds", () => {
+    const events = [
+      event(2, "slides", "succeeded", { slideNumber: 1 }),
+      event(1, "slides", "running", { slideNumber: 1 }),
+    ];
+    expect(authoringSlideNumber(events)).toBeNull();
+  });
+
+  it("ignores per-slide illustration events", () => {
+    const events = [event(1, "images", "running", { slideNumber: 3 })];
+    expect(authoringSlideNumber(events)).toBeNull();
+  });
+});
 
 describe("buildTimeline", () => {
   it("returns every step as pending when there are no events", () => {

@@ -8,6 +8,7 @@ import {
   createDeckJob,
   downloadDeckJobPptx,
   getDeckJob,
+  getDeckSlidePreview,
   listPptTemplates,
   waitForDeckJob,
 } from "../services/aiService";
@@ -49,6 +50,17 @@ const toDeck = (job) => ({
   slideCount: job.slideCount,
 });
 
+const toSlides = (job) =>
+  (job?.slides || []).map((slide) => ({
+    slideNumber: slide.slideNumber,
+    revision: slide.revision,
+    title: slide.title,
+  }));
+
+/** 只有頁碼或 revision 真的變了才需要重新抓預覽，輪詢本身不該觸發。 */
+const slidesCacheKey = (slides) =>
+  slides.map((slide) => `${slide.slideNumber}:${slide.revision}`).join(",");
+
 /**
  * 只有「伺服器判定工作失敗」或「工作已不存在」才該清掉本機紀錄。
  * 網路中斷、休眠、暫時性 5xx 都要保留 jobId，回到頁面時才接得回去。
@@ -74,9 +86,82 @@ export default function usePptMasterDeck() {
   const [isGenerating, setIsGenerating] = useState(() => Boolean(readActiveJobId()));
   const [progress, setProgress] = useState(INITIAL_PROGRESS);
   const [events, setEvents] = useState([]);
+  const [slides, setSlides] = useState([]);
+  const [slidePreviews, setSlidePreviews] = useState({});
+  const [jobId, setJobId] = useState(() => readActiveJobId());
   const [deck, setDeck] = useState(null);
   const [error, setError] = useState(null);
   const abortRef = useRef(null);
+  const previewsRef = useRef(new Map());
+  const pendingPreviewsRef = useRef(new Set());
+
+  /** 換掉或清空預覽時一定要釋放 object URL，長時間輪詢才不會漏記憶體。 */
+  const releasePreviews = useCallback(() => {
+    previewsRef.current.forEach((preview) => URL.revokeObjectURL(preview.url));
+    previewsRef.current.clear();
+    pendingPreviewsRef.current.clear();
+    setSlidePreviews({});
+  }, []);
+
+  useEffect(() => releasePreviews, [releasePreviews]);
+
+  /** 輪詢每 4 秒回傳一次相同的清單，identity 保持穩定才不會一直重抓預覽。 */
+  const updateSlides = useCallback((job) => {
+    const next = toSlides(job);
+    setSlides((current) =>
+      slidesCacheKey(current) === slidesCacheKey(next) ? current : next
+    );
+  }, []);
+
+  /**
+   * 逐頁抓取已完成的 SVG 預覽。以 revision 當快取鍵：品質修正重寫某一頁時
+   * revision 會加一，這裡才會重抓並釋放舊的 object URL。
+   * 預覽失敗只讓那一格維持骨架，不影響生成流程與既有的錯誤語意。
+   */
+  useEffect(() => {
+    if (!jobId || slides.length === 0) return undefined;
+    let cancelled = false;
+
+    (async () => {
+      for (const slide of slides) {
+        if (cancelled) return;
+
+        const cached = previewsRef.current.get(slide.slideNumber);
+        if (cached && cached.revision >= slide.revision) continue;
+
+        const pendingKey = `${slide.slideNumber}:${slide.revision}`;
+        if (pendingPreviewsRef.current.has(pendingKey)) continue;
+        pendingPreviewsRef.current.add(pendingKey);
+
+        try {
+          const blob = await getDeckSlidePreview({
+            jobId,
+            slideNumber: slide.slideNumber,
+          });
+          if (cancelled) return;
+
+          const previous = previewsRef.current.get(slide.slideNumber);
+          if (previous && previous.revision >= slide.revision) continue;
+
+          if (previous?.url) URL.revokeObjectURL(previous.url);
+          previewsRef.current.set(slide.slideNumber, {
+            revision: slide.revision,
+            title: slide.title,
+            url: URL.createObjectURL(blob),
+          });
+          setSlidePreviews(Object.fromEntries(previewsRef.current));
+        } catch {
+          /* 這一頁的預覽抓不到就維持骨架 */
+        } finally {
+          pendingPreviewsRef.current.delete(pendingKey);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, slides]);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,32 +187,37 @@ export default function usePptMasterDeck() {
     };
   }, []);
 
-  const watchJob = useCallback(async ({ jobId, signal, slideCount }) => {
-    const finished = await waitForDeckJob({
-      jobId,
-      signal,
-      onProgress: (update) => {
-        setProgress(toProgress(update, slideCount));
-        setEvents(update?.events || []);
-      },
-    });
+  const watchJob = useCallback(
+    async ({ jobId: watchedJobId, signal, slideCount }) => {
+      const finished = await waitForDeckJob({
+        jobId: watchedJobId,
+        signal,
+        onProgress: (update) => {
+          setProgress(toProgress(update, slideCount));
+          setEvents(update?.events || []);
+          updateSlides(update);
+        },
+      });
 
-    const result = toDeck(finished);
-    setDeck(result);
-    setEvents(finished.events || []);
-    setProgress({
-      phase: "已完成",
-      current: finished.progress?.total || 0,
-      total: finished.progress?.total || 0,
-      startedAt: finished.startedAt || finished.createdAt || null,
-    });
-    return result;
-  }, []);
+      const result = toDeck(finished);
+      setDeck(result);
+      setEvents(finished.events || []);
+      updateSlides(finished);
+      setProgress({
+        phase: "已完成",
+        current: finished.progress?.total || 0,
+        total: finished.progress?.total || 0,
+        startedAt: finished.startedAt || finished.createdAt || null,
+      });
+      return result;
+    },
+    [updateSlides]
+  );
 
   /** 掛載時接回仍在進行（或已完成但尚未下載）的工作，切換頁籤才不會弄丟結果。 */
   useEffect(() => {
-    const jobId = readActiveJobId();
-    if (!jobId) return undefined;
+    const activeJobId = readActiveJobId();
+    if (!activeJobId) return undefined;
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -136,12 +226,13 @@ export default function usePptMasterDeck() {
     (async () => {
       let job = null;
       try {
-        job = await getDeckJob({ jobId, signal: controller.signal });
+        job = await getDeckJob({ jobId: activeJobId, signal: controller.signal });
       } catch (lookupError) {
         if (cancelled || lookupError?.name === "AbortError") return;
         setIsGenerating(false);
         if (lookupError?.status === 404) {
           writeActiveJobId(null);
+          setJobId(null);
           return;
         }
         setError(lookupError.message || "無法讀取先前的簡報生成工作");
@@ -151,6 +242,7 @@ export default function usePptMasterDeck() {
       if (cancelled) return;
 
       setEvents(job?.events || []);
+      updateSlides(job);
 
       if (job?.status === "succeeded") {
         setDeck(toDeck(job));
@@ -168,7 +260,11 @@ export default function usePptMasterDeck() {
       setProgress(toProgress(job, job?.slideCount));
 
       try {
-        await watchJob({ jobId, signal: controller.signal, slideCount: job?.slideCount });
+        await watchJob({
+          jobId: activeJobId,
+          signal: controller.signal,
+          slideCount: job?.slideCount,
+        });
       } catch (watchError) {
         if (cancelled || watchError?.name === "AbortError") return;
         if (isJobGone(watchError)) writeActiveJobId(null);
@@ -183,7 +279,7 @@ export default function usePptMasterDeck() {
       cancelled = true;
       controller.abort();
     };
-  }, [watchJob]);
+  }, [updateSlides, watchJob]);
 
   const generate = useCallback(
     async ({ topic, file, slideCount, styleId, layoutId }) => {
@@ -210,6 +306,9 @@ export default function usePptMasterDeck() {
       setError(null);
       setDeck(null);
       setEvents([]);
+      setSlides([]);
+      setJobId(null);
+      releasePreviews();
       setProgress({
         phase: "準備中",
         current: 0,
@@ -235,6 +334,7 @@ export default function usePptMasterDeck() {
           signal: controller.signal,
         });
         writeActiveJobId(job.jobId);
+        setJobId(job.jobId);
 
         return await watchJob({ jobId: job.jobId, signal: controller.signal, slideCount });
       } catch (generationError) {
@@ -254,7 +354,7 @@ export default function usePptMasterDeck() {
         setIsGenerating(false);
       }
     },
-    [watchJob]
+    [releasePreviews, watchJob]
   );
 
   /** 停止在這台裝置追蹤工作；伺服器上的生成不會因此中止。 */
@@ -262,10 +362,13 @@ export default function usePptMasterDeck() {
     abortRef.current?.abort();
     abortRef.current = null;
     writeActiveJobId(null);
+    setJobId(null);
     setIsGenerating(false);
     setProgress(INITIAL_PROGRESS);
     setEvents([]);
-  }, []);
+    setSlides([]);
+    releasePreviews();
+  }, [releasePreviews]);
 
   const download = useCallback(async () => {
     if (!deck?.jobId) return;
@@ -282,11 +385,14 @@ export default function usePptMasterDeck() {
 
   const reset = useCallback(() => {
     writeActiveJobId(null);
+    setJobId(null);
     setDeck(null);
     setError(null);
     setProgress(INITIAL_PROGRESS);
     setEvents([]);
-  }, []);
+    setSlides([]);
+    releasePreviews();
+  }, [releasePreviews]);
 
   return {
     templates,
@@ -294,6 +400,8 @@ export default function usePptMasterDeck() {
     isGenerating,
     progress,
     events,
+    slides,
+    slidePreviews,
     deck,
     error,
     generate,

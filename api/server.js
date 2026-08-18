@@ -125,7 +125,11 @@ registerRoutes(["/api/analyze-style"], ["POST", "OPTIONS"], analyzeStyle);
 registerRoutes(["/api/blob-sas"], ["POST", "OPTIONS"], blobSas);
 registerRoutes(["/api/deck-jobs"], ["POST", "OPTIONS"], deckJobs);
 registerRoutes(
-  ["/api/deck-jobs/:id", "/api/deck-jobs/:id/:action"],
+  [
+    "/api/deck-jobs/:id",
+    "/api/deck-jobs/:id/:action",
+    "/api/deck-jobs/:id/slides/:slideNumber",
+  ],
   ["GET", "OPTIONS"],
   deckJobs
 );

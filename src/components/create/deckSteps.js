@@ -50,3 +50,20 @@ export const buildTimeline = (events = []) => {
 
 export const activeStepIndex = (steps) =>
   steps.findIndex((step) => step.status === "running" || step.status === "failed");
+
+/**
+ * 目前正在設計（或修正）的頁碼，讓縮圖列能標出「這一頁正在畫」。
+ * 逐頁事件是 running → succeeded，因此看該頁最後一筆事件即可。
+ */
+export const authoringSlideNumber = (events = []) => {
+  const ordered = [...events].sort((a, b) => (a.id || 0) - (b.id || 0));
+  let active = null;
+
+  for (const event of ordered) {
+    if (event.slideNumber == null) continue;
+    if (event.step !== "slides" && event.step !== "quality") continue;
+    active = event.status === "running" ? event.slideNumber : null;
+  }
+
+  return active;
+};

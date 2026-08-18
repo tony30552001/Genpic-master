@@ -135,6 +135,19 @@ export const downloadDeckJobPptx = async ({ jobId, signal }) =>
   });
 
 /**
+ * 取得單頁投影片的 SVG 預覽。
+ * 走 apiClient 而不是直接把網址塞進 <img src>，才能沿用既有的 cookie 認證、
+ * 重試與 AuthExpiredError 處理（開發環境的 API 可能不同來源）。
+ */
+export const getDeckSlidePreview = async ({ jobId, slideNumber, signal }) =>
+  apiGetBlob(
+    `${API_BASE_URL}/deck-jobs/${encodeURIComponent(jobId)}/slides/${encodeURIComponent(
+      slideNumber
+    )}`,
+    { signal }
+  );
+
+/**
  * 輪詢簡報生成工作，直到成功或失敗。
  * 每頁投影片都要經過 LLM 手寫 SVG 與品質閘門，因此逾時設定得比圖片長。
  * 生成期間使用者可能休眠電腦或切換網路，單次輪詢失敗不代表工作失敗，

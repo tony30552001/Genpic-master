@@ -228,6 +228,16 @@ addOperation("/api/deck-jobs/{id}/download", "get", {
   },
 });
 
+addOperation("/api/deck-jobs/{id}/slides/{slideNumber}", "get", {
+  summary: "Get one authored slide of a deck job as an SVG preview",
+  tags: ["AI"],
+  parameters: pathParameters("id", "slideNumber"),
+  successContentType: "image/svg+xml",
+  successSchema: {
+    type: "string",
+  },
+});
+
 addOperation("/api/ppt-templates", "get", {
   summary: "List the available PPT Master style and layout templates",
   tags: ["Templates"],
