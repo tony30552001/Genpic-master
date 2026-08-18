@@ -7,15 +7,25 @@ openwiki:
   roles: [workflow, integration]
   change_kinds: [document-analysis, presentation-export, response-contract, provider-adapter]
   source_paths: [api/analyze-document/index.js, api/generate-presentation/index.js, api/_shared/presentationSchema.js, api/_shared/pptxAutomizer.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js]
-  symbols: [normalizeDocumentScene, normalizePresentationSlide, normalizePresentationSlides, buildAnalysisPrompt, generateJsonCompletion, generatePresentationPptx, setNamedText]
+  symbols: [normalizeDocumentScene, normalizePresentationSlide, normalizePresentationSlides, buildAnalysisPrompt, generateJsonCompletion, getFallbackDeployment, generatePresentationPptx, setNamedText]
   test_paths: [api/_shared/__tests__/presentationSchema.test.js, api/_shared/__tests__/pptxAutomizer.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
-  invariants: [Presentation analysis returns normalized slides rather than storyboard scenes., Storyboard analysis rejects an AI response without a nonempty recommended_style.prompt., Company-template export accepts one through ten normalized slides and loads only the repository template., Presentation schema normalization bounds native table and chart data before rendering.]
-  validation_commands: [pnpm test --run api/_shared/__tests__/presentationSchema.test.js api/_shared/__tests__/pptxAutomizer.test.js]
+  invariants: [Presentation analysis returns normalized slides rather than storyboard scenes., Storyboard analysis rejects an AI response without a nonempty recommended_style.prompt., Retryable Azure Responses failures get at most four total attempts; each retry reduces a nonempty output budget no lower than 8000 and may move to the configured fallback deployment., Company-template export accepts one through ten normalized slides and loads only the repository template., Presentation schema normalization bounds native table and chart data before rendering.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/presentationSchema.test.js api/_shared/__tests__/pptxAutomizer.test.js, pnpm test --run api/_shared/__tests__/azureOpenAI.test.js]
 ---
 
 # AI generation, document analysis, and presentation rendering
 
 Handlers authenticate, rate-limit, and usually resolve identity before work. `_shared/gemini.js` creates Google GenAI clients and normalizes JSON-like text; `_shared/gptImage.js` maps aspect ratios, chooses Azure `api-key` or Bearer authentication, and normalizes image responses. `azureOpenAI.js` separately powers prompt optimization and document analysis through structured Responses output.
+
+## Azure Responses resilience
+
+`azureOpenAI.js::generateJsonCompletion` is the shared Responses adapter used by document analysis and PPT Master outline/SVG authoring. It makes at most four total attempts for a `429` or a `5xx`; other errors, malformed output, and local validation errors surface without retry. Before each retry it reduces a nonempty `maxOutputTokens` to 60% with an 8,000-token floor, waits an exponential delay with jitter, and—when `AZURE_OPENAI_FALLBACK_DEPLOYMENT` is configured—switches once from the selected primary deployment to that peer. The fallback is a Node/API setting, not browser configuration; deployment ownership is described in [development, migrations, and deployment](../operations/development-deployment.md).
+
+The fallback does not create an independent deck workflow: [PPT Master deck jobs](ppt-master-decks.md) still explicitly selects `getDeckDeployment` for its background calls, and the shared adapter applies the retry policy around that selection. Do not convert a retryable provider response into a client-visible partial document or SVG result. `api/_shared/__tests__/azureOpenAI.test.js` verifies fallback selection, budget reduction/floor, retry exhaustion, and non-retryable `400` propagation; run it whenever adapter, retry, deployment, or output-budget behavior changes.
+
+```sh
+pnpm test --run api/_shared/__tests__/azureOpenAI.test.js
+```
 
 ## Generation and transformation
 
@@ -79,7 +89,7 @@ For a format, conversion, Responses-input, or response-normalization change, beg
 pnpm test --run api/_shared/__tests__/presentationSchema.test.js
 ```
 
-`documentParser.test.js` covers format/MIME recognition, direct text, CSV conversion, image routing, and conversion-error mapping; `azureOpenAI.test.js` covers image/PDF Responses input and configured deployment output. Run their focused pair only when parser or provider-input behavior changes. No focused handler test covers mode branching, `slideCount`, or storyboard required-style rejection; add a handler test or use controlled API integration before changing those branches. Provider credentials are not a required check for schema-only work.
+`documentParser.test.js` covers format/MIME recognition, direct text, CSV conversion, image routing, and conversion-error mapping. `azureOpenAI.test.js` covers image/PDF Responses input, configured deployment output, retry/fallback selection, output-budget reduction, exhaustion, and immediate propagation of non-retryable errors. Run the relevant focused test when parser or provider-adapter behavior changes; provider credentials are not required. No focused handler test covers mode branching, `slideCount`, or storyboard required-style rejection; add a handler test or use controlled API integration before changing those branches.
 
 ## Company-template PowerPoint export
 

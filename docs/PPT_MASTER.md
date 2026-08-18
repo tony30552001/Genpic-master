@@ -166,6 +166,21 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
   尚未產出的頁以骨架佔位，正在設計的那一頁有載入指示；
   點某一頁會在左欄放大顯示。成功與失敗都保留預覽。
 
+### 尖峰負載與素材檔名的兩個現實
+
+兩個一定會遇到、且都不是使用者操作錯誤的失敗來源：
+
+- **Azure GlobalStandard 尖峰拒絕**：部署在尖峰時會以 `429` 拒絕**體積過大的單一請求**
+  （訊息是 *your request exceeds the maximum usage size allowed during peak load*）。
+  這是針對「這個請求多大」的判定，不是「你叫得多頻繁」，所以重送同樣大小的請求沒有用。
+  `generateJsonCompletion()` 因此在重試時同步**縮小 `max_output_tokens`**
+  （下限 8000，逐頁授稿是 16000 → 9600 → 8000）並在設定 `AZURE_OPENAI_FALLBACK_DEPLOYMENT`
+  時改用同儕部署，最多 4 次、退避帶抖動。4 次仍失敗才讓錯誤浮上來。
+- **非 ASCII 檔名**：sidecar 對檔名有保守的 ASCII 白名單，中文檔名會被回
+  `unsafe file name (502)`，整份簡報在「解析素材」就死。`pptMasterClient.convertSource()`
+  上傳前用 `sidecarFileName()` 正規化，保留副檔名（sidecar 靠它判斷格式）。
+  使用者看到的檔名不受影響，正規化只作用在送往 sidecar 的那一次上傳。
+
 ---
 
 ## 5. 每頁 SVG 必須成立的硬性條件
@@ -204,6 +219,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `PPT_MASTER_INCLUDE_BRANDS` | App Service | 設為 `true` 才會開放品牌 template（預設隱藏，避免第三方商標問題） |
 | `DECK_JOB_TIMEOUT_MINUTES` | App Service | worker lock 逾時，預設 40 |
 | `DECK_JOB_POLL_MS` | App Service | worker 輪詢間隔，預設 5000 |
+| `AZURE_OPENAI_FALLBACK_DEPLOYMENT` | App Service | 尖峰被拒時改用的同儕部署（例如 `gpt-5.6-terra`）；未設定就只做退避重試 |
 | `PPT_MASTER_WORKDIR` | Container Apps | deck 工作目錄，預設 `/tmp/decks` |
 | `PPT_MASTER_COMMAND_TIMEOUT` | Container Apps | 單一 skill 指令逾時秒數 |
 
@@ -231,7 +247,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 
 ```powershell
 # 前端與共用契約
-corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckPreview.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js src/components/create/__tests__/DeckSlideRail.test.jsx src/components/create/__tests__/PptMasterStudio.test.jsx
+corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckPreview.test.js api/_shared/__tests__/azureOpenAI.test.js api/_shared/__tests__/pptMasterClient.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js src/components/create/__tests__/DeckSlideRail.test.jsx src/components/create/__tests__/PptMasterStudio.test.jsx
 corepack pnpm lint
 corepack pnpm build
 
@@ -254,5 +270,7 @@ docker run --rm -e PPT_MASTER_SERVICE_KEY=dev pixora-ppt-master:dev python smoke
 - 使用者上傳自家 `.pptx` 萃取 template 尚未實作，需要先掛載 Azure Files 永續磁碟
   （容器檔案系統是暫時的，註冊的 template 會在重啟後消失）。
 - 配圖失敗不會讓整份簡報失敗，該頁會改以純版面呈現，原因記在伺服器日誌。
+- 授稿呼叫遇到尖峰 `429` 會自動縮小輸出預算並改用備援部署重試；若整段尖峰持續，
+  仍會失敗，而且整個 job 會依 `MAX_ATTEMPTS` 從「解析素材」重跑，大綱與配圖都會重做。
 - 生成中的預覽用的是**瀏覽器本機的字型**，容器裡是 `fc-list` 回報的那一組。
   版面骨架、配色與比例與最終 PPTX 一致，中文字型可能被替換，實際字面以下載的檔案為準。

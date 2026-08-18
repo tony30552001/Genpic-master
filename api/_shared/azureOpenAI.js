@@ -32,6 +32,38 @@ const getDeployment = () =>
 const getDeckDeployment = () =>
   process.env.AZURE_OPENAI_DECK_DEPLOYMENT || DEFAULT_DECK_DEPLOYMENT;
 
+/** Peer deployment used when the primary one rejects the request under load. */
+const getFallbackDeployment = () =>
+  process.env.AZURE_OPENAI_FALLBACK_DEPLOYMENT || "";
+
+/**
+ * GlobalStandard deployments reject oversized requests during peak load with
+ * HTTP 429 ("your request exceeds the maximum usage size allowed"). That
+ * verdict is about the size of this request, not about how often we call, so
+ * every retry also shrinks the output budget and moves to the peer deployment.
+ */
+const RETRY_ATTEMPTS = 4;
+const RETRY_BASE_DELAY_MS = 2000;
+const MIN_RETRY_OUTPUT_TOKENS = 8000;
+
+class AzureOpenAIError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = "AzureOpenAIError";
+    this.status = status;
+  }
+}
+
+const isRetryableStatus = (status) => status === 429 || status >= 500;
+
+const shrinkOutputTokens = (tokens) =>
+  tokens ? Math.max(MIN_RETRY_OUTPUT_TOKENS, Math.floor(tokens * 0.6)) : tokens;
+
+const retryDelayMs = (attempt) =>
+  RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) + Math.floor(Math.random() * 500);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const getResponsesEndpoint = () => {
   const configuredEndpoint = getConfiguredEndpoint();
   if (!configuredEndpoint) {
@@ -141,7 +173,7 @@ const buildResponseInput = ({
   return [{ role: "user", content }];
 };
 
-const generateJsonCompletion = async ({
+const postJsonCompletion = async ({
   systemMessage,
   userMessage,
   imageDataUrl,
@@ -149,14 +181,8 @@ const generateJsonCompletion = async ({
   fileName,
   maxOutputTokens,
   deployment,
+  apiKey,
 }) => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error(
-      "AZURE_OPENAI_API_KEY 尚未設定（也未找到可共用的 GPT_IMAGE_API_KEY）"
-    );
-  }
-
   const response = await fetch(getResponsesEndpoint(), {
     method: "POST",
     headers: {
@@ -164,7 +190,7 @@ const generateJsonCompletion = async ({
       "api-key": apiKey,
     },
     body: JSON.stringify({
-      model: deployment || getDeployment(),
+      model: deployment,
       instructions: systemMessage,
       input: buildResponseInput({
         userMessage,
@@ -188,7 +214,7 @@ const generateJsonCompletion = async ({
   if (!response.ok) {
     const message =
       data?.error?.message || data?.message || "Azure OpenAI 請求失敗";
-    throw new Error(`${message} (${response.status})`);
+    throw new AzureOpenAIError(`${message} (${response.status})`, response.status);
   }
 
   const outputItems = Array.isArray(data?.output) ? data.output : [];
@@ -205,6 +231,56 @@ const generateJsonCompletion = async ({
   }
 
   return parseJsonContent(content);
+};
+
+const generateJsonCompletion = async ({
+  systemMessage,
+  userMessage,
+  imageDataUrl,
+  fileDataUrl,
+  fileName,
+  maxOutputTokens,
+  deployment,
+}) => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error(
+      "AZURE_OPENAI_API_KEY 尚未設定（也未找到可共用的 GPT_IMAGE_API_KEY）"
+    );
+  }
+
+  const fallbackDeployment = getFallbackDeployment();
+  let activeDeployment = deployment || getDeployment();
+  let activeMaxOutputTokens = maxOutputTokens;
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await postJsonCompletion({
+        systemMessage,
+        userMessage,
+        imageDataUrl,
+        fileDataUrl,
+        fileName,
+        maxOutputTokens: activeMaxOutputTokens,
+        deployment: activeDeployment,
+        apiKey,
+      });
+    } catch (error) {
+      if (attempt >= RETRY_ATTEMPTS || !isRetryableStatus(error.status)) throw error;
+
+      activeMaxOutputTokens = shrinkOutputTokens(activeMaxOutputTokens);
+      if (fallbackDeployment && activeDeployment !== fallbackDeployment) {
+        activeDeployment = fallbackDeployment;
+      }
+      console.warn("[azureOpenAI] Retrying rejected request:", {
+        attempt,
+        status: error.status,
+        deployment: activeDeployment,
+        maxOutputTokens: activeMaxOutputTokens,
+      });
+      await sleep(retryDelayMs(attempt));
+    }
+  }
 };
 
 module.exports = {

@@ -91,12 +91,31 @@ const getTemplateSpec = ({ kind, templateId }) =>
     `/catalog/${encodeURIComponent(kind)}/${encodeURIComponent(templateId)}/spec`
   );
 
+/**
+ * The sidecar rejects file names outside a conservative ASCII allow list
+ * ("unsafe file name"), which fails every upload with a non-Latin name. Upload
+ * under a sanitised name and keep the extension, which its format detection
+ * relies on.
+ */
+const sidecarFileName = (fileName) => {
+  const raw = String(fileName || "").trim();
+  const dot = raw.lastIndexOf(".");
+  const extension =
+    dot > 0 ? raw.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  const stem = (dot > 0 ? raw.slice(0, dot) : raw)
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^[._-]+/, "")
+    .slice(0, 60);
+  const safeStem = stem || "source";
+  return extension ? `${safeStem}.${extension}` : safeStem;
+};
+
 const convertSource = async ({ fileName, buffer, contentType }) => {
   const form = new FormData();
   form.append(
     "file",
     new Blob([buffer], { type: contentType || "application/octet-stream" }),
-    fileName
+    sidecarFileName(fileName)
   );
   return request("/sources/convert", { method: "POST", body: form });
 };
@@ -143,6 +162,7 @@ module.exports = {
   getHealth,
   getTemplateSpec,
   isConfigured,
+  sidecarFileName,
   writeImage,
   writeSlide,
 };
