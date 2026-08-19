@@ -1,6 +1,11 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel, parseGeminiResponse } = require("../_shared/gemini");
+const { generateGeminiJson } = require("../_shared/gemini");
+const { resolveIdentity } = require("../_shared/identity");
+const {
+    LlmConfigurationError,
+    resolveRoleModel,
+} = require("../_shared/llmModels");
 const { rateLimit } = require("../_shared/rateLimit");
 
 const OPTIMIZE_SCENE_PROMPT = `你是專業的視覺導演與 AI 圖像生成提示詞工程師。
@@ -52,9 +57,9 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // Build prompt
-        const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-2.0-flash";
-        const model = getModel(modelName);
+        // Build prompt with the Gemini model assigned in the admin center.
+        const identity = await resolveIdentity(auth.user);
+        const llm = await resolveRoleModel(identity.tenantId, "scene_optimization");
 
         let inputText = `請優化以下場景：
 
@@ -68,19 +73,19 @@ module.exports = async function (context, req) {
             inputText += `\n\n參考風格：${styleContext}`;
         }
 
-        const result = await model.generateContent([
-            {
-                role: "user",
-                parts: [{ text: OPTIMIZE_SCENE_PROMPT + "\n\n" + inputText }],
-            },
-        ], {
-            responseMimeType: "application/json",
-        });
-
         // Parse
         let data;
         try {
-            data = parseGeminiResponse(result);
+            data = await generateGeminiJson({
+                model: llm.model,
+                fallback: llm.fallback,
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: OPTIMIZE_SCENE_PROMPT + "\n\n" + inputText }],
+                    },
+                ],
+            });
         } catch (e) {
             context.log.error("[optimize-scene] Parse failed:", e.message);
             data = {
@@ -96,6 +101,10 @@ module.exports = async function (context, req) {
 
     } catch (err) {
         context.log.error("[optimize-scene] Error:", err.message);
+        if (err instanceof LlmConfigurationError) {
+            context.res = error(err.message, err.code, err.status);
+            return;
+        }
         context.res = error("場景優化失敗: " + err.message, "internal_error", 500);
     }
 };

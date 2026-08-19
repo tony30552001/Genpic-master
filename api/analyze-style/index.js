@@ -1,8 +1,11 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel, parseGeminiResponse } = require("../_shared/gemini");
+const { generateGeminiJson } = require("../_shared/gemini");
+const {
+  LlmConfigurationError,
+  resolveRoleModel,
+} = require("../_shared/llmModels");
 const { rateLimit } = require("../_shared/rateLimit");
-const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
 
 const normalizeTags = (raw) => {
@@ -64,8 +67,16 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-1.5-flash";
-    const model = getModel(modelName);
+    const identity = await resolveIdentity(auth.user);
+    if (!identity.userId) {
+      // DEBUG: 暴露更多使用者資訊以利除錯
+      const debugInfo = JSON.stringify(auth.user);
+      console.error("[Identity Error] User resolution failed:", debugInfo);
+      context.res = error(`無法辨識使用者: ${debugInfo}`, "unauthorized", 401);
+      return;
+    }
+
+    const llm = await resolveRoleModel(identity.tenantId, "style_analysis");
     let base64Data = null;
     let mimeType = "image/png";
 
@@ -77,8 +88,10 @@ module.exports = async function (context, req) {
       base64Data = referencePreview.split(",")[1];
     }
 
-    const result = await model.generateContent(
-      [
+    const raw = await generateGeminiJson({
+      model: llm.model,
+      fallback: llm.fallback,
+      contents: [
         {
           role: "user",
           parts: [
@@ -87,24 +100,11 @@ module.exports = async function (context, req) {
           ],
         },
       ],
-      {
-        responseMimeType: "application/json",
-      }
-    );
+    });
 
-    const raw = parseGeminiResponse(result);
     const sanitized = sanitizeAnalysisResult(raw);
     const tags = sanitized.suggested_tags;
     const styleName = safeString(raw.style_name).trim() || tags[0] || "未命名風格";
-
-    const identity = await resolveIdentity(auth.user);
-    if (!identity.userId) {
-      // DEBUG: 暴露更多使用者資訊以利除錯
-      const debugInfo = JSON.stringify(auth.user);
-      console.error("[Identity Error] User resolution failed:", debugInfo);
-      context.res = error(`無法辨識使用者: ${debugInfo}`, "unauthorized", 401);
-      return;
-    }
 
     context.res = ok({
       ...sanitized,
@@ -113,6 +113,10 @@ module.exports = async function (context, req) {
     });
   } catch (err) {
     context.log.error("Analyze style failed", err);
+    if (err instanceof LlmConfigurationError) {
+      context.res = error(err.message, err.code, err.status);
+      return;
+    }
     if (process.env.AUTH_DISABLED === "true") {
       context.res = error(
         err?.message || "分析失敗",

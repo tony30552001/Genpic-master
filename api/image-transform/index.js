@@ -93,7 +93,7 @@ module.exports = async function (context, req) {
     }
 
     const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
-    const model = getModel(modelName);
+    const model = getModel(modelName, process.env.GOOGLE_API_KEY);
 
     let base64Data = imageBase64 || null;
     let imageMimeType = mimeType || "image/jpeg";

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  Brain,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import ImageLightbox from "../common/ImageLightbox";
+import LlmModelSettings from "./LlmModelSettings";
 import useAuth from "../../hooks/useAuth";
 import {
   deleteAdminStyle,
@@ -41,6 +43,7 @@ const SECTIONS = [
   { id: "users", label: "使用者", icon: Users },
   { id: "history", label: "生成紀錄", icon: Image },
   { id: "models", label: "模型政策", icon: Settings },
+  { id: "llm", label: "分析模型", icon: Brain },
   { id: "styles", label: "風格庫", icon: Palette },
 ];
 
@@ -904,6 +907,8 @@ export default function AdminPanel() {
                     </CardContent>
                   </Card>
                 )}
+
+                {activeSection === "llm" && <LlmModelSettings />}
 
                 {activeSection === "styles" && (
                   <Card>

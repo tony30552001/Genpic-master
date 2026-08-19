@@ -26,6 +26,31 @@ const BLOCKED_IP_PATTERNS = [
     /^localhost$/i,               // localhost hostname
 ];
 
+/** 判斷 hostname 是否落在私有/保留範圍 */
+const isPrivateHost = (hostname) =>
+    BLOCKED_IP_PATTERNS.some((pattern) => pattern.test(hostname));
+
+/**
+ * 判斷管理員設定的服務端點是否可接受（僅 HTTPS 且非私有位址）。
+ * 與 isUrlAllowed 不同，這裡不套用 Blob Storage 白名單。
+ *
+ * @param {string} urlString - 待驗證的端點
+ * @returns {boolean}
+ */
+const isPublicHttpsEndpoint = (urlString) => {
+    if (!urlString || typeof urlString !== "string") return false;
+
+    let url;
+    try {
+        url = new URL(urlString);
+    } catch {
+        return false;
+    }
+
+    if (url.protocol !== "https:") return false;
+    return !isPrivateHost(url.hostname);
+};
+
 /**
  * 判斷 URL 是否在允許的白名單內
  *
@@ -53,7 +78,7 @@ const isUrlAllowed = (urlString) => {
     const hostname = url.hostname;
 
     // 規則 2: 封鎖所有私有/保留 IP 範圍
-    if (BLOCKED_IP_PATTERNS.some((pattern) => pattern.test(hostname))) {
+    if (isPrivateHost(hostname)) {
         return false;
     }
 
@@ -71,4 +96,4 @@ const isUrlAllowed = (urlString) => {
     return true;
 };
 
-module.exports = { isUrlAllowed };
+module.exports = { isUrlAllowed, isPublicHttpsEndpoint };

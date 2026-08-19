@@ -1,8 +1,8 @@
 ---
 type: operations guide
 title: Development, migrations, and deployment
-description: Local commands, API entrypoints, BFF session and PPT Master sidecar configuration, migration procedure, and deployment validation boundaries.
-tags: [operations, development, deployment, sessions, entra, ppt-master]
+description: Local commands, API entrypoints, BFF session, encrypted analysis-model, and PPT Master sidecar configuration, migration procedure, and deployment validation boundaries.
+tags: [operations, development, deployment, sessions, entra, llm, ppt-master]
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations]
@@ -28,15 +28,27 @@ Register the Entra callback as a **Web** redirect URI, for example `http://local
 
 For browser-only changes, use the focused test from the owning wiki page, then `pnpm lint && pnpm build` when the changed surface needs a build check. For API route wiring, use the syntax and adapter smoke checks in [HTTP API](../backend/http-api.md). Avoid running the whole suite by default.
 
-For schema changes, run migrations only against a disposable database and check the owning API behavior. Use `node api/scripts/migrate.cjs <exact-migration.sql>` for a narrow new-migration check (for example, `node api/scripts/migrate.cjs 012_deck_job_events.sql`); use `cd api && npm run migrate` only when validating full ordered replay. `010_auth_sessions.sql` is required for the BFF session implementation; `012_deck_job_events.sql` is required before deploying the event-aware deck-status handler because `GET /api/deck-jobs/:id` queries that table. See [schema](../data/schema.md). Do not run migrations against production as routine validation.
+For schema changes, run migrations only against a disposable database and check the owning API behavior. Use `node api/scripts/migrate.cjs <exact-migration.sql>` for a narrow new-migration check (for example, `node api/scripts/migrate.cjs 014_llm_models.sql`); use `cd api && npm run migrate` only when validating full ordered replay. `010_auth_sessions.sql` is required for the BFF session implementation; `012_deck_job_events.sql` is required before deploying the event-aware deck-status handler because `GET /api/deck-jobs/:id` queries that table; and `014_llm_models.sql` is required before any tenant-configured analysis caller. See [schema](../data/schema.md). Do not run migrations against production as routine validation.
 
 For a session/authentication change, run the focused browser and API tests documented by [browser application](../frontend/application.md) and [server sessions](../backend/sessions.md), then use non-production configuration to check this sequence: BFF login returns to the requested local route, `GET /api/auth/session` reports a user and CSRF value, a mutation includes cookie plus CSRF, logout clears the session, and an expired/revoked session produces recovery UI. This is conditional integration validation, not a baseline for unrelated frontend work.
+
+## Analysis-model secret configuration
+
+`SECRET_ENCRYPTION_KEY` is an API-only 64-character hex value used by `api/_shared/secretCrypto.js` for AES-256-GCM encryption of LINE channel tokens and tenant analysis-model API keys. It must be stable: replacing it makes existing ciphertext unreadable. Existing deployments using `LINE_TOKEN_ENCRYPTION_KEY` need to retain its key material under `SECRET_ENCRYPTION_KEY` before reading pre-existing LINE records. Generate and store the value through the deployment secret mechanism; never put it in Vite configuration, a migration, or this wiki.
+
+After applying `014_llm_models.sql`, an administrator creates Azure OpenAI/Gemini records and assigns each fixed role in `/admin`. The managed runtime paths are document analysis, prompt optimization, PPT Master deck authoring, style analysis, filename generation, and scene optimization; [AI generation](../backend/ai-generation.md) is canonical for the role/provider and fallback rules. `AZURE_OPENAI_*`, `GEMINI_MODEL_ANALYSIS`, and the old deployment fallback setting no longer configure those paths. This does not change image-generation credentials or embedding configuration. Validate model persistence and boundary rules provider-free with:
+
+```sh
+pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/azureOpenAI.test.js
+```
+
+Use an administrator-only connection test only when deliberately validating live provider credentials; it is not a default CI check.
 
 ## PPT Master sidecar
 
 The optional PPT Master workflow uses a separately deployed FastAPI container because the immutable upstream Python skill performs source conversion, SVG quality checks, and deterministic SVG-to-native-PPTX compilation. The Node API remains responsible for model calls and durable jobs; the sidecar is called through `api/_shared/pptMasterClient.js` with `X-Pixora-Service-Key`. See [PPT Master deck jobs](../backend/ppt-master-decks.md) for the runtime lifecycle and [schema](../data/schema.md) for its migration.
 
-The API always registers the public deck routes, but creation and template lookup return unavailable when `PPT_MASTER_SERVICE_URL` and `PPT_MASTER_SERVICE_KEY` are absent; the standalone worker does not start without them. Other non-secret configuration categories are request timeout, worker poll interval, lock timeout, and the optional brand-catalog flag; use the source/defaults rather than placing these values in browser configuration. `AZURE_OPENAI_DECK_DEPLOYMENT` is an optional Node-side override for deck outline/SVG authoring and defaults to `gpt-5.6-sol`; it is distinct from `AZURE_OPENAI_DEPLOYMENT` for interactive/document-analysis Responses calls. `AZURE_OPENAI_FALLBACK_DEPLOYMENT` is an optional peer deployment for retryable Responses failures from either path; it does not replace the selected primary unless a retry occurs. The sidecar requires the same service key, a Python work directory, and its command timeout. No model credential belongs in the sidecar; see [PPT Master deck jobs](../backend/ppt-master-decks.md) for the model boundary and [AI generation](../backend/ai-generation.md) for retry semantics.
+The API always registers the public deck routes, but creation and template lookup return unavailable when `PPT_MASTER_SERVICE_URL` and `PPT_MASTER_SERVICE_KEY` are absent; the standalone worker does not start without them. Other non-secret configuration categories are request timeout, worker poll interval, lock timeout, and the optional brand-catalog flag; use the source/defaults rather than placing these values in browser configuration. Deck outline/SVG authoring resolves the tenant's assigned `deck_authoring` model and optional fallback; it no longer reads Azure deployment settings. The sidecar requires the same service key, a Python work directory, and its command timeout. No model credential belongs in the sidecar; see [PPT Master deck jobs](../backend/ppt-master-decks.md) for the model boundary and [AI generation](../backend/ai-generation.md) for retry semantics.
 
 For a container or upstream-skill change, build and run the zero-AI smoke pipeline from `services/ppt-master-service/README.md`; it writes a minimal SVG, runs the authoritative gate, and exports a PPTX. This is conditional and more expensive than the Node contract test. For API outline/SVG validation changes, run the narrow check:
 

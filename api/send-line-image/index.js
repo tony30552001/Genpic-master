@@ -15,7 +15,7 @@ const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
-const { decrypt } = require("../_shared/lineEncryption");
+const { decrypt } = require("../_shared/secretCrypto");
 
 // ─── Push image via LINE Messaging API ────────────────────────────────────
 const pushImageMessage = async (channelAccessToken, targetId, imageUrl) => {

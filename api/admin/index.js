@@ -7,6 +7,19 @@ const {
   SUPPORTED_IMAGE_MODELS,
   updateModelPolicy,
 } = require("../_shared/modelPolicy");
+const {
+  LLM_PROVIDERS,
+  LLM_ROLES,
+  createLlmModel,
+  deleteLlmModel,
+  getLlmModelSecret,
+  getRole,
+  listLlmModels,
+  listRoleAssignments,
+  setRoleAssignment,
+  testLlmModel,
+  updateLlmModel,
+} = require("../_shared/llmModels");
 
 const timestamp = (value) =>
   value ? { seconds: Math.floor(new Date(value).getTime() / 1000) } : null;
@@ -373,6 +386,112 @@ const deleteStyle = async (context, identity, req, targetId) => {
   context.res = ok(null, 204, req);
 };
 
+const llmSettingsPayload = async (tenantId) => {
+  const [models, assignments] = await Promise.all([
+    listLlmModels(tenantId),
+    listRoleAssignments(tenantId),
+  ]);
+  return { models, assignments, roles: LLM_ROLES, providers: LLM_PROVIDERS };
+};
+
+const respondLlmError = (context, req, err) => {
+  if (err?.status) {
+    context.res = error(err.message, err.code, err.status, req);
+    return true;
+  }
+  return false;
+};
+
+const handleLlmModels = async (context, identity, req, method, targetId) => {
+  try {
+    if (method === "GET") {
+      context.res = ok(await llmSettingsPayload(identity.tenantId), 200, req);
+      return;
+    }
+
+    if (method === "POST") {
+      await createLlmModel({
+        tenantId: identity.tenantId,
+        label: req.body?.label,
+        provider: req.body?.provider,
+        modelName: req.body?.modelName,
+        endpoint: req.body?.endpoint,
+        apiKey: req.body?.apiKey,
+        createdBy: identity.userId,
+      });
+      context.res = ok(await llmSettingsPayload(identity.tenantId), 201, req);
+      return;
+    }
+
+    if (method === "PUT") {
+      if (!targetId) {
+        context.res = error("缺少模型 id", "bad_request", 400, req);
+        return;
+      }
+      await updateLlmModel({
+        tenantId: identity.tenantId,
+        id: targetId,
+        label: req.body?.label,
+        provider: req.body?.provider,
+        modelName: req.body?.modelName,
+        endpoint: req.body?.endpoint,
+        apiKey: req.body?.apiKey,
+      });
+      context.res = ok(await llmSettingsPayload(identity.tenantId), 200, req);
+      return;
+    }
+
+    if (!targetId) {
+      context.res = error("缺少模型 id", "bad_request", 400, req);
+      return;
+    }
+    await deleteLlmModel({ tenantId: identity.tenantId, id: targetId });
+    context.res = ok(await llmSettingsPayload(identity.tenantId), 200, req);
+  } catch (err) {
+    if (respondLlmError(context, req, err)) return;
+    throw err;
+  }
+};
+
+const handleLlmRoleAssignment = async (context, identity, req, targetId) => {
+  if (!getRole(targetId)) {
+    context.res = error("不支援的分析用途", "bad_request", 400, req);
+    return;
+  }
+  try {
+    await setRoleAssignment({
+      tenantId: identity.tenantId,
+      role: targetId,
+      modelId: req.body?.modelId,
+      fallbackModelId: req.body?.fallbackModelId,
+      updatedBy: identity.userId,
+    });
+    context.res = ok(await llmSettingsPayload(identity.tenantId), 200, req);
+  } catch (err) {
+    if (respondLlmError(context, req, err)) return;
+    throw err;
+  }
+};
+
+const handleLlmModelTest = async (context, identity, req) => {
+  try {
+    const modelId = req.body?.modelId;
+    const config = modelId
+      ? await getLlmModelSecret({ tenantId: identity.tenantId, id: modelId })
+      : {
+          provider: req.body?.provider,
+          modelName: req.body?.modelName,
+          endpoint: req.body?.endpoint,
+          apiKey: req.body?.apiKey,
+        };
+    const { latencyMs } = await testLlmModel(config);
+    context.res = ok({ success: true, latencyMs }, 200, req);
+  } catch (err) {
+    if (respondLlmError(context, req, err)) return;
+    context.res = ok({ success: false, message: err.message }, 200, req);
+  }
+};
+
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
     context.res = options(req);
@@ -446,6 +565,21 @@ module.exports = async function (context, req) {
     } catch (err) {
       context.res = error(err.message, "bad_request", 400, req);
     }
+    return;
+  }
+
+  if (resource === "llm-models" && ["GET", "POST", "PUT", "DELETE"].includes(method)) {
+    await handleLlmModels(context, identity, req, method, targetId);
+    return;
+  }
+
+  if (method === "PUT" && resource === "llm-roles") {
+    await handleLlmRoleAssignment(context, identity, req, targetId);
+    return;
+  }
+
+  if (method === "POST" && resource === "llm-model-tests") {
+    await handleLlmModelTest(context, identity, req);
     return;
   }
 

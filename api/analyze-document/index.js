@@ -10,8 +10,12 @@ const {
 } = require("../_shared/documentParser");
 const {
   generateJsonCompletion,
-  getDeployment,
 } = require("../_shared/azureOpenAI");
+const { resolveIdentity } = require("../_shared/identity");
+const {
+  LlmConfigurationError,
+  resolveRoleModel,
+} = require("../_shared/llmModels");
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
 const {
@@ -310,10 +314,21 @@ module.exports = async function (context, req) {
       throw conversionError;
     }
 
-    const modelName = getDeployment();
+    let llm;
+    try {
+      const identity = await resolveIdentity(auth.user);
+      llm = await resolveRoleModel(identity.tenantId, "document_analysis");
+    } catch (configError) {
+      if (configError instanceof LlmConfigurationError) {
+        context.res = error(configError.message, configError.code, configError.status);
+        return;
+      }
+      throw configError;
+    }
+
     context.log(
       "[analyze-document] Step 4: Call Azure OpenAI, model:",
-      modelName,
+      llm.model.modelName,
       "finalMimeType:",
       parsedDocument.mimeType
     );
@@ -362,6 +377,8 @@ module.exports = async function (context, req) {
     let data;
     try {
       data = await generateJsonCompletion({
+        model: llm.model,
+        fallback: llm.fallback,
         systemMessage: analysisPrompt,
         userMessage,
         imageDataUrl,
@@ -428,7 +445,7 @@ module.exports = async function (context, req) {
         estimated_generation_time: slides.length * 3,
         analysis_mode: analysisMode,
         analysis_provider: "azure_openai",
-        analysis_model: modelName,
+        analysis_model: llm.model.modelName,
         source_parser: parsedDocument.parser,
         source_format: parsedDocument.format,
         presentation_schema_version: PRESENTATION_SCHEMA_VERSION,
@@ -521,7 +538,7 @@ module.exports = async function (context, req) {
       estimated_generation_time: validatedScenes.length * 15,
       analysis_mode: analysisMode,
       analysis_provider: "azure_openai",
-      analysis_model: modelName,
+      analysis_model: llm.model.modelName,
       source_parser: parsedDocument.parser,
       source_format: parsedDocument.format,
       presentation_schema_version:

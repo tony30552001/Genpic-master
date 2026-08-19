@@ -1,4 +1,4 @@
-const { generateJsonCompletion, getDeckDeployment } = require("./azureOpenAI");
+const { generateJsonCompletion } = require("./azureOpenAI");
 const pptMaster = require("./pptMasterClient");
 const {
   DECK_MAX_REPAIR_ROUNDS,
@@ -25,7 +25,7 @@ const stripSvgWrapper = (value) => {
   return candidate.slice(start, end + "</svg>".length).trim();
 };
 
-const generateOutline = async ({ topic, sourceMarkdown, slideCount }) => {
+const generateOutline = async ({ topic, sourceMarkdown, slideCount, llm }) => {
   const material = sourceMarkdown
     ? `素材內容：\n${sourceMarkdown.slice(0, SOURCE_EXCERPT_LIMIT)}`
     : `簡報主題：${topic}\n請依據這個主題自行建構完整、具體且有實質內容的簡報論述。`;
@@ -34,7 +34,8 @@ const generateOutline = async ({ topic, sourceMarkdown, slideCount }) => {
     systemMessage: buildOutlineSystemPrompt(),
     userMessage: `${material}\n\n請規劃 ${slideCount} 頁的簡報大綱。`,
     maxOutputTokens: 8000,
-    deployment: getDeckDeployment(),
+    model: llm.model,
+    fallback: llm.fallback,
   });
 
   const normalized = normalizeOutline(outline, { slideCount });
@@ -44,12 +45,13 @@ const generateOutline = async ({ topic, sourceMarkdown, slideCount }) => {
   return normalized;
 };
 
-const authorSlideSvg = async ({ systemMessage, userMessage }) => {
+const authorSlideSvg = async ({ systemMessage, userMessage, llm }) => {
   const result = await generateJsonCompletion({
     systemMessage,
     userMessage,
     maxOutputTokens: 16000,
-    deployment: getDeckDeployment(),
+    model: llm.model,
+    fallback: llm.fallback,
   });
   const svg = stripSvgWrapper(result?.svg ?? result?.content ?? "");
   if (!svg.startsWith("<svg")) {
@@ -78,6 +80,7 @@ const authorDeck = async ({
   imagesBySlide = {},
   onProgress,
   onSlidePreview,
+  llm,
 }) => {
   const totalSlides = outline.slides.length;
   const authored = [];
@@ -102,6 +105,7 @@ const authorDeck = async ({
     const availableImages = imagesBySlide[slide.slide_number] || [];
     let svg = await authorSlideSvg({
       systemMessage,
+      llm,
       userMessage: buildSlideUserMessage({
         deckTitle: outline.title,
         slide,
@@ -116,6 +120,7 @@ const authorDeck = async ({
       attempt += 1;
       svg = await authorSlideSvg({
         systemMessage,
+        llm,
         userMessage: buildRepairUserMessage({
           slide,
           previousSvg: svg,
@@ -190,6 +195,7 @@ const authorDeck = async ({
       const problems = collectSlideProblems(report, item.fileName);
       const repaired = await authorSlideSvg({
         systemMessage,
+        llm,
         userMessage: buildRepairUserMessage({
           slide: item.slide,
           previousSvg: item.svg,

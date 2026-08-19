@@ -1,46 +1,16 @@
-const DEFAULT_DEPLOYMENT = "gpt-5.6-luna";
-
-// Deck authoring emits strict, structurally validated SVG and runs inside the
-// background worker, so it trades latency for a deeper reasoning deployment.
-const DEFAULT_DECK_DEPLOYMENT = "gpt-5.6-sol";
-
-const getConfiguredEndpoint = () =>
-  process.env.AZURE_OPENAI_ENDPOINT ||
-  process.env.AZURE_OPENAI_BASE_URL ||
-  deriveEndpointFromImageSetting();
-
-const deriveEndpointFromImageSetting = () => {
-  const imageEndpoint = process.env.GPT_IMAGE_ENDPOINT;
-  if (!imageEndpoint) return "";
-
-  try {
-    const url = new URL(imageEndpoint);
-    url.pathname = url.pathname.replace(/\/images\/(edits|generations).*$/i, "");
-    url.search = "";
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return imageEndpoint.replace(/\/images\/(edits|generations).*$/i, "");
-  }
-};
-
-const getApiKey = () =>
-  process.env.AZURE_OPENAI_API_KEY || process.env.GPT_IMAGE_API_KEY || "";
-
-const getDeployment = () =>
-  process.env.AZURE_OPENAI_DEPLOYMENT || DEFAULT_DEPLOYMENT;
-
-const getDeckDeployment = () =>
-  process.env.AZURE_OPENAI_DECK_DEPLOYMENT || DEFAULT_DECK_DEPLOYMENT;
-
-/** Peer deployment used when the primary one rejects the request under load. */
-const getFallbackDeployment = () =>
-  process.env.AZURE_OPENAI_FALLBACK_DEPLOYMENT || "";
+/**
+ * Azure OpenAI Responses client.
+ *
+ * Endpoint, API key and deployment always come from the caller. Analysis models
+ * are configured per tenant in the admin center (api/_shared/llmModels.js), so
+ * this module never reads environment variables.
+ */
 
 /**
  * GlobalStandard deployments reject oversized requests during peak load with
  * HTTP 429 ("your request exceeds the maximum usage size allowed"). That
  * verdict is about the size of this request, not about how often we call, so
- * every retry also shrinks the output budget and moves to the peer deployment.
+ * every retry also shrinks the output budget and moves to the peer model.
  */
 const RETRY_ATTEMPTS = 4;
 const RETRY_BASE_DELAY_MS = 2000;
@@ -64,19 +34,16 @@ const retryDelayMs = (attempt) =>
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const getResponsesEndpoint = () => {
-  const configuredEndpoint = getConfiguredEndpoint();
+const getResponsesEndpoint = (configuredEndpoint) => {
   if (!configuredEndpoint) {
-    throw new Error(
-      "AZURE_OPENAI_ENDPOINT 尚未設定（也未找到可共用的 GPT_IMAGE_ENDPOINT）"
-    );
+    throw new Error("分析模型缺少 Azure OpenAI 端點設定");
   }
 
   let url;
   try {
     url = new URL(configuredEndpoint);
   } catch {
-    throw new Error("AZURE_OPENAI_ENDPOINT 格式無效");
+    throw new Error("Azure OpenAI 端點格式無效");
   }
 
   url.search = "";
@@ -173,24 +140,36 @@ const buildResponseInput = ({
   return [{ role: "user", content }];
 };
 
+const requireModel = (model, label) => {
+  if (!model?.modelName) {
+    throw new Error(`${label}缺少模型名稱`);
+  }
+  if (!model.endpoint) {
+    throw new Error(`${label}缺少 Azure OpenAI 端點`);
+  }
+  if (!model.apiKey) {
+    throw new Error(`${label}缺少 API 金鑰`);
+  }
+  return model;
+};
+
 const postJsonCompletion = async ({
+  model,
   systemMessage,
   userMessage,
   imageDataUrl,
   fileDataUrl,
   fileName,
   maxOutputTokens,
-  deployment,
-  apiKey,
 }) => {
-  const response = await fetch(getResponsesEndpoint(), {
+  const response = await fetch(getResponsesEndpoint(model.endpoint), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "api-key": apiKey,
+      "api-key": model.apiKey,
     },
     body: JSON.stringify({
-      model: deployment,
+      model: model.modelName,
       instructions: systemMessage,
       input: buildResponseInput({
         userMessage,
@@ -233,49 +212,48 @@ const postJsonCompletion = async ({
   return parseJsonContent(content);
 };
 
+/**
+ * @param {object} params
+ * @param {{ modelName: string, endpoint: string, apiKey: string }} params.model
+ * @param {{ modelName: string, endpoint: string, apiKey: string }} [params.fallback]
+ *   Peer model used once the primary one rejects the request under load.
+ */
 const generateJsonCompletion = async ({
+  model,
+  fallback,
   systemMessage,
   userMessage,
   imageDataUrl,
   fileDataUrl,
   fileName,
   maxOutputTokens,
-  deployment,
 }) => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error(
-      "AZURE_OPENAI_API_KEY 尚未設定（也未找到可共用的 GPT_IMAGE_API_KEY）"
-    );
-  }
-
-  const fallbackDeployment = getFallbackDeployment();
-  let activeDeployment = deployment || getDeployment();
+  let activeModel = requireModel(model, "主要分析模型");
+  const fallbackModel = fallback ? requireModel(fallback, "備援分析模型") : null;
   let activeMaxOutputTokens = maxOutputTokens;
 
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await postJsonCompletion({
+        model: activeModel,
         systemMessage,
         userMessage,
         imageDataUrl,
         fileDataUrl,
         fileName,
         maxOutputTokens: activeMaxOutputTokens,
-        deployment: activeDeployment,
-        apiKey,
       });
     } catch (error) {
       if (attempt >= RETRY_ATTEMPTS || !isRetryableStatus(error.status)) throw error;
 
       activeMaxOutputTokens = shrinkOutputTokens(activeMaxOutputTokens);
-      if (fallbackDeployment && activeDeployment !== fallbackDeployment) {
-        activeDeployment = fallbackDeployment;
+      if (fallbackModel && activeModel.modelName !== fallbackModel.modelName) {
+        activeModel = fallbackModel;
       }
       console.warn("[azureOpenAI] Retrying rejected request:", {
         attempt,
         status: error.status,
-        deployment: activeDeployment,
+        model: activeModel.modelName,
         maxOutputTokens: activeMaxOutputTokens,
       });
       await sleep(retryDelayMs(attempt));
@@ -287,7 +265,6 @@ module.exports = {
   buildResponseInput,
   generateJsonCompletion,
   parseJsonContent,
+  postJsonCompletion,
   getResponsesEndpoint,
-  getDeployment,
-  getDeckDeployment,
 };

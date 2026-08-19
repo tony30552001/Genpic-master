@@ -38,22 +38,19 @@ func --version
     "GOOGLE_CLIENT_ID": "<google-client-id>",
     "CORS_ALLOW_ORIGIN": "http://localhost:5175",
     "GOOGLE_API_KEY": "<your-gemini-api-key>",
-    "GEMINI_MODEL_ANALYSIS": "gemini-1.5-flash",
     "GEMINI_MODEL_GENERATION": "gemini-3-pro-image-preview",
-    "AZURE_OPENAI_ENDPOINT": "https://<resource>.services.ai.azure.com/openai/v1",
-    "AZURE_OPENAI_API_KEY": "<your-azure-openai-key>",
-    "AZURE_OPENAI_DEPLOYMENT": "gpt-5.6-luna",
+    "SECRET_ENCRYPTION_KEY": "<32-byte-base64-or-hex-key>",
     "AUTH_DISABLED": "false"
   }
 }
 ```
 
-「AI 智能優化」使用 Azure OpenAI Responses API。以上三個設定只放在
-API runtime（App Service 或本機 adapter）；不要加上 `VITE_` 前綴，也不要放進前端 `.env`。
-若未設定 `AZURE_OPENAI_API_KEY`，後端會暫時共用 `GPT_IMAGE_API_KEY`。
-文件分析也使用相同的 `AZURE_OPENAI_DEPLOYMENT`，包含 AnyDoc Markdown、圖片及
-掃描型 PDF；deployment 必須支援 Responses API 的 image 與 file input。
-`GEMINI_MODEL_ANALYSIS` 仍供風格分析、檔名生成與場景優化使用。
+分析用的 LLM（文件分析、Prompt 優化、簡報生成、風格分析、檔名生成、場景優化）
+不再由環境變數設定：模型代號、端點與金鑰都存在資料庫，由管理中心的「分析模型」
+分頁維護，金鑰以 `SECRET_ENCRYPTION_KEY` 加密。本機開發同樣需要先套用
+`db/migrations/014_llm_models.sql` 並在管理中心新增模型與完成用途指派，
+否則相關 API 會回傳 HTTP 503 與 `llm_not_configured`。
+`GOOGLE_API_KEY` 仍供圖片生成與 embedding 使用。
 
 ---
 

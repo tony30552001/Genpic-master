@@ -15,18 +15,23 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
    - `services.ai.azure.com` 端點使用 `api-key` header；GPT credentials 一律保留在後端 runtime。
 4. 重新登入後，管理員可從 `/admin` 開啟管理中心。
 
-## AI 智能優化模型
+## 分析模型（LLM）
 
-圖片生成頁面的「AI 智能優化」使用 Azure OpenAI Responses API。請在
-App Service runtime 設定以下變數，不要使用 `VITE_*` 前端變數：
+文件分析、Prompt 優化、簡報生成、風格分析、檔名生成與場景優化所使用的模型，全部在管理中心的
+「分析模型」分頁維護，後端不再讀取 `AZURE_OPENAI_*` 或 `GEMINI_MODEL_ANALYSIS` 環境變數。
 
-- `AZURE_OPENAI_ENDPOINT=https://<resource>.services.ai.azure.com/openai/v1`
-- `AZURE_OPENAI_API_KEY=<Azure OpenAI API Key>`
-- `AZURE_OPENAI_DEPLOYMENT=gpt-5.6-luna`
+1. 執行 `db/migrations/014_llm_models.sql`。
+2. 在 App Service 設定 `SECRET_ENCRYPTION_KEY`（32 bytes 的 base64 或 hex 金鑰，與 LINE token 共用）。
+   由 `LINE_TOKEN_ENCRYPTION_KEY` 升級者請把原值原封不動複製過去，既有加密資料即可繼續解密。
+3. 在管理中心「分析模型」新增模型：名稱、供應商、模型／部署代號、端點（Azure OpenAI 必填）與 API 金鑰。
+   金鑰以 AES-256-GCM 加密存於 `llm_models`，儲存後不會再回傳前端。
+4. 使用「測試」按鈕實際呼叫一次模型確認連線。
+5. 在「用途指派」為六個用途各指派主要模型，必要時指定同供應商的備援模型
+   （取代舊的 `AZURE_OPENAI_FALLBACK_DEPLOYMENT`）。
 
-`AZURE_OPENAI_API_KEY` 未設定時，後端會共用 `GPT_IMAGE_API_KEY`，方便與
-同一個 Azure AI Foundry 資源整合。文件分析的 AnyDoc Markdown、圖片及掃描型
-PDF 也使用此 GPT deployment；`optimize-scene` 的單一場景優化仍使用 Gemini 設定。
+用途與供應商是固定搭配的：文件分析、Prompt 優化、簡報生成使用 Azure OpenAI；
+風格分析、檔名生成、場景優化使用 Google Gemini。尚未指派前，對應 API 會回傳
+HTTP 503 與 `llm_not_configured`，不做任何靜默降級。
 
 ## 模型政策
 
@@ -44,3 +49,9 @@ PDF 也使用此 GPT deployment；`optimize-scene` 的單一場景優化仍使�
 - `PUT /api/management/users/{id}`：調整使用者角色。
 - `PUT /api/management/users/{id}` 搭配 `{ "isActive": false }`：停用使用者；停用後該帳號無法使用系統。
 - `DELETE /api/management/styles/{id}`：刪除租戶風格並解除歷史紀錄關聯。
+- `GET /api/management/llm-models`：取得分析模型清單、用途目錄與指派狀態（不含金鑰）。
+- `POST /api/management/llm-models`：新增分析模型。
+- `PUT /api/management/llm-models/{id}`：更新分析模型；`apiKey` 留空表示不變更。
+- `DELETE /api/management/llm-models/{id}`：刪除分析模型；仍被指派時回傳 409。
+- `PUT /api/management/llm-roles/{role}`：指派用途的主要與備援模型。
+- `POST /api/management/llm-model-tests`：以 `{ modelId }` 或草稿設定實際呼叫模型測試連線。

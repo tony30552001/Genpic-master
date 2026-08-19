@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import { apiDelete, apiGet, apiPut } from "./apiClient";
+import { apiDelete, apiGet, apiPost, apiPut } from "./apiClient";
 
 const ADMIN_API_BASE = `${API_BASE_URL}/management`;
 
@@ -53,3 +53,21 @@ export const updateAdminModelSettings = async (settings) =>
 
 export const deleteAdminStyle = async (styleId) =>
   apiDelete(`${ADMIN_API_BASE}/styles/${styleId}`);
+
+export const listAdminLlmModels = async () =>
+  apiGet(`${ADMIN_API_BASE}/llm-models`);
+
+export const createAdminLlmModel = async (model) =>
+  apiPost(`${ADMIN_API_BASE}/llm-models`, model);
+
+export const updateAdminLlmModel = async (modelId, model) =>
+  apiPut(`${ADMIN_API_BASE}/llm-models/${modelId}`, model);
+
+export const deleteAdminLlmModel = async (modelId) =>
+  apiDelete(`${ADMIN_API_BASE}/llm-models/${modelId}`);
+
+export const assignAdminLlmRole = async (role, assignment) =>
+  apiPut(`${ADMIN_API_BASE}/llm-roles/${role}`, assignment);
+
+export const testAdminLlmModel = async (payload) =>
+  apiPost(`${ADMIN_API_BASE}/llm-model-tests`, payload);

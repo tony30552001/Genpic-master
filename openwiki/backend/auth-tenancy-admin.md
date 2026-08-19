@@ -1,16 +1,16 @@
 ---
 type: security architecture
 title: Authentication, tenancy, and administration
-description: Session-derived identity, tenant persistence, role enforcement, and tenant model-policy administration.
-tags: [backend, authentication, authorization, tenancy, administration]
+description: Session-derived identity, tenant persistence, role enforcement, image-model policy, and encrypted tenant analysis-model administration.
+tags: [backend, authentication, authorization, tenancy, administration, llm]
 openwiki:
   roles: [architecture, domain, integration, testing]
-  change_kinds: [authorization, tenancy, model-policy]
-  source_paths: [api/_shared/auth.js, api/_shared/identity.js, api/admin/index.js, api/me/index.js]
-  symbols: [requireAuth, resolveIdentity, requireAdmin, ensureModelPolicy, validateModelPolicy]
-  test_paths: [api/_shared/__tests__/auth.test.js]
-  invariants: ["A protected handler receives identity from a valid Pixora session, not a browser-supplied provider token.", "Tenant resource access remains server-scoped even when the client supplies filters."]
-  validation_commands: [pnpm test --run api/_shared/__tests__/auth.test.js]
+  change_kinds: [authorization, tenancy, model-policy, model-configuration]
+  source_paths: [api/_shared/auth.js, api/_shared/identity.js, api/_shared/llmModels.js, api/admin/index.js, api/me/index.js]
+  symbols: [requireAuth, resolveIdentity, requireAdmin, ensureModelPolicy, validateModelPolicy, resolveRoleModel, setRoleAssignment]
+  test_paths: [api/_shared/__tests__/auth.test.js, api/_shared/__tests__/llmModels.test.js]
+  invariants: ["A protected handler receives identity from a valid Pixora session, not a browser-supplied provider token.", "Tenant resource access remains server-scoped even when the client supplies filters.", "Analysis API keys are encrypted at rest and never included in management responses.", "Each analysis role resolves only a same-tenant model of its fixed provider or returns llm_not_configured."]
+  validation_commands: [pnpm test --run api/_shared/__tests__/auth.test.js api/_shared/__tests__/llmModels.test.js]
 ---
 
 # Authentication, tenancy, and administration
@@ -23,7 +23,13 @@ Protected handlers call `requireAuth`, then conventionally rate-limit and resolv
 
 `requireAdmin` rejects inactive users and requires role `admin`, except for the true local non-production bypass. `adminService.js` maps `/api/management/users?page&pageSize`, `/user-options`, `/history?userId&page&pageSize`, `/styles?userId&page&pageSize`, and `/settings`; updates use `PUT /users/:id` or `PUT /settings`, and admin style removal is `DELETE /styles/:id`. The API lists only the admin tenant, applies optional `userId` filters to history/styles, clamps page size to 100, validates `admin|editor|viewer` and boolean status, disallows self-disable, and prevents demoting or disabling the final active admin. Unlike normal `/styles/:id`, whose deletion requires creator ownership, management deletion can remove any style in the tenant after nulling history references. The browser's table, page-local image preview, and download presentation consume this list contract but add no detail endpoint; see [administrator panel and history preview](../frontend/admin-panel.md).
 
-`tenant_model_settings` is created lazily by `ensureModelPolicy`. `GET /management/settings` returns `{ modelPolicy, supportedModels }`; `PUT` initializes then validates/persists `{ allowedModels, defaultModel }` with `updatedBy`. `validateModelPolicy` accepts only `gemini-imagen` and `gpt-image-2`, requires at least one allowed model, and requires the default to be allowed. Generation and history use the default, so an admin setting changes runtime provider selection rather than merely UI presentation.
+`tenant_model_settings` is created lazily by `ensureModelPolicy`. `GET /management/settings` returns `{ modelPolicy, supportedModels }`; `PUT` initializes then validates/persists `{ allowedModels, defaultModel }` with `updatedBy`. `validateModelPolicy` accepts only `gemini-imagen` and `gpt-image-2`, requires at least one allowed model, and requires the default to be allowed. Generation and history use the default, so this image-generation setting changes runtime provider selection rather than merely UI presentation.
+
+### Tenant analysis models
+
+`api/_shared/llmModels.js` owns a different tenant catalog for six analysis roles. `GET /management/llm-models` returns models without plaintext API keys (`hasApiKey` only), assignments, the fixed role catalog, and provider metadata. Administrators use `POST`, `PUT`, and `DELETE /management/llm-models[/id]`; an empty update key retains the prior encrypted value, duplicate labels are conflicts, and deletion is refused while an assignment references the model. `PUT /management/llm-roles/:role` upserts a primary and optional distinct fallback, both of which must be tenant-local and provider-compatible. `POST /management/llm-model-tests` tests either an already stored model or draft configuration and returns a success/latency result; it is not a secret-return path.
+
+`resolveRoleModel(tenantId, role)` decrypts only the selected model(s) for server-side calls. The role/provider pairing is fixed: `document_analysis`, `prompt_optimization`, and `deck_authoring` require Azure OpenAI; `style_analysis`, `filename`, and `scene_optimization` require Google Gemini. Azure endpoints must be public HTTPS URLs; Gemini endpoint input is discarded because its SDK owns the endpoint. A missing assignment is `LlmConfigurationError` (`503 llm_not_configured`), not a fallback to environment configuration. The model tables and encryption boundary are documented in [schema](../data/schema.md), and runtime callers are documented in [AI generation](ai-generation.md).
 
 `/api/me` is the browser profile boundary and returns `{ user: { id, email, displayName, role }, modelPolicy }`; `AuthProvider` folds it into `profile` and `isAdmin`. See [browser application and authentication](../frontend/application.md) for the profile-load and gate lifecycle.
 

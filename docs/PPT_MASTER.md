@@ -174,7 +174,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
   （訊息是 *your request exceeds the maximum usage size allowed during peak load*）。
   這是針對「這個請求多大」的判定，不是「你叫得多頻繁」，所以重送同樣大小的請求沒有用。
   `generateJsonCompletion()` 因此在重試時同步**縮小 `max_output_tokens`**
-  （下限 8000，逐頁授稿是 16000 → 9600 → 8000）並在設定 `AZURE_OPENAI_FALLBACK_DEPLOYMENT`
+  （下限 8000，逐頁授稿是 16000 → 9600 → 8000）並在「簡報生成」用途指派了備援模型
   時改用同儕部署，最多 4 次、退避帶抖動。4 次仍失敗才讓錯誤浮上來。
 - **非 ASCII 檔名**：sidecar 對檔名有保守的 ASCII 白名單，中文檔名會被回
   `unsafe file name (502)`，整份簡報在「解析素材」就死。`pptMasterClient.convertSource()`
@@ -219,9 +219,11 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `PPT_MASTER_INCLUDE_BRANDS` | App Service | 設為 `true` 才會開放品牌 template（預設隱藏，避免第三方商標問題） |
 | `DECK_JOB_TIMEOUT_MINUTES` | App Service | worker lock 逾時，預設 40 |
 | `DECK_JOB_POLL_MS` | App Service | worker 輪詢間隔，預設 5000 |
-| `AZURE_OPENAI_FALLBACK_DEPLOYMENT` | App Service | 尖峰被拒時改用的同儕部署（例如 `gpt-5.6-terra`）；未設定就只做退避重試 |
 | `PPT_MASTER_WORKDIR` | Container Apps | deck 工作目錄，預設 `/tmp/decks` |
 | `PPT_MASTER_COMMAND_TIMEOUT` | Container Apps | 單一 skill 指令逾時秒數 |
+
+撰稿使用的模型（含尖峰被拒時改用的同儕模型）在管理中心「分析模型」的「簡報生成」
+用途指派，不再由環境變數設定。未指派時 job 會直接失敗並回報 `llm_not_configured`。
 
 前端沒有新增任何 `VITE_*` 變數。
 

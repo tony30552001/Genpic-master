@@ -1,14 +1,14 @@
 ---
 type: data model
 title: PostgreSQL schema and migrations
-description: Tenant-scoped persistence model, ordered SQL evolution, vector search, durable image and PPT Master deck jobs, and opaque authentication sessions.
-tags: [database, postgres, migrations, sessions, deck-jobs]
+description: Tenant-scoped persistence model, ordered SQL evolution, encrypted analysis-model configuration, vector search, durable image and PPT Master deck jobs, and opaque authentication sessions.
+tags: [database, postgres, migrations, sessions, deck-jobs, llm]
 openwiki:
   roles: [domain, operations, testing]
   change_kinds: [schema, migrations, session-lifecycle]
-  source_paths: [db/migrations, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, db/migrations/013_deck_slide_previews.sql, api/_shared/deckJobs.js, api/scripts/migrate.cjs]
-  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "An optional migrator argument must exactly name an existing .sql migration; selected files still execute in lexicographic order.", "Authentication session records store token hashes, never raw browser tokens.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck job events are append-only, constrained to known steps and statuses, and cascade with their job.", "Deck slide previews have one row per job and page; a quality rewrite increments revision and deletion of the job cascades."]
-  validation_commands: [cd api && npm run migrate, node api/scripts/migrate.cjs 013_deck_slide_previews.sql]
+  source_paths: [db/migrations, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, db/migrations/013_deck_slide_previews.sql, db/migrations/014_llm_models.sql, api/_shared/llmModels.js, api/_shared/deckJobs.js, api/scripts/migrate.cjs]
+  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "An optional migrator argument must exactly name an existing .sql migration; selected files still execute in lexicographic order.", "Authentication session records store token hashes, never raw browser tokens.", "Each analysis role assignment uses tenant-local primary and optional distinct fallback models.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck job events are append-only, constrained to known steps and statuses, and cascade with their job.", "Deck slide previews have one row per job and page; a quality rewrite increments revision and deletion of the job cascades."]
+  validation_commands: [node api/scripts/migrate.cjs 014_llm_models.sql, cd api && npm run migrate]
 ---
 
 # PostgreSQL schema and migrations
@@ -26,6 +26,9 @@ erDiagram
   users ||--o{ image_generation_jobs : owns
   tenants ||--o{ deck_generation_jobs : scopes
   users ||--o{ deck_generation_jobs : owns
+  tenants ||--o{ llm_models : configures
+  llm_models ||--o{ llm_role_assignments : assigned
+  users ||--o{ llm_models : creates
   deck_generation_jobs ||--o{ deck_job_events : traces
   deck_generation_jobs ||--o{ deck_slide_previews : retains
   users ||--o| line_configs : configures
@@ -38,6 +41,12 @@ This diagram includes the durable session relationship used by [server sessions 
 `001_init.sql` creates tenants, users, projects, styles, scenes, and history. All primary operational records carry `tenant_id`; user-scoped records also carry an owner. Styles contain `vector(1536)` embedding and a cosine ivfflat index. `002` adds prompt snapshots to history, `003` adds templates, `005` evolves styles into shared/private catalog records, `006` adds tenant model settings and history model audit data, and `009` adds durable image jobs with `queued|processing|succeeded|failed`, attempts, lock/timing fields, and queue/user indexes.
 
 `004_line_config.sql` defines encrypted credential text columns and a unique `(user_id, tenant_id)` binding. Encryption happens in application code, never SQL. `008` adds `users.is_active`.
+
+## Tenant analysis-model configuration
+
+`014_llm_models.sql` adds the per-tenant model catalog used by [AI generation](../backend/ai-generation.md). `llm_models` belongs to a tenant, records a case-insensitively unique label, fixed provider (`azure-openai` or `google-gemini`), model/deployment name, optional endpoint, encrypted API-key ciphertext, creator, and timestamps. Its API key is encrypted/decrypted only in `api/_shared/secretCrypto.js`; no plaintext key belongs in SQL responses or browser state.
+
+`llm_role_assignments` has one `(tenant_id, role)` row and references a required primary and optional fallback `llm_models` row. The fallback differs at the database constraint level; primary deletion is restricted while a fallback becomes null if deleted, with application-level deletion refusal used to make reassignment explicit. Both tables cascade when the tenant is removed, while creator/updater references become null when a user is removed. The runtime additionally checks role/provider compatibility and resolves only tenant-local assignments. Apply `014_llm_models.sql` before deploying any caller that invokes `resolveRoleModel`; an unassigned role returns `llm_not_configured` rather than using a legacy environment default.
 
 ## PPT Master deck jobs
 

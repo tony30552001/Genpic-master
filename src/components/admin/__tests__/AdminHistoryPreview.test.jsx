@@ -12,12 +12,18 @@ import {
 } from "../../../services/adminService";
 
 vi.mock("../../../services/adminService", () => ({
+  assignAdminLlmRole: vi.fn(),
+  createAdminLlmModel: vi.fn(),
+  deleteAdminLlmModel: vi.fn(),
   deleteAdminStyle: vi.fn(),
   getAdminModelSettings: vi.fn(),
   listAdminHistory: vi.fn(),
+  listAdminLlmModels: vi.fn(),
   listAdminStyles: vi.fn(),
   listAdminUsers: vi.fn(),
   listAdminUserOptions: vi.fn(),
+  testAdminLlmModel: vi.fn(),
+  updateAdminLlmModel: vi.fn(),
   updateAdminModelSettings: vi.fn(),
   updateAdminUserRole: vi.fn(),
   updateAdminUserStatus: vi.fn(),

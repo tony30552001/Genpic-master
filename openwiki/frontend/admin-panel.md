@@ -1,21 +1,29 @@
 ---
 type: frontend administration workflow
 title: Administrator panel and history preview
-description: Admin-only browser workspace for tenant user, history, model-policy, and style operations, including page-local generated-image inspection.
-tags: [frontend, administration, history, images, accessibility]
+description: Admin-only browser workspace for tenant users, history, image policy, encrypted analysis-model role assignments, and styles, including page-local generated-image inspection.
+tags: [frontend, administration, history, images, llm, accessibility]
 openwiki:
   roles: [frontend, workflow, integration, testing]
-  change_kinds: [administration, history-browsing, image-preview]
-  source_paths: [src/App.jsx, src/pages/AdminPage.jsx, src/components/admin/AdminPanel.jsx, src/components/common/ImageLightbox.jsx, src/services/adminService.js]
-  symbols: [ProtectedAdminRoute, AdminPage, AdminPanel, listAdminHistory, ImageLightbox, viewableHistoryItems]
-  test_paths: [src/components/admin/__tests__/AdminHistoryPreview.test.jsx, src/components/common/__tests__/ImageLightbox.test.jsx]
-  invariants: [The `/admin` route renders only after authenticated profile loading confirms the admin role., History preview navigation includes only image-bearing records loaded in the current page., Closing a shared lightbox restores prior focus and document scrolling., Administrator history inspection uses the existing tenant-scoped management list and does not fetch an individual record.]
-  validation_commands: [pnpm test --run src/components/admin/__tests__/AdminHistoryPreview.test.jsx src/components/common/__tests__/ImageLightbox.test.jsx]
+  change_kinds: [administration, history-browsing, image-preview, model-configuration]
+  source_paths: [src/App.jsx, src/pages/AdminPage.jsx, src/components/admin/AdminPanel.jsx, src/components/admin/LlmModelSettings.jsx, src/components/common/ImageLightbox.jsx, src/services/adminService.js]
+  symbols: [ProtectedAdminRoute, AdminPage, AdminPanel, LlmModelSettings, listAdminLlmModels, assignAdminLlmRole, ImageLightbox, viewableHistoryItems]
+  test_paths: [src/components/admin/__tests__/AdminHistoryPreview.test.jsx, src/components/admin/__tests__/LlmModelSettings.test.jsx, src/components/common/__tests__/ImageLightbox.test.jsx]
+  invariants: [The `/admin` route renders only after authenticated profile loading confirms the admin role., History preview navigation includes only image-bearing records loaded in the current page., Closing a shared lightbox restores prior focus and document scrolling., Administrator history inspection uses the existing tenant-scoped management list and does not fetch an individual record., Browser model settings never receive an analysis API key.]
+  validation_commands: [pnpm test --run src/components/admin/__tests__/AdminHistoryPreview.test.jsx src/components/admin/__tests__/LlmModelSettings.test.jsx src/components/common/__tests__/ImageLightbox.test.jsx]
 ---
 
 # Administrator panel and history preview
 
-`/admin` is the administrator browser workspace. `AdminPage` is a thin wrapper around `AdminPanel`; `ProtectedAdminRoute` in [browser application and authentication](application.md) waits for profile loading and redirects non-admin users to `/`. The panel uses `adminService` to load the first page of users, generation history, and styles along with model settings, then exposes the existing section-specific pagination, user filtering, user role/status changes, model-policy saves, and administrator style deletion. The server-side authorization, tenant scope, and management endpoints are canonical in [authentication, tenancy, and administration](../backend/auth-tenancy-admin.md).
+`/admin` is the administrator browser workspace. `AdminPage` is a thin wrapper around `AdminPanel`; `ProtectedAdminRoute` in [browser application and authentication](application.md) waits for profile loading and redirects non-admin users to `/`. The panel uses `adminService` to load the first page of users, generation history, and styles along with image-model policy; it separately mounts `LlmModelSettings` for encrypted analysis-model settings. It exposes section-specific pagination, user filtering, user role/status changes, image-model-policy saves, administrator style deletion, and analysis-model CRUD/role assignment. The server-side authorization, tenant scope, and management endpoints are canonical in [authentication, tenancy, and administration](../backend/auth-tenancy-admin.md).
+
+## Analysis-model settings
+
+The **analysis models** section is a separate composition component, `LlmModelSettings`. It loads `{ models, assignments, roles, providers }` through `listAdminLlmModels`, then delegates create/update/delete, role assignment, and a deliberate live connection test to the corresponding `adminService` calls. The API returns `hasApiKey`, never the key itself; an edit with an empty `apiKey` preserves the stored ciphertext. Azure entries require a public HTTPS endpoint while Gemini entries omit one. The fixed role catalog filters primary/fallback selections by provider, so browser guidance agrees with server enforcement.
+
+Assignments select a required primary and optional distinct fallback. Configuration, encryption, provider compatibility, and the six runtime roles are detailed in [authentication, tenancy, and administration](../backend/auth-tenancy-admin.md); callers and failure behavior are detailed in [AI generation](../backend/ai-generation.md). The connection-test action is intentionally an admin-initiated provider call, not a normal browser startup request.
+
+For this section, begin at `src/components/admin/LlmModelSettings.jsx` and `src/services/adminService.js`. `LlmModelSettings.test.jsx` covers settings load, secret-free rendering, model creation payload, provider-filtered assignment, delete rejection, and connection-test UI. Run it together with the model-domain test from [AI generation](../backend/ai-generation.md); use a live connection test only when changing real credentials or provider connectivity.
 
 ## History image inspection
 

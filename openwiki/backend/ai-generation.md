@@ -1,30 +1,43 @@
 ---
 type: backend workflow
 title: AI generation, document analysis, and presentation rendering
-description: Provider adapters, document-analysis contracts, company-template PowerPoint rendering, model policy, and the durable GPT image job lifecycle.
-tags: [backend, ai-generation, document-analysis, presentation]
+description: Tenant-managed analysis-model routing, provider adapters, document-analysis contracts, company-template PowerPoint rendering, image model policy, and durable GPT image jobs.
+tags: [backend, ai-generation, document-analysis, llm, presentation]
 openwiki:
-  roles: [workflow, integration]
-  change_kinds: [document-analysis, presentation-export, response-contract, provider-adapter]
-  source_paths: [api/analyze-document/index.js, api/generate-presentation/index.js, api/_shared/presentationSchema.js, api/_shared/pptxAutomizer.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js]
-  symbols: [normalizeDocumentScene, normalizePresentationSlide, normalizePresentationSlides, buildAnalysisPrompt, generateJsonCompletion, getFallbackDeployment, generatePresentationPptx, setNamedText]
-  test_paths: [api/_shared/__tests__/presentationSchema.test.js, api/_shared/__tests__/pptxAutomizer.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
-  invariants: [Presentation analysis returns normalized slides rather than storyboard scenes., Storyboard analysis rejects an AI response without a nonempty recommended_style.prompt., Retryable Azure Responses failures get at most four total attempts; each retry reduces a nonempty output budget no lower than 8000 and may move to the configured fallback deployment., Company-template export accepts one through ten normalized slides and loads only the repository template., Presentation schema normalization bounds native table and chart data before rendering.]
-  validation_commands: [pnpm test --run api/_shared/__tests__/presentationSchema.test.js api/_shared/__tests__/pptxAutomizer.test.js, pnpm test --run api/_shared/__tests__/azureOpenAI.test.js]
+  roles: [workflow, integration, operations]
+  change_kinds: [document-analysis, presentation-export, response-contract, provider-adapter, model-configuration]
+  source_paths: [api/_shared/llmModels.js, api/analyze-document/index.js, api/optimize-prompt/index.js, api/analyze-style/index.js, api/generate-filename/index.js, api/optimize-scene/index.js, api/generate-presentation/index.js, api/_shared/presentationSchema.js, api/_shared/pptxAutomizer.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js, api/_shared/gemini.js]
+  symbols: [resolveRoleModel, LLM_ROLES, generateJsonCompletion, generateGeminiJson, normalizeDocumentScene, normalizePresentationSlide, normalizePresentationSlides, buildAnalysisPrompt, generatePresentationPptx, setNamedText]
+  test_paths: [api/_shared/__tests__/llmModels.test.js, api/_shared/__tests__/presentationSchema.test.js, api/_shared/__tests__/pptxAutomizer.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
+  invariants: [Presentation analysis returns normalized slides rather than storyboard scenes., Every analysis role resolves a tenant-assigned model of its fixed provider or returns llm_not_configured rather than silently using environment configuration., API keys are encrypted at rest and never returned through management responses., Azure Responses retries retryable failures at most four times and may switch once to the assigned peer model while reducing a nonempty output budget no lower than 8000., Company-template export accepts one through ten normalized slides and loads only the repository template., Presentation schema normalization bounds native table and chart data before rendering.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/azureOpenAI.test.js, pnpm test --run api/_shared/__tests__/presentationSchema.test.js api/_shared/__tests__/pptxAutomizer.test.js]
 ---
 
 # AI generation, document analysis, and presentation rendering
 
-Handlers authenticate, rate-limit, and usually resolve identity before work. `_shared/gemini.js` creates Google GenAI clients and normalizes JSON-like text; `_shared/gptImage.js` maps aspect ratios, chooses Azure `api-key` or Bearer authentication, and normalizes image responses. `azureOpenAI.js` separately powers prompt optimization and document analysis through structured Responses output.
+Handlers authenticate, rate-limit, and resolve identity before tenant work. `_shared/gptImage.js` maps aspect ratios, chooses Azure `api-key` or Bearer authentication, and normalizes image responses. The structured analysis adapters are deliberately separate from image generation: `azureOpenAI.js` receives an Azure model object from its caller, while `_shared/gemini.js` creates the Gemini client for an assigned model.
 
-## Azure Responses resilience
+## Tenant-managed analysis models
 
-`azureOpenAI.js::generateJsonCompletion` is the shared Responses adapter used by document analysis and PPT Master outline/SVG authoring. It makes at most four total attempts for a `429` or a `5xx`; other errors, malformed output, and local validation errors surface without retry. Before each retry it reduces a nonempty `maxOutputTokens` to 60% with an 8,000-token floor, waits an exponential delay with jitter, and—when `AZURE_OPENAI_FALLBACK_DEPLOYMENT` is configured—switches once from the selected primary deployment to that peer. The fallback is a Node/API setting, not browser configuration; deployment ownership is described in [development, migrations, and deployment](../operations/development-deployment.md).
+An administrator configures analysis-model records and role assignments in `/admin`; the browser composition is documented in [administrator panel and history preview](../frontend/admin-panel.md), the protected management contract in [authentication, tenancy, and administration](auth-tenancy-admin.md), and persistence in [schema](../data/schema.md). `llmModels.js::resolveRoleModel(tenantId, role)` reads and decrypts only the primary plus optional fallback assigned to that tenant and role. No endpoint or API key is returned to the browser: model lists expose `hasApiKey` only.
 
-The fallback does not create an independent deck workflow: [PPT Master deck jobs](ppt-master-decks.md) still explicitly selects `getDeckDeployment` for its background calls, and the shared adapter applies the retry policy around that selection. Do not convert a retryable provider response into a client-visible partial document or SVG result. `api/_shared/__tests__/azureOpenAI.test.js` verifies fallback selection, budget reduction/floor, retry exhaustion, and non-retryable `400` propagation; run it whenever adapter, retry, deployment, or output-budget behavior changes.
+The role catalog fixes the provider because each caller has a provider-specific request/response contract:
+
+| Role | Provider | Runtime caller |
+|---|---|---|
+| `document_analysis`, `prompt_optimization`, `deck_authoring` | Azure OpenAI | `analyze-document`, `optimize-prompt`, and the PPT Master worker |
+| `style_analysis`, `filename`, `scene_optimization` | Google Gemini | `analyze-style`, `generate-filename`, and `optimize-scene` |
+
+Assignments require a primary model, optional different fallback, and models from the role's provider in the same tenant. Azure endpoints must be public HTTPS (not a private/loopback host); Gemini drops any supplied endpoint because its SDK owns it. A missing assignment is `LlmConfigurationError`, which interactive callers translate to `503 llm_not_configured`; they do not fall back to `AZURE_OPENAI_*` or `GEMINI_MODEL_ANALYSIS` environment settings. Image generation and embeddings remain separate environment-backed concerns.
+
+## Provider resilience
+
+`azureOpenAI.js::generateJsonCompletion` is the Azure Responses adapter used by document analysis, prompt optimization, and PPT Master outline/SVG authoring. Its caller supplies `model` and optional `fallback`. It makes at most four total attempts for a `429` or a `5xx`; other errors, malformed output, and local validation errors surface without retry. Before each retry it reduces a nonempty `maxOutputTokens` to 60% with an 8,000-token floor, waits an exponential delay with jitter, and switches once to the assigned fallback when its model name differs. `_shared/gemini.js::generateGeminiJson` similarly tries its assigned fallback once after the primary call fails.
+
+Do not convert a retryable provider response into a client-visible partial document or SVG result. Do not make a fallback cross providers or treat missing configuration as retryable. `api/_shared/__tests__/azureOpenAI.test.js` verifies Azure fallback selection, budget reduction/floor, retry exhaustion, and non-retryable `400` propagation; `llmModels.test.js` covers endpoint/provider validation, encrypted-key response omission, assignment constraints, and missing assignment. Run:
 
 ```sh
-pnpm test --run api/_shared/__tests__/azureOpenAI.test.js
+pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/azureOpenAI.test.js
 ```
 
 ## Generation and transformation
@@ -63,7 +76,7 @@ sequenceDiagram
 
 This is the shared transport path. The selected mode changes the prompt and response contract; it does not reinterpret one result as the other in the browser.
 
-`parseDocumentBuffer` strips a text BOM and passes TXT/Markdown directly as text. It converts other recognized document formats to Markdown through `@firecrawl/anydoc`; a PDF that AnyDoc reports unsupported is sent as a PDF file for GPT vision. Images are vision input. The handler maps empty/conversion failures to `DocumentConversionError` status/code and rejects text over `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it never truncates. `generateJsonCompletion` uses the configured Azure OpenAI deployment, JSON output, and `maxOutputTokens: 8192`; its Responses adapter permits exactly one attached image or file input.
+`parseDocumentBuffer` strips a text BOM and passes TXT/Markdown directly as text. It converts other recognized document formats to Markdown through `@firecrawl/anydoc`; a PDF that AnyDoc reports unsupported is sent as a PDF file for GPT vision. Images are vision input. The handler maps empty/conversion failures to `DocumentConversionError` status/code and rejects text over `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it never truncates. Before provider work, it resolves the tenant's `document_analysis` Azure model; `generateJsonCompletion` uses that model, JSON output, and `maxOutputTokens: 8192`, and its Responses adapter permits exactly one attached image or file input.
 
 ### Storyboard mode
 

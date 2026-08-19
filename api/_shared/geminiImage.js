@@ -44,7 +44,7 @@ const generateGeminiImage = async ({
   referenceImage,
   logger,
 }) => {
-  const model = getModel(DEFAULT_MODEL_NAME);
+  const model = getModel(DEFAULT_MODEL_NAME, process.env.GOOGLE_API_KEY);
   const textPrompt = aspectRatio ? `${prompt}\nAspect ratio: ${aspectRatio}.` : prompt;
   const parts = [{ text: textPrompt }];
 

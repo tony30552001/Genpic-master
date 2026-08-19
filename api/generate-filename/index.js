@@ -1,6 +1,11 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { getModel, parseGeminiResponse } = require("../_shared/gemini");
+const { generateGeminiJson } = require("../_shared/gemini");
+const { resolveIdentity } = require("../_shared/identity");
+const {
+    LlmConfigurationError,
+    resolveRoleModel,
+} = require("../_shared/llmModels");
 const { rateLimit } = require("../_shared/rateLimit");
 
 const GENERATE_FILENAME_SYSTEM_MESSAGE = `
@@ -48,9 +53,9 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // 5. Call Gemini (Flash)
-        const modelName = process.env.GEMINI_MODEL_ANALYSIS || "gemini-1.5-flash"; // 挑選快速的模型
-        const model = getModel(modelName);
+        // 5. Call the Gemini model assigned to this role in the admin center.
+        const identity = await resolveIdentity(auth.user);
+        const llm = await resolveRoleModel(identity.tenantId, "filename");
 
         const promptText = `
 User Script: "${userScript}"
@@ -58,19 +63,19 @@ User Script: "${userScript}"
 請產生對應的英文檔名：
 `;
 
-        const result = await model.generateContent([
-            {
-                role: "user",
-                parts: [{ text: GENERATE_FILENAME_SYSTEM_MESSAGE + "\n" + promptText }]
-            }
-        ], {
-            responseMimeType: "application/json"
-        });
-
         // 6. Parse Result
         let data;
         try {
-            data = parseGeminiResponse(result);
+            data = await generateGeminiJson({
+                model: llm.model,
+                fallback: llm.fallback,
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: GENERATE_FILENAME_SYSTEM_MESSAGE + "\n" + promptText }],
+                    },
+                ],
+            });
 
             // 安全防護：確保格式真的是 kebab-case，如果 AI 亂鬧，就做基礎的字串清理
             if (data && data.filename) {
@@ -96,6 +101,10 @@ User Script: "${userScript}"
 
     } catch (err) {
         context.log.error("[generate-filename] Error:", err.message);
+        if (err instanceof LlmConfigurationError) {
+            context.res = error(err.message, err.code, err.status);
+            return;
+        }
         // 如果失敗，默默退回時間戳記，不該讓這個小功能卡死整個流程
         context.res = ok({
             filename: `generated-image-${Date.now()}`

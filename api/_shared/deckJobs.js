@@ -10,6 +10,7 @@ const {
 } = require("./documentParser");
 const pptMaster = require("./pptMasterClient");
 const { authorDeck, generateOutline } = require("./deckAuthor");
+const { LlmConfigurationError, resolveRoleModel } = require("./llmModels");
 const { generateDeckImages } = require("./deckImages");
 const { buildAuthoringSystemPrompt } = require("./svgAuthoringPrompt");
 const { DECK_STEP_LABELS: STEP_LABELS } = require("./deckContract");
@@ -189,7 +190,7 @@ const claimNextDeckJob = async () => {
        WHERE jobs.id = candidate.id
        RETURNING jobs.id, jobs.input_kind, jobs.topic, jobs.source_document_url,
                  jobs.source_file_name, jobs.slide_count, jobs.style_id,
-                 jobs.layout_id, jobs.brand_id, jobs.attempts`,
+                 jobs.layout_id, jobs.brand_id, jobs.attempts, jobs.tenant_id`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
     );
 
@@ -238,8 +239,9 @@ const markDeckJobSucceeded = async ({ jobId, blobName, fileName, deckTitle, slid
 
 const markDeckJobFailure = async ({ jobId, attempts, error }) => {
   const message = error?.message || "簡報生成失敗，請稍後重試";
+  const retryable = !(error instanceof LlmConfigurationError);
 
-  if (attempts < MAX_ATTEMPTS) {
+  if (retryable && attempts < MAX_ATTEMPTS) {
     await query(
       `UPDATE deck_generation_jobs
        SET status = 'queued',
@@ -260,13 +262,13 @@ const markDeckJobFailure = async ({ jobId, attempts, error }) => {
     `UPDATE deck_generation_jobs
      SET status = 'failed',
          phase = NULL,
-         error_code = 'deck_generation_failed',
+         error_code = $3,
          error_message = $2,
          locked_at = NULL,
          completed_at = now(),
          updated_at = now()
      WHERE id = $1 AND status = 'processing'`,
-    [jobId, message]
+    [jobId, message, retryable ? "deck_generation_failed" : "llm_not_configured"]
   );
 
   console.error("[deck-jobs] Job failed permanently:", { jobId, attempts, message });
@@ -399,10 +401,12 @@ const processDeckJob = async (job) => {
     }
 
     await report({ step: "outline", detail: "規劃簡報大綱", current: 0, total: job.slide_count });
+    const llm = await resolveRoleModel(job.tenant_id, "deck_authoring");
     const outline = await generateOutline({
       topic: job.topic,
       sourceMarkdown,
       slideCount: job.slide_count,
+      llm,
     });
     await report({
       step: "outline",
@@ -434,6 +438,7 @@ const processDeckJob = async (job) => {
         deckId: deck.deckId,
         outline,
         imagesBySlide,
+        llm,
         systemMessage: buildAuthoringSystemPrompt({
           fontFamilies: fonts?.families,
           templateSpecs,

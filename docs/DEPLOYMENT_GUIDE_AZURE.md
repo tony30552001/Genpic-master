@@ -31,10 +31,9 @@
 
 - `DATABASE_URL`、`DATABASE_SSL`
 - `AZURE_STORAGE_ACCOUNT`、`AZURE_STORAGE_KEY`、`BLOB_CONTAINER_DEFAULT`
-- `GOOGLE_API_KEY`、`GEMINI_MODEL_ANALYSIS`、`GEMINI_MODEL_GENERATION`
+- `GOOGLE_API_KEY`、`GEMINI_MODEL_GENERATION`
 - `DOCUMENT_ANALYSIS_MAX_CHARS=500000`（AnyDoc 解析後可交給同步 GPT 分析的最大字元數；超過時回傳 413，不會靜默截斷）
-- `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_DEPLOYMENT`
-- `AZURE_OPENAI_DECK_DEPLOYMENT`（可選；PPT Master 簡報生成專用，預設 `gpt-5.6-sol`）
+- `SECRET_ENCRYPTION_KEY`（32 bytes 的 base64 或 hex 金鑰；加密分析模型 API 金鑰與 LINE token）
 - `GPT_IMAGE_ENDPOINT`、`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`
 - `BLOB_CONTAINER_GENERATED=generated`
 - `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`
@@ -52,14 +51,19 @@ GPT Image 2 會由 `POST /api/generate-images` 建立 queued job，App Service
 背景 worker 在不佔用 SWA gateway request 的情況下執行生成。生成結果會放在
 `BLOB_CONTAINER_GENERATED`，前端再透過 `/api/image-jobs/{id}` polling 取得結果。
 
-`POST /api/analyze-document` 的文字、圖片與掃描型 PDF 分析都使用
-`AZURE_OPENAI_DEPLOYMENT`。該 deployment 必須支援 Responses API、image input
-與 PDF file input；未設定時程式預設使用 `gpt-5.6-luna`。
+分析用的 LLM 不由環境變數設定。套用 `db/migrations/014_llm_models.sql` 後，
+管理員在管理中心「分析模型」新增模型（模型代號、端點與 API 金鑰）並指派給六個用途：
+文件分析、Prompt 優化、簡報生成（Azure OpenAI）與風格分析、檔名生成、場景優化（Google Gemini）。
+金鑰以 `SECRET_ENCRYPTION_KEY` 加密後存放於資料庫。
 
-PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）改用
-`AZURE_OPENAI_DECK_DEPLOYMENT`，未設定時預設 `gpt-5.6-sol`。這條路徑跑在背景
-worker，可接受較長延遲以換取更嚴謹的 SVG 版面推理；互動式功能仍使用
-`AZURE_OPENAI_DEPLOYMENT`。
+`POST /api/analyze-document` 的文字、圖片與掃描型 PDF 分析使用「文件分析」用途指派的模型，
+該 deployment 必須支援 Responses API、image input 與 PDF file input。
+
+PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）使用「簡報生成」用途指派的模型。
+這條路徑跑在背景 worker，可接受較長延遲以換取更嚴謹的 SVG 版面推理。
+
+任何用途尚未指派前，對應 API 會回傳 HTTP 503 與 `llm_not_configured`，
+簡報 job 則會直接標記為失敗，不會重試。
 
 ## 3. 連結 Static Web App
 

@@ -1,9 +1,10 @@
 /**
- * lineEncryption.js
- * AES-256-GCM encryption helpers for securely storing LINE Channel Access Tokens.
+ * secretCrypto.js
+ * AES-256-GCM encryption helpers for secrets stored in the database
+ * (LINE channel access tokens and analysis model API keys).
  *
  * Environment variable required:
- *   LINE_TOKEN_ENCRYPTION_KEY — 64-character hex string (32 bytes)
+ *   SECRET_ENCRYPTION_KEY — 64-character hex string (32 bytes)
  *
  * Generate one with:
  *   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -16,10 +17,10 @@ const IV_LENGTH = 12;  // 96-bit IV recommended for GCM
 const TAG_LENGTH = 16; // 128-bit auth tag
 
 const getKey = () => {
-    const keyHex = process.env.LINE_TOKEN_ENCRYPTION_KEY;
+    const keyHex = process.env.SECRET_ENCRYPTION_KEY;
     if (!keyHex || keyHex.length !== 64) {
         throw new Error(
-            "Missing or invalid LINE_TOKEN_ENCRYPTION_KEY. " +
+            "Missing or invalid SECRET_ENCRYPTION_KEY. " +
             "Expected 64-character hex string (32 bytes). " +
             "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
         );

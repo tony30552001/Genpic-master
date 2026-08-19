@@ -171,7 +171,7 @@ registerRoutes(
 );
 registerRoutes(
   ["/api/management", "/api/management/:resource", "/api/management/:resource/:id"],
-  ["GET", "PUT", "DELETE", "OPTIONS"],
+  ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   admin
 );
 

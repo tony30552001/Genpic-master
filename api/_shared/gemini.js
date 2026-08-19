@@ -1,15 +1,14 @@
 const { GoogleGenAI } = require("@google/genai");
 
-const getClient = () => {
-  const apiKey = process.env.GOOGLE_API_KEY;
+const getClient = (apiKey) => {
   if (!apiKey) {
-    throw new Error("Missing GOOGLE_API_KEY");
+    throw new Error("Missing Gemini API key");
   }
   return new GoogleGenAI({ apiKey });
 };
 
-const getModel = (modelName) => {
-  const client = getClient();
+const getModel = (modelName, apiKey) => {
+  const client = getClient(apiKey);
   return {
     generateContent: (contents, config) =>
       client.models.generateContent({
@@ -21,7 +20,7 @@ const getModel = (modelName) => {
 };
 
 const getEmbeddingModel = (modelName) => {
-  const client = getClient();
+  const client = getClient(process.env.GOOGLE_API_KEY);
   return {
     embedContent: (content) =>
       client.models.embedContent({
@@ -90,5 +89,41 @@ const parseGeminiResponse = (result) => {
   return JSON.parse(cleanText);
 };
 
-module.exports = { getModel, getEmbeddingModel, embedText, parseGeminiResponse };
+/**
+ * Runs a JSON-returning Gemini prompt with the tenant-configured model.
+ * When a fallback model is assigned it is tried once after the primary fails.
+ *
+ * @param {object} params
+ * @param {{ modelName: string, apiKey: string }} params.model
+ * @param {{ modelName: string, apiKey: string }} [params.fallback]
+ */
+const generateGeminiJson = async ({ model, fallback, contents, config }) => {
+  const call = async (target) => {
+    const result = await getModel(target.modelName, target.apiKey).generateContent(
+      contents,
+      { responseMimeType: "application/json", ...config }
+    );
+    return parseGeminiResponse(result);
+  };
+
+  try {
+    return await call(model);
+  } catch (error) {
+    if (!fallback || fallback.modelName === model.modelName) throw error;
+    console.warn("[gemini] Primary model failed, trying fallback:", {
+      model: model.modelName,
+      fallback: fallback.modelName,
+      message: error.message,
+    });
+    return call(fallback);
+  }
+};
+
+module.exports = {
+  getModel,
+  getEmbeddingModel,
+  embedText,
+  generateGeminiJson,
+  parseGeminiResponse,
+};
 
