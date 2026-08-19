@@ -31,7 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StyleCard from "./StyleCard";
-import StyleImageLightbox from "./StyleImageLightbox";
+import ImageLightbox from "../common/ImageLightbox";
 
 const SCOPE_OPTIONS = [
   { value: "mine", label: "我的風格", description: "私人與已共享的個人風格" },
@@ -868,7 +868,7 @@ export default function StyleLibrary({
       )}
 
       {previewStyle?.previewUrl && (
-        <StyleImageLightbox
+        <ImageLightbox
           src={previewStyle.previewUrl}
           alt={previewStyle.name}
           onClose={() => setPreviewStyle(null)}

@@ -16,11 +16,13 @@ import {
   Users,
   UserCheck,
   UserX,
+  ZoomIn,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import ImageLightbox from "../common/ImageLightbox";
 import useAuth from "../../hooks/useAuth";
 import {
   deleteAdminStyle,
@@ -160,6 +162,7 @@ export default function AdminPanel() {
   const [historyItems, setHistoryItems] = useState([]);
   const [historyPagination, setHistoryPagination] = useState(EMPTY_PAGINATION);
   const [historyPageSize, setHistoryPageSize] = useState(DEFAULT_USER_PAGE_SIZE);
+  const [previewHistoryId, setPreviewHistoryId] = useState(null);
   const [styles, setStyles] = useState([]);
   const [stylesPagination, setStylesPagination] = useState(EMPTY_PAGINATION);
   const [stylesPageSize, setStylesPageSize] = useState(DEFAULT_USER_PAGE_SIZE);
@@ -506,6 +509,30 @@ export default function AdminPanel() {
   );
   const filterUsers = userOptions.length > 0 ? userOptions : users;
 
+  const viewableHistoryItems = useMemo(
+    () => historyItems.filter((item) => item.imageUrl),
+    [historyItems]
+  );
+  const previewIndex = viewableHistoryItems.findIndex(
+    (item) => item.id === previewHistoryId
+  );
+  const previewItem = previewIndex >= 0 ? viewableHistoryItems[previewIndex] : null;
+  const previewDetails = previewItem
+    ? [
+        {
+          label: "使用者",
+          value: [previewItem.userDisplayName, previewItem.userEmail]
+            .filter(Boolean)
+            .join("\n"),
+        },
+        { label: "模型", value: modelLabel(previewItem.model || "gemini-imagen") },
+        { label: "風格", value: previewItem.styleName },
+        { label: "時間", value: formatDate(previewItem.createdAt) },
+        { label: "完整 Prompt", value: previewItem.fullPrompt },
+        { label: "使用者腳本", value: previewItem.userScript },
+      ]
+    : [];
+
   const activeSectionInfo = SECTIONS.find((section) => section.id === activeSection);
 
   return (
@@ -754,14 +781,24 @@ export default function AdminPanel() {
                             <tr key={item.id} className="align-top hover:bg-muted/30">
                               <td className="px-5 py-3">
                                 {item.imageUrl ? (
-                                  <img
-                                    src={item.imageUrl}
-                                    alt=""
-                                    width={80}
-                                    height={54}
-                                    loading="lazy"
-                                    className="h-14 w-20 rounded-lg border border-border object-cover"
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewHistoryId(item.id)}
+                                    aria-label={`放大查看 ${item.userDisplayName} 的生成圖片`}
+                                    className="group relative block h-14 w-20 overflow-hidden rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  >
+                                    <img
+                                      src={item.imageUrl}
+                                      alt=""
+                                      width={80}
+                                      height={54}
+                                      loading="lazy"
+                                      className="h-full w-full object-cover"
+                                    />
+                                    <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                                      <ZoomIn className="h-4 w-4 text-white" aria-hidden="true" />
+                                    </span>
+                                  </button>
                                 ) : (
                                   <span className="flex h-14 w-20 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">無預覽</span>
                                 )}
@@ -958,6 +995,28 @@ export default function AdminPanel() {
           </section>
         </div>
       </main>
+
+      {previewItem && (
+        <ImageLightbox
+          src={previewItem.imageUrl}
+          alt={`${previewItem.userDisplayName} 的生成圖片`}
+          details={previewDetails}
+          downloadUrl={previewItem.imageUrl}
+          downloadName={`pixora-${previewItem.id}.png`}
+          position={{ index: previewIndex, total: viewableHistoryItems.length }}
+          onPrev={
+            previewIndex > 0
+              ? () => setPreviewHistoryId(viewableHistoryItems[previewIndex - 1].id)
+              : undefined
+          }
+          onNext={
+            previewIndex < viewableHistoryItems.length - 1
+              ? () => setPreviewHistoryId(viewableHistoryItems[previewIndex + 1].id)
+              : undefined
+          }
+          onClose={() => setPreviewHistoryId(null)}
+        />
+      )}
     </div>
   );
 }
