@@ -78,7 +78,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `api/_shared/deckPreview.js` | 把預覽 SVG 內的 `../images/xxx` 換成內嵌 data URL |
 | `api/deck-jobs/index.js` | `POST` 建立、`GET /:id` 查詢、`GET /:id/download` 下載、`GET /:id/slides/:n` 預覽 |
 | `db/migrations/013_deck_slide_previews.sql` | `deck_slide_previews` 逐頁預覽表 |
-| `db/migrations/014_deck_image_density.sql` | `deck_generation_jobs.image_density` 配圖密度 |
+| `db/migrations/015_deck_image_density.sql` | `deck_generation_jobs.image_density` 配圖密度 |
 | `api/ppt-templates/index.js` | template 目錄（快取 10 分鐘，只回傳與畫布格式相符的版型） |
 | `src/components/create/PptMasterStudio.jsx` | 「設計簡報」子頁籤主面板 |
 | `src/components/create/PptTemplatePicker.jsx` | 風格／版型選擇器（受控元件） |
