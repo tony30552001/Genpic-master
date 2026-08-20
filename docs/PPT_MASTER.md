@@ -49,8 +49,8 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
         ◄─ 202 { jobId } ───────────────────
         ── GET  /api/deck-jobs/:id (輪詢) ──►  deckJobWorker
                                                  │ 1. 取素材（Blob → AnyDoc，PDF 退回 sidecar PyMuPDF）
-                                                 │ 2. LLM 產大綱（JSON）
-                                                 │ 3. 需要配圖 → Gemini 產圖 → PUT 給 sidecar
+                                                 │ 2. LLM 產大綱（JSON，含 art_direction）
+                                                 │ 3. 依配圖密度政策挑頁 → 租戶模型產圖 → PUT 給 sidecar
                                                  │ 4. 逐頁 LLM 產 SVG（注入 design_spec + 文法卡）
                                                  │ 5. sidecar check → 有 error 回饋修補（最多 3 輪）
                                                  │ 6. sidecar export → PPTX bytes
@@ -71,15 +71,18 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `api/_shared/deckContract.js` | 大綱正規化、頁數上限、SVG 前置健檢 |
 | `api/_shared/svgAuthoringPrompt.js` | 蒸餾文法卡 + `design_spec` + 可用字型 → system prompt |
 | `api/_shared/deckAuthor.js` | 大綱 → 逐頁 SVG → 品質閘門修補迴圈 |
-| `api/_shared/deckImages.js` | 依大綱產生 AI 配圖並上傳到 deck 工作區 |
+| `api/_shared/deckImages.js` | 依配圖政策產生 AI 配圖（併發 2）並上傳到 deck 工作區 |
+| `api/_shared/imageProviders.js` | 模型名稱 → 圖片 bytes（`gemini-imagen` / `gpt-image-2`） |
 | `api/_shared/geminiImage.js` | 共用的 Gemini 圖片生成（`/api/generate-images` 也用它） |
 | `api/_shared/deckJobs.js` | 佇列、worker、進度、步驟事件與逐頁預覽的保存 |
 | `api/_shared/deckPreview.js` | 把預覽 SVG 內的 `../images/xxx` 換成內嵌 data URL |
 | `api/deck-jobs/index.js` | `POST` 建立、`GET /:id` 查詢、`GET /:id/download` 下載、`GET /:id/slides/:n` 預覽 |
 | `db/migrations/013_deck_slide_previews.sql` | `deck_slide_previews` 逐頁預覽表 |
+| `db/migrations/014_deck_image_density.sql` | `deck_generation_jobs.image_density` 配圖密度 |
 | `api/ppt-templates/index.js` | template 目錄（快取 10 分鐘，只回傳與畫布格式相符的版型） |
 | `src/components/create/PptMasterStudio.jsx` | 「設計簡報」子頁籤主面板 |
 | `src/components/create/PptTemplatePicker.jsx` | 風格／版型選擇器（受控元件） |
+| `src/components/create/DeckImageDensityPicker.jsx` | 配圖密度選擇器（受控元件） |
 | `src/components/create/pptTemplateCopy.js` | 模板 id → 繁體中文名稱、說明與標籤 |
 | `src/components/create/DeckProgress.jsx` | 階段式進度、已耗時與背景執行說明 |
 | `src/components/create/DeckTimeline.jsx` | 可展開的步驟時間軸（含逐頁明細） |
@@ -213,6 +216,46 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 `buildFontGuidance()` 只把**真的裝得到**的字型列入白名單寫進 prompt。
 在 Windows 本機開發時 `fc-list` 不存在，會退回預設字型堆疊，這是預期行為。
 
+### 配圖是決定性政策，不是模型的否決權
+
+早期版本把「要不要配圖」整個交給大綱模型的 `needs_image`，結果模型幾乎一律回
+`false`，使用者看到的就是「這份簡報不需要配圖」。現在職責切成三層：
+
+- **決策層**：使用者選配圖密度，`api/_shared/deckContract.js` 的 `applyImagePolicy()`
+  決定性地挑頁。模型只負責提名候選與描述畫面，沒有全有全無的否決權。
+- **一致性層**：大綱同一次呼叫額外產出 `art_direction`（全份共用的英文視覺調性），
+  且大綱階段就看得到所選 style／layout 的規範，因此範本調性只在這一處注入。
+- **版面整合層**：每張圖帶 `image_role`，寫進授稿 prompt，讓授稿知道圖片要佔多大版面。
+
+| 密度 | 行為 |
+| --- | --- |
+| `none` | 完全不配圖，`images` 步驟 `skipped` |
+| `key`（預設） | 目標張數 `clamp(round(頁數 / 3), 2, 5)`；優先序 cover → section → 模型標記的 content → 其餘 content；`ending` 不配圖 |
+| `every` | 每一頁都配圖 |
+
+被政策選中卻沒有 `image_prompt` 的頁面，會用「簡報標題 + 頁標題 + 前兩條重點」
+合成一份英文 brief 並記一筆事件，不靜默丟棄。
+
+| `image_role` | 授稿指引 | 生圖指引 |
+| --- | --- | --- |
+| `background` | 滿版底圖，文字壓在其上 | 低對比、大量留白、中央無焦點 |
+| `hero` | 佔半版的主視覺 | 主體明確、構圖偏一側 |
+| `accent` | 小面積點綴 | 單一主體、簡潔 |
+
+`cover` 預設 `background`、`section` 預設 `hero`、其餘預設 `accent`，模型可覆寫。
+
+配圖模型**由租戶模型政策決定**（`ensureModelPolicy(tenantId).defaultModel`），
+不是寫死 Gemini，也沒有前端模型選擇器。`api/_shared/imageProviders.js` 把模型名稱
+收斂成 bytes：`gemini-imagen` 走 inline base64，`gpt-image-2` 走 `generateGptImage()`
+再用 `fetchImageSource()` 下載。進入 `images` 步驟前會先確認該模型的憑證存在，
+沒有就記一筆 `failed` 事件並以純版面繼續，不假裝成功、不跨模型回退。
+
+尺寸上有一個已知落差：`16:9` 實際送給供應商的是 1536×1024（3:2），而授稿用
+`preserveAspectRatio="xMidYMid slice"` 填滿。兩邊夾擊處理——生圖 prompt 要求主體置中
+並留安全邊距，授稿 prompt 明講圖片約 3:2 會被裁切。
+
+配圖以固定併發 2 生成（`gpt-image-2` 較慢且配額緊）。
+
 ---
 
 ## 6. 環境變數
@@ -227,6 +270,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 | `DECK_JOB_POLL_MS` | App Service | worker 輪詢間隔，預設 5000 |
 | `PPT_MASTER_WORKDIR` | Container Apps | deck 工作目錄，預設 `/tmp/decks` |
 | `PPT_MASTER_COMMAND_TIMEOUT` | Container Apps | 單一 skill 指令逾時秒數 |
+| `GPT_IMAGE_ENDPOINT` / `GPT_IMAGE_API_KEY` | App Service | 租戶預設模型為 `gpt-image-2` 時，配圖需要這兩個變數 |
 
 撰稿使用的模型（含尖峰被拒時改用的同儕模型）在管理中心「分析模型」的「簡報生成」
 用途指派，不再由環境變數設定。未指派時 job 會直接失敗並回報 `llm_not_configured`。
@@ -284,7 +328,9 @@ docker run --rm -e PPT_MASTER_SERVICE_KEY=dev pixora-ppt-master:dev python smoke
 - 品牌 template 帶有第三方商標，預設不開放，需要時才用 `PPT_MASTER_INCLUDE_BRANDS` 開啟。
 - 使用者上傳自家 `.pptx` 萃取 template 尚未實作，需要先掛載 Azure Files 永續磁碟
   （容器檔案系統是暫時的，註冊的 template 會在重啟後消失）。
-- 配圖失敗不會讓整份簡報失敗，該頁會改以純版面呈現，原因記在伺服器日誌。
+- 配圖失敗不會讓整份簡報失敗，該頁會改以純版面呈現，原因記在步驟事件與伺服器日誌。
+  配圖模型未設定憑證時，`images` 步驟整步記為 `failed`，其餘流程照常完成。
+- `every` 密度最多 12 張圖、併發上限 2；搭配較慢的 `gpt-image-2` 時牆鐘時間會明顯拉長。
 - 授稿呼叫遇到尖峰 `429` 會自動縮小輸出預算並改用備援部署重試；若整段尖峰持續，
   仍會失敗，而且整個 job 會依 `MAX_ATTEMPTS` 從「解析素材」重跑，大綱與配圖都會重做。
 - 生成中的預覽用的是**瀏覽器本機的字型**，容器裡是 `fc-list` 回報的那一組。

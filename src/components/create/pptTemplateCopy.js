@@ -125,3 +125,29 @@ export const describeLayout = (option) => {
   if (!option.pageCount) return copy;
   return { ...copy, meta: `${option.pageCount} 種頁面版型` };
 };
+
+/**
+ * 配圖密度的選項文案。密度決定的是張數，實際挑哪幾頁由後端政策裁定，
+ * 因此描述只承諾範圍與代價，不承諾特定頁碼。
+ */
+export const IMAGE_DENSITY_OPTIONS = [
+  {
+    id: "none",
+    name: "不配圖",
+    description: "全部以純版面呈現，生成最快。",
+  },
+  {
+    id: "key",
+    name: "重點配圖",
+    description: "封面與章節等關鍵頁配圖，約佔三分之一頁數。",
+  },
+  {
+    id: "every",
+    name: "每頁配圖",
+    description: "每一頁都配圖，視覺最完整，生成時間與費用也最高。",
+  },
+];
+
+export const describeImageDensity = (id) =>
+  IMAGE_DENSITY_OPTIONS.find((option) => option.id === id) ||
+  IMAGE_DENSITY_OPTIONS[1];

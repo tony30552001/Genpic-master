@@ -20,6 +20,33 @@ const DECK_STEP_LABELS = {
 
 const PAGE_ROLES = new Set(["cover", "toc", "section", "content", "ending"]);
 
+/** How much of the deck gets an AI illustration. The user picks this. */
+const DECK_IMAGE_DENSITIES = Object.freeze(["none", "key", "every"]);
+const DECK_DEFAULT_IMAGE_DENSITY = "key";
+
+/**
+ * What an illustration does on the page. The outline picks one so both the
+ * image prompt and the slide authoring prompt agree on how much room the
+ * picture owns.
+ */
+const DECK_IMAGE_ROLES = Object.freeze(["background", "hero", "accent"]);
+
+/** Fallback role per page role, used when the model omits or invents one. */
+const DEFAULT_IMAGE_ROLE_BY_PAGE = Object.freeze({
+  cover: "background",
+  section: "hero",
+  toc: "accent",
+  content: "accent",
+  ending: "accent",
+});
+
+const normalizeImageDensity = (value) => {
+  const density = String(value || "").trim().toLowerCase();
+  return DECK_IMAGE_DENSITIES.includes(density)
+    ? density
+    : DECK_DEFAULT_IMAGE_DENSITY;
+};
+
 const toText = (value, fallback = "") =>
   value == null ? fallback : String(value).trim();
 
@@ -44,16 +71,24 @@ const normalizeSlideCount = (value) => {
 const slideFileName = (index) =>
   `${String(index + 1).padStart(2, "0")}_slide.svg`;
 
+const normalizeImageRole = (value, pageRole) => {
+  const role = toText(value).toLowerCase();
+  if (DECK_IMAGE_ROLES.includes(role)) return role;
+  return DEFAULT_IMAGE_ROLE_BY_PAGE[pageRole] || "accent";
+};
+
 const normalizeOutlineSlide = (slide, index, total) => {
   const raw = slide && typeof slide === "object" && !Array.isArray(slide) ? slide : {};
+  const pageRole = normalizePageRole(raw.page_role ?? raw.pageRole, index, total);
   return {
     slide_number: index + 1,
-    page_role: normalizePageRole(raw.page_role ?? raw.pageRole, index, total),
+    page_role: pageRole,
     title: toText(raw.title) || `投影片 ${index + 1}`,
     subtitle: toText(raw.subtitle),
     key_points: normalizeTextArray(raw.key_points ?? raw.keyPoints).slice(0, 5),
     speaker_notes: toText(raw.speaker_notes ?? raw.speakerNotes),
     needs_image: Boolean(raw.needs_image ?? raw.needsImage),
+    image_role: normalizeImageRole(raw.image_role ?? raw.imageRole, pageRole),
     image_prompt: toText(raw.image_prompt ?? raw.imagePrompt),
   };
 };
@@ -67,9 +102,86 @@ const normalizeOutline = (outline, { slideCount } = {}) => {
   return {
     title: toText(raw.title) || "未命名簡報",
     summary: toText(raw.summary),
+    art_direction: toText(raw.art_direction ?? raw.artDirection),
     slides: limited.map((slide, index) => normalizeOutlineSlide(slide, index, total)),
   };
 };
+
+/** How many pages `key` density illustrates: about a third, never fewer than 2. */
+const keyDensityTarget = (total) =>
+  Math.min(5, Math.max(2, Math.round(total / 3)));
+
+/**
+ * Rank the pages worth illustrating. A cover carries the deck's first
+ * impression and a section divider is a deliberate visual pause, so both
+ * outrank body pages; among body pages the outline's own judgement wins.
+ */
+const imageCandidateRank = (slide) => {
+  if (slide.page_role === "cover") return 0;
+  if (slide.page_role === "section") return 1;
+  if (slide.needs_image) return 2;
+  return 3;
+};
+
+/**
+ * Synthesize an illustration brief for a page the policy selected but the
+ * model left without one. Dropping the page silently is what made decks come
+ * back unillustrated in the first place.
+ */
+const synthesizeImagePrompt = (deckTitle, slide) => {
+  const parts = [deckTitle, slide.title, ...slide.key_points.slice(0, 2)]
+    .map((part) => toText(part))
+    .filter(Boolean);
+  return `An editorial illustration for a presentation slide about: ${parts.join(" — ")}`;
+};
+
+/**
+ * Decide which pages get an illustration.
+ *
+ * The outline model only nominates candidates and describes them; the count is
+ * decided here so the same density always produces a comparable deck. Returns
+ * the pages whose brief had to be synthesized so the worker can report them.
+ */
+const applyImagePolicy = ({ outline, density }) => {
+  const normalizedDensity = normalizeImageDensity(density);
+  const slides = outline.slides;
+
+  let selected;
+  if (normalizedDensity === "none") {
+    selected = new Set();
+  } else if (normalizedDensity === "every") {
+    selected = new Set(slides.map((slide) => slide.slide_number));
+  } else {
+    const eligible = slides.filter((slide) => slide.page_role !== "ending");
+    const ranked = [...eligible].sort(
+      (a, b) => imageCandidateRank(a) - imageCandidateRank(b) || a.slide_number - b.slide_number
+    );
+    const target = Math.min(keyDensityTarget(slides.length), eligible.length);
+    selected = new Set(ranked.slice(0, target).map((slide) => slide.slide_number));
+  }
+
+  const synthesizedPrompts = [];
+  const decidedSlides = slides.map((slide) => {
+    const wanted = selected.has(slide.slide_number);
+    if (!wanted) {
+      return { ...slide, needs_image: false, image_prompt: "" };
+    }
+
+    let prompt = slide.image_prompt;
+    if (!prompt) {
+      prompt = synthesizeImagePrompt(outline.title, slide);
+      synthesizedPrompts.push(slide.slide_number);
+    }
+    return { ...slide, needs_image: true, image_prompt: prompt };
+  });
+
+  return {
+    outline: { ...outline, slides: decidedSlides },
+    density: normalizedDensity,
+    synthesizedPrompts,
+  };
+};
+
 
 /**
  * Collect the `<g>` elements that are direct children of the root `<svg>`.
@@ -206,13 +318,18 @@ module.exports = {
   DECK_CANVAS_FORMAT,
   DECK_CANVAS_HEIGHT,
   DECK_CANVAS_WIDTH,
+  DECK_DEFAULT_IMAGE_DENSITY,
+  DECK_IMAGE_DENSITIES,
+  DECK_IMAGE_ROLES,
   DECK_STEPS,
   DECK_STEP_LABELS,
   DECK_MAX_REPAIR_ROUNDS,
   DECK_MAX_SLIDES,
   DECK_MIN_SLIDES,
   PAGE_ROLES,
+  applyImagePolicy,
   inspectSlideSvg,
+  normalizeImageDensity,
   normalizeOutline,
   normalizeSlideCount,
   slideFileName,

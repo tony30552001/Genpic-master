@@ -11,6 +11,12 @@ const ASPECT_RATIO_TO_SIZE = Object.freeze({
   "21:9": "1792x768",
 });
 
+const MAX_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 2000;
+
+/** Upstream is busy or briefly broken; the same request is worth repeating. */
+const isTransientStatus = (status) => status === 429 || status >= 500;
+
 const getEndpoint = () => process.env.GPT_IMAGE_ENDPOINT || "";
 const getApiKey = () => process.env.GPT_IMAGE_API_KEY || "";
 const getDeployment = () => process.env.GPT_IMAGE_DEPLOYMENT || "gpt-image-2";
@@ -65,7 +71,9 @@ const parseResponse = async (response, label) => {
 
   if (!response.ok) {
     const message = data?.error?.message || data?.message || `${label} 請求失敗`;
-    throw new Error(`${message} (${response.status})`);
+    const failure = new Error(`${message} (${response.status})`);
+    failure.status = response.status;
+    throw failure;
   }
 
   const item = data?.data?.[0];
@@ -81,25 +89,40 @@ const parseResponse = async (response, label) => {
 const getSize = (aspectRatio) =>
   ASPECT_RATIO_TO_SIZE[aspectRatio] || ASPECT_RATIO_TO_SIZE["1:1"];
 
+/**
+ * Generate one image, retrying with exponential backoff while the endpoint
+ * reports throttling or a server-side failure. A retry-exhausted call still
+ * throws: the caller decides what a missing image means.
+ */
 const generateGptImage = async ({ prompt, aspectRatio }) => {
   const endpoint = getEndpoint();
   if (!endpoint) throw new Error("GPT_IMAGE_ENDPOINT 尚未設定");
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeaders(endpoint),
-    },
-    body: JSON.stringify({
-      prompt,
-      model: getDeployment(),
-      size: getSize(aspectRatio),
-      n: 1,
-    }),
-  });
+  let delayMs = RETRY_BASE_DELAY_MS;
 
-  return parseResponse(response, "GPT Image 2");
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(endpoint),
+        },
+        body: JSON.stringify({
+          prompt,
+          model: getDeployment(),
+          size: getSize(aspectRatio),
+          n: 1,
+        }),
+      });
+
+      return await parseResponse(response, "GPT Image 2");
+    } catch (apiError) {
+      if (attempt >= MAX_RETRIES || !isTransientStatus(apiError.status)) throw apiError;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs *= 2;
+    }
+  }
 };
 
 const editGptImage = async ({ imageBase64, mimeType, prompt, aspectRatio }) => {

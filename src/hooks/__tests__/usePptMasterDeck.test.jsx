@@ -90,8 +90,7 @@ describe("usePptMasterDeck", () => {
   });
 
   it("stores the job id as soon as generation starts", async () => {
-    createDeckJob.mockResolvedValue({ jobId: "deck-3", status: "queued" });
-    waitForDeckJob.mockImplementation(async () => {
+    createDeckJob.mockResolvedValue({ jobId: "deck-3", status: "queued" });    waitForDeckJob.mockImplementation(async () => {
       expect(localStorage.getItem(STORAGE_KEY)).toBe("deck-3");
       return {
         jobId: "deck-3",
@@ -108,6 +107,29 @@ describe("usePptMasterDeck", () => {
 
     await waitFor(() => expect(result.current.deck?.jobId).toBe("deck-3"));
     expect(localStorage.getItem(STORAGE_KEY)).toBe("deck-3");
+  });
+
+  it("forwards the image density to the job endpoint", async () => {
+    createDeckJob.mockResolvedValue({ jobId: "deck-4", status: "queued" });
+    waitForDeckJob.mockResolvedValue({
+      jobId: "deck-4",
+      status: "succeeded",
+      deckTitle: "產品發表",
+      fileName: "產品發表.pptx",
+      slideCount: 6,
+      progress: { current: 6, total: 6 },
+    });
+
+    const { result } = renderHook(() => usePptMasterDeck());
+    await result.current.generate({
+      topic: "生成式 AI 導入策略",
+      slideCount: 6,
+      imageDensity: "every",
+    });
+
+    expect(createDeckJob).toHaveBeenCalledWith(
+      expect.objectContaining({ imageDensity: "every" })
+    );
   });
 
   it("keeps the job id when only the polling connection broke", async () => {

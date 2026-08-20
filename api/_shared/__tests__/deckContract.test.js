@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   DECK_MAX_SLIDES,
   DECK_MIN_SLIDES,
+  applyImagePolicy,
   inspectSlideSvg,
+  normalizeImageDensity,
   normalizeOutline,
   normalizeSlideCount,
   slideFileName,
@@ -119,5 +121,99 @@ describe("inspectSlideSvg", () => {
       '<g><text x="120" y="330"'
     ).replace("</text>\n  </g>", "</text></g>\n  </g>");
     expect(inspectSlideSvg(nested)).toEqual([]);
+  });
+});
+
+describe("normalizeImageDensity", () => {
+  it("falls back to the key density for unknown values", () => {
+    expect(normalizeImageDensity("EVERY")).toBe("every");
+    expect(normalizeImageDensity("none")).toBe("none");
+    expect(normalizeImageDensity("lots")).toBe("key");
+    expect(normalizeImageDensity(undefined)).toBe("key");
+  });
+});
+
+describe("applyImagePolicy", () => {
+  const outlineOf = (slides) =>
+    normalizeOutline({ title: "AI 策略", slides }, { slideCount: slides.length });
+
+  const nineSlides = [
+    { title: "封面", page_role: "cover" },
+    { title: "議程", page_role: "toc" },
+    { title: "現況", page_role: "content" },
+    { title: "章節一", page_role: "section" },
+    { title: "作法", page_role: "content", needs_image: true, image_prompt: "a team at work" },
+    { title: "數據", page_role: "content" },
+    { title: "風險", page_role: "content" },
+    { title: "時程", page_role: "content" },
+    { title: "結語", page_role: "ending" },
+  ];
+
+  it("illustrates nothing when the density is none", () => {
+    const { outline, density } = applyImagePolicy({
+      outline: outlineOf(nineSlides),
+      density: "none",
+    });
+
+    expect(density).toBe("none");
+    expect(outline.slides.every((slide) => slide.needs_image === false)).toBe(true);
+    expect(outline.slides.every((slide) => slide.image_prompt === "")).toBe(true);
+  });
+
+  it("picks about a third of the deck by role priority and never the ending", () => {
+    const { outline } = applyImagePolicy({
+      outline: outlineOf(nineSlides),
+      density: "key",
+    });
+
+    const illustrated = outline.slides.filter((slide) => slide.needs_image);
+    expect(illustrated.map((slide) => slide.slide_number)).toEqual([1, 4, 5]);
+    expect(outline.slides[8].needs_image).toBe(false);
+  });
+
+  it("illustrates every page including the ending at the every density", () => {
+    const { outline } = applyImagePolicy({
+      outline: outlineOf(nineSlides),
+      density: "every",
+    });
+
+    expect(outline.slides.filter((slide) => slide.needs_image)).toHaveLength(9);
+    expect(outline.slides.every((slide) => slide.image_prompt.length > 0)).toBe(true);
+  });
+
+  it("synthesizes a brief instead of silently dropping a selected page", () => {
+    const { outline, synthesizedPrompts } = applyImagePolicy({
+      outline: outlineOf(nineSlides),
+      density: "key",
+    });
+
+    expect(synthesizedPrompts).toEqual([1, 4]);
+    expect(outline.slides[0].image_prompt).toContain("AI 策略");
+    expect(outline.slides[0].image_prompt).toContain("封面");
+    expect(outline.slides[4].image_prompt).toBe("a team at work");
+  });
+
+  it("defaults the image role from the page role", () => {
+    const { outline } = applyImagePolicy({
+      outline: outlineOf(nineSlides),
+      density: "every",
+    });
+
+    expect(outline.slides[0].image_role).toBe("background");
+    expect(outline.slides[3].image_role).toBe("hero");
+    expect(outline.slides[2].image_role).toBe("accent");
+  });
+
+  it("never asks for fewer than two pictures in a short deck", () => {
+    const { outline } = applyImagePolicy({
+      outline: outlineOf([
+        { title: "封面", page_role: "cover" },
+        { title: "重點", page_role: "content" },
+        { title: "結語", page_role: "ending" },
+      ]),
+      density: "key",
+    });
+
+    expect(outline.slides.filter((slide) => slide.needs_image)).toHaveLength(2);
   });
 });

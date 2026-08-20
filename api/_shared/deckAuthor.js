@@ -2,6 +2,7 @@ const { generateJson } = require("./llmRuntime");
 const pptMaster = require("./pptMasterClient");
 const {
   DECK_MAX_REPAIR_ROUNDS,
+  applyImagePolicy,
   inspectSlideSvg,
   normalizeOutline,
   slideFileName,
@@ -9,6 +10,7 @@ const {
 const {
   buildAuthoringSystemPrompt,
   buildOutlineSystemPrompt,
+  buildOutlineUserMessage,
   buildRepairUserMessage,
   buildSlideUserMessage,
 } = require("./svgAuthoringPrompt");
@@ -25,14 +27,21 @@ const stripSvgWrapper = (value) => {
   return candidate.slice(start, end + "</svg>".length).trim();
 };
 
-const generateOutline = async ({ topic, sourceMarkdown, slideCount, llm }) => {
+const generateOutline = async ({
+  topic,
+  sourceMarkdown,
+  slideCount,
+  imageDensity,
+  templateSpecs,
+  llm,
+}) => {
   const material = sourceMarkdown
     ? `素材內容：\n${sourceMarkdown.slice(0, SOURCE_EXCERPT_LIMIT)}`
     : `簡報主題：${topic}\n請依據這個主題自行建構完整、具體且有實質內容的簡報論述。`;
 
   const outline = await generateJson({
-    systemMessage: buildOutlineSystemPrompt(),
-    userMessage: `${material}\n\n請規劃 ${slideCount} 頁的簡報大綱。`,
+    systemMessage: buildOutlineSystemPrompt({ imageDensity }),
+    userMessage: buildOutlineUserMessage({ material, slideCount, templateSpecs }),
     maxOutputTokens: 16000,
     llm,
   });
@@ -41,7 +50,7 @@ const generateOutline = async ({ topic, sourceMarkdown, slideCount, llm }) => {
   if (normalized.slides.length === 0) {
     throw new Error("AI 未能產生簡報大綱，請調整主題或更換文件");
   }
-  return normalized;
+  return applyImagePolicy({ outline: normalized, density: imageDensity });
 };
 
 const authorSlideSvg = async ({ systemMessage, userMessage, llm }) => {

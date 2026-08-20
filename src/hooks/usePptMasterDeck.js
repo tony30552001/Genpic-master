@@ -282,7 +282,7 @@ export default function usePptMasterDeck() {
   }, [updateSlides, watchJob]);
 
   const generate = useCallback(
-    async ({ topic, file, slideCount, styleId, layoutId }) => {
+    async ({ topic, file, slideCount, imageDensity, styleId, layoutId }) => {
       const trimmedTopic = String(topic || "").trim();
       if (!file && trimmedTopic.length < 4) {
         throw new Error("請輸入至少 4 個字的簡報主題，或上傳一份文件。");
@@ -329,6 +329,7 @@ export default function usePptMasterDeck() {
           documentUrl,
           fileName: file?.name || null,
           slideCount,
+          imageDensity,
           styleId: styleId || null,
           layoutId: layoutId || null,
           signal: controller.signal,

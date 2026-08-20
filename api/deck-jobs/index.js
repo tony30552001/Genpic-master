@@ -13,7 +13,10 @@ const { downloadGeneratedBlob } = require("../_shared/blobStorage");
 const { deckImageBlobName } = require("../_shared/deckImages");
 const { inlineSlideImages } = require("../_shared/deckPreview");
 const { isConfigured, PPTX_CONTENT_TYPE } = require("../_shared/pptMasterClient");
-const { normalizeSlideCount } = require("../_shared/deckContract");
+const {
+  normalizeImageDensity,
+  normalizeSlideCount,
+} = require("../_shared/deckContract");
 
 const IMAGE_CONTENT_TYPES = {
   png: "image/png",
@@ -41,6 +44,7 @@ const buildJobBody = (job, events = [], slides = []) => {
     status: job.status,
     inputKind: job.input_kind,
     slideCount: job.slide_count,
+    imageDensity: job.image_density,
     deckTitle: job.deck_title,
     phase: job.phase,
     progress: {
@@ -245,6 +249,7 @@ module.exports = async function (context, req) {
     sourceDocumentUrl: documentUrl || null,
     sourceFileName: String(body.fileName || "").trim() || null,
     slideCount: normalizeSlideCount(body.slideCount),
+    imageDensity: normalizeImageDensity(body.imageDensity),
     styleId: normalizeTemplateId(body.styleId),
     layoutId: normalizeTemplateId(body.layoutId),
     brandId: normalizeTemplateId(body.brandId),

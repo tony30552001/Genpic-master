@@ -2,6 +2,7 @@ const {
   DECK_CANVAS_HEIGHT,
   DECK_CANVAS_WIDTH,
   DECK_MAX_SLIDES,
+  normalizeImageDensity,
 } = require("./deckContract");
 
 /**
@@ -91,17 +92,59 @@ const buildAuthoringSystemPrompt = ({ fontFamilies, templateSpecs } = {}) =>
     .filter(Boolean)
     .join("\n\n");
 
-const buildOutlineSystemPrompt = () =>
-  `你是簡報策略顧問。請把輸入素材規劃成一份結構清楚、論點分明的簡報大綱。
+const IMAGE_DENSITY_GUIDANCE = {
+  none: `- 這份簡報不配圖：所有頁面的 needs_image 一律為 false，image_prompt 留空。
+- art_direction 仍要填寫，用來統一色票與版面調性。`,
+  key: `- 這份簡報採重點配圖：挑出最值得視覺化的頁面，把 needs_image 設為 true。
+- 封面與章節轉場頁優先配圖；內容頁挑論述最需要意象支撐的那幾頁。
+- 至少提名 3 頁，寧可多提名，最終張數由系統依密度裁定。`,
+  every: `- 這份簡報每頁都要配圖：所有頁面的 needs_image 一律為 true。
+- 每一頁都必須有獨立且具體的 image_prompt，不可重複同一句。`,
+};
+
+const buildOutlineSystemPrompt = ({ imageDensity } = {}) => {
+  const density = normalizeImageDensity(imageDensity);
+
+  return `你是簡報策略顧問。請把輸入素材規劃成一份結構清楚、論點分明的簡報大綱。
 規則：
 - 第一頁是封面（page_role = cover），最後一頁是結尾（page_role = ending）。
 - 中間頁使用 content，必要時可用 section 當作章節轉場。
 - 每頁 key_points 最多 5 條，每條 40 字以內，必須具體、有資訊量，不要空話。
-- 只有真正需要視覺意象的頁面才把 needs_image 設為 true，並提供英文 image_prompt。
 - 全份簡報最多 ${DECK_MAX_SLIDES} 頁。
-- 使用與輸入素材相同的語言撰寫。
+- 使用與輸入素材相同的語言撰寫，但 art_direction 與 image_prompt 一律使用英文。
+
+配圖規則：
+${IMAGE_DENSITY_GUIDANCE[density]}
+- image_prompt 描述畫面本身，不要出現任何文字、字母、圖表或浮水印。
+- image_role 說明這張圖在版面上的角色：
+  - background：滿版底圖，文字會壓在上面，畫面必須低對比、留白多、沒有中央焦點。
+  - hero：佔半個版面的主視覺，主體明確、構圖偏向一側。
+  - accent：小面積點綴，單一主體、構圖簡潔。
+- art_direction 是一句英文，描述整份簡報共用的視覺調性（色調、筆觸、質感、視角），
+  所有配圖都會沿用它，請與指定的設計範本規範一致。
+
 請只回傳 JSON：
-{"title":"簡報標題","summary":"一句話摘要","slides":[{"page_role":"cover","title":"","subtitle":"","key_points":[],"speaker_notes":"","needs_image":false,"image_prompt":""}]}`;
+{"title":"簡報標題","summary":"一句話摘要","art_direction":"Muted editorial illustration, restrained two-tone palette, soft geometric shapes, flat perspective","slides":[{"page_role":"cover","title":"","subtitle":"","key_points":[],"speaker_notes":"","needs_image":true,"image_role":"background","image_prompt":"Wide abstract composition of layered translucent planes, low contrast, generous empty space"}]}`;
+};
+
+const buildOutlineUserMessage = ({ material, slideCount, templateSpecs }) => {
+  const specs = Array.isArray(templateSpecs) ? templateSpecs.filter(Boolean) : [];
+  const guidance =
+    specs.length > 0
+      ? `\n\n這份簡報必須遵守以下設計範本規範，art_direction 請與它一致：\n\n${specs
+          .map((spec) => `【${spec.kind}／${spec.id}】\n${spec.spec}`)
+          .join("\n\n")}`
+      : "";
+
+  return `${material}\n\n請規劃 ${slideCount} 頁的簡報大綱。${guidance}`;
+};
+
+const IMAGE_ROLE_PLACEMENT = {
+  background:
+    "這張圖是滿版底圖：請鋪滿整個畫布，並把文字放在圖上方，必要時加一層半透明色塊確保可讀性。",
+  hero: "這張圖是主視覺：請讓它佔據約半個版面，與文字區左右或上下分工。",
+  accent: "這張圖是點綴：請控制在版面的一小塊區域，不要搶走文字的視覺重量。",
+};
 
 const buildSlideUserMessage = ({ deckTitle, slide, totalSlides, availableImages }) => {
   const points =
@@ -112,7 +155,9 @@ const buildSlideUserMessage = ({ deckTitle, slide, totalSlides, availableImages 
     Array.isArray(availableImages) && availableImages.length > 0
       ? `\n可用圖片（僅能使用這些檔名）：\n${availableImages
           .map((name) => `- ../images/${name}`)
-          .join("\n")}`
+          .join("\n")}\n${IMAGE_ROLE_PLACEMENT[slide.image_role] || IMAGE_ROLE_PLACEMENT.accent}
+圖片本身是橫幅（約 3:2），且以 preserveAspectRatio="xMidYMid slice" 填滿你給的框，
+超出的部分會被裁掉。請不要把它放進極端狹長或接近正方形的框。`
       : "\n本頁沒有可用圖片，請勿使用 <image>。";
 
   return `簡報標題：${deckTitle}
@@ -143,6 +188,7 @@ module.exports = {
   SVG_GRAMMAR,
   buildAuthoringSystemPrompt,
   buildOutlineSystemPrompt,
+  buildOutlineUserMessage,
   buildRepairUserMessage,
   buildSlideUserMessage,
 };

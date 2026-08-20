@@ -138,3 +138,33 @@ describe("PptMasterStudio slide previews", () => {
     expect(screen.getAllByAltText("第 1 頁預覽")).toHaveLength(1);
   });
 });
+
+describe("PptMasterStudio image density", () => {
+  beforeEach(() => {
+    deckState.current = { ...baseState, generate: vi.fn().mockResolvedValue(undefined) };
+  });
+
+  afterEach(() => cleanup());
+
+  it("defaults to illustrating the key pages", () => {
+    render(<PptMasterStudio />);
+
+    expect(screen.getByRole("button", { name: /重點配圖/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("sends the chosen density to the generator", async () => {
+    const user = userEvent.setup();
+    render(<PptMasterStudio />);
+
+    await user.type(screen.getByLabelText("簡報主題"), "生成式 AI 導入策略");
+    await user.click(screen.getByRole("button", { name: /每頁配圖/ }));
+    await user.click(screen.getByRole("button", { name: /產生簡報/ }));
+
+    expect(deckState.current.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ imageDensity: "every" })
+    );
+  });
+});

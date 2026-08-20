@@ -18,12 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { DOCUMENT_ACCEPT } from "@/lib/documentFormats";
 import usePptMasterDeck from "@/hooks/usePptMasterDeck";
 import DeckProgress from "./DeckProgress";
+import DeckImageDensityPicker from "./DeckImageDensityPicker";
 import DeckSetupSummary from "./DeckSetupSummary";
 import DeckSlideRail from "./DeckSlideRail";
 import DeckTimeline from "./DeckTimeline";
 import PptTemplatePicker from "./PptTemplatePicker";
 import { authoringSlideNumber } from "./deckSteps";
-import { describeLayout, describeStyle } from "./pptTemplateCopy";
+import { describeImageDensity, describeLayout, describeStyle } from "./pptTemplateCopy";
 
 const MIN_SLIDES = 4;
 const MAX_SLIDES = 12;
@@ -35,6 +36,7 @@ export default function PptMasterStudio() {
   const [topic, setTopic] = useState("");
   const [file, setFile] = useState(null);
   const [slideCount, setSlideCount] = useState(8);
+  const [imageDensity, setImageDensity] = useState("key");
   const [styleId, setStyleId] = useState(null);
   const [layoutId, setLayoutId] = useState(null);
   const [downloadError, setDownloadError] = useState(null);
@@ -67,6 +69,7 @@ export default function PptMasterStudio() {
   const setupTitle = topic.trim() || file?.name || "尚未填寫主題";
   const setupMeta = [
     `${slideCount} 頁`,
+    describeImageDensity(imageDensity).name,
     selectedStyle ? describeStyle(selectedStyle).name : "預設風格",
     selectedLayout ? describeLayout(selectedLayout).name : "預設骨架",
     file && topic.trim() ? `參考文件：${file.name}` : null,
@@ -79,7 +82,7 @@ export default function PptMasterStudio() {
     setShowSetup(false);
     setSelectedSlide(null);
     try {
-      await generate({ topic, file, slideCount, styleId, layoutId });
+      await generate({ topic, file, slideCount, imageDensity, styleId, layoutId });
     } catch (generationError) {
       if (generationError?.name !== "AbortError") {
         console.error("Deck generation failed:", generationError);
@@ -189,6 +192,12 @@ export default function PptMasterStudio() {
               可設定 {MIN_SLIDES}–{MAX_SLIDES} 頁，含封面與結尾。
             </p>
           </div>
+
+          <DeckImageDensityPicker
+            value={imageDensity}
+            onChange={setImageDensity}
+            disabled={isGenerating}
+          />
         </CardContent>
       </Card>
 

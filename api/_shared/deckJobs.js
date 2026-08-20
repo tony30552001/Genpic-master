@@ -11,9 +11,13 @@ const {
 const pptMaster = require("./pptMasterClient");
 const { authorDeck, generateOutline } = require("./deckAuthor");
 const { LlmConfigurationError, resolveRoleModel } = require("./llmModels");
+const { ensureModelPolicy } = require("./modelPolicy");
 const { generateDeckImages } = require("./deckImages");
 const { buildAuthoringSystemPrompt } = require("./svgAuthoringPrompt");
-const { DECK_STEP_LABELS: STEP_LABELS } = require("./deckContract");
+const {
+  DECK_STEP_LABELS: STEP_LABELS,
+  normalizeImageDensity,
+} = require("./deckContract");
 
 const MAX_ATTEMPTS = 2;
 const LOCK_TIMEOUT_MINUTES = Number(process.env.DECK_JOB_TIMEOUT_MINUTES || 40);
@@ -27,6 +31,7 @@ const createDeckJob = async ({
   sourceDocumentUrl,
   sourceFileName,
   slideCount,
+  imageDensity,
   styleId,
   layoutId,
   brandId,
@@ -34,8 +39,8 @@ const createDeckJob = async ({
   const result = await query(
     `INSERT INTO deck_generation_jobs
        (tenant_id, user_id, input_kind, topic, source_document_url, source_file_name,
-        slide_count, style_id, layout_id, brand_id, progress_total)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $7)
+        slide_count, style_id, layout_id, brand_id, image_density, progress_total)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $7)
      RETURNING id, status, created_at`,
     [
       tenantId,
@@ -48,6 +53,7 @@ const createDeckJob = async ({
       styleId || null,
       layoutId || null,
       brandId || null,
+      normalizeImageDensity(imageDensity),
     ]
   );
   return result.rows[0];
@@ -55,9 +61,10 @@ const createDeckJob = async ({
 
 const getDeckJobForUser = async ({ jobId, tenantId, userId }) => {
   const result = await query(
-    `SELECT id, input_kind, topic, source_file_name, slide_count, style_id, layout_id,
-            brand_id, deck_title, status, phase, progress_current, progress_total,
-            attempts, result_blob_name, result_file_name, error_code, error_message,
+    `SELECT id, input_kind, topic, source_file_name, slide_count, image_density,
+            style_id, layout_id, brand_id, deck_title, status, phase,
+            progress_current, progress_total, attempts, result_blob_name,
+            result_file_name, error_code, error_message,
             created_at, started_at, completed_at
      FROM deck_generation_jobs
      WHERE id = $1 AND tenant_id = $2 AND user_id = $3
@@ -189,8 +196,9 @@ const claimNextDeckJob = async () => {
        FROM candidate
        WHERE jobs.id = candidate.id
        RETURNING jobs.id, jobs.input_kind, jobs.topic, jobs.source_document_url,
-                 jobs.source_file_name, jobs.slide_count, jobs.style_id,
-                 jobs.layout_id, jobs.brand_id, jobs.attempts, jobs.tenant_id`,
+                 jobs.source_file_name, jobs.slide_count, jobs.image_density,
+                 jobs.style_id, jobs.layout_id, jobs.brand_id, jobs.attempts,
+                 jobs.tenant_id`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
     );
 
@@ -401,29 +409,48 @@ const processDeckJob = async (job) => {
     }
 
     await report({ step: "outline", detail: "規劃簡報大綱", current: 0, total: job.slide_count });
-    const llm = await resolveRoleModel(job.tenant_id, "deck_authoring");
-    const outline = await generateOutline({
-      topic: job.topic,
-      sourceMarkdown,
-      slideCount: job.slide_count,
-      llm,
-    });
-    await report({
-      step: "outline",
-      status: "succeeded",
-      detail: `《${outline.title}》共 ${outline.slides.length} 頁`,
-      current: 0,
-      total: outline.slides.length,
-    });
-
-    const [fonts, templateSpecs] = await Promise.all([
+    const [llm, fonts, templateSpecs, modelPolicy] = await Promise.all([
+      resolveRoleModel(job.tenant_id, "deck_authoring"),
       pptMaster.getFonts(),
       resolveTemplateSpecs({
         styleId: job.style_id,
         layoutId: job.layout_id,
         brandId: job.brand_id,
       }),
+      ensureModelPolicy(job.tenant_id),
     ]);
+
+    /**
+     * The outline reads the template specs so its art direction already speaks
+     * the chosen design language; every illustration then inherits that one
+     * sentence instead of drifting page by page.
+     */
+    const { outline, synthesizedPrompts } = await generateOutline({
+      topic: job.topic,
+      sourceMarkdown,
+      slideCount: job.slide_count,
+      imageDensity: job.image_density,
+      templateSpecs,
+      llm,
+    });
+    const illustrated = outline.slides.filter((slide) => slide.needs_image).length;
+    await report({
+      step: "outline",
+      status: "succeeded",
+      detail: `《${outline.title}》共 ${outline.slides.length} 頁，其中 ${illustrated} 頁配圖`,
+      current: 0,
+      total: outline.slides.length,
+    });
+
+    for (const slideNumber of synthesizedPrompts) {
+      await recordDeckJobEvent({
+        jobId: job.id,
+        step: "outline",
+        status: "succeeded",
+        slideNumber,
+        detail: `第 ${slideNumber} 頁未附配圖描述，已依標題與重點自動補寫`,
+      });
+    }
 
     const deck = await pptMaster.createDeck({ name: "pixora_deck" });
     try {
@@ -431,6 +458,7 @@ const processDeckJob = async (job) => {
         deckId: deck.deckId,
         jobId: job.id,
         outline,
+        model: modelPolicy.defaultModel,
         onProgress: report,
       });
 
