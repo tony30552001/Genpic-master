@@ -408,7 +408,7 @@ Authorization: Bearer <API_KEY>
 
 #### Step 3.1 — 文件分析 Function
 - [x] 實作 `api/analyze-document/index.js`
-- [x] 使用 Azure OpenAI Responses API 與管理中心「文件分析」用途指派的模型
+- [x] 使用管理中心「文件分析」用途指派的模型（Azure OpenAI Responses API 或 Google Gemini）
 - [x] 支援 PDF、Word、PowerPoint、Excel、OpenDocument、RTF、EPUB、CSV、TXT/MD 與圖片格式（Blob URL 輸入）
 - [x] 以固定版本 AnyDoc 將 Office、試算表與文字型 PDF 正規化為 Markdown；掃描 PDF 與圖片明確走 GPT multimodal input
 - [x] 回傳結構化分鏡 JSON 與文件級 AI 建議視覺風格，並支援前端以風格庫樣式取代

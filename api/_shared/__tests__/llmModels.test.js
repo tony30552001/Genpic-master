@@ -207,26 +207,32 @@ describe("setRoleAssignment", () => {
     ).rejects.toThrow("備援模型必須與主要模型不同");
   });
 
-  it("rejects a model from another provider", async () => {
+  it("accepts models from any provider because roles are not pinned", async () => {
+    queryResults.push({ rows: [{ id: "model-1" }, { id: "model-2" }] });
     queryResults.push({
-      rows: [{ id: "model-1", provider: "google-gemini" }],
+      rows: [
+        {
+          role: "document_analysis",
+          model_id: "model-1",
+          fallback_model_id: "model-2",
+          updated_at: new Date("2026-01-01T00:00:00Z"),
+        },
+      ],
     });
 
-    await expect(
-      setRoleAssignment({
-        tenantId: TENANT,
-        role: "document_analysis",
-        modelId: "model-1",
-      })
-    ).rejects.toThrow("只能使用 Azure OpenAI 的模型");
+    const assignment = await setRoleAssignment({
+      tenantId: TENANT,
+      role: "document_analysis",
+      modelId: "model-1",
+      fallbackModelId: "model-2",
+    });
+
+    expect(assignment.fallbackModelId).toBe("model-2");
   });
 
   it("upserts a valid assignment", async () => {
     queryResults.push({
-      rows: [
-        { id: "model-1", provider: "azure-openai" },
-        { id: "model-2", provider: "azure-openai" },
-      ],
+      rows: [{ id: "model-1" }, { id: "model-2" }],
     });
     queryResults.push({
       rows: [
@@ -256,19 +262,21 @@ describe("setRoleAssignment", () => {
 });
 
 describe("resolveRoleModel", () => {
-  it("decrypts the assigned primary and fallback models", async () => {
+  it("decrypts the assigned primary and fallback models across providers", async () => {
     queryResults.push({
       rows: [
         {
           id: "model-1",
           label: "GPT 分析",
+          provider: "azure-openai",
           model_name: "gpt-5.6-luna",
           endpoint: "https://pixora.openai.azure.com/openai/v1",
           api_key_encrypted: "enc:primary-key",
           fallback_id: "model-2",
-          fallback_label: "GPT 備援",
-          fallback_model_name: "gpt-5.6-sol",
-          fallback_endpoint: "https://peer.openai.azure.com/openai/v1",
+          fallback_label: "Gemini 備援",
+          fallback_provider: "google-gemini",
+          fallback_model_name: "gemini-2.0-flash",
+          fallback_endpoint: null,
           fallback_api_key_encrypted: "enc:peer-key",
         },
       ],
@@ -276,9 +284,10 @@ describe("resolveRoleModel", () => {
 
     const resolved = await resolveRoleModel(TENANT, "document_analysis");
 
-    expect(resolved.provider).toBe("azure-openai");
+    expect(resolved.model.provider).toBe("azure-openai");
     expect(resolved.model.apiKey).toBe("primary-key");
-    expect(resolved.fallback.modelName).toBe("gpt-5.6-sol");
+    expect(resolved.fallback.provider).toBe("google-gemini");
+    expect(resolved.fallback.modelName).toBe("gemini-2.0-flash");
     expect(resolved.fallback.apiKey).toBe("peer-key");
   });
 

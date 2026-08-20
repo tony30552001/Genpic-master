@@ -415,13 +415,11 @@ export default function LlmModelSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            每個用途都必須指派主要模型，否則相關功能會回報尚未設定。備援模型會在主要模型忙碌或失敗時接手。
+            每個用途都必須指派主要模型，否則相關功能會回報尚未設定。任何用途都可以使用 Azure OpenAI 或 Google Gemini 模型，備援模型會在主要模型忙碌或失敗時接手，且不必與主要模型同一家供應商。
           </p>
           {settings.roles.map((role) => {
             const assignment = assignmentByRole[role.id] || {};
-            const candidates = settings.models.filter(
-              (model) => model.provider === role.provider
-            );
+            const candidates = settings.models;
             const isPending = pendingRole === role.id;
             return (
               <div
@@ -434,13 +432,12 @@ export default function LlmModelSettings() {
                 <div className="min-w-0 space-y-1">
                   <p className="text-sm font-semibold">{role.label}</p>
                   <p className="text-xs text-muted-foreground">{role.description}</p>
-                  <p className="text-xs text-muted-foreground">{providerLabel(role.provider)}</p>
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold">主要模型</p>
                   {candidates.length === 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      尚未建立 {providerLabel(role.provider)} 模型，請先於上方新增。
+                      尚未建立任何分析模型，請先於上方新增。
                     </p>
                   ) : (
                     <select
@@ -453,7 +450,9 @@ export default function LlmModelSettings() {
                     >
                       <option value="">未指派</option>
                       {candidates.map((model) => (
-                        <option key={model.id} value={model.id}>{model.label}</option>
+                        <option key={model.id} value={model.id}>
+                          {`${model.label}（${providerLabel(model.provider)}）`}
+                        </option>
                       ))}
                     </select>
                   )}
@@ -464,7 +463,7 @@ export default function LlmModelSettings() {
                     <p className="text-xs text-muted-foreground">請先指派主要模型。</p>
                   ) : candidates.length < 2 ? (
                     <p className="text-xs text-muted-foreground">
-                      沒有其他 {providerLabel(role.provider)} 模型可作為備援。
+                      沒有其他模型可作為備援。
                     </p>
                   ) : (
                     <select
@@ -479,7 +478,9 @@ export default function LlmModelSettings() {
                       {candidates
                         .filter((model) => model.id !== assignment.modelId)
                         .map((model) => (
-                          <option key={model.id} value={model.id}>{model.label}</option>
+                          <option key={model.id} value={model.id}>
+                            {`${model.label}（${providerLabel(model.provider)}）`}
+                          </option>
                         ))}
                     </select>
                   )}

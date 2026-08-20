@@ -3,18 +3,10 @@
  *
  * Endpoint, API key and deployment always come from the caller. Analysis models
  * are configured per tenant in the admin center (api/_shared/llmModels.js), so
- * this module never reads environment variables.
+ * this module never reads environment variables. Retries and peer-model
+ * failover live in api/_shared/llmRuntime.js because a role may fail over to a
+ * model from another provider.
  */
-
-/**
- * GlobalStandard deployments reject oversized requests during peak load with
- * HTTP 429 ("your request exceeds the maximum usage size allowed"). That
- * verdict is about the size of this request, not about how often we call, so
- * every retry also shrinks the output budget and moves to the peer model.
- */
-const RETRY_ATTEMPTS = 4;
-const RETRY_BASE_DELAY_MS = 2000;
-const MIN_RETRY_OUTPUT_TOKENS = 8000;
 
 class AzureOpenAIError extends Error {
   constructor(message, status) {
@@ -23,16 +15,6 @@ class AzureOpenAIError extends Error {
     this.status = status;
   }
 }
-
-const isRetryableStatus = (status) => status === 429 || status >= 500;
-
-const shrinkOutputTokens = (tokens) =>
-  tokens ? Math.max(MIN_RETRY_OUTPUT_TOKENS, Math.floor(tokens * 0.6)) : tokens;
-
-const retryDelayMs = (attempt) =>
-  RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) + Math.floor(Math.random() * 500);
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getResponsesEndpoint = (configuredEndpoint) => {
   if (!configuredEndpoint) {
@@ -140,19 +122,6 @@ const buildResponseInput = ({
   return [{ role: "user", content }];
 };
 
-const requireModel = (model, label) => {
-  if (!model?.modelName) {
-    throw new Error(`${label}缺少模型名稱`);
-  }
-  if (!model.endpoint) {
-    throw new Error(`${label}缺少 Azure OpenAI 端點`);
-  }
-  if (!model.apiKey) {
-    throw new Error(`${label}缺少 API 金鑰`);
-  }
-  return model;
-};
-
 const postJsonCompletion = async ({
   model,
   systemMessage,
@@ -212,58 +181,8 @@ const postJsonCompletion = async ({
   return parseJsonContent(content);
 };
 
-/**
- * @param {object} params
- * @param {{ modelName: string, endpoint: string, apiKey: string }} params.model
- * @param {{ modelName: string, endpoint: string, apiKey: string }} [params.fallback]
- *   Peer model used once the primary one rejects the request under load.
- */
-const generateJsonCompletion = async ({
-  model,
-  fallback,
-  systemMessage,
-  userMessage,
-  imageDataUrl,
-  fileDataUrl,
-  fileName,
-  maxOutputTokens,
-}) => {
-  let activeModel = requireModel(model, "主要分析模型");
-  const fallbackModel = fallback ? requireModel(fallback, "備援分析模型") : null;
-  let activeMaxOutputTokens = maxOutputTokens;
-
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await postJsonCompletion({
-        model: activeModel,
-        systemMessage,
-        userMessage,
-        imageDataUrl,
-        fileDataUrl,
-        fileName,
-        maxOutputTokens: activeMaxOutputTokens,
-      });
-    } catch (error) {
-      if (attempt >= RETRY_ATTEMPTS || !isRetryableStatus(error.status)) throw error;
-
-      activeMaxOutputTokens = shrinkOutputTokens(activeMaxOutputTokens);
-      if (fallbackModel && activeModel.modelName !== fallbackModel.modelName) {
-        activeModel = fallbackModel;
-      }
-      console.warn("[azureOpenAI] Retrying rejected request:", {
-        attempt,
-        status: error.status,
-        model: activeModel.modelName,
-        maxOutputTokens: activeMaxOutputTokens,
-      });
-      await sleep(retryDelayMs(attempt));
-    }
-  }
-};
-
 module.exports = {
   buildResponseInput,
-  generateJsonCompletion,
   parseJsonContent,
   postJsonCompletion,
   getResponsesEndpoint,

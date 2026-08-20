@@ -12,71 +12,13 @@ const { query } = require("./db");
 const { encrypt, decrypt } = require("./secretCrypto");
 const { isPublicHttpsEndpoint } = require("./urlValidator");
 const { postJsonCompletion } = require("./azureOpenAI");
-const { getModel } = require("./gemini");
-
-const PROVIDERS = Object.freeze({
-  AZURE_OPENAI: "azure-openai",
-  GOOGLE_GEMINI: "google-gemini",
-});
-
-const LLM_PROVIDERS = Object.freeze([
-  {
-    id: PROVIDERS.AZURE_OPENAI,
-    label: "Azure OpenAI",
-    requiresEndpoint: true,
-    endpointHint: "https://<resource>.openai.azure.com",
-  },
-  {
-    id: PROVIDERS.GOOGLE_GEMINI,
-    label: "Google Gemini",
-    requiresEndpoint: false,
-    endpointHint: "",
-  },
-]);
-
-/**
- * Each role stays on the provider its call path is built for: document analysis
- * and deck authoring rely on the Azure Responses API payload shape, and the
- * Gemini roles rely on the Gemini SDK.
- */
-const LLM_ROLES = Object.freeze([
-  {
-    id: "document_analysis",
-    label: "文件分析",
-    provider: PROVIDERS.AZURE_OPENAI,
-    description: "上傳文件後拆解場景與重點",
-  },
-  {
-    id: "prompt_optimization",
-    label: "Prompt 優化",
-    provider: PROVIDERS.AZURE_OPENAI,
-    description: "把使用者輸入改寫為中英文生成 Prompt",
-  },
-  {
-    id: "deck_authoring",
-    label: "簡報生成",
-    provider: PROVIDERS.AZURE_OPENAI,
-    description: "PPT Master 的大綱與每頁 SVG 版面",
-  },
-  {
-    id: "style_analysis",
-    label: "風格分析",
-    provider: PROVIDERS.GOOGLE_GEMINI,
-    description: "從參考圖萃取風格描述與標籤",
-  },
-  {
-    id: "filename",
-    label: "檔名生成",
-    provider: PROVIDERS.GOOGLE_GEMINI,
-    description: "依生成內容命名輸出檔案",
-  },
-  {
-    id: "scene_optimization",
-    label: "場景優化",
-    provider: PROVIDERS.GOOGLE_GEMINI,
-    description: "改寫單一場景的描述與視覺 Prompt",
-  },
-]);
+const { postGeminiJson } = require("./gemini");
+const {
+  LLM_PROVIDERS,
+  LLM_ROLES,
+  PROVIDERS,
+  getRole,
+} = require("./llmProviders");
 
 class LlmValidationError extends Error {
   constructor(message) {
@@ -104,9 +46,6 @@ class LlmConfigurationError extends Error {
     this.status = 503;
   }
 }
-
-const getRole = (roleId) =>
-  LLM_ROLES.find((role) => role.id === String(roleId || "").trim()) || null;
 
 const timestamp = (value) =>
   value ? { seconds: Math.floor(new Date(value).getTime() / 1000) } : null;
@@ -327,20 +266,11 @@ const setRoleAssignment = async ({
 
   const ids = fallbackId ? [primaryId, fallbackId] : [primaryId];
   const models = await query(
-    "SELECT id, provider FROM llm_models WHERE tenant_id = $1 AND id = ANY($2::uuid[])",
+    "SELECT id FROM llm_models WHERE tenant_id = $1 AND id = ANY($2::uuid[])",
     [tenantId, ids]
   );
   if (models.rows.length !== ids.length) {
     throw new LlmValidationError("找不到指定的分析模型");
-  }
-  const mismatched = models.rows.find((row) => row.provider !== roleInfo.provider);
-  if (mismatched) {
-    const providerLabel = LLM_PROVIDERS.find(
-      (item) => item.id === roleInfo.provider
-    )?.label;
-    throw new LlmValidationError(
-      `「${roleInfo.label}」只能使用 ${providerLabel} 的模型`
-    );
   }
 
   const result = await query(
@@ -361,6 +291,7 @@ const setRoleAssignment = async ({
 const toRuntimeModel = (row) => ({
   id: row.id,
   label: row.label,
+  provider: row.provider,
   modelName: row.model_name,
   endpoint: row.endpoint || "",
   apiKey: decrypt(row.api_key_encrypted),
@@ -380,11 +311,13 @@ const resolveRoleModel = async (tenantId, role) => {
   const result = await query(
     `SELECT primary_model.id,
             primary_model.label,
+            primary_model.provider,
             primary_model.model_name,
             primary_model.endpoint,
             primary_model.api_key_encrypted,
             fallback_model.id AS fallback_id,
             fallback_model.label AS fallback_label,
+            fallback_model.provider AS fallback_provider,
             fallback_model.model_name AS fallback_model_name,
             fallback_model.endpoint AS fallback_endpoint,
             fallback_model.api_key_encrypted AS fallback_api_key_encrypted
@@ -406,12 +339,12 @@ const resolveRoleModel = async (tenantId, role) => {
 
   return {
     role: roleInfo.id,
-    provider: roleInfo.provider,
     model: toRuntimeModel(row),
     fallback: row.fallback_id
       ? toRuntimeModel({
           id: row.fallback_id,
           label: row.fallback_label,
+          provider: row.fallback_provider,
           model_name: row.fallback_model_name,
           endpoint: row.fallback_endpoint,
           api_key_encrypted: row.fallback_api_key_encrypted,
@@ -437,25 +370,23 @@ const testLlmModel = async ({ provider, modelName, endpoint, apiKey }) => {
   }
 
   const startedAt = Date.now();
+  const model = {
+    provider: normalized.provider,
+    modelName: normalized.modelName,
+    endpoint: normalized.endpoint,
+    apiKey: key,
+  };
+  const request = {
+    model,
+    systemMessage: 'Reply with the JSON object {"ok":true}.',
+    userMessage: "ping",
+    maxOutputTokens: 2048,
+  };
+
   if (normalized.provider === PROVIDERS.AZURE_OPENAI) {
-    await postJsonCompletion({
-      model: {
-        modelName: normalized.modelName,
-        endpoint: normalized.endpoint,
-        apiKey: key,
-      },
-      systemMessage: 'Reply with the JSON object {"ok":true}.',
-      userMessage: "ping",
-      maxOutputTokens: 2048,
-    });
+    await postJsonCompletion(request);
   } else {
-    const result = await getModel(normalized.modelName, key).generateContent(
-      [{ role: "user", parts: [{ text: 'Reply with the JSON object {"ok":true}.' }] }],
-      { responseMimeType: "application/json" }
-    );
-    if (!result) {
-      throw new Error("Gemini 沒有回傳內容");
-    }
+    await postGeminiJson(request);
   }
 
   return { latencyMs: Date.now() - startedAt };

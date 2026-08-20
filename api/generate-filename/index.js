@@ -1,6 +1,6 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { generateGeminiJson } = require("../_shared/gemini");
+const { generateJson } = require("../_shared/llmRuntime");
 const { resolveIdentity } = require("../_shared/identity");
 const {
     LlmConfigurationError,
@@ -66,15 +66,10 @@ User Script: "${userScript}"
         // 6. Parse Result
         let data;
         try {
-            data = await generateGeminiJson({
-                model: llm.model,
-                fallback: llm.fallback,
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: GENERATE_FILENAME_SYSTEM_MESSAGE + "\n" + promptText }],
-                    },
-                ],
+            data = await generateJson({
+                llm,
+                systemMessage: GENERATE_FILENAME_SYSTEM_MESSAGE,
+                userMessage: promptText,
             });
 
             // 安全防護：確保格式真的是 kebab-case，如果 AI 亂鬧，就做基礎的字串清理

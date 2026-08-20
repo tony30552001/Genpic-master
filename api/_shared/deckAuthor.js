@@ -1,4 +1,4 @@
-const { generateJsonCompletion } = require("./azureOpenAI");
+const { generateJson } = require("./llmRuntime");
 const pptMaster = require("./pptMasterClient");
 const {
   DECK_MAX_REPAIR_ROUNDS,
@@ -30,12 +30,11 @@ const generateOutline = async ({ topic, sourceMarkdown, slideCount, llm }) => {
     ? `素材內容：\n${sourceMarkdown.slice(0, SOURCE_EXCERPT_LIMIT)}`
     : `簡報主題：${topic}\n請依據這個主題自行建構完整、具體且有實質內容的簡報論述。`;
 
-  const outline = await generateJsonCompletion({
+  const outline = await generateJson({
     systemMessage: buildOutlineSystemPrompt(),
     userMessage: `${material}\n\n請規劃 ${slideCount} 頁的簡報大綱。`,
     maxOutputTokens: 8000,
-    model: llm.model,
-    fallback: llm.fallback,
+    llm,
   });
 
   const normalized = normalizeOutline(outline, { slideCount });
@@ -46,12 +45,11 @@ const generateOutline = async ({ topic, sourceMarkdown, slideCount, llm }) => {
 };
 
 const authorSlideSvg = async ({ systemMessage, userMessage, llm }) => {
-  const result = await generateJsonCompletion({
+  const result = await generateJson({
     systemMessage,
     userMessage,
     maxOutputTokens: 16000,
-    model: llm.model,
-    fallback: llm.fallback,
+    llm,
   });
   const svg = stripSvgWrapper(result?.svg ?? result?.content ?? "");
   if (!svg.startsWith("<svg")) {

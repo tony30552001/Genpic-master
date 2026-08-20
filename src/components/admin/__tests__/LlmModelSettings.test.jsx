@@ -33,13 +33,11 @@ const roles = [
   {
     id: "document_analysis",
     label: "文件分析",
-    provider: "azure-openai",
     description: "上傳文件後拆解場景與重點",
   },
   {
     id: "style_analysis",
     label: "風格分析",
-    provider: "google-gemini",
     description: "從參考圖萃取風格描述與標籤",
   },
 ];
@@ -88,11 +86,8 @@ describe("LlmModelSettings", () => {
       await screen.findByText("尚未建立任何分析模型，請點右上角「新增模型」開始設定。")
     ).toBeInTheDocument();
     expect(
-      screen.getByText("尚未建立 Azure OpenAI 模型，請先於上方新增。")
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("尚未建立 Google Gemini 模型，請先於上方新增。")
-    ).toBeInTheDocument();
+      screen.getAllByText("尚未建立任何分析模型，請先於上方新增。")
+    ).toHaveLength(2);
     expect(screen.queryByLabelText("文件分析主要模型")).not.toBeInTheDocument();
   });
 
@@ -106,9 +101,7 @@ describe("LlmModelSettings", () => {
     await renderSettings();
 
     expect(screen.getAllByText("請先指派主要模型。")).toHaveLength(1);
-    expect(
-      screen.getByText("沒有其他 Azure OpenAI 模型可作為備援。")
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("文件分析備援模型")).toBeInTheDocument();
   });
 
   it("lists saved models without exposing their keys", async () => {
@@ -120,20 +113,23 @@ describe("LlmModelSettings", () => {
     expect(screen.getByText("Google Gemini ・ gemini-2.0-flash")).toBeInTheDocument();
   });
 
-  it("only offers models of the provider each role is pinned to", async () => {
+  it("offers every model to every role regardless of provider", async () => {
     await renderSettings();
 
-    const azureSelect = screen.getByLabelText("文件分析主要模型");
-    const geminiSelect = screen.getByLabelText("風格分析主要模型");
+    const documentSelect = screen.getByLabelText("文件分析主要模型");
+    const styleSelect = screen.getByLabelText("風格分析主要模型");
+    const expected = [
+      "未指派",
+      "GPT 分析（Azure OpenAI）",
+      "Flash 分析（Google Gemini）",
+    ];
 
-    expect(Array.from(azureSelect.options).map((option) => option.textContent)).toEqual([
-      "未指派",
-      "GPT 分析",
-    ]);
-    expect(Array.from(geminiSelect.options).map((option) => option.textContent)).toEqual([
-      "未指派",
-      "Flash 分析",
-    ]);
+    expect(Array.from(documentSelect.options).map((option) => option.textContent)).toEqual(
+      expected
+    );
+    expect(Array.from(styleSelect.options).map((option) => option.textContent)).toEqual(
+      expected
+    );
   });
 
   it("hides the endpoint field for providers that do not need one", async () => {
@@ -215,6 +211,27 @@ describe("LlmModelSettings", () => {
       })
     );
     expect(await screen.findByRole("status")).toHaveTextContent("文件分析");
+  });
+
+  it("saves a cross-provider role assignment", async () => {
+    assignAdminLlmRole.mockResolvedValue({
+      ...settings,
+      assignments: [
+        { role: "document_analysis", modelId: "model-gemini", fallbackModelId: null },
+      ],
+    });
+    await renderSettings();
+
+    fireEvent.change(screen.getByLabelText("文件分析主要模型"), {
+      target: { value: "model-gemini" },
+    });
+
+    await waitFor(() =>
+      expect(assignAdminLlmRole).toHaveBeenCalledWith("document_analysis", {
+        modelId: "model-gemini",
+        fallbackModelId: null,
+      })
+    );
   });
 
   it("reports a delete that the backend rejects", async () => {

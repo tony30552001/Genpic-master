@@ -8,14 +8,12 @@ const {
   isSupportedDocument,
   parseDocumentBuffer,
 } = require("../_shared/documentParser");
-const {
-  generateJsonCompletion,
-} = require("../_shared/azureOpenAI");
 const { resolveIdentity } = require("../_shared/identity");
 const {
   LlmConfigurationError,
   resolveRoleModel,
 } = require("../_shared/llmModels");
+const { generateJson } = require("../_shared/llmRuntime");
 const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
 const {
@@ -335,8 +333,7 @@ module.exports = async function (context, req) {
 
     const analysisPrompt = buildAnalysisPrompt(itemCount, analysisMode);
     let userMessage;
-    let imageDataUrl;
-    let fileDataUrl;
+    let attachment;
 
     if (parsedDocument.kind === "text") {
       const textContent = parsedDocument.text;
@@ -361,39 +358,34 @@ module.exports = async function (context, req) {
 
       userMessage = `以下是待分析的文件內容：\n\n${textContent}`;
     } else {
-      const mediaDataUrl =
-        `data:${parsedDocument.mimeType};base64,${parsedDocument.buffer.toString("base64")}`;
       userMessage =
         parsedDocument.mimeType === "application/pdf"
           ? "請分析附加的掃描型 PDF，依可辨識內容建立結果。"
           : "請分析附加的圖片，依可辨識的文字與視覺內容建立結果。";
-      if (parsedDocument.mimeType === "application/pdf") {
-        fileDataUrl = mediaDataUrl;
-      } else {
-        imageDataUrl = mediaDataUrl;
-      }
+      attachment = {
+        mimeType: parsedDocument.mimeType,
+        base64: parsedDocument.buffer.toString("base64"),
+      };
     }
 
     let data;
     try {
-      data = await generateJsonCompletion({
-        model: llm.model,
-        fallback: llm.fallback,
+      data = await generateJson({
+        llm,
         systemMessage: analysisPrompt,
         userMessage,
-        imageDataUrl,
-        fileDataUrl,
+        attachment,
         fileName,
         maxOutputTokens: 8192,
       });
       context.log(
-        "[analyze-document] Step 5: Azure OpenAI responded, data keys:",
+        "[analyze-document] Step 5: analysis model responded, data keys:",
         Object.keys(data || {})
       );
     } catch (gptError) {
-      context.log.error("[analyze-document] Azure OpenAI API error:", gptError.message);
+      context.log.error("[analyze-document] analysis model error:", gptError.message);
       context.res = error(
-        `GPT 模型呼叫失敗：${gptError.message}`,
+        `分析模型呼叫失敗：${gptError.message}`,
         "gpt_analysis_error",
         502
       );
@@ -444,7 +436,7 @@ module.exports = async function (context, req) {
         total_slides: slides.length,
         estimated_generation_time: slides.length * 3,
         analysis_mode: analysisMode,
-        analysis_provider: "azure_openai",
+        analysis_provider: llm.model.provider,
         analysis_model: llm.model.modelName,
         source_parser: parsedDocument.parser,
         source_format: parsedDocument.format,
@@ -537,7 +529,7 @@ module.exports = async function (context, req) {
       total_scenes: validatedScenes.length,
       estimated_generation_time: validatedScenes.length * 15,
       analysis_mode: analysisMode,
-      analysis_provider: "azure_openai",
+      analysis_provider: llm.model.provider,
       analysis_model: llm.model.modelName,
       source_parser: parsedDocument.parser,
       source_format: parsedDocument.format,

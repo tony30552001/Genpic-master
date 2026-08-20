@@ -90,40 +90,47 @@ const parseGeminiResponse = (result) => {
 };
 
 /**
- * Runs a JSON-returning Gemini prompt with the tenant-configured model.
- * When a fallback model is assigned it is tried once after the primary fails.
+ * Runs one JSON-returning Gemini request with the tenant-configured model.
+ * Retries and peer-model failover live in api/_shared/llmRuntime.js.
  *
  * @param {object} params
  * @param {{ modelName: string, apiKey: string }} params.model
- * @param {{ modelName: string, apiKey: string }} [params.fallback]
+ * @param {string} [params.systemMessage]
+ * @param {string} params.userMessage
+ * @param {{ mimeType: string, base64: string }} [params.attachment]
+ * @param {number} [params.maxOutputTokens]
  */
-const generateGeminiJson = async ({ model, fallback, contents, config }) => {
-  const call = async (target) => {
-    const result = await getModel(target.modelName, target.apiKey).generateContent(
-      contents,
-      { responseMimeType: "application/json", ...config }
-    );
-    return parseGeminiResponse(result);
-  };
-
-  try {
-    return await call(model);
-  } catch (error) {
-    if (!fallback || fallback.modelName === model.modelName) throw error;
-    console.warn("[gemini] Primary model failed, trying fallback:", {
-      model: model.modelName,
-      fallback: fallback.modelName,
-      message: error.message,
+const postGeminiJson = async ({
+  model,
+  systemMessage,
+  userMessage,
+  attachment,
+  maxOutputTokens,
+}) => {
+  const parts = [
+    { text: [systemMessage, userMessage].filter(Boolean).join("\n\n") },
+  ];
+  if (attachment) {
+    parts.push({
+      inlineData: { mimeType: attachment.mimeType, data: attachment.base64 },
     });
-    return call(fallback);
   }
+
+  const result = await getModel(model.modelName, model.apiKey).generateContent(
+    [{ role: "user", parts }],
+    {
+      responseMimeType: "application/json",
+      ...(maxOutputTokens ? { maxOutputTokens } : {}),
+    }
+  );
+  return parseGeminiResponse(result);
 };
 
 module.exports = {
   getModel,
   getEmbeddingModel,
   embedText,
-  generateGeminiJson,
+  postGeminiJson,
   parseGeminiResponse,
 };
 

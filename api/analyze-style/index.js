@@ -1,6 +1,6 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { generateGeminiJson } = require("../_shared/gemini");
+const { generateJson } = require("../_shared/llmRuntime");
 const {
   LlmConfigurationError,
   resolveRoleModel,
@@ -88,18 +88,11 @@ module.exports = async function (context, req) {
       base64Data = referencePreview.split(",")[1];
     }
 
-    const raw = await generateGeminiJson({
-      model: llm.model,
-      fallback: llm.fallback,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: STYLE_ANALYSIS_PROMPT },
-            { inlineData: { mimeType, data: base64Data } },
-          ],
-        },
-      ],
+    const raw = await generateJson({
+      llm,
+      systemMessage: STYLE_ANALYSIS_PROMPT,
+      userMessage: "請分析附加的參考圖片。",
+      attachment: { mimeType, base64: base64Data },
     });
 
     const sanitized = sanitizeAnalysisResult(raw);

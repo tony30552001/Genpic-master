@@ -6,8 +6,8 @@ tags: [operations, development, deployment, sessions, entra, llm, ppt-master]
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations]
-  source_paths: [package.json, api/package.json, api/scripts/migrate.cjs, api/_shared/http.js, api/_shared/session.js, api/_shared/azureOpenAI.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
-  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 012_deck_job_events.sql, pnpm test --run api/_shared/__tests__/deckContract.test.js, pnpm test --run api/_shared/__tests__/azureOpenAI.test.js]
+  source_paths: [package.json, api/package.json, api/scripts/migrate.cjs, api/_shared/http.js, api/_shared/session.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 012_deck_job_events.sql, pnpm test --run api/_shared/__tests__/deckContract.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
 ---
 
 # Development, migrations, and deployment
@@ -36,10 +36,10 @@ For a session/authentication change, run the focused browser and API tests docum
 
 `SECRET_ENCRYPTION_KEY` is an API-only 64-character hex value used by `api/_shared/secretCrypto.js` for AES-256-GCM encryption of LINE channel tokens and tenant analysis-model API keys. It must be stable: replacing it makes existing ciphertext unreadable. Existing deployments using `LINE_TOKEN_ENCRYPTION_KEY` need to retain its key material under `SECRET_ENCRYPTION_KEY` before reading pre-existing LINE records. Generate and store the value through the deployment secret mechanism; never put it in Vite configuration, a migration, or this wiki.
 
-After applying `014_llm_models.sql`, an administrator creates Azure OpenAI/Gemini records and assigns each fixed role in `/admin`. The managed runtime paths are document analysis, prompt optimization, PPT Master deck authoring, style analysis, filename generation, and scene optimization; [AI generation](../backend/ai-generation.md) is canonical for the role/provider and fallback rules. `AZURE_OPENAI_*`, `GEMINI_MODEL_ANALYSIS`, and the old deployment fallback setting no longer configure those paths. This does not change image-generation credentials or embedding configuration. Validate model persistence and boundary rules provider-free with:
+After applying `014_llm_models.sql`, an administrator creates Azure OpenAI/Gemini records and assigns each role in `/admin`. The managed runtime paths are document analysis, prompt optimization, PPT Master deck authoring, style analysis, filename generation, and scene optimization. Roles are provider-neutral: the selected primary and optional fallback can be either provider, and `llmRuntime.js` dispatches each attempt by the active model; [AI generation](../backend/ai-generation.md) is canonical for those rules. `AZURE_OPENAI_*`, `GEMINI_MODEL_ANALYSIS`, and the old deployment fallback setting no longer configure those paths. This does not change image-generation credentials or embedding configuration. Validate model persistence and runtime boundaries provider-free with:
 
 ```sh
-pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/azureOpenAI.test.js
+pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js
 ```
 
 Use an administrator-only connection test only when deliberately validating live provider credentials; it is not a default CI check.

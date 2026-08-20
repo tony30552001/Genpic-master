@@ -173,9 +173,9 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 - **Azure GlobalStandard 尖峰拒絕**：部署在尖峰時會以 `429` 拒絕**體積過大的單一請求**
   （訊息是 *your request exceeds the maximum usage size allowed during peak load*）。
   這是針對「這個請求多大」的判定，不是「你叫得多頻繁」，所以重送同樣大小的請求沒有用。
-  `generateJsonCompletion()` 因此在重試時同步**縮小 `max_output_tokens`**
+  `api/_shared/llmRuntime.js` 的 `generateJson()` 因此在重試時同步**縮小 `max_output_tokens`**
   （下限 8000，逐頁授稿是 16000 → 9600 → 8000）並在「簡報生成」用途指派了備援模型
-  時改用同儕部署，最多 4 次、退避帶抖動。4 次仍失敗才讓錯誤浮上來。
+  時改用該模型（可以是另一家供應商），最多 4 次、退避帶抖動。4 次仍失敗才讓錯誤浮上來。
 - **非 ASCII 檔名**：sidecar 對檔名有保守的 ASCII 白名單，中文檔名會被回
   `unsafe file name (502)`，整份簡報在「解析素材」就死。`pptMasterClient.convertSource()`
   上傳前用 `sidecarFileName()` 正規化，保留副檔名（sidecar 靠它判斷格式）。
@@ -256,7 +256,7 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
 
 ```powershell
 # 前端與共用契約
-corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckPreview.test.js api/_shared/__tests__/azureOpenAI.test.js api/_shared/__tests__/pptMasterClient.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js src/components/create/__tests__/DeckSlideRail.test.jsx src/components/create/__tests__/PptMasterStudio.test.jsx
+corepack pnpm exec vitest run api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckPreview.test.js api/_shared/__tests__/azureOpenAI.test.js api/_shared/__tests__/llmRuntime.test.js api/_shared/__tests__/pptMasterClient.test.js src/hooks/__tests__/usePptMasterDeck.test.jsx src/services/__tests__/aiService.test.js src/components/create/__tests__/deckSteps.test.js src/components/create/__tests__/DeckSlideRail.test.jsx src/components/create/__tests__/PptMasterStudio.test.jsx
 corepack pnpm lint
 corepack pnpm build
 

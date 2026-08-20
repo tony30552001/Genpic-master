@@ -26,12 +26,12 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 3. 在管理中心「分析模型」新增模型：名稱、供應商、模型／部署代號、端點（Azure OpenAI 必填）與 API 金鑰。
    金鑰以 AES-256-GCM 加密存於 `llm_models`，儲存後不會再回傳前端。
 4. 使用「測試」按鈕實際呼叫一次模型確認連線。
-5. 在「用途指派」為六個用途各指派主要模型，必要時指定同供應商的備援模型
+5. 在「用途指派」為六個用途各指派主要模型，必要時再指定一個備援模型
    （取代舊的 `AZURE_OPENAI_FALLBACK_DEPLOYMENT`）。
 
-用途與供應商是固定搭配的：文件分析、Prompt 優化、簡報生成使用 Azure OpenAI；
-風格分析、檔名生成、場景優化使用 Google Gemini。尚未指派前，對應 API 會回傳
-HTTP 503 與 `llm_not_configured`，不做任何靜默降級。
+六個用途都可以自由選擇 Azure OpenAI 或 Google Gemini 模型，備援模型也不必與主要模型
+同一家供應商；`api/_shared/llmRuntime.js` 會依每個模型的供應商決定呼叫方式。
+尚未指派前，對應 API 會回傳 HTTP 503 與 `llm_not_configured`，不做任何靜默降級。
 
 ## 模型政策
 

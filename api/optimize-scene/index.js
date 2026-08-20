@@ -1,6 +1,6 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { generateGeminiJson } = require("../_shared/gemini");
+const { generateJson } = require("../_shared/llmRuntime");
 const { resolveIdentity } = require("../_shared/identity");
 const {
     LlmConfigurationError,
@@ -76,15 +76,10 @@ module.exports = async function (context, req) {
         // Parse
         let data;
         try {
-            data = await generateGeminiJson({
-                model: llm.model,
-                fallback: llm.fallback,
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: OPTIMIZE_SCENE_PROMPT + "\n\n" + inputText }],
-                    },
-                ],
+            data = await generateJson({
+                llm,
+                systemMessage: OPTIMIZE_SCENE_PROMPT,
+                userMessage: inputText,
             });
         } catch (e) {
             context.log.error("[optimize-scene] Parse failed:", e.message);

@@ -1,11 +1,11 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { generateJsonCompletion } = require("../_shared/azureOpenAI");
 const { resolveIdentity } = require("../_shared/identity");
 const {
     LlmConfigurationError,
     resolveRoleModel,
 } = require("../_shared/llmModels");
+const { generateJson } = require("../_shared/llmRuntime");
 const { rateLimit } = require("../_shared/rateLimit");
 
 const OPTIMIZE_PROMPT_SYSTEM_MESSAGE = `
@@ -65,9 +65,8 @@ Style Context: "${styleContext || '無特定風格 (General)'}"
         // 5. Call the analysis model assigned to this role in the admin center.
         const identity = await resolveIdentity(auth.user);
         const llm = await resolveRoleModel(identity.tenantId, "prompt_optimization");
-        const data = await generateJsonCompletion({
-            model: llm.model,
-            fallback: llm.fallback,
+        const data = await generateJson({
+            llm,
             systemMessage: OPTIMIZE_PROMPT_SYSTEM_MESSAGE,
             userMessage: promptText,
         });
