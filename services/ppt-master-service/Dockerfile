@@ -17,8 +17,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Pinned upstream release. The skill-only archive avoids the ~780MB main repo.
-ARG PPT_MASTER_VERSION=v4.5.0
-ARG PPT_MASTER_SHA256=f6ef8db5ad6b763cdd75154354d5fb6eef845380226bbcef51a02a31dab5b5d0
+ARG PPT_MASTER_VERSION=v4.8.0
+ARG PPT_MASTER_SHA256=29dc7d303147f34d5308f140bce189c4676c77c32756b793e353f968a70e0f4c
 
 # The skill must stay byte-identical: attribution_guard.py AST-checks 13 gate
 # files, SHA-256 checks LICENSE and regex-checks SKILL.md frontmatter, exiting
