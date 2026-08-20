@@ -350,7 +350,7 @@ export default function LlmModelSettings() {
 
           {settings.models.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-              尚未建立任何分析模型。
+              尚未建立任何分析模型，請點右上角「新增模型」開始設定。
             </p>
           ) : (
             <ul className="space-y-3">
@@ -437,36 +437,52 @@ export default function LlmModelSettings() {
                   <p className="text-xs text-muted-foreground">{providerLabel(role.provider)}</p>
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor={`llm-role-${role.id}-primary`} className="text-xs font-semibold">主要模型</label>
-                  <select
-                    id={`llm-role-${role.id}-primary`}
-                    className={inputClass}
-                    value={assignment.modelId || ""}
-                    disabled={isPending || candidates.length === 0}
-                    onChange={(event) => handleAssignmentChange(role, "modelId", event.target.value)}
-                  >
-                    <option value="">未指派</option>
-                    {candidates.map((model) => (
-                      <option key={model.id} value={model.id}>{model.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor={`llm-role-${role.id}-fallback`} className="text-xs font-semibold">備援模型</label>
-                  <select
-                    id={`llm-role-${role.id}-fallback`}
-                    className={inputClass}
-                    value={assignment.fallbackModelId || ""}
-                    disabled={isPending || !assignment.modelId}
-                    onChange={(event) => handleAssignmentChange(role, "fallbackModelId", event.target.value)}
-                  >
-                    <option value="">不設定</option>
-                    {candidates
-                      .filter((model) => model.id !== assignment.modelId)
-                      .map((model) => (
+                  <p className="text-xs font-semibold">主要模型</p>
+                  {candidates.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      尚未建立 {providerLabel(role.provider)} 模型，請先於上方新增。
+                    </p>
+                  ) : (
+                    <select
+                      id={`llm-role-${role.id}-primary`}
+                      aria-label={`${role.label}主要模型`}
+                      className={inputClass}
+                      value={assignment.modelId || ""}
+                      disabled={isPending}
+                      onChange={(event) => handleAssignmentChange(role, "modelId", event.target.value)}
+                    >
+                      <option value="">未指派</option>
+                      {candidates.map((model) => (
                         <option key={model.id} value={model.id}>{model.label}</option>
                       ))}
-                  </select>
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold">備援模型</p>
+                  {!assignment.modelId ? (
+                    <p className="text-xs text-muted-foreground">請先指派主要模型。</p>
+                  ) : candidates.length < 2 ? (
+                    <p className="text-xs text-muted-foreground">
+                      沒有其他 {providerLabel(role.provider)} 模型可作為備援。
+                    </p>
+                  ) : (
+                    <select
+                      id={`llm-role-${role.id}-fallback`}
+                      aria-label={`${role.label}備援模型`}
+                      className={inputClass}
+                      value={assignment.fallbackModelId || ""}
+                      disabled={isPending}
+                      onChange={(event) => handleAssignmentChange(role, "fallbackModelId", event.target.value)}
+                    >
+                      <option value="">不設定</option>
+                      {candidates
+                        .filter((model) => model.id !== assignment.modelId)
+                        .map((model) => (
+                          <option key={model.id} value={model.id}>{model.label}</option>
+                        ))}
+                    </select>
+                  )}
                 </div>
               </div>
             );

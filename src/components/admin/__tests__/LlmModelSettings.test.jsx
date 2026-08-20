@@ -80,6 +80,37 @@ const renderSettings = async () => {
 };
 
 describe("LlmModelSettings", () => {
+  it("explains why role assignment is unavailable before any model exists", async () => {
+    listAdminLlmModels.mockResolvedValue({ ...settings, models: [] });
+    render(<LlmModelSettings />);
+
+    expect(
+      await screen.findByText("尚未建立任何分析模型，請點右上角「新增模型」開始設定。")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("尚未建立 Azure OpenAI 模型，請先於上方新增。")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("尚未建立 Google Gemini 模型，請先於上方新增。")
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("文件分析主要模型")).not.toBeInTheDocument();
+  });
+
+  it("keeps the fallback selector out of the way until a primary model is assigned", async () => {
+    listAdminLlmModels.mockResolvedValue({
+      ...settings,
+      assignments: [
+        { role: "document_analysis", modelId: "model-azure", fallbackModelId: null },
+      ],
+    });
+    await renderSettings();
+
+    expect(screen.getAllByText("請先指派主要模型。")).toHaveLength(1);
+    expect(
+      screen.getByText("沒有其他 Azure OpenAI 模型可作為備援。")
+    ).toBeInTheDocument();
+  });
+
   it("lists saved models without exposing their keys", async () => {
     await renderSettings();
 
@@ -92,12 +123,8 @@ describe("LlmModelSettings", () => {
   it("only offers models of the provider each role is pinned to", async () => {
     await renderSettings();
 
-    const azureSelect = screen.getByLabelText("主要模型", {
-      selector: "#llm-role-document_analysis-primary",
-    });
-    const geminiSelect = screen.getByLabelText("主要模型", {
-      selector: "#llm-role-style_analysis-primary",
-    });
+    const azureSelect = screen.getByLabelText("文件分析主要模型");
+    const geminiSelect = screen.getByLabelText("風格分析主要模型");
 
     expect(Array.from(azureSelect.options).map((option) => option.textContent)).toEqual([
       "未指派",
@@ -177,12 +204,9 @@ describe("LlmModelSettings", () => {
     });
     await renderSettings();
 
-    fireEvent.change(
-      screen.getByLabelText("主要模型", {
-        selector: "#llm-role-document_analysis-primary",
-      }),
-      { target: { value: "model-azure" } }
-    );
+    fireEvent.change(screen.getByLabelText("文件分析主要模型"), {
+      target: { value: "model-azure" },
+    });
 
     await waitFor(() =>
       expect(assignAdminLlmRole).toHaveBeenCalledWith("document_analysis", {
