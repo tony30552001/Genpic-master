@@ -33,6 +33,10 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 同一家供應商；`api/_shared/llmRuntime.js` 會依每個模型的供應商決定呼叫方式。
 尚未指派前，對應 API 會回傳 HTTP 503 與 `llm_not_configured`，不做任何靜默降級。
 
+模型若在輸出上限內沒寫完（reasoning 模型特別容易），系統會自動加倍輸出上限重試
+（上限 32000）；若是該部署本身的單次輸出長度不足，會直接回報並建議改指派其他模型。
+「簡報生成」需要一次輸出較長的 JSON，請指派輸出長度充足的模型。
+
 ## 模型政策
 
 模型政策儲存在 `tenant_model_settings`。管理員設定的 `default_model` 會由後端套用到一般創作、文件批次生成與圖片轉換；前端不再提供個人模型選擇器。`allowed_models` 目前支援 `gemini-imagen` 與 `gpt-image-2`，且預設模型必須包含在開放清單中。

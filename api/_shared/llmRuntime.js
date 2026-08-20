@@ -10,22 +10,30 @@
 
 const { postJsonCompletion } = require("./azureOpenAI");
 const { postGeminiJson } = require("./gemini");
-const { PROVIDERS } = require("./llmProviders");
+const { PROVIDERS, OUTPUT_TRUNCATED } = require("./llmProviders");
 
 /**
  * GlobalStandard deployments reject oversized requests during peak load with
  * HTTP 429 ("your request exceeds the maximum usage size allowed"). That
  * verdict is about the size of this request, not about how often we call, so
  * every retry also shrinks the output budget and moves to the peer model.
+ *
+ * Truncation is the opposite problem: a reasoning model answered but spent the
+ * whole budget on reasoning, so those retries grow the budget on the same
+ * model instead.
  */
 const RETRY_ATTEMPTS = 4;
 const RETRY_BASE_DELAY_MS = 2000;
 const MIN_RETRY_OUTPUT_TOKENS = 8000;
+const MAX_RETRY_OUTPUT_TOKENS = 32000;
 
 const isRetryableStatus = (status) => status === 429 || status >= 500;
 
 const shrinkOutputTokens = (tokens) =>
   tokens ? Math.max(MIN_RETRY_OUTPUT_TOKENS, Math.floor(tokens * 0.6)) : tokens;
+
+const growOutputTokens = (tokens) =>
+  Math.min(MAX_RETRY_OUTPUT_TOKENS, (tokens || MIN_RETRY_OUTPUT_TOKENS) * 2);
 
 const retryDelayMs = (attempt) =>
   RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) + Math.floor(Math.random() * 500);
@@ -101,7 +109,21 @@ const generateJson = async ({
     try {
       return await callModel(activeModel, request, activeMaxOutputTokens);
     } catch (error) {
-      if (attempt >= RETRY_ATTEMPTS || !isRetryableStatus(error.status)) throw error;
+      if (attempt >= RETRY_ATTEMPTS) throw error;
+
+      if (error.code === OUTPUT_TRUNCATED) {
+        if (activeMaxOutputTokens >= MAX_RETRY_OUTPUT_TOKENS) throw error;
+        activeMaxOutputTokens = growOutputTokens(activeMaxOutputTokens);
+        console.warn("[llmRuntime] Retrying truncated response:", {
+          attempt,
+          provider: activeModel.provider,
+          model: activeModel.modelName,
+          maxOutputTokens: activeMaxOutputTokens,
+        });
+        continue;
+      }
+
+      if (!isRetryableStatus(error.status)) throw error;
 
       activeMaxOutputTokens = shrinkOutputTokens(activeMaxOutputTokens);
       if (fallbackModel && activeModel.id !== fallbackModel.id) {

@@ -33,7 +33,7 @@ const generateOutline = async ({ topic, sourceMarkdown, slideCount, llm }) => {
   const outline = await generateJson({
     systemMessage: buildOutlineSystemPrompt(),
     userMessage: `${material}\n\n請規劃 ${slideCount} 頁的簡報大綱。`,
-    maxOutputTokens: 8000,
+    maxOutputTokens: 16000,
     llm,
   });
 

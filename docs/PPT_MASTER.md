@@ -166,9 +166,9 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
   尚未產出的頁以骨架佔位，正在設計的那一頁有載入指示；
   點某一頁會在左欄放大顯示。成功與失敗都保留預覽。
 
-### 尖峰負載與素材檔名的兩個現實
+### 尖峰負載、輸出截斷與素材檔名的三個現實
 
-兩個一定會遇到、且都不是使用者操作錯誤的失敗來源：
+三個一定會遇到、且都不是使用者操作錯誤的失敗來源：
 
 - **Azure GlobalStandard 尖峰拒絕**：部署在尖峰時會以 `429` 拒絕**體積過大的單一請求**
   （訊息是 *your request exceeds the maximum usage size allowed during peak load*）。
@@ -176,6 +176,12 @@ Template 只在「授稿時」有意義，**編譯器完全不讀 `templates/`**
   `api/_shared/llmRuntime.js` 的 `generateJson()` 因此在重試時同步**縮小 `max_output_tokens`**
   （下限 8000，逐頁授稿是 16000 → 9600 → 8000）並在「簡報生成」用途指派了備援模型
   時改用該模型（可以是另一家供應商），最多 4 次、退避帶抖動。4 次仍失敗才讓錯誤浮上來。
+- **輸出被截斷**：模型會以 HTTP 200 回傳 `status: "incomplete"`（Gemini 是
+  `finishReason: MAX_TOKENS`），輸出預算全花在推理或長篇內容上，訊息內容是空的。
+  這與尖峰拒絕相反，重試必須**放大** `max_output_tokens`：`generateJson()` 逐次加倍
+  （上限 32000）。大綱與逐頁授稿都從 16000 起跳。若回應的 `output_tokens` 明顯低於
+  我們要的上限，代表是該部署自己的單次輸出長度限制，放大沒有意義，會直接回報
+  「請改指派其他模型」。
 - **非 ASCII 檔名**：sidecar 對檔名有保守的 ASCII 白名單，中文檔名會被回
   `unsafe file name (502)`，整份簡報在「解析素材」就死。`pptMasterClient.convertSource()`
   上傳前用 `sidecarFileName()` 正規化，保留副檔名（sidecar 靠它判斷格式）。

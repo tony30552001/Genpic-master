@@ -61,6 +61,20 @@ const jsonResponse = (payload) =>
     status: 200,
   });
 
+const truncatedResponse = () =>
+  new Response(
+    JSON.stringify({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "reasoning", summary: [] }],
+      usage: {
+        output_tokens: 32000,
+        output_tokens_details: { reasoning_tokens: 7998 },
+      },
+    }),
+    { status: 200 }
+  );
+
 beforeEach(() => {
   geminiCalls.length = 0;
   geminiResults = [];
@@ -195,6 +209,63 @@ describe("llmRuntime", () => {
       ([, options]) => JSON.parse(options.body).max_output_tokens
     );
     expect(budgets).toEqual([16000, 9600, 8000, 8000]);
+  });
+
+  /**
+   * A reasoning model can spend the whole budget on reasoning and answer with
+   * HTTP 200 and no content, so the retry has to grow the budget.
+   */
+  it("grows the output budget when the model truncates before answering", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(truncatedResponse())
+      .mockResolvedValueOnce(jsonResponse({ slides: [] }));
+
+    const result = await generateJson({
+      llm: { model: azureModel, fallback: geminiModel },
+      systemMessage: "Plan an outline",
+      userMessage: "Deck",
+      maxOutputTokens: 16000,
+    });
+
+    expect(result.slides).toEqual([]);
+    const budgets = fetchMock.mock.calls.map(
+      ([, options]) => JSON.parse(options.body).max_output_tokens
+    );
+    expect(budgets).toEqual([16000, 32000]);
+  });
+
+  it("stops growing at the ceiling and reports why the model produced nothing", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => truncatedResponse());
+
+    await expect(
+      generateJson({
+        llm: { model: azureModel },
+        systemMessage: "Plan an outline",
+        userMessage: "Deck",
+        maxOutputTokens: 32000,
+      })
+    ).rejects.toThrow("未在輸出上限 32000 內完成回應（max_output_tokens");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("grows the budget for a truncated Gemini answer", async () => {
+    const truncation = new Error("truncated");
+    truncation.code = "output_truncated";
+    geminiResults.push(truncation);
+    geminiResults.push({ filename: "sunset-city" });
+
+    const result = await generateJson({
+      llm: { model: geminiModel },
+      systemMessage: "Name the file",
+      userMessage: "Prompt",
+      maxOutputTokens: 8000,
+    });
+
+    expect(result.filename).toBe("sunset-city");
+    expect(geminiCalls.map((call) => call.maxOutputTokens)).toEqual([8000, 16000]);
   });
 
   it("does not retry rejections the request itself caused", async () => {

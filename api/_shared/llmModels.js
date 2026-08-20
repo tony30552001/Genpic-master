@@ -11,8 +11,7 @@
 const { query } = require("./db");
 const { encrypt, decrypt } = require("./secretCrypto");
 const { isPublicHttpsEndpoint } = require("./urlValidator");
-const { postJsonCompletion } = require("./azureOpenAI");
-const { postGeminiJson } = require("./gemini");
+const { generateJson } = require("./llmRuntime");
 const {
   LLM_PROVIDERS,
   LLM_ROLES,
@@ -370,24 +369,19 @@ const testLlmModel = async ({ provider, modelName, endpoint, apiKey }) => {
   }
 
   const startedAt = Date.now();
-  const model = {
-    provider: normalized.provider,
-    modelName: normalized.modelName,
-    endpoint: normalized.endpoint,
-    apiKey: key,
-  };
-  const request = {
-    model,
+  await generateJson({
+    llm: {
+      model: {
+        provider: normalized.provider,
+        modelName: normalized.modelName,
+        endpoint: normalized.endpoint,
+        apiKey: key,
+      },
+    },
     systemMessage: 'Reply with the JSON object {"ok":true}.',
     userMessage: "ping",
     maxOutputTokens: 2048,
-  };
-
-  if (normalized.provider === PROVIDERS.AZURE_OPENAI) {
-    await postJsonCompletion(request);
-  } else {
-    await postGeminiJson(request);
-  }
+  });
 
   return { latencyMs: Date.now() - startedAt };
 };

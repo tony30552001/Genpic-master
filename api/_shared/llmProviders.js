@@ -1,12 +1,20 @@
 /**
- * Analysis model catalog shared by the admin API, the runtime dispatcher and
- * the admin UI payloads.
+ * Shared analysis-model contract: the provider catalog, the role catalog and
+ * the error code both provider clients raise when a model stops before it
+ * produces content.
  */
 
 const PROVIDERS = Object.freeze({
   AZURE_OPENAI: "azure-openai",
   GOOGLE_GEMINI: "google-gemini",
 });
+
+/**
+ * Reasoning models can spend the whole output budget on reasoning and answer
+ * with no content. api/_shared/llmRuntime.js retries those with a larger
+ * budget instead of a smaller one.
+ */
+const OUTPUT_TRUNCATED = "output_truncated";
 
 const LLM_PROVIDERS = Object.freeze([
   {
@@ -67,6 +75,7 @@ const getProvider = (providerId) =>
 module.exports = {
   LLM_PROVIDERS,
   LLM_ROLES,
+  OUTPUT_TRUNCATED,
   PROVIDERS,
   getProvider,
   getRole,

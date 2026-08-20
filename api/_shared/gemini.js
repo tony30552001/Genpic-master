@@ -1,5 +1,7 @@
 const { GoogleGenAI } = require("@google/genai");
 
+const { OUTPUT_TRUNCATED } = require("./llmProviders");
+
 const getClient = (apiKey) => {
   if (!apiKey) {
     throw new Error("Missing Gemini API key");
@@ -123,6 +125,16 @@ const postGeminiJson = async ({
       ...(maxOutputTokens ? { maxOutputTokens } : {}),
     }
   );
+
+  const candidate = result?.candidates?.[0] || result?.response?.candidates?.[0];
+  if (candidate?.finishReason === "MAX_TOKENS") {
+    const error = new Error(
+      `分析模型未在輸出上限 ${maxOutputTokens || "預設值"} 內完成回應（MAX_TOKENS）`
+    );
+    error.code = OUTPUT_TRUNCATED;
+    throw error;
+  }
+
   return parseGeminiResponse(result);
 };
 

@@ -8,6 +8,8 @@
  * model from another provider.
  */
 
+const { OUTPUT_TRUNCATED } = require("./llmProviders");
+
 class AzureOpenAIError extends Error {
   constructor(message, status) {
     super(message);
@@ -163,6 +165,34 @@ const postJsonCompletion = async ({
     const message =
       data?.error?.message || data?.message || "Azure OpenAI 請求失敗";
     throw new AzureOpenAIError(`${message} (${response.status})`, response.status);
+  }
+
+  /**
+   * Reasoning deployments answer with HTTP 200 even when the whole output
+   * budget went into reasoning, leaving no message to parse. Say so instead of
+   * reporting a malformed response, and mark it so the runtime can retry with
+   * a larger budget — unless the deployment cut the answer well below the
+   * budget we asked for, because then a larger budget changes nothing.
+   */
+  if (data?.status === "incomplete") {
+    const reason = data?.incomplete_details?.reason || "unknown";
+    const outputTokens = data?.usage?.output_tokens ?? 0;
+    const reasoningTokens =
+      data?.usage?.output_tokens_details?.reasoning_tokens ?? 0;
+    const cappedByDeployment =
+      Boolean(maxOutputTokens) &&
+      outputTokens > 0 &&
+      outputTokens < maxOutputTokens * 0.9;
+    const error = new AzureOpenAIError(
+      cappedByDeployment
+        ? `分析模型輸出 ${outputTokens} tokens 後即被部署截斷（要求上限 ${maxOutputTokens}），此部署的單次輸出長度不足以完成這次生成，請改指派其他模型`
+        : `分析模型未在輸出上限 ${maxOutputTokens || "預設值"} 內完成回應（${reason}，推理用掉 ${reasoningTokens} tokens）`,
+      response.status
+    );
+    if (!cappedByDeployment) {
+      error.code = OUTPUT_TRUNCATED;
+    }
+    throw error;
   }
 
   const outputItems = Array.isArray(data?.output) ? data.output : [];
