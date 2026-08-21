@@ -23,7 +23,7 @@
 ## 一之二、重構前現況評估 (Pre-refactor State Analysis)
 
 > 在規劃重構前，必須先清楚認知目前程式碼的技術債。
-> 本節保留 BFF 改造前的 Firebase 原型紀錄；目前執行中的認證架構請以第六節、`docs/ENTRA_ID_SETUP.md` 與 `docs/EXECUTION_DETAILS.md` 為準。
+> 本節保留 BFF 改造前的 Firebase 原型紀錄；目前執行中的認證架構請以第六節、`docs/ENTRA_ID_SETUP.md` 與 `openwiki/backend/auth-tenancy-admin.md` 為準。
 
 ### 已實作功能
 
@@ -284,7 +284,7 @@ Authorization: Bearer <API_KEY>
 > **目標**：將巨型元件拆解為可組合的模組化架構，建立 API 抽象層，使後端可被替換。  
 > **原則**：此階段不改變任何業務功能，Firebase 仍為後端，確保隨時可 demo。
 
-執行細節請參考 [docs/EXECUTION_DETAILS.md](docs/EXECUTION_DETAILS.md)。
+實作現況請參考 `openwiki/`（由程式碼自動生成）。
 
 註：Firebase 僅作為 Phase 0 過渡依賴，Phase 1 會清除。
 
@@ -341,7 +341,7 @@ Authorization: Bearer <API_KEY>
 
 > **前置條件**：Phase 0 完成，API 抽象層已到位。
 
-執行細節請參考 [docs/EXECUTION_DETAILS.md](docs/EXECUTION_DETAILS.md)。
+實作現況請參考 `openwiki/`（由程式碼自動生成）。
 
 #### Step 1.1 — 清理 Firebase 依賴
 - [ ] 移除 `firebase` npm 套件
@@ -372,7 +372,7 @@ Authorization: Bearer <API_KEY>
 
 > **前置條件**：Phase 1 完成，API Gateway 可驗證 BFF session。
 
-執行細節請參考 [docs/EXECUTION_DETAILS.md](docs/EXECUTION_DETAILS.md)。
+實作現況請參考 `openwiki/`（由程式碼自動生成）。
 
 #### Step 2.1 — PostgreSQL 建置
 - [ ] 建立 Azure Database for PostgreSQL (Flexible Server)
@@ -402,7 +402,7 @@ Authorization: Bearer <API_KEY>
 
 > **前置條件**：Phase 2 完成，前端已切換至 REST API。
 
-執行細節請參考 [docs/EXECUTION_DETAILS.md](docs/EXECUTION_DETAILS.md)。
+實作現況請參考 `openwiki/`（由程式碼自動生成）。
 
 #### Step 3.1 — 文件分析 Function
 - [x] 實作 `api/analyze-document/index.js`
@@ -435,7 +435,7 @@ Authorization: Bearer <API_KEY>
 
 > **前置條件**：Phase 1–3 完成，核心功能穩定。
 
-執行細節請參考 [docs/EXECUTION_DETAILS.md](docs/EXECUTION_DETAILS.md)。
+實作現況請參考 `openwiki/`（由程式碼自動生成）。
 
 - [ ] 多租戶資料隔離 (Tenant-based Row Level Security)
 - [ ] 角色權限控制 (管理員 / 編輯者 / 檢視者)

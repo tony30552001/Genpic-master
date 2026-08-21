@@ -12,7 +12,7 @@ These rules are mandatory for every change:
 - **Make long-term architectural decisions.** Do not introduce temporary stopgaps intended to be replaced later.
 - **Make breaking changes completely.** Update all callers, tests, documentation, and contracts in the same change; remove the replaced implementation.
 - **Do not hide failures.** Surface errors through existing UI or API patterns; do not add silent catches or success-shaped fallbacks.
-- Treat current source code and this file as authoritative. Keep product and architecture documentation in `docs/`.
+- Treat current source code and this file as authoritative. `openwiki/` is the generated record of how the system currently behaves; do not duplicate it in `docs/`. `docs/` holds only what cannot be derived from the repository: external portal setup (Azure, Entra ID), deployment secrets placement, product vision and roadmap, point-in-time audits, and proposals for unimplemented features.
 
 ## Repository investigation workflow
 
