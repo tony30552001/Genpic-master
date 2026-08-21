@@ -278,6 +278,7 @@ function SceneModal({
   styleContext,
   styleName,
   onOpenStylePicker,
+  imageLanguage,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ ...scene });
@@ -322,6 +323,7 @@ function SceneModal({
         mood: scene.mood,
         key_elements: scene.key_elements,
         styleContext: styleContext || "",
+        imageLanguage,
       });
 
       // 更新場景資料
@@ -668,6 +670,7 @@ export default function DocumentScenes({
   isDocumentStyleOverride = false,
   onApplyStyle,
   onClearStyle,
+  imageLanguage = "",
 }) {
   const [generatingIndex, setGeneratingIndex] = useState(null);
   const [modalScene, setModalScene] = useState(null); // { scene, index }
@@ -1478,6 +1481,7 @@ export default function DocumentScenes({
           onGenerate={handleGenerateScene}
           styleContext={stylePrompt}
           styleName={styleName}
+          imageLanguage={imageLanguage}
           onOpenStylePicker={() => {
             setModalScene(null);
             setShowStylePicker(true);

@@ -591,6 +591,7 @@ export default function InfographicGenerator({
             isDocumentStyleOverride={Boolean(documentStyleOverride)}
             onApplyStyle={handleApplyDocumentStyle}
             onClearStyle={handleClearDocumentStyle}
+            imageLanguage={imageLanguage}
         />
     ) : (
         <DocumentUploader
@@ -893,6 +894,7 @@ export default function InfographicGenerator({
                                             userScript={userScript}
                                             onUserScriptChange={setUserScript}
                                             onOptimizedPromptEnChange={setOptimizedPromptEn}
+                                            imageLanguage={imageLanguage}
                                             onFocus={() => setIsInputFocused(true)}
                                             onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
                                             hideGenerate

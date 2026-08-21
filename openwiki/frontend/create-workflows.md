@@ -6,11 +6,11 @@ tags: [frontend, creation, image-generation, document-analysis, storyboard, expo
 openwiki:
   roles: [workflow, frontend]
   change_kinds: [image-generation, document-analysis, client-export, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/config.js, src/components/create/GenerateBar.jsx, src/hooks/useImageGeneration.js, src/hooks/useImageTransform.js, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/utils/pptxExport.js]
-  symbols: [IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_QUALITY, GenerateBar, useImageGeneration, useImageTransform, generateImage, transformImage, useDocumentAnalysis, updateScene, removeScene, DocumentUploader, DocumentScenes, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx]
-  test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/components/create/__tests__/PptMasterStudio.test.jsx, src/utils/__tests__/pptxExport.test.js]
-  invariants: [GPT Image quality is local UI state with low medium and high values and defaults to medium; it is sent as JSON quality for generation and transforms., Document analysis produces only storyboard scenes., The hook uploads first and falls back to base64 only for files no larger than 80 KB., Deleting a storyboard scene re-numbers scene_number and updates total_scenes., PPT Master job state is separate from storyboard state and persists its active job ID for resumption.]
-  validation_commands: [pnpm test --run api/_shared/__tests__/gptImage.test.js, pnpm test --run src/lib/__tests__/documentFormats.test.js src/utils/__tests__/pptxExport.test.js, pnpm test --run src/components/create/__tests__/PptMasterStudio.test.jsx src/hooks/__tests__/usePptMasterDeck.test.jsx]
+  source_paths: [src/InfographicGenerator.jsx, src/config.js, src/components/create/GenerateBar.jsx, src/components/create/ScriptEditor.jsx, src/hooks/useImageGeneration.js, src/hooks/useImageTransform.js, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/utils/pptxExport.js]
+  symbols: [IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_QUALITY, GenerateBar, ScriptEditor, useImageGeneration, useImageTransform, generateImage, transformImage, optimizePrompt, optimizeScene, useDocumentAnalysis, updateScene, removeScene, DocumentUploader, DocumentScenes, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx]
+  test_paths: [api/_shared/__tests__/imageTextLanguage.test.js, src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/components/create/__tests__/PptMasterStudio.test.jsx, src/utils/__tests__/pptxExport.test.js]
+  invariants: [GPT Image quality is local UI state with low medium and high values and defaults to medium; it is sent as JSON quality for generation and transforms., The persisted image-text language preference is forwarded to general-prompt and storyboard-scene optimization as imageLanguage; missing or unsupported values add no optimizer directive., Document analysis produces only storyboard scenes., The hook uploads first and falls back to base64 only for files no larger than 80 KB., Deleting a storyboard scene re-numbers scene_number and updates total_scenes., PPT Master job state is separate from storyboard state and persists its active job ID for resumption.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/gptImage.test.js, pnpm test --run api/_shared/__tests__/imageTextLanguage.test.js, pnpm test --run src/lib/__tests__/documentFormats.test.js src/utils/__tests__/pptxExport.test.js, pnpm test --run src/components/create/__tests__/PptMasterStudio.test.jsx src/hooks/__tests__/usePptMasterDeck.test.jsx]
 ---
 
 # Creation workspace, document storyboards, and exports
@@ -32,6 +32,18 @@ pnpm test --run api/_shared/__tests__/gptImage.test.js
 ```
 
 `src/services/__tests__/aiService.test.js` is the appropriate client test but its existing exact generation-payload assertion does not include `quality`; update that assertion before relying on it. There is no focused `GenerateBar`, hook, handler, or async-worker test for quality. A UI-only change normally does not require a package build; run a consumer-facing API check when changing the JSON field, allowed values, or model-dependent visibility.
+
+## Image-text preference and optimization flow
+
+`InfographicGenerator` initializes `imageLanguage` from `localStorage` key `genpic_image_language`, with `DEFAULT_IMAGE_LANGUAGE` as the fallback, and persists a changed value through `handleLanguageChange`. The setting controls text rendered **inside generated images**, not the browser UI language or the language of a user's prompt. It already travels with `generateImage`; it now also travels through both optimization paths so an optimized English prompt does not contradict the final image-generation instruction.
+
+`ScriptEditor::handleOptimize` calls `aiService::optimizePrompt({ userScript, styleContext, imageLanguage })` for the general creation editor. `DocumentScenes::SceneModal` calls `aiService::optimizeScene` with the scene fields, selected style context, and the same `imageLanguage`. `aiService.js` serializes that optional field to `/api/optimize-prompt` and `/api/optimize-scene`; the server-side directive and prompt contract are canonical in [AI generation](../backend/ai-generation.md). Both paths must preserve the field when adding a wrapper or reshaping either request.
+
+For a new language ID or a change to the no-text behavior, update the settings option, default/consumer wiring, `imageTextLanguage.js`, both optimizer request paths, and focused tests together. The helper accepts only `en`, `zh-TW`, `zh-CN`, `ja`, `ko`, `es`, `fr`, `de`, and `none`; absent or unsupported values intentionally produce no extra directive. `api/_shared/__tests__/imageTextLanguage.test.js` currently verifies a recognized language, `none`, and absent/unsupported values. There is no focused browser-propagation or optimizer-handler test, and `aiService.test.js` does not assert either optimization payload.
+
+```sh
+pnpm test --run api/_shared/__tests__/imageTextLanguage.test.js
+```
 
 ## Document upload and storyboard analysis
 

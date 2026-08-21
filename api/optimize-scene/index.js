@@ -7,6 +7,7 @@ const {
     resolveRoleModel,
 } = require("../_shared/llmModels");
 const { rateLimit } = require("../_shared/rateLimit");
+const { buildImageTextDirective } = require("../_shared/imageTextLanguage");
 
 const OPTIMIZE_SCENE_PROMPT = `你是專業的視覺導演與 AI 圖像生成提示詞工程師。
 你將收到一個「場景」資料（包含標題、描述、英文 Prompt），請進行以下優化：
@@ -26,6 +27,10 @@ const OPTIMIZE_SCENE_PROMPT = `你是專業的視覺導演與 AI 圖像生成提
 重要：
 - 保留原始場景的核心語意，不要偏離主題
 - 繁體中文的表達要自然流暢，像是專業編輯撰寫的
+- 目標模型是指令跟隨型圖像模型，visual_prompt 必須寫成完整句子構成的敘述段落，
+  嚴禁輸出逗號分隔的關鍵字清單（例如 "8k, masterpiece, cinematic lighting"）
+- visual_prompt 需依序涵蓋風格 (Style)、主體 (Subject)、場景 (Setting)、動作 (Action)、構圖與鏡頭 (Composition)
+- 需要出現在圖片中的文字，一律用雙引號包住並保留原文、不得翻譯，並說明其位置與排版
 - 英文 Prompt 應避免敏感或暴力內容
 - 確保描述中不包含任何會被 AI 安全過濾器攔截的字眼`;
 
@@ -50,7 +55,7 @@ module.exports = async function (context, req) {
         }
 
         // Get Input
-        const { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext } = req.body || {};
+        const { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage } = req.body || {};
 
         if (!scene_title && !scene_description && !visual_prompt) {
             context.res = error("請提供場景資料", "bad_request", 400);
@@ -71,6 +76,11 @@ module.exports = async function (context, req) {
 
         if (styleContext) {
             inputText += `\n\n參考風格：${styleContext}`;
+        }
+
+        const imageTextDirective = buildImageTextDirective(imageLanguage);
+        if (imageTextDirective) {
+            inputText += `\n\n圖片文字要求：${imageTextDirective}`;
         }
 
         // Parse

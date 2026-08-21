@@ -56,6 +56,7 @@ export default function ScriptEditor({
   onPaletteStyleChange,
   onGenerate,
   paletteStyle = "",
+  imageLanguage = "",
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -127,7 +128,8 @@ export default function ScriptEditor({
         userScript,
         styleContext: [analyzedStyle, paletteStyle, selectedStyleInfo?.name]
           .filter(Boolean)
-          .join("，") || ""
+          .join("，") || "",
+        imageLanguage,
       });
 
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {

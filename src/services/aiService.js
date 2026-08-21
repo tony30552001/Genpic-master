@@ -72,8 +72,8 @@ export const waitForImageJob = async ({
 export const embedText = async ({ text }) =>
   apiPost(`${API_BASE_URL}/embeddings`, { text });
 
-export const optimizePrompt = async ({ userScript, styleContext }) =>
-  apiPost(`${API_BASE_URL}/optimize-prompt`, { userScript, styleContext });
+export const optimizePrompt = async ({ userScript, styleContext, imageLanguage }) =>
+  apiPost(`${API_BASE_URL}/optimize-prompt`, { userScript, styleContext, imageLanguage });
 
 export const generateFilename = async ({ userScript }) =>
   apiPost(`${API_BASE_URL}/generate-filename`, { userScript });
@@ -205,10 +205,11 @@ export const waitForDeckJob = async ({
  * @param {string} params.mood - 氛圍
  * @param {string[]} params.key_elements - 關鍵元素
  * @param {string} params.styleContext - 風格上下文（可選）
+ * @param {string} params.imageLanguage - 圖片內文字語系（可選）
  * @returns {Promise<Object>} 優化後的場景資料
  */
-export const optimizeScene = async ({ scene_title, scene_description, visual_prompt, mood, key_elements, styleContext }) =>
-  apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext });
+export const optimizeScene = async ({ scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage }) =>
+  apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage });
 
 /**
  * AI 圖片轉換 — 支援 Gemini（後端）和 GPT-Image-2（前端 edit API）

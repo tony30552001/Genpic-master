@@ -7,22 +7,34 @@ const {
 } = require("../_shared/llmModels");
 const { generateJson } = require("../_shared/llmRuntime");
 const { rateLimit } = require("../_shared/rateLimit");
+const { buildImageTextDirective } = require("../_shared/imageTextLanguage");
 
 const OPTIMIZE_PROMPT_SYSTEM_MESSAGE = `
 擔任專業的 AI 圖像生成提示詞工程師 (Prompt Engineer)。
-你的任務是接收使用者的簡短描述 (User Script) 與風格參考 (Style)，並將其優化為高品質的「繁體中文描述」與「英文生成提示詞 (Prompt)」。
+你的任務是接收使用者的簡短描述 (User Script) 與風格參考 (Style Context)，
+並輸出一段給使用者閱讀的「繁體中文描述」與一段實際送給圖像模型的「英文生成提示詞 (Prompt)」。
 
-優化原則：
-1. 保持原意：保留使用者描述的核心主體與動作。
-2. 增加細節：補充光影 (Lighting)、構圖 (Composition)、材質 (Texture)、氛圍 (Mood) 等視覺細節。
-3. 風格一致：若有提供風格描述，請確保雙語描述都符合該風格。
-4. 英文輸出極重要：生成的 Prompt 必須是詳細的英文關鍵字組合，因為大多數生圖模型對英文理解最佳。
-5. 中文輸出要流暢：給使用者看的中文版必須是通順的一段話，讓使用者輕易理解擴充了哪些內容。
+目標模型是指令跟隨型圖像模型（Gemini 圖像模型與 GPT Image），它們理解完整敘述，不理解關鍵字堆疊。
+
+英文 Prompt 的要求：
+1. 寫成一段連貫的英文敘述，像在向專業美術指導說明畫面。
+   嚴禁輸出逗號分隔的關鍵字清單（例如 "8k, masterpiece, cinematic lighting, highly detailed"）。
+2. 依序涵蓋五個要素：風格 (Style)、主體 (Subject)、場景 (Setting)、動作或狀態 (Action)、構圖與鏡頭 (Composition)。
+3. 補充光影、材質、色彩與氛圍，讓畫面能被明確重現；但不得偏離使用者描述的核心主體與動作。
+4. 若有提供 Style Context，整段敘述都必須符合該風格。
+5. 需要出現在圖片中的文字，一律用雙引號包住並保留原文、不得翻譯，
+   並說明其位置與排版（例如 the title "營收成長" centered at the top）。
+6. 使用中性、安全的措辭，避免暴力、血腥、露骨或指涉真實人物身分的字眼，以免被模型的安全過濾器攔截。
+7. 長度約 80-160 個英文單字。
+
+繁體中文描述的要求：
+- 通順的一段話（約 50-100 字），讓使用者一眼看懂畫面被擴充了什麼。
+- 不要出現英文提示詞語法或關鍵字清單。
 
 請回傳一個 JSON 物件，格式嚴格如下：
 {
   "optimizedPromptZh": "這裡填寫優化後給使用者看的繁體中文描述，必須是通順的段落（約50-100字）...",
-  "optimizedPromptEn": "這裡填寫優化後實際送給 AI 生圖的英文 Prompt，包含豐富的視覺關鍵字，建議用逗號分隔...",
+  "optimizedPromptEn": "這裡填寫優化後實際送給 AI 生圖的英文 Prompt，必須是完整句子構成的敘述段落...",
   "explanation": "這裡用繁體中文簡短說明你增加了哪些細節（例如：加入了電影光效與廣角鏡頭）..."
 }
 `;
@@ -49,18 +61,22 @@ module.exports = async function (context, req) {
         }
 
         // 4. Get Input
-        const { userScript, styleContext } = req.body || {};
+        const { userScript, styleContext, imageLanguage } = req.body || {};
         if (!userScript) {
             context.res = error("請提供需要優化的描述 (userScript)", "bad_request", 400);
             return;
         }
 
-        const promptText = `
-User Script: "${userScript}"
-Style Context: "${styleContext || '無特定風格 (General)'}"
-
-請優化上述描述：
-`;
+        const imageTextDirective = buildImageTextDirective(imageLanguage);
+        const promptText = [
+            `User Script: "${userScript}"`,
+            `Style Context: "${styleContext || "無特定風格 (General)"}"`,
+            imageTextDirective ? `圖片文字要求：${imageTextDirective}` : "",
+            "",
+            "請優化上述描述：",
+        ]
+            .filter(Boolean)
+            .join("\n");
 
         // 5. Call the analysis model assigned to this role in the admin center.
         const identity = await resolveIdentity(auth.user);

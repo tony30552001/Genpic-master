@@ -8,24 +8,24 @@ const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { IMAGE_QUALITIES, editGptImage } = require("../_shared/gptImage");
 
 /**
- * 依轉換模式建構 Gemini 文字 Prompt
- * 針對 gemini-3.1-flash-image-preview 的 advanced reasoning 最佳化
+ * 依轉換模式建構圖像編輯指令。
+ * 圖像模型不是對話模型：直接下達畫面指令，不使用角色扮演前綴。
  */
 const buildTransformPrompt = (mode, userPrompt) => {
   const base = userPrompt ? userPrompt.trim() : "";
   switch (mode) {
     case "style_transfer":
-      return `You are an expert image style transfer artist. Look at this image carefully. Recreate it with a completely different artistic style: ${base || "a fresh artistic style"}. CRITICAL: preserve the exact same subjects, objects, composition layout, and spatial relationships. Only change the visual style, color treatment, brushwork, and artistic rendering. The content must remain identical.`;
+      return `Redraw this image in the following artistic style: ${base || "a fresh artistic style"}. Keep every subject, object, and their spatial arrangement exactly as they appear in the source image. Change only the rendering style, brushwork, texture, and color treatment.`;
 
     case "element_extract":
-      return `You are a skilled image compositor. Identify and extract the main foreground subjects from this image — preserve their exact appearance, details, and proportions. Then place them naturally into a completely new scene: ${base || "a new environment"}. Ensure consistent lighting direction, realistic shadows, and natural integration between the extracted subjects and the new environment.`;
+      return `Take the main foreground subjects out of this image and keep their appearance, details, and proportions exactly as they are. Place them into this new scene: ${base || "a new environment"}. Match the lighting direction, cast realistic shadows, and blend the subjects naturally into their new surroundings.`;
 
     case "bg_replace":
-      return `You are a professional photo editor. In this image, keep the foreground subjects (people, objects) EXACTLY as they appear — do NOT alter their appearance, clothing, expressions, or position in any way. Replace ONLY the background with: ${base || "a new background"}. Match the lighting on the foreground subjects to the new background to make the composition look natural and photorealistic.`;
+      return `Replace only the background of this image with: ${base || "a new background"}. Keep the foreground subjects unchanged — the same appearance, clothing, expressions, pose, and position. Relight them so they match the new background and the result looks photorealistic.`;
 
     case "reference_gen":
     default:
-      return `Use this image as a visual reference. Analyze its color palette, mood, lighting style, and compositional structure. Generate an entirely new, original image with this description: ${base || "a creative new image inspired by this reference"}. The new image should share the same aesthetic atmosphere and visual quality as the reference, but with completely different content.`;
+      return `Use this image only as a visual reference for its color palette, lighting, mood, and compositional structure. Create an entirely new image showing: ${base || "an original scene inspired by this reference"}. Keep the same aesthetic atmosphere and production quality, but none of the original content.`;
   }
 };
 
