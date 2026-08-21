@@ -10,7 +10,7 @@ openwiki:
 
 # Pixora code wiki quickstart
 
-Pixora is a React/Vite image and presentation creation application with a Node BFF API, PostgreSQL tenant data and sessions, Azure Blob assets, Gemini/Azure AI providers, and optional LINE bot sharing. This wiki explains browser, server, data, and operational ownership boundaries; it is not a replacement for source or provider setup guides. Start with [architecture](architecture/overview.md), then use the router below.
+Pixora is a React/Vite image and presentation creation application with a Node BFF API, PostgreSQL tenant data and sessions, Azure Blob assets, Gemini/Azure AI providers, and optional LINE bot sharing. This wiki is the generated, code-derived record of current browser, server, data, and operational behavior; source remains authoritative. Keep external portal setup, deployment-secret placement, product vision, audits, and unimplemented proposals in `docs/` rather than duplicating current implementation guidance there. Start with [architecture](architecture/overview.md), then use the router below.
 
 ## Change router
 

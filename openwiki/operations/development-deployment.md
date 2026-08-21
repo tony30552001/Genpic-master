@@ -22,7 +22,7 @@ Browser configuration is limited to the public Google client ID, API base URL, a
 
 The API needs Entra tenant/client/secret and the exact `ENTRA_REDIRECT_URI`, `AUTH_SESSION_SECRET` of at least 32 bytes, Google client ID, and database configuration. Production must also set exact `CORS_ALLOW_ORIGIN` values and leave `AUTH_DISABLED` false. Without configured origins outside production, `_shared/http.js` permits only its built-in localhost ports (5173–5175 on `localhost` or `127.0.0.1`). Any configured origin must match the browser origin exactly: session requests use credentials, so `*` is ignored and cannot support cookie authentication. The BFF configuration and safety rationale are explained in [server sessions](../backend/sessions.md).
 
-Register the Entra callback as a **Web** redirect URI, for example `http://localhost:3000/api/auth/entra/callback` locally or `https://<your-swa-domain>/api/auth/entra/callback` in deployment. The callback, client secret, and session secret remain API/App Service configuration. Existing `docs/ENTRA_ID_SETUP.md` and `docs/API_LOCAL_DEV.md` provide setup details; source code is authoritative for runtime behavior.
+Register the Entra callback as a **Web** redirect URI, for example `http://localhost:3000/api/auth/entra/callback` locally or `https://<your-swa-domain>/api/auth/entra/callback` in deployment. The callback, client secret, and session secret remain API/App Service configuration. `docs/ENTRA_ID_SETUP.md` covers the external Entra portal registration; this page is the canonical repository guide for local API behavior and setup. Source code remains authoritative for runtime behavior.
 
 ## Development and migration guide
 
