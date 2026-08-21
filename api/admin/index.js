@@ -20,6 +20,7 @@ const {
   testLlmModel,
   updateLlmModel,
 } = require("../_shared/llmModels");
+const { normalizeHistorySource } = require("../_shared/historySource");
 
 const timestamp = (value) =>
   value ? { seconds: Math.floor(new Date(value).getTime() / 1000) } : null;
@@ -63,6 +64,7 @@ const mapHistory = (row) => ({
   model: row.model,
   styleId: row.style_id,
   styleName: row.style_name,
+  source: row.source || null,
   userId: row.user_id,
   userEmail: row.user_email,
   userDisplayName: row.user_display_name || row.user_email,
@@ -190,6 +192,18 @@ const listHistory = async (context, identity, req) => {
     params.push(userId);
     where.push(`h.user_id = $${params.length}`);
   }
+  const sourceFilter = String(req.query?.source || "").trim();
+  if (sourceFilter === "unknown") {
+    where.push("h.source IS NULL");
+  } else if (sourceFilter) {
+    const source = normalizeHistorySource(sourceFilter);
+    if (!source) {
+      context.res = error("不支援的功能來源", "bad_request", 400, req);
+      return;
+    }
+    params.push(source);
+    where.push(`h.source = $${params.length}`);
+  }
 
   const { page, pageSize } = getListPagination(req);
   const countResult = await query(
@@ -213,6 +227,7 @@ const listHistory = async (context, identity, req) => {
        h.style_prompt,
        h.model,
        h.style_id,
+       h.source,
        h.created_at,
        h.user_id,
        u.email AS user_email,

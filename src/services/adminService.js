@@ -29,9 +29,9 @@ const normalizeListParams = (params) =>
   typeof params === "string" ? { userId: params } : params || {};
 
 export const listAdminHistory = async (params = {}) => {
-  const { userId, page = 1, pageSize = 10 } = normalizeListParams(params);
+  const { userId, source, page = 1, pageSize = 10 } = normalizeListParams(params);
   return apiGet(
-    `${ADMIN_API_BASE}/history${buildQueryString({ userId, page, pageSize })}`
+    `${ADMIN_API_BASE}/history${buildQueryString({ userId, source, page, pageSize })}`
   );
 };
 

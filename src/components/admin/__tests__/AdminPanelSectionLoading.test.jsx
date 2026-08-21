@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -137,6 +137,7 @@ describe("AdminPanel section loading", () => {
     await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(2));
     expect(listAdminHistory).toHaveBeenLastCalledWith({
       userId: "user-1",
+      source: "",
       page: 1,
       pageSize: 10,
     });
@@ -212,6 +213,44 @@ describe("AdminPanel section loading", () => {
       page: 1,
       pageSize: 10,
       search: "alice",
+    });
+  });
+
+  it("shows which feature produced each image and filters by it", async () => {
+    listAdminHistory.mockResolvedValue({
+      items: [
+        {
+          id: "history-1",
+          hasImage: false,
+          fullPrompt: "一隻貓",
+          model: "gemini-imagen",
+          source: "image-transform",
+          userDisplayName: "Alice",
+          userEmail: "alice@example.com",
+          createdAt: { seconds: 1700000000 },
+        },
+      ],
+      pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+    });
+
+    renderPanel();
+    await screen.findByText("alice@example.com");
+
+    fireEvent.click(screen.getByRole("button", { name: "生成紀錄" }));
+    await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(1));
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("圖片轉換")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("依功能篩選生成紀錄"), {
+      target: { value: "document" },
+    });
+
+    await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(2));
+    expect(listAdminHistory).toHaveBeenLastCalledWith({
+      userId: "",
+      source: "document",
+      page: 1,
+      pageSize: 10,
     });
   });
 });

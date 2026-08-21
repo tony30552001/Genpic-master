@@ -58,13 +58,22 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
   並在下次登入時補上正確的提供者。
 - 使用者清單提供關鍵字搜尋，輸入後以 `search` 參數在後端比對姓名與 email，並保留分頁。
 
+## 功能來源
+
+`history.source` 記錄每張圖片是由哪個創作功能產生的，於寫入生成紀錄時一併儲存，
+合法值為 `general`（一般創作）、`document`（文件分鏡）與 `image-transform`（圖片轉換）。
+
+- 生成紀錄表格顯示「功能」欄位，並提供依功能篩選的下拉選單。
+- 早於 `018_history_source.sql` 的紀錄沒有來源可回填，會顯示為「未記錄」，
+  可用 `source=unknown` 單獨篩選。
+
 ## 管理 API
 
 - `GET /api/me`：取得目前使用者角色與模型政策。
 - `GET /api/management/users`：使用者清單與生成／風格統計，含 `authProvider`（`entra` 或 `google`）。
 - `GET /api/management/users?page=1&pageSize=10&search=...`：分頁取得使用者清單，`search` 以關鍵字比對姓名與 email。
 - `GET /api/management/user-options`：取得歷史紀錄與風格庫篩選用的使用者選項，含 `authProvider`。
-- `GET /api/management/history?page=1&pageSize=10&userId=...`：分頁取得租戶生成紀錄，可用 `userId` 篩選；回傳 `hasImage` 而不內嵌圖片資料。
+- `GET /api/management/history?page=1&pageSize=10&userId=...&source=...`：分頁取得租戶生成紀錄，可用 `userId` 與 `source`（`general`／`document`／`image-transform`／`unknown`）篩選；回傳 `hasImage` 而不內嵌圖片資料。
 - `GET /api/management/history-images/{id}`：取得單筆生成紀錄的圖片（`Cache-Control: private, max-age=3600`）。
 - `GET /api/management/styles?page=1&pageSize=10&userId=...`：分頁取得租戶風格庫，可用 `userId` 篩選；回傳 `hasPreview` 而不內嵌預覽圖。
 - `GET /api/management/style-previews/{id}`：取得單一風格的預覽圖（`Cache-Control: private, max-age=3600`）。

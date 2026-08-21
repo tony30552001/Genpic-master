@@ -51,7 +51,7 @@ export default function useHistory({ user }) {
   }, [user]);
 
   const saveHistoryItem = useCallback(
-    async ({ imageUrl, userScript, stylePrompt, fullPrompt, styleId, model }) => {
+    async ({ imageUrl, userScript, stylePrompt, fullPrompt, styleId, model, source }) => {
       if (!user) return;
       const compressedUrl = await compressImage(imageUrl);
 
@@ -62,6 +62,7 @@ export default function useHistory({ user }) {
         fullPrompt,
         styleId,
         model,
+        source,
       });
 
       const items = await listHistory();

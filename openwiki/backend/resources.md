@@ -2,7 +2,15 @@
 type: backend domain reference
 title: Resource APIs, Blob assets, and LINE sharing
 description: Tenant-scoped styles, history, templates, uploads, generated assets, and LINE integration behavior.
-tags: [backend, resources, storage, line]
+tags: [backend, resources, storage, line, history]
+openwiki:
+  roles: [domain, integration, workflow]
+  change_kinds: [resource-api, storage, history-attribution]
+  source_paths: [api/history/index.js, api/_shared/historySource.js, api/blob-sas/index.js, api/styles/index.js, api/templates/index.js]
+  symbols: [normalizeHistorySource, HISTORY_SOURCES, saveHistoryItem, uploadFileToBlob]
+  test_paths: [api/admin/__tests__/adminResources.test.js, src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx, src/services/__tests__/storageService.test.js]
+  invariants: [History records remain tenant and user scoped., A history source is general document image-transform or null for legacy or unrecognized values., Blob SAS authorization is distinct from Blob object ownership.]
+  validation_commands: [pnpm test --run api/admin/__tests__/adminResources.test.js src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx]
 ---
 
 # Resource APIs, Blob assets, and LINE sharing
@@ -12,6 +20,20 @@ tags: [backend, resources, storage, line]
 `/styles` normalizes tags to trimmed arrays, categories to `social`, `presentation`, `poster`, `ecommerce`, `education`, `document`, `brand`, or `general`, and visibility to `private|shared`. Creation requires nonempty name/prompt and sets `published_at` immediately for shared styles. `mine` means tenant + owner, `shared` means tenant + shared visibility, and `all` means either; all support category/tag/text filters and updated/newest/popular/curated ordering. Read/use allows own or shared; update, delete, publish, and unpublish require creator ownership. A shared source can be copied to a new private owner record and increments source `copy_count`; `use` increments `usage_count`. Deletion first clears matching tenant `history.style_id` then deletes the owner record.
 
 `/styles/search` searches only the caller's own embedded styles by pgvector distance. `/styles/backfill-embeddings` processes at most 100 missing embeddings per request; it supports dry run and reports per-record failures. History lists/creates/deletes tenant+user records; templates list/create/update/delete tenant+creator records. Their frontend adapters live in `storageService.js` and hooks.
+
+### History creation-source attribution
+
+`history.source` records the creation workflow that wrote an image. `api/_shared/historySource.js::normalizeHistorySource` accepts exactly `general`, `document`, and `image-transform`; absent, unknown, or malformed input becomes `null`. The database constraint added by [schema](../data/schema.md) accepts the same three values or null. This is attribution rather than authorization: reads and deletes remain scoped by `tenant_id` and `user_id`, and a client cannot make an arbitrary source value persistent.
+
+`useHistory::saveHistoryItem` forwards source to `POST /history`. `InfographicGenerator` supplies `general` for ordinary image generation, `document` for a generated storyboard scene, and `image-transform` after an image transformation. The user history GET/POST response carries `source`, so consumers should display null as unrecorded rather than infer a workflow for pre-migration rows.
+
+Administrators use `GET /management/history?source=...` to filter the tenant list. A recognized workflow is matched with `h.source = $n`; `source=unknown` deliberately selects `h.source IS NULL`; any other nonempty filter receives `400 bad_request`. The admin list includes the nullable source but continues to return `hasImage` instead of an image URL. The browser control and lazy section-loading rules are owned by [administrator panel and history preview](../frontend/admin-panel.md).
+
+For source changes, update the shared allowed list, the schema constraint/migration, every write call site, list serialization, admin query validation, and the UI labels together. `adminResources.test.js` exercises a recognized source, legacy `unknown`, and rejection of an unsupported admin filter; `AdminPanelSectionLoading.test.jsx` verifies source label rendering and request forwarding. There is no focused `api/history` handler test for source persistence or user-history serialization. Run:
+
+```sh
+pnpm test --run api/admin/__tests__/adminResources.test.js src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx
+```
 
 `PUT /styles/:id` is a partial update: it changes only supplied `name`, `prompt`, `description`, `tags`, `previewUrl`, or `category` fields and requires creator ownership. `PUT /templates/:id`, however, requires `name` and replaces every persisted template field: omitted `userScript`, `stylePrompt`, `styleId`, and `previewUrl` become `null`, while omitted `category` becomes `general`. The [Asset Center](../frontend/asset-center.md) accounts for this by sending those retained fields from the selected template with its metadata edits. Keep that client payload complete while the handler remains a replacement update; a newly added replacement field must be wired through it, and a partial-update handler would require an intentional client-contract change.
 

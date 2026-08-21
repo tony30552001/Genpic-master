@@ -199,6 +199,7 @@ export default function InfographicGenerator({
                     stylePrompt: transformAppliedStyleName || '',
                     fullPrompt: result.mergedPrompt || transformPrompt,
                     model: result.model || imageModel,
+                    source: 'image-transform',
                 });
                 if (transformAppliedStyleId) {
                     markStyleUsed(transformAppliedStyleId).catch(() => {});
@@ -436,6 +437,7 @@ export default function InfographicGenerator({
                 fullPrompt: finalPrompt,
                 styleId: appliedStyleId || analysisResultData?.styleId || null,
                 model: model || imageModel,
+                source: 'general',
             });
             if (appliedStyleId) {
                 markStyleUsed(appliedStyleId).catch((err) => {
@@ -545,7 +547,8 @@ export default function InfographicGenerator({
                 styleId: styleForDocument?.id || null,
                 model: result.model || imageModel,
                 sceneNumber: scene.scene_number,
-                documentTitle: documentResult?.title
+                documentTitle: documentResult?.title,
+                source: 'document',
             });
             if (styleForDocument?.id) {
                 markStyleUsed(styleForDocument.id).catch((err) => {

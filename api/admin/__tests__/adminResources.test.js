@@ -202,4 +202,65 @@ describe("admin resources", () => {
     expect(res.status).toBe(200);
     expect(res.body[0]).toMatchObject({ id: "user-2", authProvider: "google" });
   });
+
+  it("filters the history by the creation workflow that produced it", async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "history-1",
+            has_image: true,
+            prompt: "prompt",
+            model: "gemini-imagen",
+            source: "image-transform",
+            created_at: "2026-01-01T00:00:00.000Z",
+            user_id: "user-1",
+            user_email: "alice@example.com",
+            user_display_name: "Alice",
+          },
+        ],
+      });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "history" },
+      query: { source: "image-transform" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items[0]).toMatchObject({ source: "image-transform" });
+    expect(db.query.mock.calls[0][0]).toContain("h.source = $2");
+    expect(db.query.mock.calls[0][1]).toEqual(["tenant-1", "image-transform"]);
+  });
+
+  it("filters the history for records saved before the workflow was recorded", async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ total: 0 }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "history" },
+      query: { source: "unknown" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(db.query.mock.calls[0][0]).toContain("h.source IS NULL");
+    expect(db.query.mock.calls[0][1]).toEqual(["tenant-1"]);
+  });
+
+  it("rejects an unsupported history source filter", async () => {
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "history" },
+      query: { source: "pptmaster" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(db.query).not.toHaveBeenCalled();
+  });
 });

@@ -69,6 +69,17 @@ const PROVIDER_FILTERS = [
 const providerLabel = (authProvider) =>
   PROVIDER_FILTERS.find((group) => group.id === authProvider)?.label || "—";
 
+/** Creation workflows that write into the history, mirroring api/_shared/historySource.js. */
+const HISTORY_SOURCE_FILTERS = [
+  { id: "general", label: "一般創作" },
+  { id: "document", label: "文件分鏡" },
+  { id: "image-transform", label: "圖片轉換" },
+  { id: "unknown", label: "未記錄" },
+];
+
+const historySourceLabel = (source) =>
+  HISTORY_SOURCE_FILTERS.find((item) => item.id === (source || "unknown"))?.label || "—";
+
 const formatDate = (value) => {
   if (!value?.seconds) return "—";
   return new Date(value.seconds * 1000).toLocaleString("zh-TW");
@@ -241,6 +252,7 @@ export default function AdminPanel() {
   const [modelPolicy, setModelPolicy] = useState(emptyPolicy);
   const [supportedModels, setSupportedModels] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [historySource, setHistorySource] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [previewSource, setPreviewSource] = useState("");
   const [loadingSection, setLoadingSection] = useState("users");
@@ -268,9 +280,9 @@ export default function AdminPanel() {
   );
 
   const loadHistorySection = useCallback(
-    async ({ userId = "", page = 1, pageSize = DEFAULT_USER_PAGE_SIZE } = {}) => {
+    async ({ userId = "", source = "", page = 1, pageSize = DEFAULT_USER_PAGE_SIZE } = {}) => {
       const data = normalizePaginatedData(
-        await listAdminHistory({ userId, page, pageSize }),
+        await listAdminHistory({ userId, source, page, pageSize }),
         pageSize
       );
       setHistoryItems(data.items);
@@ -304,7 +316,12 @@ export default function AdminPanel() {
     const loaders = {
       users: () =>
         loadUsersSection({ pageSize: userPageSize, search: appliedUserSearchRef.current }),
-      history: () => loadHistorySection({ userId: selectedUserId, pageSize: historyPageSize }),
+      history: () =>
+        loadHistorySection({
+          userId: selectedUserId,
+          source: historySource,
+          pageSize: historyPageSize,
+        }),
       styles: () => loadStylesSection({ userId: selectedUserId, pageSize: stylesPageSize }),
       models: () => loadSettingsSection(),
     };
@@ -328,6 +345,7 @@ export default function AdminPanel() {
   }, [
     activeSection,
     selectedUserId,
+    historySource,
     userPageSize,
     historyPageSize,
     stylesPageSize,
@@ -419,6 +437,7 @@ export default function AdminPanel() {
       () =>
         loadHistorySection({
           userId: selectedUserId,
+          source: historySource,
           page,
           pageSize: historyPagination.pageSize,
         }),
@@ -430,9 +449,16 @@ export default function AdminPanel() {
     const pageSize = Number(event.target.value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === historyPageSize) return;
     void runRefresh(
-      () => loadHistorySection({ userId: selectedUserId, pageSize }),
+      () => loadHistorySection({ userId: selectedUserId, source: historySource, pageSize }),
       "生成紀錄載入失敗"
     );
+  };
+
+  const handleHistorySourceChange = (event) => {
+    const nextSource = event.target.value;
+    if (nextSource === historySource) return;
+    requestedSectionsRef.current.delete("history");
+    setHistorySource(nextSource);
   };
 
   const handleStylesPageChange = (page) => {
@@ -611,6 +637,7 @@ export default function AdminPanel() {
             .filter(Boolean)
             .join("\n"),
         },
+        { label: "功能", value: historySourceLabel(previewItem.source) },
         { label: "模型", value: modelLabel(previewItem.model || "gemini-imagen") },
         { label: "風格", value: previewItem.styleName },
         { label: "時間", value: formatDate(previewItem.createdAt) },
@@ -695,6 +722,25 @@ export default function AdminPanel() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {activeSection === "history" && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>功能</span>
+                    <select
+                      value={historySource}
+                      onChange={handleHistorySourceChange}
+                      disabled={isRefreshing}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label="依功能篩選生成紀錄"
+                    >
+                      <option value="">全部功能</option>
+                      {HISTORY_SOURCE_FILTERS.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {(activeSection === "history" || activeSection === "styles") &&
                   userFilterGroups.map((group) => (
                     <UserFilterSelect
@@ -876,11 +922,12 @@ export default function AdminPanel() {
                       />
                     </CardHeader>
                     <CardContent className="overflow-x-auto p-0">
-                      <table className="w-full min-w-[860px] text-sm">
+                      <table className="w-full min-w-[960px] text-sm">
                         <thead className="border-y border-border bg-muted/40 text-left text-xs text-muted-foreground">
                           <tr>
                             <th className="px-5 py-3 font-medium">圖片</th>
                             <th className="px-5 py-3 font-medium">使用者</th>
+                            <th className="px-5 py-3 font-medium">功能</th>
                             <th className="px-5 py-3 font-medium">模型</th>
                             <th className="px-5 py-3 font-medium">Prompt</th>
                             <th className="px-5 py-3 font-medium">時間</th>
@@ -917,6 +964,9 @@ export default function AdminPanel() {
                               <td className="px-5 py-3">
                                 <p className="font-medium">{item.userDisplayName}</p>
                                 <p className="text-xs text-muted-foreground">{item.userEmail}</p>
+                              </td>
+                              <td className="px-5 py-3">
+                                <Badge variant="secondary">{historySourceLabel(item.source)}</Badge>
                               </td>
                               <td className="px-5 py-3">
                                 <Badge variant="outline">{modelLabel(item.model || "gemini-imagen")}</Badge>
