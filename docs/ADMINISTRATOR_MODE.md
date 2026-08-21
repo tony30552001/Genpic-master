@@ -4,7 +4,7 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 
 ## 啟用步驟
 
-1. 若尚未執行，依序執行 `db/migrations/006_administrator_mode.sql`、`db/migrations/007_dedupe_users.sql`、`db/migrations/008_user_status.sql` 與 `db/migrations/016_admin_list_indexes.sql`。
+1. 若尚未執行，依序執行 `db/migrations/006_administrator_mode.sql`、`db/migrations/007_dedupe_users.sql`、`db/migrations/008_user_status.sql`、`db/migrations/016_admin_list_indexes.sql` 與 `db/migrations/017_user_auth_provider.sql`。
 2. 在 App Service 設定 `ADMIN_EMAILS`，例如 `admin@example.com`。
 3. 若要開放 GPT Image 2，將 GPT 設定放在 App Service runtime（不是 `VITE_*` build 變數）：
    - `GPT_IMAGE_ENDPOINT`
@@ -47,12 +47,23 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 變更使用者篩選時只重新載入目前分頁。生成紀錄與風格庫的縮圖以獨立請求逐張載入，
 表格因此可在圖片下載完成前先顯示。
 
+## 使用者篩選與搜尋
+
+`users.auth_provider` 記錄每位使用者最後一次登入使用的身分提供者，於登入流程寫入，
+既有資料由 `017_user_auth_provider.sql` 依最新的 `auth_sessions` 回填。
+
+- 生成紀錄與風格庫的使用者篩選拆成「Entra ID」與「Google」兩個下拉選單，各自支援
+  以姓名或 email 關鍵字搜尋；兩者互斥，同時只會套用一位使用者。早於
+  `010_auth_sessions.sql` 的帳號沒有 session 可回填，會出現在「未記錄」篩選，
+  並在下次登入時補上正確的提供者。
+- 使用者清單提供關鍵字搜尋，輸入後以 `search` 參數在後端比對姓名與 email，並保留分頁。
+
 ## 管理 API
 
 - `GET /api/me`：取得目前使用者角色與模型政策。
-- `GET /api/management/users`：使用者清單與生成／風格統計。
-- `GET /api/management/users?page=1&pageSize=10`：分頁取得使用者清單。
-- `GET /api/management/user-options`：取得歷史紀錄與風格庫篩選用的使用者選項。
+- `GET /api/management/users`：使用者清單與生成／風格統計，含 `authProvider`（`entra` 或 `google`）。
+- `GET /api/management/users?page=1&pageSize=10&search=...`：分頁取得使用者清單，`search` 以關鍵字比對姓名與 email。
+- `GET /api/management/user-options`：取得歷史紀錄與風格庫篩選用的使用者選項，含 `authProvider`。
 - `GET /api/management/history?page=1&pageSize=10&userId=...`：分頁取得租戶生成紀錄，可用 `userId` 篩選；回傳 `hasImage` 而不內嵌圖片資料。
 - `GET /api/management/history-images/{id}`：取得單筆生成紀錄的圖片（`Cache-Control: private, max-age=3600`）。
 - `GET /api/management/styles?page=1&pageSize=10&userId=...`：分頁取得租戶風格庫，可用 `userId` 篩選；回傳 `hasPreview` 而不內嵌預覽圖。

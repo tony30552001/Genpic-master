@@ -1,6 +1,6 @@
 const { OAuth2Client } = require("google-auth-library");
 const { ok, error, options, corsHeaders } = require("../_shared/http");
-const { resolveIdentity } = require("../_shared/identity");
+const { recordAuthProvider, resolveIdentity } = require("../_shared/identity");
 const {
   OAUTH_STATE_COOKIE_NAME,
   buildEntraAuthorizationUrl,
@@ -58,6 +58,8 @@ const createSessionForIdentity = async ({
     context.res = error("無法辨識使用者", "unauthorized", 401, req);
     return null;
   }
+
+  await recordAuthProvider(identity.userId, provider);
 
   const createdSession = await session.createSession({
     tenantId: identity.tenantId,

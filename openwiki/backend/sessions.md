@@ -6,11 +6,11 @@ tags: [backend, authentication, sessions, entra, csrf]
 openwiki:
   roles: [architecture, integration, workflow, testing]
   change_kinds: [authentication, session-lifecycle, csrf, public-api]
-  source_paths: [api/auth/index.js, api/_shared/session.js, api/_shared/entra.js, api/_shared/auth.js, api/_shared/rateLimit.js]
-  symbols: [handleEntraStart, handleEntraCallback, handleGoogleLogin, createSession, requireAuth, redeemEntraAuthorizationCode, rateLimit]
-  test_paths: [api/_shared/__tests__/auth.test.js, api/_shared/__tests__/session.test.js]
-  invariants: ["Provider credentials are exchanged server-side for an opaque HttpOnly session cookie.", "Unsafe authenticated requests require the CSRF token derived for the current session.", "Idle expiry is eight hours and absolute expiry is thirty days."]
-  validation_commands: [pnpm test --run api/_shared/__tests__/auth.test.js api/_shared/__tests__/session.test.js]
+  source_paths: [api/auth/index.js, api/_shared/identity.js, api/_shared/session.js, api/_shared/entra.js, api/_shared/auth.js, api/_shared/rateLimit.js]
+  symbols: [handleEntraStart, handleEntraCallback, handleGoogleLogin, createSessionForIdentity, recordAuthProvider, createSession, requireAuth, redeemEntraAuthorizationCode, rateLimit]
+  test_paths: [api/_shared/__tests__/identity.test.js, api/_shared/__tests__/auth.test.js, api/_shared/__tests__/session.test.js]
+  invariants: ["Provider credentials are exchanged server-side for an opaque HttpOnly session cookie.", "A successful active sign-in records only the supported provider as the user's last provider before its session is created.", "Unsafe authenticated requests require the CSRF token derived for the current session.", "Idle expiry is eight hours and absolute expiry is thirty days."]
+  validation_commands: [pnpm test --run api/_shared/__tests__/identity.test.js api/_shared/__tests__/auth.test.js api/_shared/__tests__/session.test.js]
 ---
 
 # Server sessions and BFF sign-in
@@ -30,7 +30,8 @@ sequenceDiagram
   AuthApi-->>Browser: redirect and state cookie
   Entra-->>AuthApi: callback with code and state
   AuthApi->>Entra: redeem authorization code
-  AuthApi->>Database: resolve identity and create session
+  AuthApi->>Database: resolve identity and record provider
+  AuthApi->>Database: create opaque session
   AuthApi-->>Browser: redirect with session cookie
   Browser->>AuthApi: GET auth session
   AuthApi-->>Browser: authenticated user and CSRF token
@@ -38,7 +39,7 @@ sequenceDiagram
 
 This sequence shows the Entra authorization-code exchange and subsequent BFF session bootstrap.
 
-This is the Entra route. Google instead posts its credential once to `POST /api/auth/google`; `handleGoogleLogin` verifies it, resolves identity, creates the same session, and returns the CSRF token in JSON plus the session cookie. `handleEntraStart`, `handleEntraCallback`, and `handleGoogleLogin` first apply the shared in-memory `rateLimit` by forwarded/client/real IP (or `unknown`) with `RATE_LIMIT_PER_MINUTE` or a default of 60 requests per minute; a limit breach returns `429` with `Retry-After`. This limiter is process-local, so deployment-scale rate limiting is outside this implementation.
+This is the Entra route. Google instead posts its credential once to `POST /api/auth/google`; `handleGoogleLogin` verifies it, resolves identity, records the supported provider as the user's last successful sign-in method, creates the same session, and returns the CSRF token in JSON plus the session cookie. `createSessionForIdentity` makes that ordering explicit: it rejects inactive/unresolved users before `recordAuthProvider`, then creates the session. Provider attribution is administration metadata, not an alternative authentication or authorization input; its durable column and backfill are documented in [schema](../data/schema.md). `handleEntraStart`, `handleEntraCallback`, and `handleGoogleLogin` first apply the shared in-memory `rateLimit` by forwarded/client/real IP (or `unknown`) with `RATE_LIMIT_PER_MINUTE` or a default of 60 requests per minute; a limit breach returns `429` with `Retry-After`. This limiter is process-local, so deployment-scale rate limiting is outside this implementation.
 
 `handleEntraStart` calls `buildEntraAuthorizationUrl`; it signs a random nonce, sanitized `returnTo`, and issue time with `AUTH_SESSION_SECRET`, then puts the complete state value in a ten-minute HttpOnly `pixora_oauth_state` cookie. `redeemEntraAuthorizationCode` requires a timing-safe equality match between callback state and that cookie, validates the signature and lifetime, and uses the configured confidential MSAL client to redeem the code. `normalizeReturnTo` accepts only single-slash, non-`/api/` local paths, preventing an external or API redirect target.
 
@@ -58,17 +59,18 @@ Consult this page for login providers, session persistence, cookies, CSRF, expir
 
 1. `api/auth/index.js` dispatches the five auth endpoints and issues/clears cookies.
 2. `api/_shared/entra.js` owns signed state, `returnTo` normalization, confidential-client setup, and code redemption.
-3. `api/_shared/session.js` owns token hashing, cookie serialization, database storage, expiry, touching, revocation, and conversion to the handler identity.
-4. `api/_shared/auth.js` applies session and CSRF checks to protected handlers.
-5. `api/server.js` registers routes and `api/openapi.js` advertises them; update both as required by [HTTP API](http-api.md).
-6. `db/migrations/010_auth_sessions.sql` is the durable contract; add a migration rather than editing an applied migration.
+3. `api/_shared/identity.js::recordAuthProvider` records only an active user's supported last sign-in provider without writing unchanged values; `017_user_auth_provider.sql` owns its durable constraint and backfill.
+4. `api/_shared/session.js` owns token hashing, cookie serialization, database storage, expiry, touching, revocation, and conversion to the handler identity.
+5. `api/_shared/auth.js` applies session and CSRF checks to protected handlers.
+6. `api/server.js` registers routes and `api/openapi.js` advertises them; update both as required by [HTTP API](http-api.md).
+7. `db/migrations/010_auth_sessions.sql` is the session durable contract; add a migration rather than editing an applied migration.
 
 Keep these invariants: raw session and CSRF tokens never enter the database, client code cannot substitute a token header for cookie authentication, unsafe requests cannot bypass CSRF, and `returnTo` remains an internal browser route. A bad cookie token is cleared because it has no row to revoke; expired or inactive persisted sessions are revoked and cleared. Credentialed cross-origin requests require an exact allowed origin: development may use the built-in local-origin allow-list, but `*` never works.
 
 Run the focused suites after changing helpers or middleware:
 
 ```sh
-pnpm test --run api/_shared/__tests__/auth.test.js api/_shared/__tests__/session.test.js
+pnpm test --run api/_shared/__tests__/identity.test.js api/_shared/__tests__/auth.test.js api/_shared/__tests__/session.test.js
 ```
 
-`session.test.js` covers cookie parsing/attributes, CSRF hash comparison, and idle expiry. `auth.test.js` covers missing-session 401, unsafe-request CSRF rejection, and valid-session touch behavior. Also run `src/services/__tests__/authService.test.js` and `src/services/__tests__/apiClient.test.js` when the browser session endpoint, CSRF response, or 401 behavior changes. A provider callback change requires a local end-to-end login and logout smoke test with non-production configuration; a migration change additionally requires a disposable-database migration. Do not use real production secrets for either check.
+`identity.test.js` covers supported-provider recording, no-op updates, and rejected provider/missing-user inputs. `session.test.js` covers cookie parsing/attributes, CSRF hash comparison, and idle expiry. `auth.test.js` covers missing-session 401, unsafe-request CSRF rejection, and valid-session touch behavior. Also run `src/services/__tests__/authService.test.js` and `src/services/__tests__/apiClient.test.js` when the browser session endpoint, CSRF response, or 401 behavior changes. A provider callback change requires a local end-to-end login and logout smoke test with non-production configuration; a migration change additionally requires a disposable-database migration. Do not use real production secrets for either check.

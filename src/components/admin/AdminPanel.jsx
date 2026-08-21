@@ -11,6 +11,7 @@ import {
   Loader2,
   Palette,
   Save,
+  Search,
   Settings,
   ShieldCheck,
   Trash2,
@@ -25,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import ImageLightbox from "../common/ImageLightbox";
 import LlmModelSettings from "./LlmModelSettings";
+import UserFilterSelect from "./UserFilterSelect";
 import useAuth from "../../hooks/useAuth";
 import {
   deleteAdminStyle,
@@ -54,6 +56,18 @@ const ROLE_OPTIONS = [
   { value: "editor", label: "編輯者" },
   { value: "viewer", label: "檢視者" },
 ];
+
+const USER_SEARCH_DEBOUNCE_MS = 300;
+
+/** Entra ID and Google accounts get their own filter; unknown providers only surface when present. */
+const PROVIDER_FILTERS = [
+  { id: "entra", label: "Entra ID" },
+  { id: "google", label: "Google" },
+  { id: "unknown", label: "未記錄" },
+];
+
+const providerLabel = (authProvider) =>
+  PROVIDER_FILTERS.find((group) => group.id === authProvider)?.label || "—";
 
 const formatDate = (value) => {
   if (!value?.seconds) return "—";
@@ -227,6 +241,7 @@ export default function AdminPanel() {
   const [modelPolicy, setModelPolicy] = useState(emptyPolicy);
   const [supportedModels, setSupportedModels] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [userSearch, setUserSearch] = useState("");
   const [previewSource, setPreviewSource] = useState("");
   const [loadingSection, setLoadingSection] = useState("users");
   const [isLoadingUserOptions, setIsLoadingUserOptions] = useState(false);
@@ -236,13 +251,21 @@ export default function AdminPanel() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const requestedSectionsRef = useRef(new Set());
+  const appliedUserSearchRef = useRef("");
 
-  const loadUsersSection = useCallback(async ({ page = 1, pageSize = DEFAULT_USER_PAGE_SIZE } = {}) => {
-    const data = normalizePaginatedData(await listAdminUsers({ page, pageSize }), pageSize);
-    setUsers(data.items);
-    setUserPagination(data.pagination);
-    setUserPageSize(data.pagination.pageSize);
-  }, []);
+  const loadUsersSection = useCallback(
+    async ({ page = 1, pageSize = DEFAULT_USER_PAGE_SIZE, search = "" } = {}) => {
+      const data = normalizePaginatedData(
+        await listAdminUsers({ page, pageSize, search }),
+        pageSize
+      );
+      appliedUserSearchRef.current = search;
+      setUsers(data.items);
+      setUserPagination(data.pagination);
+      setUserPageSize(data.pagination.pageSize);
+    },
+    []
+  );
 
   const loadHistorySection = useCallback(
     async ({ userId = "", page = 1, pageSize = DEFAULT_USER_PAGE_SIZE } = {}) => {
@@ -279,7 +302,8 @@ export default function AdminPanel() {
   useEffect(() => {
     const sectionId = activeSection;
     const loaders = {
-      users: () => loadUsersSection({ pageSize: userPageSize }),
+      users: () =>
+        loadUsersSection({ pageSize: userPageSize, search: appliedUserSearchRef.current }),
       history: () => loadHistorySection({ userId: selectedUserId, pageSize: historyPageSize }),
       styles: () => loadStylesSection({ userId: selectedUserId, pageSize: stylesPageSize }),
       models: () => loadSettingsSection(),
@@ -351,7 +375,12 @@ export default function AdminPanel() {
   const handleUserPageChange = (page) => {
     if (page < 1 || page > userPagination.totalPages || page === userPagination.page) return;
     void runRefresh(
-      () => loadUsersSection({ page, pageSize: userPagination.pageSize || userPageSize }),
+      () =>
+        loadUsersSection({
+          page,
+          pageSize: userPagination.pageSize || userPageSize,
+          search: appliedUserSearchRef.current,
+        }),
       "使用者清單載入失敗"
     );
   };
@@ -359,8 +388,24 @@ export default function AdminPanel() {
   const handleUserPageSizeChange = (event) => {
     const pageSize = Number(event.target.value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === userPageSize) return;
-    void runRefresh(() => loadUsersSection({ pageSize }), "使用者清單載入失敗");
+    void runRefresh(
+      () => loadUsersSection({ pageSize, search: appliedUserSearchRef.current }),
+      "使用者清單載入失敗"
+    );
   };
+
+  useEffect(() => {
+    if (activeSection !== "users") return undefined;
+    const search = userSearch.trim();
+    if (search === appliedUserSearchRef.current) return undefined;
+    const timer = setTimeout(() => {
+      void runRefresh(
+        () => loadUsersSection({ pageSize: userPageSize, search }),
+        "使用者清單載入失敗"
+      );
+    }, USER_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [activeSection, userSearch, userPageSize, loadUsersSection, runRefresh]);
 
   const handleHistoryPageChange = (page) => {
     if (
@@ -418,10 +463,11 @@ export default function AdminPanel() {
     );
   };
 
-  const handleUserFilterChange = (event) => {
+  const handleUserFilterChange = (nextUserId) => {
+    if (nextUserId === selectedUserId) return;
     requestedSectionsRef.current.delete("history");
     requestedSectionsRef.current.delete("styles");
-    setSelectedUserId(event.target.value);
+    setSelectedUserId(nextUserId);
   };
 
   const handleRoleChange = async (userId, role) => {
@@ -518,7 +564,16 @@ export default function AdminPanel() {
     () => [...userOptions, ...users].find((item) => item.id === selectedUserId),
     [selectedUserId, userOptions, users]
   );
-  const filterUsers = userOptions.length > 0 ? userOptions : users;
+
+  const userFilterGroups = useMemo(() => {
+    const source = userOptions.length > 0 ? userOptions : users;
+    return PROVIDER_FILTERS.map((group) => ({
+      ...group,
+      users: source.filter(
+        (item) => (item.authProvider || "unknown") === group.id
+      ),
+    })).filter((group) => group.id !== "unknown" || group.users.length > 0);
+  }, [userOptions, users]);
 
   const viewableHistoryItems = useMemo(
     () => historyItems.filter((item) => item.hasImage),
@@ -639,23 +694,23 @@ export default function AdminPanel() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                {(activeSection === "history" || activeSection === "styles") && (
-                  <select
-                    value={selectedUserId}
-                    onChange={handleUserFilterChange}
-                    disabled={isLoadingUserOptions}
-                    className="h-9 max-w-[240px] rounded-lg border border-input bg-background px-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label="依使用者篩選"
-                  >
-                    <option value="">全部使用者</option>
-                    {filterUsers.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.displayName} · {item.email}{item.isActive ? "" : "（已停用）"}
-                      </option>
-                    ))}
-                  </select>
-                )}
+              <div className="flex flex-wrap items-center gap-2">
+                {(activeSection === "history" || activeSection === "styles") &&
+                  userFilterGroups.map((group) => (
+                    <UserFilterSelect
+                      key={group.id}
+                      label={group.label}
+                      users={group.users}
+                      value={
+                        group.users.some((item) => item.id === selectedUserId)
+                          ? selectedUserId
+                          : ""
+                      }
+                      onChange={handleUserFilterChange}
+                      disabled={isLoadingUserOptions}
+                      allLabel="全部使用者"
+                    />
+                  ))}
                 {(isRefreshing || loadingSection) && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
                 )}
@@ -690,18 +745,35 @@ export default function AdminPanel() {
                         使用者清單
                         <Badge variant="secondary" className="ml-auto">{userPagination.total}</Badge>
                       </CardTitle>
-                      <PageSizeSelect
-                        value={userPageSize}
-                        onChange={handleUserPageSizeChange}
-                        disabled={isRefreshing}
-                        ariaLabel="每頁顯示使用者數量"
-                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative">
+                          <Search
+                            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <input
+                            type="search"
+                            value={userSearch}
+                            onChange={(event) => setUserSearch(event.target.value)}
+                            placeholder="搜尋姓名或 Email"
+                            aria-label="搜尋使用者"
+                            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-56"
+                          />
+                        </div>
+                        <PageSizeSelect
+                          value={userPageSize}
+                          onChange={handleUserPageSizeChange}
+                          disabled={isRefreshing}
+                          ariaLabel="每頁顯示使用者數量"
+                        />
+                      </div>
                     </CardHeader>
                     <CardContent className="overflow-x-auto p-0">
-                      <table className="w-full min-w-[880px] text-sm">
+                      <table className="w-full min-w-[980px] text-sm">
                         <thead className="border-y border-border bg-muted/40 text-left text-xs text-muted-foreground">
                           <tr>
                             <th className="px-5 py-3 font-medium">使用者</th>
+                            <th className="px-5 py-3 font-medium">登入方式</th>
                             <th className="px-5 py-3 font-medium">角色</th>
                             <th className="px-5 py-3 font-medium">狀態</th>
                             <th className="px-5 py-3 font-medium">生成圖片</th>
@@ -719,6 +791,9 @@ export default function AdminPanel() {
                               <td className="px-5 py-3">
                                 <p className="font-medium">{item.displayName}</p>
                                 <p className="text-xs text-muted-foreground">{item.email}</p>
+                              </td>
+                              <td className="px-5 py-3 text-xs text-muted-foreground">
+                                {providerLabel(item.authProvider)}
                               </td>
                               <td className="px-5 py-3">
                                 <select
@@ -769,7 +844,11 @@ export default function AdminPanel() {
                         </tbody>
                       </table>
                       {users.length === 0 && (
-                        <p className="px-5 py-10 text-center text-sm text-muted-foreground">目前沒有使用者資料。</p>
+                        <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+                          {userSearch.trim()
+                            ? "找不到符合搜尋條件的使用者。"
+                            : "目前沒有使用者資料。"}
+                        </p>
                       )}
                       <AdminTablePagination
                         pagination={userPagination}

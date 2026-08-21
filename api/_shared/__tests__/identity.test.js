@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 const db = require("../db");
 db.query = vi.fn();
 
-const { resolveIdentity } = require("../identity");
+const { recordAuthProvider, resolveIdentity } = require("../identity");
 
 const user = {
   displayName: "Alice",
@@ -95,5 +95,28 @@ describe("resolveIdentity", () => {
       "Alice",
       "viewer",
     ]);
+  });
+});
+
+describe("recordAuthProvider", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("stores the provider only when it changed", async () => {
+    db.query.mockResolvedValue({ rows: [] });
+
+    await recordAuthProvider("user-1", "google");
+
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0][0]).toContain("auth_provider IS DISTINCT FROM $2");
+    expect(db.query.mock.calls[0][1]).toEqual(["user-1", "google"]);
+  });
+
+  it("ignores unknown providers and missing users", async () => {
+    await recordAuthProvider("user-1", "line");
+    await recordAuthProvider(null, "entra");
+
+    expect(db.query).not.toHaveBeenCalled();
   });
 });

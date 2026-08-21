@@ -39,6 +39,7 @@ const mapUser = (row) => ({
   displayName: row.display_name || row.email,
   role: row.role,
   isActive: row.is_active !== false,
+  authProvider: row.auth_provider || null,
   createdAt: timestamp(row.created_at),
   generationCount: Number(row.generation_count || 0),
   styleCount: Number(row.style_count || 0),
@@ -50,6 +51,7 @@ const mapUserOption = (row) => ({
   displayName: row.display_name || row.email,
   role: row.role,
   isActive: row.is_active !== false,
+  authProvider: row.auth_provider || null,
 });
 
 const mapHistory = (row) => ({
@@ -106,11 +108,29 @@ const getListPagination = (req) => ({
   ),
 });
 
+/** Turns a raw keyword into a safe ILIKE pattern; wildcards stay literal. */
+const buildSearchPattern = (value) => {
+  const term = String(value ?? "").trim();
+  if (!term) return null;
+  return `%${term.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
+};
+
 const listUsers = async (context, identity, req) => {
   const { page, pageSize } = getUserPagination(req);
+  const params = [identity.tenantId];
+  const where = ["u.tenant_id = $1"];
+  const searchPattern = buildSearchPattern(req.query?.search);
+  if (searchPattern) {
+    params.push(searchPattern);
+    where.push(
+      `(u.display_name ILIKE $${params.length} OR u.email ILIKE $${params.length})`
+    );
+  }
+  const whereClause = where.join(" AND ");
+
   const countResult = await query(
-    "SELECT COUNT(*)::int AS total FROM users WHERE tenant_id = $1",
-    [identity.tenantId]
+    `SELECT COUNT(*)::int AS total FROM users u WHERE ${whereClause}`,
+    params
   );
   const total = Number(countResult.rows[0]?.total || 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -124,16 +144,17 @@ const listUsers = async (context, identity, req) => {
        u.display_name,
        u.role,
        u.is_active,
+       u.auth_provider,
        u.created_at,
        (SELECT COUNT(*) FROM history h
         WHERE h.user_id = u.id AND h.tenant_id = u.tenant_id) AS generation_count,
        (SELECT COUNT(*) FROM styles s
         WHERE s.created_by = u.id AND s.tenant_id = u.tenant_id) AS style_count
      FROM users u
-     WHERE u.tenant_id = $1
+     WHERE ${whereClause}
      ORDER BY u.created_at DESC
-     LIMIT $2 OFFSET $3`,
-    [identity.tenantId, pageSize, offset]
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, pageSize, offset]
   );
   context.res = ok(
     {
@@ -152,7 +173,7 @@ const listUsers = async (context, identity, req) => {
 
 const listUserOptions = async (context, identity, req) => {
   const result = await query(
-    `SELECT id, email, display_name, role, is_active
+    `SELECT id, email, display_name, role, is_active, auth_provider
      FROM users
      WHERE tenant_id = $1
      ORDER BY display_name ASC NULLS LAST, email ASC`,
@@ -346,7 +367,7 @@ const updateUser = async (context, identity, req, targetId) => {
        UPDATE users
        SET role = $1, is_active = $2
        WHERE id = $3 AND tenant_id = $4
-       RETURNING id, email, display_name, role, is_active, created_at, tenant_id
+       RETURNING id, email, display_name, role, is_active, auth_provider, created_at, tenant_id
      )
      SELECT
        u.id,
@@ -354,6 +375,7 @@ const updateUser = async (context, identity, req, targetId) => {
        u.display_name,
        u.role,
        u.is_active,
+       u.auth_provider,
        u.created_at,
        (SELECT COUNT(*) FROM history h
         WHERE h.user_id = u.id AND h.tenant_id = u.tenant_id) AS generation_count,

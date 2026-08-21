@@ -19,8 +19,8 @@ export const getCurrentUserProfile = async () =>
 export const getAdminModelSettings = async () =>
   apiGet(`${ADMIN_API_BASE}/settings`);
 
-export const listAdminUsers = async ({ page = 1, pageSize = 10 } = {}) =>
-  apiGet(`${ADMIN_API_BASE}/users${buildQueryString({ page, pageSize })}`);
+export const listAdminUsers = async ({ page = 1, pageSize = 10, search = "" } = {}) =>
+  apiGet(`${ADMIN_API_BASE}/users${buildQueryString({ page, pageSize, search })}`);
 
 export const listAdminUserOptions = async () =>
   apiGet(`${ADMIN_API_BASE}/user-options`);

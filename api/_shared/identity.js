@@ -112,4 +112,17 @@ const resolveIdentity = async (user) => {
   };
 };
 
-module.exports = { resolveIdentity };
+const AUTH_PROVIDERS = new Set(["entra", "google"]);
+
+/** Records the provider the user just signed in with; called from the login flow only. */
+const recordAuthProvider = async (userId, provider) => {
+  if (!userId || !AUTH_PROVIDERS.has(provider)) return;
+  await query(
+    `UPDATE users
+     SET auth_provider = $2
+     WHERE id = $1 AND auth_provider IS DISTINCT FROM $2`,
+    [userId, provider]
+  );
+};
+
+module.exports = { recordAuthProvider, resolveIdentity };

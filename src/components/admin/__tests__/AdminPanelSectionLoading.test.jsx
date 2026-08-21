@@ -106,15 +106,33 @@ describe("AdminPanel section loading", () => {
   });
 
   it("reloads the filtered sections when the user filter changes", async () => {
+    listAdminUserOptions.mockResolvedValue([
+      {
+        id: "user-1",
+        email: "alice@example.com",
+        displayName: "Alice",
+        role: "viewer",
+        isActive: true,
+        authProvider: "entra",
+      },
+      {
+        id: "user-2",
+        email: "bob@example.com",
+        displayName: "Bob",
+        role: "viewer",
+        isActive: true,
+        authProvider: "google",
+      },
+    ]);
+
     renderPanel();
     await screen.findByText("alice@example.com");
 
     fireEvent.click(screen.getByRole("button", { name: "生成紀錄" }));
     await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByLabelText("依使用者篩選"), {
-      target: { value: "user-1" },
-    });
+    fireEvent.click(await screen.findByRole("button", { name: /Entra ID/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /Alice/ }));
 
     await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(2));
     expect(listAdminHistory).toHaveBeenLastCalledWith({
@@ -123,5 +141,77 @@ describe("AdminPanel section loading", () => {
       pageSize: 10,
     });
     expect(listAdminStyles).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Entra ID and Google user filters separate and searchable", async () => {
+    listAdminUserOptions.mockResolvedValue([
+      {
+        id: "user-1",
+        email: "alice@example.com",
+        displayName: "Alice",
+        role: "viewer",
+        isActive: true,
+        authProvider: "entra",
+      },
+      {
+        id: "user-2",
+        email: "bob@example.com",
+        displayName: "Bob",
+        role: "viewer",
+        isActive: true,
+        authProvider: "google",
+      },
+      {
+        id: "user-3",
+        email: "carol@example.com",
+        displayName: "Carol",
+        role: "viewer",
+        isActive: true,
+        authProvider: "google",
+      },
+    ]);
+
+    renderPanel();
+    await screen.findByText("alice@example.com");
+
+    fireEvent.click(screen.getByRole("button", { name: "生成紀錄" }));
+    await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Entra ID/ }));
+    expect(screen.queryByRole("option", { name: /Bob/ })).toBeNull();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Google/ }));
+    expect(await screen.findByRole("option", { name: /Bob/ })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /Alice/ })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("搜尋Google"), {
+      target: { value: "carol" },
+    });
+
+    expect(await screen.findByRole("option", { name: /Carol/ })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /Bob/ })).toBeNull();
+  });
+
+  it("reloads the user list with the keyword search", async () => {
+    renderPanel();
+    await screen.findByText("alice@example.com");
+
+    expect(listAdminUsers).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 10,
+      search: "",
+    });
+
+    fireEvent.change(screen.getByLabelText("搜尋使用者"), {
+      target: { value: "alice" },
+    });
+
+    await waitFor(() => expect(listAdminUsers).toHaveBeenCalledTimes(2));
+    expect(listAdminUsers).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 10,
+      search: "alice",
+    });
   });
 });

@@ -125,4 +125,81 @@ describe("admin resources", () => {
     expect(res.status).toBe(400);
     expect(db.query).not.toHaveBeenCalled();
   });
+
+  it("filters the user list by an escaped keyword and returns the auth provider", async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ total: 1 }] }).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "user-1",
+          email: "alice@example.com",
+          display_name: "Alice",
+          role: "viewer",
+          is_active: true,
+          auth_provider: "entra",
+          created_at: "2026-01-01T00:00:00.000Z",
+          generation_count: 2,
+          style_count: 1,
+        },
+      ],
+    });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "users" },
+      query: { search: " 100%_a " },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items[0]).toMatchObject({
+      id: "user-1",
+      authProvider: "entra",
+    });
+    expect(db.query.mock.calls[0][0]).toContain("ILIKE $2");
+    expect(db.query.mock.calls[0][1]).toEqual(["tenant-1", "%100\\%\\_a%"]);
+    expect(db.query.mock.calls[1][1]).toEqual(["tenant-1", "%100\\%\\_a%", 10, 0]);
+  });
+
+  it("lists every user without a keyword filter", async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ total: 0 }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "users" },
+      query: {},
+    });
+
+    expect(res.status).toBe(200);
+    expect(db.query.mock.calls[0][0]).not.toContain("ILIKE");
+    expect(db.query.mock.calls[0][1]).toEqual(["tenant-1"]);
+    expect(db.query.mock.calls[1][1]).toEqual(["tenant-1", 10, 0]);
+  });
+
+  it("returns the auth provider with the filter options", async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: "user-2",
+          email: "bob@example.com",
+          display_name: "Bob",
+          role: "viewer",
+          is_active: true,
+          auth_provider: "google",
+        },
+      ],
+    });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "user-options" },
+      query: {},
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toMatchObject({ id: "user-2", authProvider: "google" });
+  });
 });
