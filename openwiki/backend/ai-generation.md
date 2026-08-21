@@ -1,49 +1,43 @@
 ---
 type: backend workflow
-title: AI generation, document analysis, and presentation rendering
-description: Tenant-managed analysis-model routing, provider adapters, document-analysis contracts, company-template PowerPoint rendering, image model policy, and durable GPT image jobs.
-tags: [backend, ai-generation, document-analysis, llm, presentation]
+title: AI generation and document storyboard analysis
+description: Tenant-managed model routing, provider adapters, storyboard document-analysis contracts, image generation jobs, and the boundary to asynchronous PPT Master deck creation.
+tags: [backend, ai-generation, document-analysis, storyboard, llm]
 openwiki:
   roles: [workflow, integration, operations]
-  change_kinds: [document-analysis, presentation-export, response-contract, provider-adapter, model-configuration]
-  source_paths: [api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/analyze-document/index.js, api/optimize-prompt/index.js, api/analyze-style/index.js, api/generate-filename/index.js, api/optimize-scene/index.js, api/generate-presentation/index.js, api/_shared/presentationSchema.js, api/_shared/pptxAutomizer.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js, api/_shared/gemini.js]
-  symbols: [OUTPUT_TRUNCATED, LLM_ROLES, resolveRoleModel, generateJson, postJsonCompletion, postGeminiJson, normalizeDocumentScene, normalizePresentationSlide, normalizePresentationSlides, buildAnalysisPrompt, generatePresentationPptx, setNamedText]
-  test_paths: [api/_shared/__tests__/llmModels.test.js, api/_shared/__tests__/llmRuntime.test.js, api/_shared/__tests__/presentationSchema.test.js, api/_shared/__tests__/pptxAutomizer.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
-  invariants: [Presentation analysis returns normalized slides rather than storyboard scenes., Every analysis role resolves a tenant-assigned primary and optional fallback model, regardless of provider, or returns llm_not_configured rather than silently using environment configuration., API keys are encrypted at rest and never returned through management responses., The provider-neutral runtime retries 429 and 5xx failures at most four times and may fail over to an assigned cross-provider peer while reducing a nonempty output budget no lower than 8000; a recognized incomplete response instead retries the same model with a doubled budget capped at 32000., Company-template export accepts one through ten normalized slides and loads only the repository template., Presentation schema normalization bounds native table and chart data before rendering.]
-  validation_commands: [pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js api/_shared/__tests__/azureOpenAI.test.js, pnpm test --run api/_shared/__tests__/presentationSchema.test.js api/_shared/__tests__/pptxAutomizer.test.js]
+  change_kinds: [document-analysis, response-contract, provider-adapter, model-configuration]
+  source_paths: [api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/analyze-document/index.js, api/_shared/documentScene.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js, api/_shared/gemini.js]
+  symbols: [OUTPUT_TRUNCATED, LLM_ROLES, resolveRoleModel, generateJson, normalizeDocumentScene, normalizeRecommendedStyle, buildAnalysisPrompt]
+  test_paths: [api/_shared/__tests__/llmModels.test.js, api/_shared/__tests__/llmRuntime.test.js, api/_shared/__tests__/documentScene.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
+  invariants: [Document analysis produces storyboard scenes and a required recommended-style prompt, not editable presentation slides., Every analysis role resolves a tenant-assigned primary and optional fallback model or returns llm_not_configured rather than using environment configuration., API keys are encrypted at rest and never returned through management responses., The provider-neutral runtime makes at most four total attempts for retryable failures and retries recognized truncation on the same model with a larger budget.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js api/_shared/__tests__/azureOpenAI.test.js, pnpm test --run api/_shared/__tests__/documentScene.test.js api/_shared/__tests__/documentParser.test.js]
 ---
 
-# AI generation, document analysis, and presentation rendering
+# AI generation and document storyboard analysis
 
-Handlers authenticate, rate-limit, and resolve identity before tenant work. `_shared/gptImage.js` maps aspect ratios, chooses Azure `api-key` or Bearer authentication, and normalizes image responses. The structured analysis adapters are deliberately separate from image generation: `azureOpenAI.js` receives an Azure model object from its caller, while `_shared/gemini.js` creates the Gemini client for an assigned model.
+This page owns the server-side structured-AI boundary: tenant model selection, provider adaptation, document parsing, and safe storyboard normalization. It also records the image-generation job lifecycle. Browser composition and the upload fallback live in [creation workflows](../frontend/create-workflows.md); route registration and the public catalog live in [HTTP API](http-api.md). PPT Master is a separate asynchronous deck system documented in [PPT Master deck jobs](ppt-master-decks.md), not a result mode of document analysis.
 
 ## Tenant-managed analysis models
 
-An administrator configures analysis-model records and role assignments in `/admin`; the browser composition is documented in [administrator panel and history preview](../frontend/admin-panel.md), the protected management contract in [authentication, tenancy, and administration](auth-tenancy-admin.md), and persistence in [schema](../data/schema.md). `llmModels.js::resolveRoleModel(tenantId, role)` reads and decrypts only the primary plus optional fallback assigned to that tenant and role. No endpoint or API key is returned to the browser: model lists expose `hasApiKey` only.
+An administrator configures model records and role assignments in `/admin`; their management and persistence contracts are documented in [authentication and administration](auth-tenancy-admin.md) and [schema](../data/schema.md). `llmModels.js::resolveRoleModel(tenantId, role)` reads and decrypts the tenant's primary model plus an optional distinct fallback. Management responses expose `hasApiKey`, never the key itself.
 
-The role catalog in `llmProviders.js` identifies six product functions, but does **not** pin a role to a provider. Assignments require a primary model, an optional different fallback, and tenant-local model IDs; either selected model can be Azure OpenAI or Google Gemini. Azure endpoints must be public HTTPS (not a private/loopback host); Gemini discards any supplied endpoint because its SDK owns it. A missing assignment is `LlmConfigurationError`, which interactive callers translate to `503 llm_not_configured`; they do not fall back to `AZURE_OPENAI_*` or `GEMINI_MODEL_ANALYSIS` environment settings. Image generation and embeddings remain separate environment-backed concerns.
+`llmProviders.js::LLM_ROLES` defines six provider-neutral roles: `document_analysis`, `prompt_optimization`, `deck_authoring`, `style_analysis`, `filename`, and `scene_optimization`. Every role may use Azure OpenAI or Google Gemini. A missing assignment becomes `LlmConfigurationError`, mapped by interactive callers to `503 llm_not_configured`; analysis does not silently fall back to `AZURE_OPENAI_*` or `GEMINI_MODEL_ANALYSIS` environment settings. Image generation and embeddings are separate environment-backed concerns.
 
-## Provider-neutral runtime and resilience
+## Provider-neutral runtime
 
-`llmRuntime.js::generateJson` is the common structured-completion boundary for all six roles. It receives the resolved `{ model, fallback }` plus a system/user message and optional `{ mimeType, base64 }` attachment, then dispatches by the active model's `provider`: Azure uses `azureOpenAI.js::postJsonCompletion`; Gemini uses `gemini.js::postGeminiJson`. A PDF becomes an Azure `input_file`, while other Azure attachments become `input_image`; the Gemini adapter receives inline attachment data. This is why document analysis, style analysis, prompt/scene optimization, filename generation, and PPT Master authoring can use either provider without each handler owning provider branching.
+`llmRuntime.js::generateJson` receives the resolved model/fallback, system and user messages, and an optional attachment. It dispatches Azure work to `azureOpenAI.js::postJsonCompletion` and Gemini work to `gemini.js::postGeminiJson`. Azure represents PDFs as `input_file` and other attachments as `input_image`; Gemini receives inline attachment data.
 
-For a `429` or a `5xx`, the runtime makes at most four total attempts; before each retry it reduces a nonempty `maxOutputTokens` to 60% with an 8,000-token floor, waits an exponential delay with jitter, and switches to the distinct assigned fallback by model ID. That peer may use the other provider. A different, successful-HTTP truncation path applies when Azure reports `status: "incomplete"` because the requested output budget was exhausted, or Gemini reports `finishReason: MAX_TOKENS`: the adapter raises `OUTPUT_TRUNCATED`, and the runtime immediately retries the **same** model with twice the budget, capped at 32,000 tokens. It does not retry an Azure response that ended materially below the requested budget, because that signals the deployment's own output cap and increasing the request cannot help. Other errors, malformed output, local validation errors, and missing configuration surface without retry. Do not convert a retryable response into a client-visible partial document or SVG result.
+For `429` and `5xx` failures, the runtime makes at most four total attempts, reduces a nonempty output budget to 60% with an 8,000-token floor, waits with exponential jitter, and can switch to the assigned fallback. `OUTPUT_TRUNCATED` is different: when Azure reports an incomplete output-budget response or Gemini reports `MAX_TOKENS`, it retries the **same** model with double the budget, capped at 32,000 tokens. Other errors, malformed output, and local validation errors surface without retry.
 
-`api/_shared/__tests__/llmRuntime.test.js` covers Azure image/PDF attachment mapping, Gemini dispatch, Azure-to-Gemini failover, 429/5xx retry-budget floor/exhaustion, budget growth for Azure and Gemini truncation, non-retryable `400`, and Azure endpoint validation. `llmModels.test.js` covers endpoint/provider validation, encrypted-key response omission, cross-provider assignment, and missing assignment. `azureOpenAI.test.js` is the narrow single-call Azure payload adapter test, including retryable reasoning-only incompleteness and the non-retryable deployment-cap diagnosis. Run:
+`llmRuntime.test.js` covers attachment mapping, provider dispatch, fallback, retry budgets, truncation, and non-retryable errors. `llmModels.test.js` covers provider validation, encrypted-key omission, cross-provider assignment, and missing configuration. Use:
 
 ```sh
 pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js api/_shared/__tests__/azureOpenAI.test.js
 ```
 
-## Generation and transformation
+## Document storyboard contract
 
-`POST /generate-images` requires `prompt`, loads the tenant default model, and **does not honor the client-supplied model**. Gemini builds text plus an allowed reference image, retries overload-like failures twice with exponential delay, then returns a data URL. For `gpt-image-2`, Azure Functions generates synchronously while standalone Express creates a job and returns `202 { jobId, status }`.
-
-`POST /image-transform` accepts base64 or an allowed Blob URL. `buildTransformPrompt` supports `style_transfer`, `element_extract`, `bg_replace`, and default `reference_gen`; GPT edits multipart source data and Gemini sends inline data. `isUrlAllowed` restricts production fetches to HTTPS, non-private addresses, and normally the configured Blob host.
-
-## Document analysis: two distinct result contracts
-
-`POST /analyze-document` accepts `documentUrl` or `base64Content`, filename/MIME, `mode`, and a mode-specific count: `sceneCount` for `storyboard`, `slideCount` for `presentation`. Numeric counts are clamped to 1–10. It recognizes the shared server format set in `_shared/documentParser.js`: PDF; Word, PowerPoint, and Excel variants; OpenDocument; RTF; EPUB; CSV; TXT/Markdown; and PNG/JPEG, by filename extension or MIME type. A same-account Blob URL is read with the Storage SDK; another URL must pass `isUrlAllowed`; missing/octet-stream MIME falls back to filename.
+`POST /analyze-document` accepts `documentUrl` or `base64Content`, `fileName`, `contentType`, and optional `sceneCount`. `sceneCount` is clamped to 1–10. The handler supports the shared format set from `_shared/documentParser.js`: PDF; Word, PowerPoint, and Excel variants; OpenDocument; RTF; EPUB; CSV; TXT/Markdown; and PNG/JPEG. A same-account Blob URL is downloaded with the Storage SDK; another URL must pass `isUrlAllowed`; an absent or octet-stream MIME type falls back to the filename.
 
 ```mermaid
 sequenceDiagram
@@ -54,7 +48,7 @@ sequenceDiagram
   participant Runtime as LLM runtime
   participant Provider as assigned LLM provider
   Browser->>Blob: upload document
-  Browser->>Handler: document URL or base64 and mode
+  Browser->>Handler: document URL or base64 and sceneCount
   opt document URL is provided
     Handler->>Blob: download same-account document
   end
@@ -62,83 +56,35 @@ sequenceDiagram
   alt text or converted document
     Parser-->>Handler: text and parser metadata
     Handler->>Runtime: JSON request with text
-    Runtime->>Provider: dispatch by assigned model
   else image or scanned PDF
     Parser-->>Handler: vision buffer and parser metadata
     Handler->>Runtime: JSON request with attachment
-    Runtime->>Provider: dispatch by assigned model
   end
+  Runtime->>Provider: dispatch assigned model
   Provider-->>Runtime: structured analysis
   Runtime-->>Handler: structured analysis
-  Handler-->>Browser: normalized scenes or slides
+  Handler-->>Browser: normalized storyboard scenes
 ```
 
-This is the shared transport path. The selected mode changes the prompt and response contract; it does not reinterpret one result as the other in the browser.
+This flow shows the only document-analysis result contract: scenes, a document-level recommended style, characters, and provenance.
 
-`parseDocumentBuffer` strips a text BOM and passes TXT/Markdown directly as text. It converts other recognized document formats to Markdown through `@firecrawl/anydoc`; a PDF that AnyDoc reports unsupported becomes a PDF attachment and images become image attachments. The handler maps empty/conversion failures to `DocumentConversionError` status/code and rejects text over `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it never truncates. Before provider work, it resolves the tenant's `document_analysis` assignment and calls `generateJson` with JSON output and `maxOutputTokens: 8192`. `llmRuntime` adapts that one attachment to the selected provider, so `analysis_provider` in response provenance is the configured primary model's provider rather than a hard-coded Azure value.
+`parseDocumentBuffer` reads TXT/Markdown directly, converts other recognized document formats to Markdown through `@firecrawl/anydoc`, sends unsupported PDFs as PDF attachments, and sends images as image attachments. The handler rejects text exceeding `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it never truncates input. It resolves the `document_analysis` model assignment and calls `generateJson` with JSON output and `maxOutputTokens: 8192`.
 
-### Storyboard mode
-
-Storyboard mode returns `scenes`, `recommended_style`, characters, and provenance. A valid model response must supply `recommended_style.prompt`; `normalizeRecommendedStyle` emits `{ name, description, prompt, tags }`, stringifies scalar fields, splits comma-delimited tags, and supplies `AI 文件建議風格` for a missing name. A missing/blank prompt is `invalid_response` `502`, not an empty style.
-
-`normalizeDocumentScene` handles snake/camel aliases, applies safe scene number/title/layout fallbacks, and emits at most one normalized table and chart in the legacy arrays. Tables allow at most eight columns and ten rows; charts allow at most twelve labels and four series. Empty visuals disappear, numeric chart values are normalized with zero fill, and `column`/`donut` become `bar`/`doughnut`. `presentation_schema_version` is `null` in this mode. [Creation workflows](../frontend/create-workflows.md) owns storyboard image generation and browser PDF/PPTX export.
-
-### Presentation mode
-
-Presentation mode returns `slides`—not `scenes`—with `presentation_schema_version: 2`, `total_slides`, title/summary, and provenance. It deliberately has no image style, character, or image-generation contract: `recommended_style` is `null` and presentation cards do not enter the storyboard batch-generation flow.
-
-Each normalized slide has `slide_number`, `slide_type`, `title`, `subtitle`, `body`, `bullets`, `speaker_notes`, `source_excerpt`, `table`, and `chart`. `normalizePresentationSlides` caps input at ten, drops only structurally unusable items, and re-numbers retained slides sequentially. Slide types are `cover`, `section`, `content`, and `closing`; an unrecognized or missing `slide_type` normalizes to `content`. Table/chart limits and numeric/chart-type normalization are shared with storyboard scenes, but presentation uses singular `table`/`chart` values. The normalizer is the safety boundary, not prompt compliance.
-
-[Creation workflows](../frontend/create-workflows.md) keeps these modes separate: it submits `slideCount`, presents editable slides through `PresentationGenerator`, and sends that slide contract unchanged to the renderer.
+A successful result requires a nonempty `scenes` array and `recommended_style.prompt`. `normalizeRecommendedStyle` supplies safe scalar fields and splits comma-delimited tags, but a missing/blank prompt is `502 invalid_response`. `documentScene.js::normalizeDocumentScene` accepts snake/camel aliases, supplies safe scene number/title/layout fallbacks, and allows at most one normalized table and chart per scene. Tables are capped at eight columns and ten rows; charts at twelve labels and four series. Empty visuals disappear, numeric values are normalized with zero fill, and `column`/`donut` map to `bar`/`doughnut`.
 
 ### Change and validation guide
 
-For a format, conversion, provider-attachment, or response-normalization change, begin with `documentParser.js`, `llmRuntime.js`, the selected provider adapter, `presentationSchema.js`, and `analyze-document/index.js`, then trace the selected browser consumer in [creation workflows](../frontend/create-workflows.md). Do not change a shared table/chart limit in only one consumer: document-scene normalization and presentation-slide normalization share those helpers.
+For a format, parser, attachment, prompt, or response-normalization change, start with `documentParser.js`, `llmRuntime.js`, the relevant provider adapter, `documentScene.js`, and `analyze-document/index.js`; then follow the browser consumer in [creation workflows](../frontend/create-workflows.md). Do not change the table/chart bounds in only one layer: the browser export re-normalizes editable scenes independently.
 
-`api/_shared/__tests__/presentationSchema.test.js` covers safe document scene fallbacks, independent presentation-slide normalization and re-numbering, chart-type normalization, and invalid visual rejection. Run:
-
-```sh
-pnpm test --run api/_shared/__tests__/presentationSchema.test.js
-```
-
-`documentParser.test.js` covers format/MIME recognition, direct text, CSV conversion, image routing, and conversion-error mapping. `llmRuntime.test.js` covers Azure image/PDF attachment conversion, Gemini dispatch, cross-provider failover, 429/5xx budget reduction/exhaustion, truncation budget growth, and immediate propagation of other non-retryable errors; `azureOpenAI.test.js` checks the Azure request payload and incomplete-response diagnosis. Run the relevant focused test when parser or provider-adapter behavior changes; provider credentials are not required. No focused handler test covers mode branching, `slideCount`, or storyboard required-style rejection; add a handler test or use controlled API integration before changing those branches.
-
-## Company-template PowerPoint export
-
-`POST /generate-presentation` is authenticated, rate-limited, CSRF-protected, and binary. It rejects a missing/empty `slides` array and more than ten supplied entries with `400 bad_request`, calls `presentationSchema.js::normalizePresentationSlides`, and rejects a result with no usable content. On success it returns a no-store `.pptx` attachment with the Office presentation content type. Its registration and OpenAPI binary declaration are owned by [HTTP API](http-api.md); its browser caller is [creation workflows](../frontend/create-workflows.md).
-
-```mermaid
-sequenceDiagram
-  participant Browser
-  participant Client as apiPostBlob
-  participant Handler as generate-presentation
-  participant Renderer as pptxAutomizer
-  participant Template as company template
-  Browser->>Client: editable slides
-  Client->>Handler: cookie and CSRF protected POST
-  Handler->>Handler: validate and normalize slides
-  Handler->>Renderer: generatePresentationPptx
-  Renderer->>Template: load named template slides
-  Renderer-->>Handler: PPTX buffer
-  Handler-->>Client: binary attachment
-  Client-->>Browser: Blob download
-```
-
-This sequence shows the shipped export boundary. It has no provider call, Blob fetch, or client image data path.
-
-`generatePresentationPptx` requires `api/assets/2026_ppt_template_16.9.pptx` through `COMPANY_TEMPLATE_PATH`; it fails rather than silently substituting another template. Automizer removes existing root slides, imports the company template, and copies one template slide per normalized result. The mapping is fixed: `cover` -> template slide 1, `section` -> 2, `closing` -> 5, and `content` -> 3 without a native visual or 4 with a `table` or `chart`.
-
-`setNamedText` updates named template shapes and throws when an expected shape/name occurrence is absent. Cover, section, content, and closing each use distinct names. Content slides add body/bullets and native table/chart components using the Automizer PptxGenJS bridge; both visual types share the right column when present. `speaker_notes` remain in the analysis/client state but are not written into the generated deck. The template, its shape names, and this mapping are therefore one compatibility surface: changing the `.pptx` requires renderer inspection and an export test, not only a file replacement.
-
-For renderer work, start with `_shared/pptxAutomizer.js` for template lifecycle, mappings, named-text dependencies, or native visual placement; use `generate-presentation/index.js` for request/response policy. `api/_shared/__tests__/pptxAutomizer.test.js` normalizes a company-template slide and creates a ZIP-based PPTX containing native visuals. The combined contract check is:
+`documentScene.test.js` covers safe scene fallbacks, chart aliases, and invalid visual removal. `documentParser.test.js` covers format/MIME recognition, text and CSV paths, image routing, and conversion-error mapping. `aiService.test.js` verifies the browser sends document metadata and `sceneCount`. No focused handler test covers authorization, URL/base64 branching, required recommended-style rejection, or response status mapping; add handler coverage before changing those branches.
 
 ```sh
-pnpm test --run api/_shared/__tests__/presentationSchema.test.js api/_shared/__tests__/pptxAutomizer.test.js
+pnpm test --run api/_shared/__tests__/documentScene.test.js api/_shared/__tests__/documentParser.test.js src/services/__tests__/aiService.test.js
 ```
 
-A renderer module test does not prove the public binary endpoint: add a handler test before changing auth, CSRF, rate limit, input status codes, attachment headers, or error mapping. Run the client service/blob tests from [creation workflows](../frontend/create-workflows.md) when the JSON or download boundary changes. Do not run a provider check for this export.
+## Image generation jobs
 
-## Job state machine
+`POST /generate-images` requires `prompt`, loads the tenant default model, and does not honor a client-selected model as policy. Gemini returns a data URL after overload-like retries; standalone Express runs `gpt-image-2` through a durable job and returns `202 { jobId, status }`. `POST /image-transform` accepts base64 or an allowed Blob URL. Its transformation modes are `style_transfer`, `element_extract`, `bg_replace`, and `reference_gen`; production URL fetching is constrained by `isUrlAllowed`.
 
 ```mermaid
 stateDiagram-v2
@@ -149,6 +95,6 @@ stateDiagram-v2
   processing --> failed: final failure or stale final lock
 ```
 
-The worker in `_shared/imageJobs.js` runs one local cycle at a time. `claimNextImageJob` uses a transaction and `FOR UPDATE SKIP LOCKED`, increments attempts, and can reclaim a processing lock older than 15 minutes. It retries up to three attempts with a five-second delay; a stale job at max attempts fails. Success stores an image in Blob and records its name/mime type. `GET /image-jobs/:id` validates UUID and scopes retrieval to tenant and user before reading Blob into a data URL. Browser polling is `waitForImageJob` every two seconds, maximum 20 minutes; aborting stops browser waiting but cannot guarantee provider work is cancelled.
+The local image worker claims one job at a time; database locking and tenant-scoped status retrieval are the durable boundary. Browser polling is owned by [creation workflows](../frontend/create-workflows.md), while generated assets are owned by [resources](resources.md).
 
-See [resources](resources.md) for storage details and [creation workflows](../frontend/create-workflows.md) for callers. Focused client coverage is `aiService.test.js` and `generationProgress.test.js`; no worker handler test was found. Validate provider-free changes with the focused client test, then use controlled API integration tests for job locking/provider configuration.
+`_shared/imageJobs.js` uses a transaction and `FOR UPDATE SKIP LOCKED`, increments attempts, can reclaim a processing lock older than 15 minutes, and retries up to three attempts with a five-second delay. Success stores the Blob object name and MIME type. `GET /image-jobs/:id` validates the ID and scopes reads to tenant and user before returning a data URL. There is no focused worker or handler test; use `src/services/__tests__/aiService.test.js` for provider-free polling/client changes and controlled API integration for locking, authorization, or Blob behavior.

@@ -18,9 +18,7 @@ const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
 const {
   normalizeDocumentScene,
-  normalizePresentationSlides,
-  PRESENTATION_SCHEMA_VERSION,
-} = require("../_shared/presentationSchema");
+} = require("../_shared/documentScene");
 
 const safeString = (value, fallback = "") =>
   value == null ? fallback : typeof value === "string" ? value : String(value);
@@ -78,48 +76,16 @@ const DOCUMENT_ANALYSIS_PROMPT_BASE = `請擔任專業的文件分析師與視�
 - 直接回傳 JSON，不要其他多餘對話。`;
 
 /**
- * 簡報設計模式的系統提示詞
- * 要求 GPT 將文件/大綱轉換為適合簡報的結構化內容
+ * 根據 sceneCount 參數建構完整的 Prompt
+ * @param {number|string} sceneCount - 目標場景數量（'auto' 或數字）
  */
-const PRESENTATION_ANALYSIS_PROMPT_BASE = `請擔任專業的簡報設計師與內容策略師。分析提供的文件或大綱，將其轉換為清晰、可直接編輯的投影片內容與版面結構，並以「最精簡有效」的 JSON 格式回傳：
+const buildAnalysisPrompt = (sceneCount) => {
+  let prompt = DOCUMENT_ANALYSIS_PROMPT_BASE;
 
-1. "title": (string) 簡報標題
-2. "summary": (string, 繁體中文) 核心摘要（50字內）
-3. "slides": (array of objects) 每個項目代表一張完整投影片，依內容邏輯規劃（1-10張），不要回傳 scenes。每張投影片包含：
-   - "slide_number": (number) 編號
-   - "slide_type": (string) 只能是 "cover"、"section"、"content" 或 "closing"
-   - "title": (string, 繁體中文) 投影片標題（20字內，簡潔有力）
-   - "subtitle": (string, 繁體中文) 標題下方的一句摘要，沒有需要時回傳空字串
-   - "body": (string, 繁體中文) 可直接放在投影片上的補充內容，若已使用 bullets 可回傳空字串
-   - "bullets": (array of strings, 繁體中文) 2到5條獨立、完整的重點，封面或結尾可為空陣列
-   - "speaker_notes": (string, 繁體中文) 講者備注，補充說明這張投影片的演講要點（60字內）
-   - "source_excerpt": (string, 繁體中文) 擷取對應原文片段（30字內）
-   - "table": (object|null) 若原文包含真正的表格資料，最多回傳1個表格；包含 "title"、"headers" 與 "rows"，最多8欄、10列；沒有表格時回傳 null
-   - "chart": (object|null) 若原文包含可量化的資料，最多回傳1個圖表；包含 "type"、"title"、"labels" 與 "series"，沒有可靠數值時回傳 null
-**重要規則：**
-- 這是投影片內容生成流程，不是分鏡或故事板流程；不要產生 visual_prompt、scene_description 或 characters。
-- 第一張通常使用 cover，章節轉折可使用 section，一般內容使用 content，最後總結可使用 closing；不要產生圖片或分鏡內容。
-- bullets 必須是完整且可朗讀的重點，避免長篇段落與空泛描述。
-- table 與 chart 只能使用文件中實際存在的資料，不可臆造數字；沒有可靠資料時必須回傳 null。
-- 每張投影片最多提供一個 table 與一個 chart。
-- 直接回傳 JSON，不要其他多餘對話。`;
+  if (sceneCount && sceneCount !== 'auto' && !isNaN(Number(sceneCount))) {
+    const count = Math.min(Math.max(1, Math.floor(Number(sceneCount))), 10);
 
-/**
- * 根據 mode 與 itemCount 參數建構完整的 Prompt
- * @param {number|string} itemCount - 目標場景或投影片數量（'auto' 或數字）
- * @param {'storyboard'|'presentation'} mode - 分析模式
- */
-const buildAnalysisPrompt = (itemCount, mode = 'storyboard') => {
-  let prompt = mode === 'presentation'
-    ? PRESENTATION_ANALYSIS_PROMPT_BASE
-    : DOCUMENT_ANALYSIS_PROMPT_BASE;
-
-  if (itemCount && itemCount !== 'auto' && !isNaN(Number(itemCount))) {
-    const count = Math.min(Math.max(1, Math.floor(Number(itemCount))), 10);
-
-    const modeLabel = mode === 'presentation' ? '投影片' : '場景';
-    const actionLabel = mode === 'presentation' ? '規劃' : '拆分';
-    prompt += `\n\n**重要：使用者指定參考的${modeLabel}數量約為 ${count} 個，請以 ${count} 個作為目標${actionLabel}內容。若文件長度無法完美契合，可依內容邏輯自然增減，但不可超過 10 個。**`;
+    prompt += `\n\n**重要：使用者指定參考的場景數量約為 ${count} 個，請以 ${count} 個作為目標拆分內容。若文件長度無法完美契合，可依內容邏輯自然增減，但不可超過 10 個。**`;
   }
   return prompt;
 };
@@ -220,19 +186,14 @@ module.exports = async function (context, req) {
       contentType,
       base64Content,
       sceneCount,
-      slideCount,
-      mode,
     } = req.body || {};
-    const analysisMode = (mode === 'presentation') ? 'presentation' : 'storyboard';
-    const itemCount = analysisMode === 'presentation' ? slideCount : sceneCount;
     context.log("[analyze-document] Step 2: Params -",
       "fileName:", fileName,
       "contentType:", contentType,
       "hasBase64:", !!base64Content,
       "base64Len:", base64Content?.length || 0,
       "hasUrl:", !!documentUrl,
-      "itemCount:", itemCount || "auto",
-      "mode:", analysisMode
+      "sceneCount:", sceneCount || "auto"
     );
 
     // 驗證必要參數
@@ -331,7 +292,7 @@ module.exports = async function (context, req) {
       parsedDocument.mimeType
     );
 
-    const analysisPrompt = buildAnalysisPrompt(itemCount, analysisMode);
+    const analysisPrompt = buildAnalysisPrompt(sceneCount);
     let userMessage;
     let attachment;
 
@@ -392,63 +353,19 @@ module.exports = async function (context, req) {
       return;
     }
     context.log(
-      "[analyze-document] Step 6: Parse OK, items:",
-      analysisMode === "presentation" ? data?.slides?.length : data?.scenes?.length
+      "[analyze-document] Step 6: Parse OK, scenes:",
+      data?.scenes?.length
     );
 
     // 驗證必要欄位
     // 模型有時會直接回傳 scenes 陣列而非物件
     if (Array.isArray(data)) {
       context.log("[analyze-document] data is array, wrapping...");
-      data = analysisMode === "presentation"
-        ? { slides: data, title: fileName || "未命名文件", summary: "" }
-        : { scenes: data, title: fileName || "未命名文件", summary: "" };
+      data = { scenes: data, title: fileName || "未命名文件", summary: "" };
     }
 
     if (!data || typeof data !== "object") {
       data = {};
-    }
-
-    if (analysisMode === "presentation") {
-      const slides = normalizePresentationSlides(data.slides);
-      if (slides.length === 0) {
-        context.log.error(
-          "[analyze-document] Missing slides. data keys:",
-          Object.keys(data),
-          "data preview:",
-          JSON.stringify(data).substring(0, 500)
-        );
-        context.res = error(
-          "AI 回應缺少投影片內容，請稍後重試或減少投影片數量",
-          "invalid_response",
-          502
-        );
-        return;
-      }
-
-      const response = {
-        title: data.title || fileName || "未命名簡報",
-        summary: data.summary || "",
-        recommended_style: null,
-        content_type: data.content_type || data.contentType || "presentation",
-        page_count: data.page_count || data.pageCount || slides.length,
-        slides,
-        total_slides: slides.length,
-        estimated_generation_time: slides.length * 3,
-        analysis_mode: analysisMode,
-        analysis_provider: llm.model.provider,
-        analysis_model: llm.model.modelName,
-        source_parser: parsedDocument.parser,
-        source_format: parsedDocument.format,
-        presentation_schema_version: PRESENTATION_SCHEMA_VERSION,
-      };
-
-      context.log(
-        "[analyze-document] Step 7: Success, total_slides:",
-        response.total_slides
-      );
-      context.res = ok(response);
-      return;
     }
 
     if (!data.scenes || !Array.isArray(data.scenes) || data.scenes.length === 0) {
@@ -528,13 +445,10 @@ module.exports = async function (context, req) {
       characters: validatedCharacters,
       total_scenes: validatedScenes.length,
       estimated_generation_time: validatedScenes.length * 15,
-      analysis_mode: analysisMode,
       analysis_provider: llm.model.provider,
       analysis_model: llm.model.modelName,
       source_parser: parsedDocument.parser,
       source_format: parsedDocument.format,
-      presentation_schema_version:
-        analysisMode === "presentation" ? PRESENTATION_SCHEMA_VERSION : null,
     };
 
     context.log("[analyze-document] Step 7: Success, total_scenes:", response.total_scenes);

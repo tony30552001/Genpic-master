@@ -183,19 +183,6 @@ addOperation("/api/generate-images", "post", {
   successStatuses: [200, 202],
 });
 
-addOperation("/api/generate-presentation", "post", {
-  summary: "Generate an editable PowerPoint presentation with pptx-automizer",
-  tags: ["AI"],
-  body: true,
-  csrf: true,
-  successContentType:
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  successSchema: {
-    type: "string",
-    format: "binary",
-  },
-});
-
 addOperation("/api/image-jobs/{id}", "get", {
   summary: "Get the status of an image generation job",
   tags: ["AI"],

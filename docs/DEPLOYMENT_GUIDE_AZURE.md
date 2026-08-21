@@ -53,14 +53,14 @@ GPT Image 2 會由 `POST /api/generate-images` 建立 queued job，App Service
 
 分析用的 LLM 不由環境變數設定。套用 `db/migrations/014_llm_models.sql` 後，
 管理員在管理中心「分析模型」新增模型（模型代號、端點與 API 金鑰）並指派給六個用途：
-文件分析、Prompt 優化、簡報生成、風格分析、檔名生成與場景優化。每個用途都可以
+文件分鏡、Prompt 優化、設計簡報、風格分析、檔名生成與場景優化。每個用途都可以
 自由選擇 Azure OpenAI 或 Google Gemini 模型，備援模型也不必與主要模型同一家供應商。
 金鑰以 `SECRET_ENCRYPTION_KEY` 加密後存放於資料庫。
 
-`POST /api/analyze-document` 的文字、圖片與掃描型 PDF 分析使用「文件分析」用途指派的模型，
+`POST /api/analyze-document` 的文字、圖片與掃描型 PDF 分析使用「文件分鏡」用途指派的模型，
 若指派 Azure OpenAI 模型，該 deployment 必須支援 Responses API、image input 與 PDF file input。
 
-PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）使用「簡報生成」用途指派的模型。
+PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）使用「設計簡報」用途指派的模型。
 這條路徑跑在背景 worker，可接受較長延遲以換取更嚴謹的 SVG 版面推理。
 
 任何用途尚未指派前，對應 API 會回傳 HTTP 503 與 `llm_not_configured`，

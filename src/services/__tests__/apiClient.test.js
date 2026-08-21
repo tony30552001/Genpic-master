@@ -8,7 +8,6 @@ import {
   apiDelete,
   apiGet,
   apiPost,
-  apiPostBlob,
   AuthExpiredError,
   setAuthExpiredHandler,
   setCsrfToken,
@@ -82,24 +81,5 @@ describe("apiClient", () => {
     });
 
     await expect(apiDelete("/styles/1")).resolves.toBeNull();
-  });
-
-  it("apiPostBlob returns binary responses", async () => {
-    const blob = new Blob(["pptx"]);
-    setCsrfToken("csrf-token");
-    global.fetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      blob: vi.fn().mockResolvedValue(blob),
-    });
-
-    await expect(apiPostBlob("/generate-presentation", { slides: [] })).resolves.toBe(blob);
-    expect(global.fetch.mock.calls[0][1]).toEqual(
-      expect.objectContaining({
-        method: "POST",
-        credentials: "include",
-        body: JSON.stringify({ slides: [] }),
-      })
-    );
   });
 });

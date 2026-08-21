@@ -3,16 +3,14 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("../apiClient", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(() => Promise.resolve({ ok: true })),
-  apiPostBlob: vi.fn(() => Promise.resolve(new Blob(["pptx"]))),
   apiGetBlob: vi.fn(() => Promise.resolve(new Blob(["pptx"]))),
 }));
 
-import { apiGet, apiPost, apiPostBlob } from "../apiClient";
+import { apiGet, apiPost } from "../apiClient";
 import {
   analyzeDocument,
   analyzeStyle,
   generateImage,
-  generatePresentationPptx,
   waitForDeckJob,
   waitForImageJob,
 } from "../aiService";
@@ -55,8 +53,7 @@ describe("aiService", () => {
       fileName: "report.docx",
       contentType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      slideCount: 6,
-      mode: "presentation",
+      sceneCount: 6,
     });
 
     expect(apiPost).toHaveBeenCalledWith("/api/analyze-document", {
@@ -65,22 +62,8 @@ describe("aiService", () => {
       contentType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       base64Content: undefined,
-      sceneCount: undefined,
-      slideCount: 6,
-      mode: "presentation",
+      sceneCount: 6,
     });
-  });
-
-  it("requests a server-generated presentation as a blob", async () => {
-    const slides = [{ title: "Overview", slide_type: "cover" }];
-
-    await generatePresentationPptx({ slides, signal: "abort-signal" });
-
-    expect(apiPostBlob).toHaveBeenCalledWith(
-      "/api/generate-presentation",
-      { slides },
-      { signal: "abort-signal" }
-    );
   });
 
   it("waits for queued image jobs until the result is ready", async () => {

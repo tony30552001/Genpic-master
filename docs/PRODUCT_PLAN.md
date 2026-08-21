@@ -35,9 +35,7 @@
 | 單張圖片生成 | ✅ 可用 | Firebase Vertex AI SDK → Imagen 3 |
 | Microsoft SSO 登入 | ✅ 可用 | Firebase Auth + OAuthProvider |
 | 生成歷史記錄 | ✅ 可用 | Firestore + Base64 圖片 (壓縮至 JPEG 0.6) |
-| 文件分析（分鏡模式） | ✅ 可用 | AnyDoc 統一解析 Office／PDF／試算表 → Azure OpenAI GPT → 場景 JSON → AI 圖片生成 |
-| 文件分析（簡報模式） | ✅ 可用 | AnyDoc → Azure OpenAI GPT bullet_points / speaker_notes → pptxgenjs 匯出 .pptx |
-| 大綱文字輸入 | ✅ 可用 | 貼上大綱分頁 → 暫存 .txt 上傳 → 自動套用簡報模式 |
+| 文件分鏡 | ✅ 可用 | AnyDoc 統一解析 Office／PDF／試算表 → Azure OpenAI GPT → 場景 JSON → AI 圖片生成 |
 
 ### 主要技術債
 
@@ -408,7 +406,7 @@ Authorization: Bearer <API_KEY>
 
 #### Step 3.1 — 文件分析 Function
 - [x] 實作 `api/analyze-document/index.js`
-- [x] 使用管理中心「文件分析」用途指派的模型（Azure OpenAI Responses API 或 Google Gemini）
+- [x] 使用管理中心「文件分鏡」用途指派的模型（Azure OpenAI Responses API 或 Google Gemini）
 - [x] 支援 PDF、Word、PowerPoint、Excel、OpenDocument、RTF、EPUB、CSV、TXT/MD 與圖片格式（Blob URL 輸入）
 - [x] 以固定版本 AnyDoc 將 Office、試算表與文字型 PDF 正規化為 Markdown；掃描 PDF 與圖片明確走 GPT multimodal input
 - [x] 回傳結構化分鏡 JSON 與文件級 AI 建議視覺風格，並支援前端以風格庫樣式取代

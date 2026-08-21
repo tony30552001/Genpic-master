@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertCircle, Wand2,
-    FileText, LogIn, LogOut, User, Settings, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown, Library, Presentation
+    FileText, LogIn, LogOut, User, Settings, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown, Library
 } from 'lucide-react';
 
 import useAuth from './hooks/useAuth';
@@ -24,7 +24,6 @@ import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
 import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
-import PresentationGenerator from './components/create/PresentationGenerator';
 import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
@@ -141,15 +140,14 @@ export default function InfographicGenerator({
     const {
         isAnalyzing: isAnalyzingDocument, analysisPhase: documentAnalysisPhase,
         documentResult, analyzeDocument, clearDocument, updateScene, removeScene,
-        updateSlide, removeSlide, scenes,
+        scenes,
     } = useDocumentAnalysis();
     const documentStyle =
         documentAnalysisMode === "storyboard"
             ? documentStyleOverride || documentResult?.recommended_style || null
             : null;
     const hasActiveDocumentResult =
-        Boolean(documentResult) &&
-        documentResult.analysis_mode === documentAnalysisMode;
+        documentAnalysisMode === "storyboard" && Boolean(documentResult);
 
     const {
         analyzedStyle, analysisResultData, generatedImage, generatedFilename,
@@ -477,15 +475,15 @@ export default function InfographicGenerator({
         document.body.removeChild(link);
     };
 
-    const handleAnalyzeDocument = async (file, itemCount, mode) => {
+    const handleAnalyzeDocument = async (file, sceneCount) => {
         try {
             setErrorMsg('');
-            const result = await analyzeDocument(file, itemCount, mode);
+            const result = await analyzeDocument(file, sceneCount);
             setDocumentStyleOverride(null);
             return result;
         } catch (err) {
             console.error("Document Analysis Failed:", err);
-            setErrorMsg(err.message || "文件分析失敗，請稍後重試。");
+            setErrorMsg(err.message || "文件分鏡失敗，請稍後重試。");
             throw err;
         }
     };
@@ -574,35 +572,25 @@ export default function InfographicGenerator({
     };
 
     const activeDocumentPanel = hasActiveDocumentResult ? (
-        documentAnalysisMode === "presentation" ? (
-            <PresentationGenerator
-                documentResult={documentResult}
-                onUpdateSlide={updateSlide}
-                onRemoveSlide={removeSlide}
-                onClear={handleClearDocument}
-            />
-        ) : (
-            <DocumentScenes
-                documentResult={documentResult}
-                onUpdateScene={updateScene}
-                onRemoveScene={removeScene}
-                onGenerateScene={handleGenerateScene}
-                onGenerateAll={handleGenerateAllScenes}
-                onClear={handleClearDocument}
-                isGenerating={isGenerating}
-                savedStyles={savedStyles}
-                documentStyle={documentStyle}
-                isDocumentStyleOverride={Boolean(documentStyleOverride)}
-                onApplyStyle={handleApplyDocumentStyle}
-                onClearStyle={handleClearDocumentStyle}
-            />
-        )
+        <DocumentScenes
+            documentResult={documentResult}
+            onUpdateScene={updateScene}
+            onRemoveScene={removeScene}
+            onGenerateScene={handleGenerateScene}
+            onGenerateAll={handleGenerateAllScenes}
+            onClear={handleClearDocument}
+            isGenerating={isGenerating}
+            savedStyles={savedStyles}
+            documentStyle={documentStyle}
+            isDocumentStyleOverride={Boolean(documentStyleOverride)}
+            onApplyStyle={handleApplyDocumentStyle}
+            onClearStyle={handleClearDocumentStyle}
+        />
     ) : (
         <DocumentUploader
             onAnalyze={handleAnalyzeDocument}
             isAnalyzing={isAnalyzingDocument}
             analysisPhase={documentAnalysisPhase}
-            analysisMode={documentAnalysisMode}
             disabled={isAnalyzingDocument}
         />
     );
@@ -610,7 +598,7 @@ export default function InfographicGenerator({
     // --- Tab 定義 ---
     const tabs = [
         { id: 'general', label: '一般創作', shortLabel: '創作', icon: Wand2 },
-        { id: 'document', label: '文件分析', shortLabel: '文件', icon: FileText },
+        { id: 'document', label: '文件創作', shortLabel: '文件', icon: FileText },
         { id: 'image-transform', label: '圖片轉換', shortLabel: '轉換', icon: ImagePlay },
         { id: 'library', label: '素材中心', shortLabel: '素材', icon: Library },
         { id: 'settings', label: '設定', shortLabel: '設定', icon: Settings },
@@ -857,14 +845,10 @@ export default function InfographicGenerator({
                                     className="flex h-full min-h-0 flex-col"
                                 >
                                     <div className="shrink-0">
-                                        <TabsList className="grid h-10 w-full max-w-2xl grid-cols-3">
+                                        <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
                                             <TabsTrigger value="storyboard" className="gap-2 text-xs sm:text-sm">
                                                 <FileText className="h-4 w-4" aria-hidden="true" />
-                                                文件分析
-                                            </TabsTrigger>
-                                            <TabsTrigger value="presentation" className="gap-2 text-xs sm:text-sm">
-                                                <Presentation className="h-4 w-4" aria-hidden="true" />
-                                                簡報生成
+                                                文件分鏡
                                             </TabsTrigger>
                                             <TabsTrigger value="pptmaster" className="gap-2 text-xs sm:text-sm">
                                                 <Wand2 className="h-4 w-4" aria-hidden="true" />
@@ -874,8 +858,6 @@ export default function InfographicGenerator({
                                         <p className="mt-2 text-xs text-muted-foreground">
                                             {documentAnalysisMode === "pptmaster"
                                                 ? "由 AI 逐頁設計版面，直接產出套用專業模板的 PowerPoint。"
-                                                : documentAnalysisMode === "presentation"
-                                                ? "將文件或大綱轉換成可編輯的 PowerPoint 投影片。"
                                                 : "分析文件內容並提取可生成圖片的分鏡腳本。"}
                                         </p>
                                     </div>
@@ -884,12 +866,6 @@ export default function InfographicGenerator({
                                         className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
                                     >
                                         {documentAnalysisMode === "storyboard" && activeDocumentPanel}
-                                    </TabsContent>
-                                    <TabsContent
-                                        value="presentation"
-                                        className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
-                                    >
-                                        {documentAnalysisMode === "presentation" && activeDocumentPanel}
                                     </TabsContent>
                                     <TabsContent
                                         value="pptmaster"

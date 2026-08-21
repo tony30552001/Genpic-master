@@ -15,7 +15,7 @@ openwiki:
 
 # PPT Master asynchronous deck generation
 
-PPT Master is the third document-area workflow: unlike the editable fixed-company-template export in [AI generation](ai-generation.md), it creates a new native PowerPoint deck from a topic or optional source document. The Node API owns BFF authorization, durable job state, outline/SVG authoring, tenant-model illustrations, and generated-output storage. The Python [PPT Master sidecar](../operations/development-deployment.md) owns source-conversion fallback, temporary deck workspaces, the authoritative SVG quality gate, and deterministic SVG-to-PPTX compilation.
+PPT Master is the dedicated native-PowerPoint workflow in the document area. It is distinct from the storyboard analysis described in [AI generation](ai-generation.md): it creates a new deck from a topic or optional source document rather than returning scenes for image generation. The Node API owns BFF authorization, durable job state, outline/SVG authoring, tenant-model illustrations, and generated-output storage. The Python [PPT Master sidecar](../operations/development-deployment.md) owns source-conversion fallback, temporary deck workspaces, the authoritative SVG quality gate, and deterministic SVG-to-PPTX compilation.
 
 ## Public job and template contract
 

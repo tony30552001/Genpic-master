@@ -190,7 +190,7 @@ describe("deleteLlmModel", () => {
       deleteLlmModel({ tenantId: TENANT, id: "model-1" })
     ).rejects.toMatchObject({
       status: 409,
-      message: expect.stringContaining("文件分析"),
+      message: expect.stringContaining("文件分鏡"),
     });
   });
 });

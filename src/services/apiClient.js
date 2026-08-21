@@ -121,14 +121,6 @@ export async function apiPost(url, body, options = {}) {
   );
 }
 
-export async function apiPostBlob(url, body, options = {}) {
-  return requestWithRetry(
-    url,
-    { method: "POST", body: JSON.stringify(body ?? {}) },
-    { ...options, responseType: "blob" }
-  );
-}
-
 export async function apiPut(url, body, options = {}) {
   return requestWithRetry(
     url,

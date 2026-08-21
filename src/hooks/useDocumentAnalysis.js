@@ -9,8 +9,8 @@ import { analyzeDocument } from "../services/aiService";
 import { uploadFileToBlob } from "../services/storageService";
 
 /**
- * 文件分析 Hook
- * 處理文件上傳、分析、分鏡腳本與簡報投影片內容
+ * 文件分鏡 Hook
+ * 處理文件上傳、分析與分鏡腳本內容
  */
 export default function useDocumentAnalysis() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -20,12 +20,11 @@ export default function useDocumentAnalysis() {
   const [error, setError] = useState(null);
 
   /**
-   * 分析文件並提取分鏡腳本或簡報投影片
+   * 分析文件並提取分鏡腳本
    * @param {File} file - 上傳的文件物件
-   * @param {number|'auto'} itemCount - 場景/投影片數量
-   * @param {'storyboard'|'presentation'} mode - 分析模式
+   * @param {number|'auto'} sceneCount - 場景數量
    */
-  const analyzeDocumentFromFile = useCallback(async (file, itemCount, mode = 'storyboard') => {
+  const analyzeDocumentFromFile = useCallback(async (file, sceneCount) => {
     if (!file) {
       throw new Error("請先選擇文件。");
     }
@@ -48,10 +47,7 @@ export default function useDocumentAnalysis() {
       const analysisParams = {
         fileName: file.name,
         contentType: inferDocumentMimeType(file),
-        ...(mode === "presentation"
-          ? { slideCount: itemCount || "auto" }
-          : { sceneCount: itemCount || "auto" }),
-        mode,
+        sceneCount: sceneCount || "auto",
       };
 
       // 統一走 Blob Storage 上傳（避免 Azure SWA 請求大小限制）
@@ -86,13 +82,9 @@ export default function useDocumentAnalysis() {
       // 步驟 3: 處理結果
       setAnalysisPhase("整理分析結果...");
 
-      const items = mode === "presentation" ? result.slides : result.scenes;
+      const items = result.scenes;
       if (!Array.isArray(items) || items.length === 0) {
-        throw new Error(
-          mode === "presentation"
-            ? "無法從文件中提取投影片內容，請嘗試其他文件。"
-            : "無法從文件中提取場景，請嘗試其他文件。"
-        );
+        throw new Error("無法從文件中提取場景，請嘗試其他文件。");
       }
 
       const analysisResult = {
@@ -162,44 +154,6 @@ export default function useDocumentAnalysis() {
     });
   }, []);
 
-  /**
-   * 更新特定投影片的內容
-   */
-  const updateSlide = useCallback((slideIndex, updates) => {
-    setDocumentResult((prev) => {
-      if (!prev || !prev.slides) return prev;
-
-      const newSlides = [...prev.slides];
-      if (newSlides[slideIndex]) {
-        newSlides[slideIndex] = { ...newSlides[slideIndex], ...updates };
-      }
-
-      return { ...prev, slides: newSlides };
-    });
-  }, []);
-
-  /**
-   * 刪除特定投影片
-   */
-  const removeSlide = useCallback((slideIndex) => {
-    setDocumentResult((prev) => {
-      if (!prev || !prev.slides) return prev;
-
-      const renumberedSlides = prev.slides
-        .filter((_, index) => index !== slideIndex)
-        .map((slide, index) => ({
-          ...slide,
-          slide_number: index + 1,
-        }));
-
-      return {
-        ...prev,
-        slides: renumberedSlides,
-        total_slides: renumberedSlides.length,
-      };
-    });
-  }, []);
-
   return {
     // 狀態
     isAnalyzing,
@@ -213,15 +167,11 @@ export default function useDocumentAnalysis() {
     clearDocument,
     updateScene,
     removeScene,
-    updateSlide,
-    removeSlide,
 
     // 計算屬性
     hasDocument: !!documentResult,
     totalScenes: documentResult?.scenes?.length || 0,
     scenes: documentResult?.scenes || [],
-    totalSlides: documentResult?.slides?.length || 0,
-    slides: documentResult?.slides || [],
     characters: documentResult?.characters || [],
     title: documentResult?.title || "",
     summary: documentResult?.summary || "",

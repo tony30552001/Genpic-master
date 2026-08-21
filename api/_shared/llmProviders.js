@@ -35,7 +35,7 @@ const LLM_PROVIDERS = Object.freeze([
 const LLM_ROLES = Object.freeze([
   {
     id: "document_analysis",
-    label: "文件分析",
+    label: "文件分鏡",
     description: "上傳文件後拆解場景與重點",
   },
   {
@@ -45,7 +45,7 @@ const LLM_ROLES = Object.freeze([
   },
   {
     id: "deck_authoring",
-    label: "簡報生成",
+    label: "設計簡報",
     description: "PPT Master 的大綱與每頁 SVG 版面",
   },
   {

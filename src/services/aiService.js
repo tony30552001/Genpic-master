@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import { apiGet, apiGetBlob, apiPost, apiPostBlob } from "./apiClient";
+import { apiGet, apiGetBlob, apiPost } from "./apiClient";
 
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
@@ -71,16 +71,14 @@ export const generateFilename = async ({ userScript }) =>
   apiPost(`${API_BASE_URL}/generate-filename`, { userScript });
 
 /**
- * 分析文件內容並提取分鏡腳本或簡報投影片
+ * 分析文件內容並提取分鏡腳本
  * @param {Object} params
  * @param {string} params.documentUrl - 文件在 Blob Storage 的 URL
  * @param {string} params.fileName - 檔案名稱
  * @param {string} params.contentType - MIME 類型
  * @param {string} params.base64Content - Base64 編碼的文件內容（可選）
- * @param {number|'auto'} params.sceneCount - 分鏡數量（分鏡模式）
- * @param {number|'auto'} params.slideCount - 投影片數量（簡報模式）
- * @param {'storyboard'|'presentation'} params.mode - 分析模式
- * @returns {Promise<Object>} 分鏡模式包含 scenes；簡報模式包含 slides
+ * @param {number|'auto'} params.sceneCount - 分鏡數量
+ * @returns {Promise<Object>} 包含 scenes 的分析結果
  */
 export const analyzeDocument = async ({
   documentUrl,
@@ -88,8 +86,6 @@ export const analyzeDocument = async ({
   contentType,
   base64Content,
   sceneCount,
-  slideCount,
-  mode,
 }) =>
   apiPost(`${API_BASE_URL}/analyze-document`, {
     documentUrl,
@@ -97,16 +93,7 @@ export const analyzeDocument = async ({
     contentType,
     base64Content,
     sceneCount,
-    slideCount,
-    mode,
   });
-
-export const generatePresentationPptx = async ({ slides, signal }) =>
-  apiPostBlob(
-    `${API_BASE_URL}/generate-presentation`,
-    { slides },
-    { signal }
-  );
 
 export const listPptTemplates = async ({ signal } = {}) =>
   apiGet(`${API_BASE_URL}/ppt-templates`, { signal });
