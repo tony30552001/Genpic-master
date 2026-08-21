@@ -14,6 +14,15 @@ const ASPECT_RATIO_TO_SIZE = Object.freeze({
 const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 2000;
 
+/** Azure `images/generations` rendering effort; higher costs more and is slower. */
+const IMAGE_QUALITIES = Object.freeze(["low", "medium", "high"]);
+const DEFAULT_IMAGE_QUALITY = "medium";
+
+const normalizeImageQuality = (value) => {
+  const quality = String(value || "").trim().toLowerCase();
+  return IMAGE_QUALITIES.includes(quality) ? quality : DEFAULT_IMAGE_QUALITY;
+};
+
 /** Upstream is busy or briefly broken; the same request is worth repeating. */
 const isTransientStatus = (status) => status === 429 || status >= 500;
 
@@ -94,7 +103,7 @@ const getSize = (aspectRatio) =>
  * reports throttling or a server-side failure. A retry-exhausted call still
  * throws: the caller decides what a missing image means.
  */
-const generateGptImage = async ({ prompt, aspectRatio }) => {
+const generateGptImage = async ({ prompt, aspectRatio, quality }) => {
   const endpoint = getEndpoint();
   if (!endpoint) throw new Error("GPT_IMAGE_ENDPOINT 尚未設定");
 
@@ -112,6 +121,7 @@ const generateGptImage = async ({ prompt, aspectRatio }) => {
           prompt,
           model: getDeployment(),
           size: getSize(aspectRatio),
+          quality: normalizeImageQuality(quality),
           n: 1,
         }),
       });
@@ -125,7 +135,7 @@ const generateGptImage = async ({ prompt, aspectRatio }) => {
   }
 };
 
-const editGptImage = async ({ imageBase64, mimeType, prompt, aspectRatio }) => {
+const editGptImage = async ({ imageBase64, mimeType, prompt, aspectRatio, quality }) => {
   const endpoint = deriveEditEndpoint(
     process.env.GPT_IMAGE_EDIT_ENDPOINT || getEndpoint()
   );
@@ -143,6 +153,7 @@ const editGptImage = async ({ imageBase64, mimeType, prompt, aspectRatio }) => {
   formData.append("prompt", prompt || "");
   formData.append("model", getDeployment());
   formData.append("size", getSize(aspectRatio));
+  formData.append("quality", normalizeImageQuality(quality));
   formData.append("n", "1");
 
   const response = await fetch(endpoint, {
@@ -154,4 +165,11 @@ const editGptImage = async ({ imageBase64, mimeType, prompt, aspectRatio }) => {
   return parseResponse(response, "GPT Image 2 Edit");
 };
 
-module.exports = { deriveEditEndpoint, editGptImage, generateGptImage };
+module.exports = {
+  DEFAULT_IMAGE_QUALITY,
+  IMAGE_QUALITIES,
+  deriveEditEndpoint,
+  editGptImage,
+  generateGptImage,
+  normalizeImageQuality,
+};

@@ -2,15 +2,15 @@
 type: backend workflow
 title: AI generation and document storyboard analysis
 description: Tenant-managed model routing, provider adapters, storyboard document-analysis contracts, image generation jobs, and the boundary to asynchronous PPT Master deck creation.
-tags: [backend, ai-generation, document-analysis, storyboard, llm]
+tags: [backend, ai-generation, image-generation, document-analysis, storyboard, llm]
 openwiki:
   roles: [workflow, integration, operations]
-  change_kinds: [document-analysis, response-contract, provider-adapter, model-configuration]
-  source_paths: [api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/analyze-document/index.js, api/_shared/documentScene.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js, api/_shared/gemini.js]
-  symbols: [OUTPUT_TRUNCATED, LLM_ROLES, resolveRoleModel, generateJson, normalizeDocumentScene, normalizeRecommendedStyle, buildAnalysisPrompt]
-  test_paths: [api/_shared/__tests__/llmModels.test.js, api/_shared/__tests__/llmRuntime.test.js, api/_shared/__tests__/documentScene.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
-  invariants: [Document analysis produces storyboard scenes and a required recommended-style prompt, not editable presentation slides., Every analysis role resolves a tenant-assigned primary and optional fallback model or returns llm_not_configured rather than using environment configuration., API keys are encrypted at rest and never returned through management responses., The provider-neutral runtime makes at most four total attempts for retryable failures and retries recognized truncation on the same model with a larger budget.]
-  validation_commands: [pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js api/_shared/__tests__/azureOpenAI.test.js, pnpm test --run api/_shared/__tests__/documentScene.test.js api/_shared/__tests__/documentParser.test.js]
+  change_kinds: [image-generation, document-analysis, response-contract, provider-adapter, model-configuration]
+  source_paths: [api/_shared/gptImage.js, api/_shared/imageJobs.js, api/generate-images/index.js, api/image-transform/index.js, api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/analyze-document/index.js, api/_shared/documentScene.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js, api/_shared/gemini.js]
+  symbols: [IMAGE_QUALITIES, DEFAULT_IMAGE_QUALITY, normalizeImageQuality, generateGptImage, editGptImage, createImageJob, OUTPUT_TRUNCATED, LLM_ROLES, resolveRoleModel, generateJson, normalizeDocumentScene, normalizeRecommendedStyle, buildAnalysisPrompt]
+  test_paths: [api/_shared/__tests__/gptImage.test.js, api/_shared/__tests__/llmModels.test.js, api/_shared/__tests__/llmRuntime.test.js, api/_shared/__tests__/documentScene.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
+  invariants: [Document analysis produces storyboard scenes and a required recommended-style prompt, not editable presentation slides., Every analysis role resolves a tenant-assigned primary and optional fallback model or returns llm_not_configured rather than using environment configuration., API keys are encrypted at rest and never returned through management responses., GPT Image accepts only low medium or high quality at its public handlers; omitted or internal invalid values normalize to medium., A durable GPT image job retains its normalized quality through claiming and worker execution., The provider-neutral runtime makes at most four total attempts for retryable failures and retries recognized truncation on the same model with a larger budget.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/gptImage.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js api/_shared/__tests__/azureOpenAI.test.js, pnpm test --run api/_shared/__tests__/documentScene.test.js api/_shared/__tests__/documentParser.test.js]
 ---
 
 # AI generation and document storyboard analysis
@@ -84,7 +84,9 @@ pnpm test --run api/_shared/__tests__/documentScene.test.js api/_shared/__tests_
 
 ## Image generation jobs
 
-`POST /generate-images` requires `prompt`, loads the tenant default model, and does not honor a client-selected model as policy. Gemini returns a data URL after overload-like retries; standalone Express runs `gpt-image-2` through a durable job and returns `202 { jobId, status }`. `POST /image-transform` accepts base64 or an allowed Blob URL. Its transformation modes are `style_transfer`, `element_extract`, `bg_replace`, and `reference_gen`; production URL fetching is constrained by `isUrlAllowed`.
+`POST /generate-images` requires `prompt`, loads the tenant default model, and does not honor a client-selected model as policy. `POST /image-transform` accepts base64 or an allowed Blob URL; its transformation modes are `style_transfer`, `element_extract`, `bg_replace`, and `reference_gen`, and production URL fetching is constrained by `isUrlAllowed`.
+
+Both handlers accept an optional, exact lowercase `quality` value of `low`, `medium`, or `high`; a supplied value outside that enum is `400 bad_request`. This is a GPT Image rendering-effort parameter, not Gemini image resolution or a tenant policy setting. `gptImage.js::normalizeImageQuality` lowercases/trims internal input and defaults omitted or invalid values to `medium`; `generateGptImage` sends it in the Azure JSON request and `editGptImage` sends it in multipart form data. Gemini ignores the field. The browser's `imageQuality` state is serialized as the API key `quality`; that client path is documented in [creation workflows](../frontend/create-workflows.md).
 
 ```mermaid
 stateDiagram-v2
@@ -97,4 +99,12 @@ stateDiagram-v2
 
 The local image worker claims one job at a time; database locking and tenant-scoped status retrieval are the durable boundary. Browser polling is owned by [creation workflows](../frontend/create-workflows.md), while generated assets are owned by [resources](resources.md).
 
-`_shared/imageJobs.js` uses a transaction and `FOR UPDATE SKIP LOCKED`, increments attempts, can reclaim a processing lock older than 15 minutes, and retries up to three attempts with a five-second delay. Success stores the Blob object name and MIME type. `GET /image-jobs/:id` validates the ID and scopes reads to tenant and user before returning a data URL. There is no focused worker or handler test; use `src/services/__tests__/aiService.test.js` for provider-free polling/client changes and controlled API integration for locking, authorization, or Blob behavior.
+When the selected model is `gpt-image-2`, an Azure Functions runtime calls `generateGptImage` directly; the standalone local runtime creates a durable job and returns `202 { jobId, status }`. `createImageJob` normalizes and stores `quality`; `claimNextImageJob` returns it; and `processNextImageJob` passes the stored value to Azure. Thus an asynchronous job must not recompute quality from a later browser preference. The `quality` column and its default/check constraint are owned by [schema](../data/schema.md), so deploy `019_image_job_quality.sql` before this persistence path.
+
+`_shared/imageJobs.js` uses a transaction and `FOR UPDATE SKIP LOCKED`, increments attempts, can reclaim a processing lock older than 15 minutes, and retries up to three attempts with a five-second delay. Success stores the Blob object name and MIME type. `GET /image-jobs/:id` validates the ID and scopes reads to tenant and user before returning a data URL. `gptImage.test.js` covers normalization plus JSON/multipart provider payloads:
+
+```sh
+pnpm test --run api/_shared/__tests__/gptImage.test.js
+```
+
+There is no focused generation/transform handler, durable worker, or migration integration test. `src/services/__tests__/aiService.test.js` is the client serialization test location, but its existing generation payload expectation omits the newly sent `quality` property and must be updated before it validates that boundary. Use controlled API integration for handler validation, locking, authorization, Blob behavior, or a migration deployment.

@@ -3,7 +3,7 @@ import { Monitor, Layout, Square, Smartphone, Wand2, Loader2 } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { IMAGE_MODEL_OPTIONS } from "@/config";
+import { IMAGE_MODEL_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@/config";
 
 const ASPECT_RATIOS = [
     { id: "16:9", label: "16:9 簡報", icon: Monitor },
@@ -35,6 +35,8 @@ export default function GenerateBar({
     onAspectRatioChange,
     imageSize,
     onImageSizeChange,
+    imageQuality,
+    onImageQualityChange,
     imageModel,
     isGenerating,
     onGenerate,
@@ -46,10 +48,12 @@ export default function GenerateBar({
 }) {
     const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
     const showResolutionPicker = !modelConfig?.supportsSizeMapping;
+    const showQualityPicker = Boolean(modelConfig?.supportsQuality);
     const selectedRatio = ASPECT_RATIOS.find((ratio) => ratio.id === aspectRatio);
     const selectedSizeLabel = showResolutionPicker
         ? imageSize
         : GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024";
+    const selectedQuality = IMAGE_QUALITY_OPTIONS.find((item) => item.id === imageQuality);
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
         : isGeneratingText || "AI 生成中…";
@@ -61,6 +65,7 @@ export default function GenerateBar({
                     <p className="text-xs font-semibold text-foreground">輸出設定</p>
                     <p className="truncate text-xs text-muted-foreground">
                         {modelConfig?.label || "自訂模型"} · {selectedRatio?.label || aspectRatio} · {selectedSizeLabel}
+                        {showQualityPicker && selectedQuality ? ` · 品質${selectedQuality.label}` : ""}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground" aria-label="目前輸出設定">
@@ -73,6 +78,11 @@ export default function GenerateBar({
                     <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
                         {selectedSizeLabel}
                     </span>
+                    {showQualityPicker && selectedQuality && (
+                        <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
+                            品質{selectedQuality.label}
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -125,9 +135,30 @@ export default function GenerateBar({
                         ))}
                     </div>
                 ) : (
-                    /* gpt-image-2：顯示自動映射的像素尺寸 */
-                    <div className="rounded-md border border-border/70 bg-muted/70 px-2.5 py-1.5 text-xs text-muted-foreground shadow-inner">
-                        {GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024"}
+                    /* gpt-image-2：低/中/高 渲染品質 */
+                    <div
+                        className="flex gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner"
+                        role="group"
+                        aria-label="圖片品質"
+                    >
+                        {IMAGE_QUALITY_OPTIONS.map((option) => (
+                            <button
+                                type="button"
+                                key={option.id}
+                                onClick={() => onImageQualityChange(option.id)}
+                                aria-label={`設定圖片品質為${option.label}`}
+                                aria-pressed={imageQuality === option.id}
+                                className={cn(
+                                    "min-h-11 min-w-11 touch-manipulation rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted",
+                                    imageQuality === option.id
+                                        ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
+                                        : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                                )}
+                                title={option.description}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
                     </div>
                 )}
             </div>

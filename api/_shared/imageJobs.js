@@ -1,5 +1,5 @@
 const { query, getPool } = require("./db");
-const { generateGptImage } = require("./gptImage");
+const { generateGptImage, normalizeImageQuality } = require("./gptImage");
 const { uploadGeneratedImage } = require("./blobStorage");
 
 const MAX_ATTEMPTS = 3;
@@ -12,14 +12,23 @@ const createImageJob = async ({
   prompt,
   aspectRatio,
   imageSize,
+  quality,
   model,
 }) => {
   const result = await query(
     `INSERT INTO image_generation_jobs
-       (tenant_id, user_id, model, prompt, aspect_ratio, image_size)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (tenant_id, user_id, model, prompt, aspect_ratio, image_size, quality)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, status, model, created_at`,
-    [tenantId, userId, model, prompt, aspectRatio || null, imageSize || null]
+    [
+      tenantId,
+      userId,
+      model,
+      prompt,
+      aspectRatio || null,
+      imageSize || null,
+      normalizeImageQuality(quality),
+    ]
   );
   return result.rows[0];
 };
@@ -81,7 +90,7 @@ const claimNextImageJob = async () => {
        FROM candidate
        WHERE jobs.id = candidate.id
        RETURNING jobs.id, jobs.model, jobs.prompt, jobs.aspect_ratio,
-                 jobs.image_size, jobs.attempts`,
+                 jobs.image_size, jobs.quality, jobs.attempts`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
     );
 
@@ -155,6 +164,7 @@ const processNextImageJob = async () => {
     const result = await generateGptImage({
       prompt: job.prompt,
       aspectRatio: job.aspect_ratio,
+      quality: job.quality,
     });
     const stored = await uploadGeneratedImage({
       blobName: `jobs/${job.id}.png`,

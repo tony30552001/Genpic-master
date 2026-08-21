@@ -115,7 +115,7 @@ export default function useImageTransform() {
     setTransformError("");
   }, []);
 
-  const runTransform = useCallback(async ({ model = DEFAULT_IMAGE_MODEL } = {}) => {
+  const runTransform = useCallback(async ({ model = DEFAULT_IMAGE_MODEL, imageQuality } = {}) => {
     if (!sourcePreview) {
       setTransformError("請先上傳來源圖片。");
       return null;
@@ -148,6 +148,7 @@ export default function useImageTransform() {
         mode,
         prompt: mergedPrompt,
         aspectRatio,
+        imageQuality,
         model,
         signal: abortController.signal,
       });

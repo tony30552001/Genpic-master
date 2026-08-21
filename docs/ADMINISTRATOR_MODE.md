@@ -41,6 +41,10 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 
 模型政策儲存在 `tenant_model_settings`。管理員設定的 `default_model` 會由後端套用到一般創作、文件批次生成與圖片轉換；前端不再提供個人模型選擇器。`allowed_models` 目前支援 `gemini-imagen` 與 `gpt-image-2`，且預設模型必須包含在開放清單中。
 
+## 圖片品質
+
+租戶預設模型為 `gpt-image-2` 時，生成列會顯示 低／中／高 三段品質切換，對應 Azure `images/generations` 的 `quality`（`low` / `medium` / `high`），預設為 `medium`。品質只影響算圖細緻度，不影響輸出尺寸；`high` 較慢且單張成本較高。`gemini-imagen` 沒有對應參數，因此改為顯示 1K／2K／4K 解析度選擇，不會出現品質切換。品質為使用者自選，管理中心不提供上限設定。
+
 ## 載入行為
 
 管理中心只會載入目前開啟的分頁資料，切換過的分頁會保留在記憶體中不重複請求；

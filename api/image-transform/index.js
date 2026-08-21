@@ -5,7 +5,7 @@ const { rateLimit } = require("../_shared/rateLimit");
 const { isUrlAllowed } = require("../_shared/urlValidator");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
-const { editGptImage } = require("../_shared/gptImage");
+const { IMAGE_QUALITIES, editGptImage } = require("../_shared/gptImage");
 
 /**
  * 依轉換模式建構 Gemini 文字 Prompt
@@ -52,10 +52,15 @@ module.exports = async function (context, req) {
 
   const modelPolicy = await ensureModelPolicy(identity.tenantId);
   const selectedModel = modelPolicy.defaultModel;
-  const { imageBase64, mimeType, imageUrl, mode, prompt, aspectRatio, imageSize } = req.body || {};
+  const { imageBase64, mimeType, imageUrl, mode, prompt, aspectRatio, imageSize, quality } =
+    req.body || {};
 
   if (!imageBase64 && !imageUrl) {
     context.res = error("缺少來源圖片 (imageBase64 or imageUrl)", "bad_request", 400);
+    return;
+  }
+  if (quality && !IMAGE_QUALITIES.includes(quality)) {
+    context.res = error("不支援的圖片品質", "bad_request", 400);
     return;
   }
 
@@ -82,6 +87,7 @@ module.exports = async function (context, req) {
         mimeType: sourceMimeType,
         prompt: textPrompt,
         aspectRatio,
+        quality,
       });
       context.res = ok({
         ...result,

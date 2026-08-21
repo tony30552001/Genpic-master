@@ -4,10 +4,18 @@ import { apiGet, apiGetBlob, apiPost } from "./apiClient";
 export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
 
-export const generateImage = async ({ prompt, aspectRatio, imageSize, imageUrl, model, signal }) => {
+export const generateImage = async ({
+  prompt,
+  aspectRatio,
+  imageSize,
+  imageQuality,
+  imageUrl,
+  model,
+  signal,
+}) => {
   return apiPost(
     `${API_BASE_URL}/generate-images`,
-    { prompt, aspectRatio, imageSize, imageUrl, model },
+    { prompt, aspectRatio, imageSize, quality: imageQuality, imageUrl, model },
     { signal }
   );
 };
@@ -224,6 +232,7 @@ export const transformImage = async ({
   prompt,
   aspectRatio,
   imageSize,
+  imageQuality,
   model,
   signal,
 }) => {
@@ -238,6 +247,7 @@ export const transformImage = async ({
       prompt,
       aspectRatio,
       imageSize,
+      quality: imageQuality,
       model,
     },
     { signal }

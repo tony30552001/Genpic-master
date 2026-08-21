@@ -13,7 +13,7 @@ import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import useImageTransform from './hooks/useImageTransform';
 import { requestBlobSas } from './services/storageService';
-import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from './config';
+import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, DEFAULT_IMAGE_QUALITY, IMAGE_MODEL_OPTIONS } from './config';
 import { cn } from './lib/utils';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -65,6 +65,7 @@ export default function InfographicGenerator({
     // 風格設定相關
     const [aspectRatio, setAspectRatio] = useState('16:9');
     const [imageSize, setImageSize] = useState('1K');
+    const [imageQuality, setImageQuality] = useState(DEFAULT_IMAGE_QUALITY);
     const [errorMsg, setErrorMsg] = useState('');
     const [warningMsg, setWarningMsg] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -191,7 +192,7 @@ export default function InfographicGenerator({
     const handleTransform = async () => {
         try {
             setTransformError('');
-            const result = await runTransform({ model: imageModel });
+            const result = await runTransform({ model: imageModel, imageQuality });
             if (result?.imageUrl) {
                 await saveHistoryItem({
                     imageUrl: result.imageUrl,
@@ -426,6 +427,7 @@ export default function InfographicGenerator({
                 analyzedStyle: mergedStyle,
                 aspectRatio,
                 imageSize,
+                imageQuality,
                 imageLanguage,
                 contentImageUrl: contentBlobSasUrl,
                 model: imageModel
@@ -519,6 +521,7 @@ export default function InfographicGenerator({
                 analyzedStyle: stylePrompt,
                 aspectRatio,
                 imageSize,
+                imageQuality,
                 imageLanguage,
                 model: imageModel,
                 updatePreview: false
@@ -980,6 +983,8 @@ export default function InfographicGenerator({
                                 onAspectRatioChange={setAspectRatio}
                                 imageSize={imageSize}
                                 onImageSizeChange={setImageSize}
+                                imageQuality={imageQuality}
+                                onImageQualityChange={setImageQuality}
                                 imageModel={imageModel}
                                 isGenerating={isGenerating}
                                 generationStatus={generationStatus}

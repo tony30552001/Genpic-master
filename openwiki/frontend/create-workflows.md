@@ -2,15 +2,15 @@
 type: frontend workflow
 title: Creation workspace, document storyboards, and exports
 description: React creation composition, storyboard document upload and editing, browser exports, image transformations, and the separate PPT Master studio lifecycle.
-tags: [frontend, creation, document-analysis, storyboard, export]
+tags: [frontend, creation, image-generation, document-analysis, storyboard, export]
 openwiki:
   roles: [workflow, frontend]
-  change_kinds: [document-analysis, client-export, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/utils/pptxExport.js]
-  symbols: [useDocumentAnalysis, updateScene, removeScene, DocumentUploader, DocumentScenes, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx]
+  change_kinds: [image-generation, document-analysis, client-export, client-progress]
+  source_paths: [src/InfographicGenerator.jsx, src/config.js, src/components/create/GenerateBar.jsx, src/hooks/useImageGeneration.js, src/hooks/useImageTransform.js, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/utils/pptxExport.js]
+  symbols: [IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_QUALITY, GenerateBar, useImageGeneration, useImageTransform, generateImage, transformImage, useDocumentAnalysis, updateScene, removeScene, DocumentUploader, DocumentScenes, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx]
   test_paths: [src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/components/create/__tests__/PptMasterStudio.test.jsx, src/utils/__tests__/pptxExport.test.js]
-  invariants: [Document analysis produces only storyboard scenes., The hook uploads first and falls back to base64 only for files no larger than 80 KB., Deleting a storyboard scene re-numbers scene_number and updates total_scenes., PPT Master job state is separate from storyboard state and persists its active job ID for resumption.]
-  validation_commands: [pnpm test --run src/lib/__tests__/documentFormats.test.js src/services/__tests__/aiService.test.js src/utils/__tests__/pptxExport.test.js, pnpm test --run src/components/create/__tests__/PptMasterStudio.test.jsx src/hooks/__tests__/usePptMasterDeck.test.jsx]
+  invariants: [GPT Image quality is local UI state with low medium and high values and defaults to medium; it is sent as JSON quality for generation and transforms., Document analysis produces only storyboard scenes., The hook uploads first and falls back to base64 only for files no larger than 80 KB., Deleting a storyboard scene re-numbers scene_number and updates total_scenes., PPT Master job state is separate from storyboard state and persists its active job ID for resumption.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/gptImage.test.js, pnpm test --run src/lib/__tests__/documentFormats.test.js src/utils/__tests__/pptxExport.test.js, pnpm test --run src/components/create/__tests__/PptMasterStudio.test.jsx src/hooks/__tests__/usePptMasterDeck.test.jsx]
 ---
 
 # Creation workspace, document storyboards, and exports
@@ -18,6 +18,20 @@ openwiki:
 `InfographicGenerator.jsx` is the browser composition point for general image creation, document storyboards, image transforms, settings, library, and PPT Master. Shared asset lists compose through [Asset Center](asset-center.md); server model and document contracts are canonical in [AI generation](../backend/ai-generation.md).
 
 The document area has two intentionally independent paths: **Document storyboard** calls `useDocumentAnalysis` and renders `DocumentScenes`; **PPT Master** renders `PptMasterStudio` and owns durable deck-job state. The previous editable company-template presentation path is not a current browser or API surface. Do not introduce `slides`, `slideCount`, or a presentation `mode` into the document-analysis request without restoring a complete server contract, route registration, and consumer workflow.
+
+## General image output settings
+
+`InfographicGenerator` owns one `imageQuality` state value, initialized from `DEFAULT_IMAGE_QUALITY` (`medium`), and passes it to `GenerateBar`, `useImageGeneration`, and `useImageTransform`. `GenerateBar` exposes the `low`/`medium`/`high` control only when the selected configuration has `supportsQuality`—currently `gpt-image-2`. Gemini instead shows its resolution picker; quality is not a resolution alias.
+
+`generateImage` and `transformImage` serialize browser `imageQuality` under the API field name `quality`. The selected browser `model` travels with the request but the BFF applies the tenant default model, so do not treat UI configuration as an authorization or provider-selection seam. Server validation, Azure request mapping, and durable-job persistence are canonical in [AI generation](../backend/ai-generation.md); the column migration is in [schema](../data/schema.md).
+
+For this cross-boundary change, edit `config.js`, `GenerateBar.jsx`, the owning hook(s), `aiService.js`, both BFF handlers, and `gptImage.js` together. `api/_shared/__tests__/gptImage.test.js` is the only focused current check for the new provider quality payload:
+
+```sh
+pnpm test --run api/_shared/__tests__/gptImage.test.js
+```
+
+`src/services/__tests__/aiService.test.js` is the appropriate client test but its existing exact generation-payload assertion does not include `quality`; update that assertion before relying on it. There is no focused `GenerateBar`, hook, handler, or async-worker test for quality. A UI-only change normally does not require a package build; run a consumer-facing API check when changing the JSON field, allowed values, or model-dependent visibility.
 
 ## Document upload and storyboard analysis
 

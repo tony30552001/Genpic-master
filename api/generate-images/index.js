@@ -6,7 +6,7 @@ const { isUrlAllowed } = require("../_shared/urlValidator");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { createImageJob } = require("../_shared/imageJobs");
-const { generateGptImage } = require("../_shared/gptImage");
+const { IMAGE_QUALITIES, generateGptImage } = require("../_shared/gptImage");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -31,16 +31,20 @@ module.exports = async function (context, req) {
 
   const modelPolicy = await ensureModelPolicy(identity.tenantId);
   const selectedModel = modelPolicy.defaultModel;
-  const { prompt, aspectRatio, imageSize, imageUrl } = req.body || {};
+  const { prompt, aspectRatio, imageSize, imageUrl, quality } = req.body || {};
   if (!prompt) {
     context.res = error("缺少 prompt", "bad_request", 400);
+    return;
+  }
+  if (quality && !IMAGE_QUALITIES.includes(quality)) {
+    context.res = error("不支援的圖片品質", "bad_request", 400);
     return;
   }
 
   try {
     if (selectedModel === "gpt-image-2") {
       if (process.env.FUNCTIONS_WORKER_RUNTIME) {
-        const result = await generateGptImage({ prompt, aspectRatio });
+        const result = await generateGptImage({ prompt, aspectRatio, quality });
         context.res = ok({
           ...result,
           aspectRatio: aspectRatio || "1:1",
@@ -56,6 +60,7 @@ module.exports = async function (context, req) {
         prompt,
         aspectRatio,
         imageSize,
+        quality,
         model: selectedModel,
       });
       context.res = ok(
