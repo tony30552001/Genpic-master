@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -28,7 +28,9 @@ import LlmModelSettings from "./LlmModelSettings";
 import useAuth from "../../hooks/useAuth";
 import {
   deleteAdminStyle,
+  getAdminHistoryImage,
   getAdminModelSettings,
+  getAdminStylePreview,
   listAdminHistory,
   listAdminStyles,
   listAdminUsers,
@@ -116,6 +118,56 @@ const PageSizeSelect = ({ value, onChange, disabled, ariaLabel }) => (
   </label>
 );
 
+const adminImageCache = new Map();
+
+const loadAdminImage = async (id, fetcher) => {
+  if (adminImageCache.has(id)) return adminImageCache.get(id);
+  const data = await fetcher(id);
+  const imageUrl = data?.imageUrl || "";
+  adminImageCache.set(id, imageUrl);
+  return imageUrl;
+};
+
+const AdminRemoteImage = ({ id, fetcher, alt, width, height, className, placeholderClassName }) => {
+  const [source, setSource] = useState(() => adminImageCache.get(id) || "");
+  const [hasFailed, setHasFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadAdminImage(id, fetcher)
+      .then((imageUrl) => {
+        if (cancelled) return;
+        setSource(imageUrl);
+        setHasFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setHasFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, fetcher]);
+
+  if (hasFailed) {
+    return (
+      <span className={cn(placeholderClassName, "flex items-center justify-center bg-muted text-[10px] text-muted-foreground")}>
+        載入失敗
+      </span>
+    );
+  }
+
+  if (!source) {
+    return (
+      <span
+        className={cn(placeholderClassName, "block animate-pulse bg-muted motion-reduce:animate-none")}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return <img src={source} alt={alt} width={width} height={height} className={className} />;
+};
+
 const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChange }) => {
   if (pagination.total <= 0) return null;
 
@@ -175,46 +227,91 @@ export default function AdminPanel() {
   const [modelPolicy, setModelPolicy] = useState(emptyPolicy);
   const [supportedModels, setSupportedModels] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [previewSource, setPreviewSource] = useState("");
+  const [loadingSection, setLoadingSection] = useState("users");
   const [isLoadingUserOptions, setIsLoadingUserOptions] = useState(false);
   const [hasLoadedUserOptions, setHasLoadedUserOptions] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const requestedSectionsRef = useRef(new Set());
 
-  const loadDashboard = useCallback(async () => {
-    try {
-      const [userData, historyData, styleData, settingsData] = await Promise.all([
-        listAdminUsers({ page: 1, pageSize: DEFAULT_USER_PAGE_SIZE }),
-        listAdminHistory({ page: 1, pageSize: DEFAULT_USER_PAGE_SIZE }),
-        listAdminStyles({ page: 1, pageSize: DEFAULT_USER_PAGE_SIZE }),
-        getAdminModelSettings(),
-      ]);
-      const userPage = normalizePaginatedData(userData, DEFAULT_USER_PAGE_SIZE);
-      const historyPage = normalizePaginatedData(historyData, DEFAULT_USER_PAGE_SIZE);
-      const stylesPage = normalizePaginatedData(styleData, DEFAULT_USER_PAGE_SIZE);
-      setUsers(userPage.items);
-      setUserPagination(userPage.pagination);
-      setUserPageSize(userPage.pagination.pageSize);
-      setHistoryItems(historyPage.items);
-      setHistoryPagination(historyPage.pagination);
-      setHistoryPageSize(historyPage.pagination.pageSize);
-      setStyles(stylesPage.items);
-      setStylesPagination(stylesPage.pagination);
-      setStylesPageSize(stylesPage.pagination.pageSize);
-      setModelPolicy(settingsData?.modelPolicy || emptyPolicy);
-      setSupportedModels(settingsData?.supportedModels || []);
-    } catch (error) {
-      setErrorMessage(error.message || "管理資料載入失敗");
-    } finally {
-      setIsLoading(false);
-    }
+  const loadUsersSection = useCallback(async ({ page = 1, pageSize = DEFAULT_USER_PAGE_SIZE } = {}) => {
+    const data = normalizePaginatedData(await listAdminUsers({ page, pageSize }), pageSize);
+    setUsers(data.items);
+    setUserPagination(data.pagination);
+    setUserPageSize(data.pagination.pageSize);
+  }, []);
+
+  const loadHistorySection = useCallback(
+    async ({ userId = "", page = 1, pageSize = DEFAULT_USER_PAGE_SIZE } = {}) => {
+      const data = normalizePaginatedData(
+        await listAdminHistory({ userId, page, pageSize }),
+        pageSize
+      );
+      setHistoryItems(data.items);
+      setHistoryPagination(data.pagination);
+      setHistoryPageSize(data.pagination.pageSize);
+    },
+    []
+  );
+
+  const loadStylesSection = useCallback(
+    async ({ userId = "", page = 1, pageSize = DEFAULT_USER_PAGE_SIZE } = {}) => {
+      const data = normalizePaginatedData(
+        await listAdminStyles({ userId, page, pageSize }),
+        pageSize
+      );
+      setStyles(data.items);
+      setStylesPagination(data.pagination);
+      setStylesPageSize(data.pagination.pageSize);
+    },
+    []
+  );
+
+  const loadSettingsSection = useCallback(async () => {
+    const data = await getAdminModelSettings();
+    setModelPolicy(data?.modelPolicy || emptyPolicy);
+    setSupportedModels(data?.supportedModels || []);
   }, []);
 
   useEffect(() => {
-    void Promise.resolve().then(loadDashboard);
-  }, [loadDashboard]);
+    const sectionId = activeSection;
+    const loaders = {
+      users: () => loadUsersSection({ pageSize: userPageSize }),
+      history: () => loadHistorySection({ userId: selectedUserId, pageSize: historyPageSize }),
+      styles: () => loadStylesSection({ userId: selectedUserId, pageSize: stylesPageSize }),
+      models: () => loadSettingsSection(),
+    };
+    const loader = loaders[sectionId];
+    if (!loader || requestedSectionsRef.current.has(sectionId)) return;
+
+    requestedSectionsRef.current.add(sectionId);
+    void Promise.resolve()
+      .then(() => {
+        setLoadingSection(sectionId);
+        setErrorMessage("");
+        return loader();
+      })
+      .catch((error) => {
+        requestedSectionsRef.current.delete(sectionId);
+        setErrorMessage(error.message || "管理資料載入失敗");
+      })
+      .finally(() => {
+        setLoadingSection((current) => (current === sectionId ? null : current));
+      });
+  }, [
+    activeSection,
+    selectedUserId,
+    userPageSize,
+    historyPageSize,
+    stylesPageSize,
+    loadUsersSection,
+    loadHistorySection,
+    loadStylesSection,
+    loadSettingsSection,
+  ]);
 
   const loadUserOptions = useCallback(async () => {
     setIsLoadingUserOptions(true);
@@ -239,45 +336,33 @@ export default function AdminPanel() {
     }
   }, [activeSection, hasLoadedUserOptions, loadUserOptions]);
 
-  const handleUserPageChange = async (page) => {
-    if (page < 1 || page > userPagination.totalPages || page === userPagination.page) return;
+  const runRefresh = useCallback(async (loader, failureMessage) => {
     setIsRefreshing(true);
     setErrorMessage("");
     try {
-      const pageSize = userPagination.pageSize || userPageSize;
-      const data = normalizePaginatedData(await listAdminUsers({ page, pageSize }), pageSize);
-      setUsers(data.items);
-      setUserPagination(data.pagination);
-      setUserPageSize(data.pagination.pageSize);
+      await loader();
     } catch (error) {
-      setErrorMessage(error.message || "使用者清單載入失敗");
+      setErrorMessage(error.message || failureMessage);
     } finally {
       setIsRefreshing(false);
     }
+  }, []);
+
+  const handleUserPageChange = (page) => {
+    if (page < 1 || page > userPagination.totalPages || page === userPagination.page) return;
+    void runRefresh(
+      () => loadUsersSection({ page, pageSize: userPagination.pageSize || userPageSize }),
+      "使用者清單載入失敗"
+    );
   };
 
-  const handleUserPageSizeChange = async (event) => {
+  const handleUserPageSizeChange = (event) => {
     const pageSize = Number(event.target.value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === userPageSize) return;
-
-    setIsRefreshing(true);
-    setErrorMessage("");
-    try {
-      const data = normalizePaginatedData(
-        await listAdminUsers({ page: 1, pageSize }),
-        pageSize
-      );
-      setUsers(data.items);
-      setUserPagination(data.pagination);
-      setUserPageSize(data.pagination.pageSize);
-    } catch (error) {
-      setErrorMessage(error.message || "使用者清單載入失敗");
-    } finally {
-      setIsRefreshing(false);
-    }
+    void runRefresh(() => loadUsersSection({ pageSize }), "使用者清單載入失敗");
   };
 
-  const handleHistoryPageChange = async (page) => {
+  const handleHistoryPageChange = (page) => {
     if (
       page < 1 ||
       page > historyPagination.totalPages ||
@@ -285,50 +370,27 @@ export default function AdminPanel() {
     ) {
       return;
     }
-
-    setIsRefreshing(true);
-    setErrorMessage("");
-    try {
-      const data = normalizePaginatedData(
-        await listAdminHistory({
+    void runRefresh(
+      () =>
+        loadHistorySection({
           userId: selectedUserId,
           page,
           pageSize: historyPagination.pageSize,
         }),
-        historyPagination.pageSize
-      );
-      setHistoryItems(data.items);
-      setHistoryPagination(data.pagination);
-      setHistoryPageSize(data.pagination.pageSize);
-    } catch (error) {
-      setErrorMessage(error.message || "生成紀錄載入失敗");
-    } finally {
-      setIsRefreshing(false);
-    }
+      "生成紀錄載入失敗"
+    );
   };
 
-  const handleHistoryPageSizeChange = async (event) => {
+  const handleHistoryPageSizeChange = (event) => {
     const pageSize = Number(event.target.value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === historyPageSize) return;
-
-    setIsRefreshing(true);
-    setErrorMessage("");
-    try {
-      const data = normalizePaginatedData(
-        await listAdminHistory({ userId: selectedUserId, page: 1, pageSize }),
-        pageSize
-      );
-      setHistoryItems(data.items);
-      setHistoryPagination(data.pagination);
-      setHistoryPageSize(data.pagination.pageSize);
-    } catch (error) {
-      setErrorMessage(error.message || "生成紀錄載入失敗");
-    } finally {
-      setIsRefreshing(false);
-    }
+    void runRefresh(
+      () => loadHistorySection({ userId: selectedUserId, pageSize }),
+      "生成紀錄載入失敗"
+    );
   };
 
-  const handleStylesPageChange = async (page) => {
+  const handleStylesPageChange = (page) => {
     if (
       page < 1 ||
       page > stylesPagination.totalPages ||
@@ -336,84 +398,30 @@ export default function AdminPanel() {
     ) {
       return;
     }
-
-    setIsRefreshing(true);
-    setErrorMessage("");
-    try {
-      const data = normalizePaginatedData(
-        await listAdminStyles({
+    void runRefresh(
+      () =>
+        loadStylesSection({
           userId: selectedUserId,
           page,
           pageSize: stylesPagination.pageSize,
         }),
-        stylesPagination.pageSize
-      );
-      setStyles(data.items);
-      setStylesPagination(data.pagination);
-      setStylesPageSize(data.pagination.pageSize);
-    } catch (error) {
-      setErrorMessage(error.message || "風格資料載入失敗");
-    } finally {
-      setIsRefreshing(false);
-    }
+      "風格資料載入失敗"
+    );
   };
 
-  const handleStylesPageSizeChange = async (event) => {
+  const handleStylesPageSizeChange = (event) => {
     const pageSize = Number(event.target.value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === stylesPageSize) return;
-
-    setIsRefreshing(true);
-    setErrorMessage("");
-    try {
-      const data = normalizePaginatedData(
-        await listAdminStyles({ userId: selectedUserId, page: 1, pageSize }),
-        pageSize
-      );
-      setStyles(data.items);
-      setStylesPagination(data.pagination);
-      setStylesPageSize(data.pagination.pageSize);
-    } catch (error) {
-      setErrorMessage(error.message || "風格資料載入失敗");
-    } finally {
-      setIsRefreshing(false);
-    }
+    void runRefresh(
+      () => loadStylesSection({ userId: selectedUserId, pageSize }),
+      "風格資料載入失敗"
+    );
   };
 
-  const refreshFilteredData = useCallback(async (userId) => {
-    setIsRefreshing(true);
-    setErrorMessage("");
-    try {
-      const [historyData, styleData] = await Promise.all([
-        listAdminHistory({
-          userId,
-          page: 1,
-          pageSize: historyPageSize,
-        }),
-        listAdminStyles({
-          userId,
-          page: 1,
-          pageSize: stylesPageSize,
-        }),
-      ]);
-      const historyPage = normalizePaginatedData(historyData, historyPageSize);
-      const stylesPage = normalizePaginatedData(styleData, stylesPageSize);
-      setHistoryItems(historyPage.items);
-      setHistoryPagination(historyPage.pagination);
-      setHistoryPageSize(historyPage.pagination.pageSize);
-      setStyles(stylesPage.items);
-      setStylesPagination(stylesPage.pagination);
-      setStylesPageSize(stylesPage.pagination.pageSize);
-    } catch (error) {
-      setErrorMessage(error.message || "篩選資料載入失敗");
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [historyPageSize, stylesPageSize]);
-
   const handleUserFilterChange = (event) => {
-    const userId = event.target.value;
-    setSelectedUserId(userId);
-    refreshFilteredData(userId);
+    requestedSectionsRef.current.delete("history");
+    requestedSectionsRef.current.delete("styles");
+    setSelectedUserId(event.target.value);
   };
 
   const handleRoleChange = async (userId, role) => {
@@ -513,13 +521,33 @@ export default function AdminPanel() {
   const filterUsers = userOptions.length > 0 ? userOptions : users;
 
   const viewableHistoryItems = useMemo(
-    () => historyItems.filter((item) => item.imageUrl),
+    () => historyItems.filter((item) => item.hasImage),
     [historyItems]
   );
   const previewIndex = viewableHistoryItems.findIndex(
     (item) => item.id === previewHistoryId
   );
   const previewItem = previewIndex >= 0 ? viewableHistoryItems[previewIndex] : null;
+
+  const openHistoryPreview = (historyId) => {
+    setPreviewHistoryId(historyId);
+    setPreviewSource(adminImageCache.get(historyId) || "");
+  };
+
+  useEffect(() => {
+    if (!previewHistoryId) return undefined;
+    let cancelled = false;
+    void loadAdminImage(previewHistoryId, getAdminHistoryImage)
+      .then((imageUrl) => {
+        if (!cancelled) setPreviewSource(imageUrl);
+      })
+      .catch((error) => {
+        if (!cancelled) setErrorMessage(error.message || "生成圖片載入失敗");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewHistoryId]);
   const previewDetails = previewItem
     ? [
         {
@@ -628,7 +656,7 @@ export default function AdminPanel() {
                     ))}
                   </select>
                 )}
-                {(isRefreshing || isLoading) && (
+                {(isRefreshing || loadingSection) && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
                 )}
               </div>
@@ -646,7 +674,7 @@ export default function AdminPanel() {
               </div>
             )}
 
-            {isLoading ? (
+            {loadingSection === activeSection ? (
               <Card>
                 <CardContent className="flex min-h-56 items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-primary motion-reduce:animate-none" aria-label="載入管理資料" />
@@ -783,20 +811,21 @@ export default function AdminPanel() {
                           {historyItems.map((item) => (
                             <tr key={item.id} className="align-top hover:bg-muted/30">
                               <td className="px-5 py-3">
-                                {item.imageUrl ? (
+                                {item.hasImage ? (
                                   <button
                                     type="button"
-                                    onClick={() => setPreviewHistoryId(item.id)}
+                                    onClick={() => openHistoryPreview(item.id)}
                                     aria-label={`放大查看 ${item.userDisplayName} 的生成圖片`}
                                     className="group relative block h-14 w-20 overflow-hidden rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   >
-                                    <img
-                                      src={item.imageUrl}
+                                    <AdminRemoteImage
+                                      id={item.id}
+                                      fetcher={getAdminHistoryImage}
                                       alt=""
                                       width={80}
                                       height={54}
-                                      loading="lazy"
                                       className="h-full w-full object-cover"
+                                      placeholderClassName="h-full w-full"
                                     />
                                     <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                                       <ZoomIn className="h-4 w-4 text-white" aria-hidden="true" />
@@ -941,8 +970,16 @@ export default function AdminPanel() {
                             <tr key={style.id} className="align-top hover:bg-muted/30">
                               <td className="px-5 py-3">
                                 <div className="flex items-start gap-3">
-                                  {style.previewUrl ? (
-                                    <img src={style.previewUrl} alt="" width={48} height={48} loading="lazy" className="h-12 w-12 rounded-lg border border-border object-cover" />
+                                  {style.hasPreview ? (
+                                    <AdminRemoteImage
+                                      id={style.id}
+                                      fetcher={getAdminStylePreview}
+                                      alt=""
+                                      width={48}
+                                      height={48}
+                                      className="h-12 w-12 rounded-lg border border-border object-cover"
+                                      placeholderClassName="h-12 w-12 rounded-lg border border-border"
+                                    />
                                   ) : (
                                     <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted"><Palette className="h-4 w-4 text-muted-foreground" aria-hidden="true" /></span>
                                   )}
@@ -1003,20 +1040,20 @@ export default function AdminPanel() {
 
       {previewItem && (
         <ImageLightbox
-          src={previewItem.imageUrl}
+          src={previewSource}
           alt={`${previewItem.userDisplayName} 的生成圖片`}
           details={previewDetails}
-          downloadUrl={previewItem.imageUrl}
+          downloadUrl={previewSource}
           downloadName={`pixora-${previewItem.id}.png`}
           position={{ index: previewIndex, total: viewableHistoryItems.length }}
           onPrev={
             previewIndex > 0
-              ? () => setPreviewHistoryId(viewableHistoryItems[previewIndex - 1].id)
+              ? () => openHistoryPreview(viewableHistoryItems[previewIndex - 1].id)
               : undefined
           }
           onNext={
             previewIndex < viewableHistoryItems.length - 1
-              ? () => setPreviewHistoryId(viewableHistoryItems[previewIndex + 1].id)
+              ? () => openHistoryPreview(viewableHistoryItems[previewIndex + 1].id)
               : undefined
           }
           onClose={() => setPreviewHistoryId(null)}

@@ -642,21 +642,21 @@ export default function InfographicGenerator({
 
             {/* ═══════════ Top Header Bar ═══════════ */}
             <header className="relative shrink-0 border-b border-border bg-primary text-white shadow-md">
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 lg:px-8 h-14">
+                <div className="flex min-w-0 items-center justify-between gap-2 px-3 h-14 sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
                     {/* Logo */}
-                    <div className="flex min-w-0 shrink-0 items-center gap-3 justify-self-start">
-                        <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 justify-self-start sm:gap-3">
+                        <div className="w-8 h-8 shrink-0 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
                             <Wand2 className="w-5 h-5" />
                         </div>
-                        <div>
-                            <h1 className="text-base font-bold leading-tight">Pixora 智繪</h1>
+                        <div className="min-w-0">
+                            <h1 className="truncate text-sm font-bold leading-tight sm:text-base">Pixora 智繪</h1>
                             <p className="text-[10px] text-white/70 leading-none hidden sm:block">AI 智能視覺創作平台</p>
                         </div>
                         {/* 手機版：顯示當前頁面名稱 badge */}
                         {activeTabInfo && (
-                            <span className="sm:hidden flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-medium backdrop-blur-sm">
-                                <activeTabInfo.icon className="w-3 h-3" />
-                                {activeTabInfo.label}
+                            <span className="sm:hidden flex min-w-0 shrink items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-medium backdrop-blur-sm">
+                                <activeTabInfo.icon className="w-3 h-3 shrink-0" />
+                                <span className="truncate">{activeTabInfo.label}</span>
                             </span>
                         )}
                     </div>
@@ -710,7 +710,7 @@ export default function InfographicGenerator({
                     </nav>
 
                     {/* User Controls */}
-                    <div className="flex min-w-0 shrink-0 items-center gap-3 justify-self-end">
+                    <div className="flex min-w-0 shrink-0 items-center gap-2 justify-self-end sm:gap-3">
                         {isAdmin && (
                             <Button
                                 variant="ghost"
@@ -724,12 +724,12 @@ export default function InfographicGenerator({
                             </Button>
                         )}
                         {user && (
-                            <div className="flex items-center gap-3 pl-3 border-l border-white/20">
+                            <div className="flex items-center gap-2 pl-2 border-l border-white/20 sm:gap-3 sm:pl-3">
                                 <div className="hidden flex-col items-end xl:flex">
                                     <span className="text-xs font-bold leading-tight">{user.displayName}</span>
                                     <span className="text-[10px] text-white/70 leading-tight">{user.email}</span>
                                 </div>
-                                <div className="w-8 h-8 rounded-full bg-white/20 border border-white/30 overflow-hidden flex items-center justify-center">
+                                <div className="w-8 h-8 shrink-0 rounded-full bg-white/20 border border-white/30 overflow-hidden flex items-center justify-center">
                                     {user.photoURL ? (
                                         <img src={user.photoURL} alt="使用者頭像" width={32} height={32} className="w-full h-full object-cover" />
                                     ) : (
@@ -740,7 +740,7 @@ export default function InfographicGenerator({
                                     variant="ghost"
                                      size="icon"
                                      onClick={handleLogout}
-                                     className="h-10 w-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                                     className="h-10 w-10 shrink-0 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
                                      title="登出系統"
                                      aria-label="登出系統"
                                  >

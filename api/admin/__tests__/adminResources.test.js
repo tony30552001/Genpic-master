@@ -1,0 +1,128 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
+const db = require("../../_shared/db");
+const adminAuth = require("../../_shared/admin");
+const rateLimit = require("../../_shared/rateLimit");
+
+db.query = vi.fn();
+adminAuth.requireAdmin = vi.fn();
+rateLimit.rateLimit = vi.fn(() => ({ limited: false }));
+
+const handler = require("../index");
+
+const identity = { tenantId: "tenant-1", userId: "user-1", role: "admin" };
+
+const invoke = async (req) => {
+  const context = { bindingData: {} };
+  await handler(context, req);
+  return context.res;
+};
+
+describe("admin resources", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rateLimit.rateLimit.mockReturnValue({ limited: false });
+    adminAuth.requireAdmin.mockResolvedValue({ identity });
+  });
+
+  it("lists history without embedding the stored image", async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "history-1",
+            has_image: true,
+            prompt: "prompt",
+            user_script: null,
+            style_prompt: null,
+            model: "gemini-imagen",
+            style_id: null,
+            created_at: "2026-01-01T00:00:00.000Z",
+            user_id: "user-1",
+            user_email: "alice@example.com",
+            user_display_name: "Alice",
+            style_name: null,
+          },
+        ],
+      });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "history" },
+      query: {},
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items[0]).toMatchObject({ id: "history-1", hasImage: true });
+    expect(res.body.items[0]).not.toHaveProperty("imageUrl");
+    expect(db.query.mock.calls[1][0]).not.toMatch(/h\.image_url,/);
+  });
+
+  it("returns a single history image with a cache header", async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{ image_url: "data:image/jpeg;base64,AAAA" }],
+    });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "history-images", id: "history-1" },
+      query: {},
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ imageUrl: "data:image/jpeg;base64,AAAA" });
+    expect(res.headers["Cache-Control"]).toBe("private, max-age=3600");
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("FROM history"), [
+      "history-1",
+      "tenant-1",
+    ]);
+  });
+
+  it("returns 404 when the history image is missing", async () => {
+    db.query.mockResolvedValueOnce({ rows: [] });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "history-images", id: "history-1" },
+      query: {},
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("not_found");
+  });
+
+  it("returns a single style preview", async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{ preview_url: "data:image/jpeg;base64,BBBB" }],
+    });
+
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "style-previews", id: "style-1" },
+      query: {},
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ imageUrl: "data:image/jpeg;base64,BBBB" });
+  });
+
+  it("rejects a style preview request without an id", async () => {
+    const res = await invoke({
+      method: "GET",
+      headers: {},
+      params: { resource: "style-previews" },
+      query: {},
+    });
+
+    expect(res.status).toBe(400);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+});

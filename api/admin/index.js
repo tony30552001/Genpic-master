@@ -54,7 +54,7 @@ const mapUserOption = (row) => ({
 
 const mapHistory = (row) => ({
   id: row.id,
-  imageUrl: row.image_url,
+  hasImage: Boolean(row.has_image),
   fullPrompt: row.prompt,
   userScript: row.user_script,
   stylePrompt: row.style_prompt,
@@ -73,7 +73,7 @@ const mapStyle = (row) => ({
   prompt: row.prompt,
   description: row.description,
   tags: row.tags || [],
-  previewUrl: row.preview_url,
+  hasPreview: Boolean(row.has_preview),
   category: row.category || "general",
   visibility: row.visibility || "private",
   isCurated: Boolean(row.is_curated),
@@ -186,7 +186,7 @@ const listHistory = async (context, identity, req) => {
   const result = await query(
     `SELECT
        h.id,
-       h.image_url,
+       (h.image_url IS NOT NULL AND h.image_url <> '') AS has_image,
        h.prompt,
        h.user_script,
        h.style_prompt,
@@ -250,7 +250,7 @@ const listStyles = async (context, identity, req) => {
        s.prompt,
        s.description,
        s.tags,
-       s.preview_url,
+       (s.preview_url IS NOT NULL AND s.preview_url <> '') AS has_preview,
        s.category,
        s.visibility,
        s.is_curated,
@@ -363,6 +363,52 @@ const updateUser = async (context, identity, req, targetId) => {
     [role, isActive, targetId, identity.tenantId]
   );
   context.res = ok(mapUser(result.rows[0]), 200, req);
+};
+
+const IMAGE_CACHE_CONTROL = "private, max-age=3600";
+
+const okImage = (imageUrl, req) => {
+  const response = ok({ imageUrl }, 200, req);
+  return {
+    ...response,
+    headers: { ...response.headers, "Cache-Control": IMAGE_CACHE_CONTROL },
+  };
+};
+
+const getHistoryImage = async (context, identity, req, targetId) => {
+  if (!targetId) {
+    context.res = error("缺少 history id", "bad_request", 400, req);
+    return;
+  }
+
+  const result = await query(
+    "SELECT image_url FROM history WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    [targetId, identity.tenantId]
+  );
+  const imageUrl = result.rows[0]?.image_url || null;
+  if (!imageUrl) {
+    context.res = error("找不到生成圖片", "not_found", 404, req);
+    return;
+  }
+  context.res = okImage(imageUrl, req);
+};
+
+const getStylePreview = async (context, identity, req, targetId) => {
+  if (!targetId) {
+    context.res = error("缺少 style id", "bad_request", 400, req);
+    return;
+  }
+
+  const result = await query(
+    "SELECT preview_url FROM styles WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    [targetId, identity.tenantId]
+  );
+  const imageUrl = result.rows[0]?.preview_url || null;
+  if (!imageUrl) {
+    context.res = error("找不到風格預覽圖", "not_found", 404, req);
+    return;
+  }
+  context.res = okImage(imageUrl, req);
 };
 
 const deleteStyle = async (context, identity, req, targetId) => {
@@ -527,8 +573,18 @@ module.exports = async function (context, req) {
     return;
   }
 
+  if (method === "GET" && resource === "history-images") {
+    await getHistoryImage(context, identity, req, targetId);
+    return;
+  }
+
   if (method === "GET" && resource === "styles") {
     await listStyles(context, identity, req);
+    return;
+  }
+
+  if (method === "GET" && resource === "style-previews") {
+    await getStylePreview(context, identity, req, targetId);
     return;
   }
 

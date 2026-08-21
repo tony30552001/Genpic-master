@@ -12,7 +12,9 @@ const configuredAdminEmails = new Set(
     .filter(Boolean)
 );
 
-const getDefaultTenant = async () => {
+let defaultTenantIdPromise = null;
+
+const loadDefaultTenant = async () => {
   const result = await query(
     "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1"
   );
@@ -24,6 +26,16 @@ const getDefaultTenant = async () => {
     [name]
   );
   return created.rows[0].id;
+};
+
+const getDefaultTenant = () => {
+  if (!defaultTenantIdPromise) {
+    defaultTenantIdPromise = loadDefaultTenant().catch((err) => {
+      defaultTenantIdPromise = null;
+      throw err;
+    });
+  }
+  return defaultTenantIdPromise;
 };
 
 const getUserIdentity = (user) => {
@@ -46,6 +58,24 @@ const getOrCreateUser = async (tenantId, user) => {
   const identity = getUserIdentity(user);
   if (!identity) return null;
   const isConfiguredAdmin = configuredAdminEmails.has(identity.email);
+
+  const existing = await query(
+    `SELECT id, role, is_active, email, display_name
+     FROM users
+     WHERE tenant_id = $1 AND lower(trim(email)) = $2
+     LIMIT 1`,
+    [tenantId, identity.email]
+  );
+  const current = existing.rows[0];
+  const isCurrentRowUpToDate =
+    current &&
+    current.email === identity.email &&
+    current.display_name === identity.displayName &&
+    (!isConfiguredAdmin || current.role === "admin");
+  if (isCurrentRowUpToDate) {
+    return { id: current.id, role: current.role, is_active: current.is_active };
+  }
+
   const created = await query(
     `INSERT INTO users (tenant_id, email, display_name, role)
      VALUES ($1, $2, $3, $4)

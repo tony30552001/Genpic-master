@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AdminPanel from "../AdminPanel";
 import {
+  getAdminHistoryImage,
   getAdminModelSettings,
   listAdminHistory,
   listAdminStyles,
@@ -16,7 +17,9 @@ vi.mock("../../../services/adminService", () => ({
   createAdminLlmModel: vi.fn(),
   deleteAdminLlmModel: vi.fn(),
   deleteAdminStyle: vi.fn(),
+  getAdminHistoryImage: vi.fn(),
   getAdminModelSettings: vi.fn(),
+  getAdminStylePreview: vi.fn(),
   listAdminHistory: vi.fn(),
   listAdminLlmModels: vi.fn(),
   listAdminStyles: vi.fn(),
@@ -40,7 +43,7 @@ vi.mock("../../../hooks/useAuth", () => ({
 const historyItems = [
   {
     id: "history-1",
-    imageUrl: "https://example.com/first.png",
+    hasImage: true,
     fullPrompt: "第一張完整 Prompt",
     userScript: "第一張腳本",
     model: "gemini-imagen",
@@ -52,7 +55,7 @@ const historyItems = [
   },
   {
     id: "history-2",
-    imageUrl: "https://example.com/second.png",
+    hasImage: true,
     fullPrompt: "第二張完整 Prompt",
     model: "gemini-imagen",
     userId: "user-2",
@@ -62,7 +65,7 @@ const historyItems = [
   },
   {
     id: "history-3",
-    imageUrl: "",
+    hasImage: false,
     fullPrompt: "沒有圖片的紀錄",
     model: "gemini-imagen",
     userId: "user-3",
@@ -71,6 +74,11 @@ const historyItems = [
     createdAt: { seconds: 1700000200 },
   },
 ];
+
+const historyImages = {
+  "history-1": "https://example.com/first.png",
+  "history-2": "https://example.com/second.png",
+};
 
 const emptyPage = { items: [], pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 } };
 
@@ -103,6 +111,9 @@ describe("AdminPanel history preview", () => {
       items: historyItems,
       pagination: { page: 1, pageSize: 10, total: 3, totalPages: 1 },
     });
+    getAdminHistoryImage.mockImplementation(async (historyId) => ({
+      imageUrl: historyImages[historyId] || "",
+    }));
   });
 
   it("opens a lightbox with the record details when a thumbnail is clicked", async () => {

@@ -4,7 +4,7 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 
 ## 啟用步驟
 
-1. 若尚未執行，依序執行 `db/migrations/006_administrator_mode.sql`、`db/migrations/007_dedupe_users.sql` 與 `db/migrations/008_user_status.sql`。
+1. 若尚未執行，依序執行 `db/migrations/006_administrator_mode.sql`、`db/migrations/007_dedupe_users.sql`、`db/migrations/008_user_status.sql` 與 `db/migrations/016_admin_list_indexes.sql`。
 2. 在 App Service 設定 `ADMIN_EMAILS`，例如 `admin@example.com`。
 3. 若要開放 GPT Image 2，將 GPT 設定放在 App Service runtime（不是 `VITE_*` build 變數）：
    - `GPT_IMAGE_ENDPOINT`
@@ -41,14 +41,22 @@ Administrator 管理中心提供租戶層級的使用者、生成紀錄、圖片
 
 模型政策儲存在 `tenant_model_settings`。管理員設定的 `default_model` 會由後端套用到一般創作、文件批次生成與圖片轉換；前端不再提供個人模型選擇器。`allowed_models` 目前支援 `gemini-imagen` 與 `gpt-image-2`，且預設模型必須包含在開放清單中。
 
+## 載入行為
+
+管理中心只會載入目前開啟的分頁資料，切換過的分頁會保留在記憶體中不重複請求；
+變更使用者篩選時只重新載入目前分頁。生成紀錄與風格庫的縮圖以獨立請求逐張載入，
+表格因此可在圖片下載完成前先顯示。
+
 ## 管理 API
 
 - `GET /api/me`：取得目前使用者角色與模型政策。
 - `GET /api/management/users`：使用者清單與生成／風格統計。
 - `GET /api/management/users?page=1&pageSize=10`：分頁取得使用者清單。
 - `GET /api/management/user-options`：取得歷史紀錄與風格庫篩選用的使用者選項。
-- `GET /api/management/history?page=1&pageSize=10&userId=...`：分頁取得租戶生成紀錄，可用 `userId` 篩選。
-- `GET /api/management/styles?page=1&pageSize=10&userId=...`：分頁取得租戶風格庫，可用 `userId` 篩選。
+- `GET /api/management/history?page=1&pageSize=10&userId=...`：分頁取得租戶生成紀錄，可用 `userId` 篩選；回傳 `hasImage` 而不內嵌圖片資料。
+- `GET /api/management/history-images/{id}`：取得單筆生成紀錄的圖片（`Cache-Control: private, max-age=3600`）。
+- `GET /api/management/styles?page=1&pageSize=10&userId=...`：分頁取得租戶風格庫，可用 `userId` 篩選；回傳 `hasPreview` 而不內嵌預覽圖。
+- `GET /api/management/style-previews/{id}`：取得單一風格的預覽圖（`Cache-Control: private, max-age=3600`）。
 - `GET|PUT /api/management/settings`：讀寫模型政策。
 - `PUT /api/management/users/{id}`：調整使用者角色。
 - `PUT /api/management/users/{id}` 搭配 `{ "isActive": false }`：停用使用者；停用後該帳號無法使用系統。

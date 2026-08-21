@@ -35,6 +35,12 @@ export const listAdminHistory = async (params = {}) => {
   );
 };
 
+export const getAdminHistoryImage = async (historyId) =>
+  apiGet(`${ADMIN_API_BASE}/history-images/${historyId}`);
+
+export const getAdminStylePreview = async (styleId) =>
+  apiGet(`${ADMIN_API_BASE}/style-previews/${styleId}`);
+
 export const listAdminStyles = async (params = {}) => {
   const { userId, page = 1, pageSize = 10 } = normalizeListParams(params);
   return apiGet(
