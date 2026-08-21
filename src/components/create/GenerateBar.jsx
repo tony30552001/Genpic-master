@@ -48,42 +48,20 @@ export default function GenerateBar({
 }) {
     const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
     const showResolutionPicker = !modelConfig?.supportsSizeMapping;
-    const showQualityPicker = Boolean(modelConfig?.supportsQuality);
-    const selectedRatio = ASPECT_RATIOS.find((ratio) => ratio.id === aspectRatio);
     const selectedSizeLabel = showResolutionPicker
         ? imageSize
         : GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024";
-    const selectedQuality = IMAGE_QUALITY_OPTIONS.find((item) => item.id === imageQuality);
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
         : isGeneratingText || "AI 生成中…";
 
     return (
         <div className="shrink-0 space-y-3 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_24px_hsl(var(--foreground)/0.08)] ring-1 ring-border/40">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground">輸出設定</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                        {modelConfig?.label || "自訂模型"} · {selectedRatio?.label || aspectRatio} · {selectedSizeLabel}
-                        {showQualityPicker && selectedQuality ? ` · 品質${selectedQuality.label}` : ""}
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground" aria-label="目前輸出設定">
-                    <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
-                        {modelConfig?.label || "自訂模型"}
-                    </span>
-                    <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
-                        {aspectRatio}
-                    </span>
-                    <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
-                        {selectedSizeLabel}
-                    </span>
-                    {showQualityPicker && selectedQuality && (
-                        <span className="rounded-full border border-border/80 bg-background px-2 py-0.5 shadow-sm">
-                            品質{selectedQuality.label}
-                        </span>
-                    )}
-                </div>
+            <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-foreground">輸出設定</p>
+                <p className="min-w-0 truncate text-xs text-muted-foreground">
+                    {modelConfig?.label || "自訂模型"} · {selectedSizeLabel}
+                </p>
             </div>
 
             <div className="flex items-center gap-3">

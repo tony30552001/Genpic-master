@@ -193,7 +193,7 @@ export default function InfographicGenerator({
     const handleTransform = async () => {
         try {
             setTransformError('');
-            const result = await runTransform({ model: imageModel, imageQuality, imageLanguage });
+            const result = await runTransform({ model: imageModel, imageSize, imageQuality, imageLanguage });
             if (result?.imageUrl) {
                 await saveHistoryItem({
                     imageUrl: result.imageUrl,
@@ -1022,34 +1022,47 @@ export default function InfographicGenerator({
 
                 {/* ─── Image Transform Tab ─── */}
                 {activeTab === 'image-transform' && (
-                    <div className="flex-1 min-h-0 overflow-hidden">
-                        <ImageTransformPanel
-                            sourcePreview={transformSourcePreview}
-                            isUploadingSource={isUploadingTransformSource}
-                            sourceUploadProgress={transformSourceUploadProgress}
-                            onSourceImageUpload={handleTransformSourceUpload}
-                            onClearSource={clearTransformSource}
-                            mode={transformMode}
-                            onModeChange={setTransformMode}
-                            prompt={transformPrompt}
-                            onPromptChange={setTransformPrompt}
+                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                        <div className="flex-1 min-h-0 overflow-hidden">
+                            <ImageTransformPanel
+                                sourcePreview={transformSourcePreview}
+                                isUploadingSource={isUploadingTransformSource}
+                                sourceUploadProgress={transformSourceUploadProgress}
+                                onSourceImageUpload={handleTransformSourceUpload}
+                                onClearSource={clearTransformSource}
+                                mode={transformMode}
+                                onModeChange={setTransformMode}
+                                prompt={transformPrompt}
+                                onPromptChange={setTransformPrompt}
+                                aspectRatio={transformAspectRatio}
+                                paletteSelected={transformPaletteSelected}
+                                onPaletteSelectedChange={setTransformPaletteSelected}
+                                savedStyles={savedStyles}
+                                appliedStyleName={transformAppliedStyleName}
+                                appliedStyleId={transformAppliedStyleId}
+                                onApplyStyle={handleApplyStyleForTransform}
+                                onClearAppliedStyle={handleClearAppliedStyleForTransform}
+                                imageLanguage={imageLanguage}
+                                result={transformResult}
+                                isTransforming={isTransforming}
+                                transformError={transformError}
+                                onDownloadResult={handleDownloadTransformResult}
+                            />
+                        </div>
+                        <GenerateBar
                             aspectRatio={transformAspectRatio}
                             onAspectRatioChange={setTransformAspectRatio}
-                            paletteSelected={transformPaletteSelected}
-                            onPaletteSelectedChange={setTransformPaletteSelected}
-                            savedStyles={savedStyles}
-                            appliedStyleName={transformAppliedStyleName}
-                            appliedStyleId={transformAppliedStyleId}
-                            onApplyStyle={handleApplyStyleForTransform}
-                            onClearAppliedStyle={handleClearAppliedStyleForTransform}
-                            globalModelLabel={IMAGE_MODEL_OPTIONS.find(m => m.id === imageModel)?.label || imageModel}
-                            imageLanguage={imageLanguage}
-                            result={transformResult}
-                            isTransforming={isTransforming}
-                            transformError={transformError}
-                            onTransform={handleTransform}
-                            onCancelTransform={cancelTransform}
-                            onDownloadResult={handleDownloadTransformResult}
+                            imageSize={imageSize}
+                            onImageSizeChange={setImageSize}
+                            imageQuality={imageQuality}
+                            onImageQualityChange={setImageQuality}
+                            imageModel={imageModel}
+                            isGenerating={isTransforming}
+                            onGenerate={handleTransform}
+                            onCancelGeneration={cancelTransform}
+                            buttonText="開始 AI 轉換"
+                            isGeneratingText="AI 轉換中…"
+                            disabled={!transformSourcePreview || isUploadingTransformSource}
                         />
                     </div>
                 )}

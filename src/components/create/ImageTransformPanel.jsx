@@ -44,19 +44,6 @@ const TRANSFORM_MODES = [
   },
 ];
 
-const ASPECT_RATIOS = [
-  { id: "1:1",  label: "1:1" },
-  { id: "16:9", label: "16:9" },
-  { id: "9:16", label: "9:16" },
-  { id: "4:3",  label: "4:3" },
-  { id: "3:4",  label: "3:4" },
-  { id: "3:2",  label: "3:2" },
-  { id: "2:3",  label: "2:3" },
-  { id: "5:4",  label: "5:4" },
-  { id: "4:5",  label: "4:5" },
-  { id: "21:9", label: "21:9" },
-];
-
 const ASPECT_RATIO_DIMENSIONS = {
   "1:1": { width: 1200, height: 1200 },
   "16:9": { width: 1600, height: 900 },
@@ -195,7 +182,6 @@ export default function ImageTransformPanel({
   prompt,
   onPromptChange,
   aspectRatio,
-  onAspectRatioChange,
 
   // Style palette
   paletteSelected,
@@ -209,15 +195,12 @@ export default function ImageTransformPanel({
   onClearAppliedStyle,
 
   // Global model (read-only, from Settings)
-  globalModelLabel,
   imageLanguage = "",
 
   // Result
   result,
   isTransforming,
   transformError,
-  onTransform,
-  onCancelTransform,
   onDownloadResult,
 }) {
   const fileInputRef = useRef(null);
@@ -225,10 +208,6 @@ export default function ImageTransformPanel({
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [showStyleSource, setShowStyleSource] = useState(false);
   const [styleSourceTab, setStyleSourceTab] = useState("templates");
-  const [showOutputSettings, setShowOutputSettings] = useState(() => Boolean(
-    typeof window !== "undefined"
-    && window.matchMedia?.("(min-width: 1024px)")?.matches
-  ));
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizeError, setOptimizeError] = useState("");
   const [suggestionData, setSuggestionData] = useState(null);
@@ -337,7 +316,7 @@ export default function ImageTransformPanel({
 
         {/* ─── Left: Controls (col-span-3) ─── */}
         <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pl-px pr-1">
-          <div className="space-y-5">
+          <div className="space-y-5 pb-4">
 
           {/* Source image */}
           <section className="space-y-3">
@@ -736,96 +715,6 @@ export default function ImageTransformPanel({
               </div>
             </div>
           </section>
-
-          {/* Output settings */}
-          <section className="overflow-hidden rounded-2xl border border-border bg-card">
-            <button
-              type="button"
-              onClick={() => setShowOutputSettings((open) => !open)}
-              className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              aria-expanded={showOutputSettings}
-              aria-controls="output-settings-content"
-            >
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-foreground">輸出設定</span>
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                  比例 {aspectRatio || "1:1"}
-                  {globalModelLabel ? ` · ${globalModelLabel}` : ""}
-                </span>
-              </span>
-              {showOutputSettings ? (
-                <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              )}
-            </button>
-
-            <div
-              id="output-settings-content"
-              aria-hidden={!showOutputSettings}
-              inert={!showOutputSettings}
-              className={cn(
-                "grid overflow-hidden border-t border-border transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-                showOutputSettings
-                  ? "grid-rows-[1fr] opacity-100"
-                  : "pointer-events-none grid-rows-[0fr] opacity-0"
-              )}
-            >
-              <div className="min-h-0 overflow-hidden">
-                <div className="space-y-3 p-3 sm:p-4">
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">輸出比例</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {ASPECT_RATIOS.map(({ id, label }) => (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => onAspectRatioChange(id)}
-                          aria-pressed={aspectRatio === id}
-                          className={cn(
-                            "min-h-11 touch-manipulation rounded-lg border px-3 py-2 text-xs font-medium transition-[background-color,border-color,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            aspectRatio === id
-                              ? "border-primary bg-primary/8 text-primary"
-                              : "border-border bg-background text-muted-foreground hover:border-primary/40"
-                          )}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {globalModelLabel && (
-                    <p className="text-xs text-muted-foreground">
-                      生成模型：
-                      <span className="font-medium text-foreground">{globalModelLabel}</span>
-                      <span className="ml-1 text-muted-foreground/70">（可至「設定」頁面變更）</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Generate Button */}
-          <Button
-            onClick={isTransforming ? onCancelTransform : onTransform}
-            disabled={!sourcePreview || isUploadingSource}
-            className="mb-4 min-h-11 w-full gap-2 touch-manipulation"
-            variant={isTransforming ? "outline" : "default"}
-          >
-            {isTransforming ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" />
-                轉換中… 點擊取消
-              </>
-            ) : (
-              <>
-                <Wand2 className="w-4 h-4" />
-                開始 AI 轉換
-              </>
-            )}
-          </Button>
         </div>
 
         {/* Mobile result — result state scrolls into view after generation */}
