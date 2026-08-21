@@ -21,30 +21,36 @@ describe("aiService", () => {
     expect(apiPost).toHaveBeenCalled();
   });
 
-  it("generateImage posts prompt (no model)", async () => {
-    await generateImage({ prompt: "prompt", aspectRatio: "16:9" });
+  it("generateImage posts the creative inputs, not an assembled prompt", async () => {
+    await generateImage({ userScript: "prompt", aspectRatio: "16:9" });
     expect(apiPost).toHaveBeenCalled();
   });
 
   it("routes every image generation through the backend policy gateway", async () => {
-    const result = await generateImage({ prompt: "a red fox", aspectRatio: "1:1", model: "gpt-image-2" });
+    const result = await generateImage({
+      userScript: "a red fox",
+      stylePrompt: "watercolor",
+      styleTags: ["柔和"],
+      purpose: "storyboard",
+      imageLanguage: "zh-TW",
+      aspectRatio: "1:1",
+    });
     expect(apiPost).toHaveBeenCalledWith(
       "/api/generate-images",
       {
-        prompt: "a red fox",
+        userScript: "a red fox",
+        stylePrompt: "watercolor",
+        styleTags: ["柔和"],
+        purpose: "storyboard",
+        imageLanguage: "zh-TW",
         aspectRatio: "1:1",
         imageSize: undefined,
+        quality: undefined,
         imageUrl: undefined,
-        model: "gpt-image-2",
       },
       { signal: undefined }
     );
     expect(result).toEqual({ ok: true });
-  });
-
-  it("generateImage uses apiPost for unknown model", async () => {
-    await generateImage({ prompt: "prompt", aspectRatio: "16:9", model: "dall-e-3" });
-    expect(apiPost).toHaveBeenCalled();
   });
 
   it("sends document metadata to the analysis endpoint", async () => {

@@ -76,7 +76,7 @@ export default function InfographicGenerator({
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [compactNavSection, setCompactNavSection] = useState(null);
-    const [paletteStyle, setPaletteStyle] = useState('');
+    const [paletteStyleTags, setPaletteStyleTags] = useState([]);
     const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
 
     useEffect(() => {
@@ -93,8 +93,8 @@ export default function InfographicGenerator({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [compactNavSection, mobileMoreOpen]);
 
-    const handlePaletteStyleChange = (styleStr) => {
-        setPaletteStyle(styleStr);
+    const handlePaletteStyleChange = (tags) => {
+        setPaletteStyleTags(tags);
         // 調色盤風格改變時，清除舊的 AI 優化英文 prompt（它是在不知道調色盤的情況下優化的）
         setOptimizedPromptEn('');
     };
@@ -192,7 +192,7 @@ export default function InfographicGenerator({
     const handleTransform = async () => {
         try {
             setTransformError('');
-            const result = await runTransform({ model: imageModel, imageQuality });
+            const result = await runTransform({ model: imageModel, imageQuality, imageLanguage });
             if (result?.imageUrl) {
                 await saveHistoryItem({
                     imageUrl: result.imageUrl,
@@ -419,12 +419,12 @@ export default function InfographicGenerator({
         try {
             // 如果存在 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的中文 userScript
             const finalScriptToUse = optimizedPromptEn || userScript;
-            // 合併風格庫風格與調色盤快選風格
-            const mergedStyle = [analyzedStyle, paletteStyle].filter(Boolean).join('，');
 
             const { imageUrl, finalPrompt, model } = await generateImage({
                 userScript: finalScriptToUse,
-                analyzedStyle: mergedStyle,
+                analyzedStyle,
+                styleTags: paletteStyleTags,
+                purpose: 'infographic',
                 aspectRatio,
                 imageSize,
                 imageQuality,
@@ -435,7 +435,7 @@ export default function InfographicGenerator({
             await saveHistoryItem({
                 imageUrl,
                 userScript,
-                stylePrompt: mergedStyle,
+                stylePrompt: [analyzedStyle, paletteStyleTags.join('，')].filter(Boolean).join('，'),
                 fullPrompt: finalPrompt,
                 styleId: appliedStyleId || analysisResultData?.styleId || null,
                 model: model || imageModel,
@@ -519,6 +519,7 @@ export default function InfographicGenerator({
             const result = await generateImage({
                 userScript: promptToUse,
                 analyzedStyle: stylePrompt,
+                purpose: 'storyboard',
                 aspectRatio,
                 imageSize,
                 imageQuality,
@@ -927,7 +928,7 @@ export default function InfographicGenerator({
                                             // 調色盤與快捷鍵
                                             onPaletteStyleChange={handlePaletteStyleChange}
                                             onGenerate={generateInfographic}
-                                            paletteStyle={paletteStyle}
+                                            paletteStyleTags={paletteStyleTags}
                                         />
 
                                         <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40 lg:hidden">
@@ -1039,6 +1040,7 @@ export default function InfographicGenerator({
                             onApplyStyle={handleApplyStyleForTransform}
                             onClearAppliedStyle={handleClearAppliedStyleForTransform}
                             globalModelLabel={IMAGE_MODEL_OPTIONS.find(m => m.id === imageModel)?.label || imageModel}
+                            imageLanguage={imageLanguage}
                             result={transformResult}
                             isTransforming={isTransforming}
                             transformError={transformError}

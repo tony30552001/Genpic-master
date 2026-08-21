@@ -5,17 +5,30 @@ export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
 
 export const generateImage = async ({
-  prompt,
+  userScript,
+  stylePrompt,
+  styleTags,
+  purpose,
+  imageLanguage,
   aspectRatio,
   imageSize,
   imageQuality,
   imageUrl,
-  model,
   signal,
 }) => {
   return apiPost(
     `${API_BASE_URL}/generate-images`,
-    { prompt, aspectRatio, imageSize, quality: imageQuality, imageUrl, model },
+    {
+      userScript,
+      stylePrompt,
+      styleTags,
+      purpose,
+      imageLanguage,
+      aspectRatio,
+      imageSize,
+      quality: imageQuality,
+      imageUrl,
+    },
     { signal }
   );
 };
@@ -221,9 +234,9 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
  * @param {string} params.prompt - 使用者自訂描述
  * @param {string} [params.aspectRatio] - 圖片比例
  * @param {string} [params.imageSize] - 圖片尺寸（Gemini）
- * @param {'gemini-imagen'|'gpt-image-2'} params.model - AI 模型
+ * @param {string} [params.imageLanguage] - 圖片內文字語系
  * @param {AbortSignal} [params.signal]
- * @returns {Promise<{imageUrl: string}>}
+ * @returns {Promise<{imageUrl: string, prompt: string}>}
  */
 export const transformImage = async ({
   imageDataUrl,
@@ -234,7 +247,7 @@ export const transformImage = async ({
   aspectRatio,
   imageSize,
   imageQuality,
-  model,
+  imageLanguage,
   signal,
 }) => {
   const imageBase64 = imageDataUrl ? imageDataUrl.split(",")[1] : null;
@@ -249,7 +262,7 @@ export const transformImage = async ({
       aspectRatio,
       imageSize,
       quality: imageQuality,
-      model,
+      imageLanguage,
     },
     { signal }
   );

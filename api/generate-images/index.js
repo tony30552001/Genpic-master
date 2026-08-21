@@ -7,6 +7,7 @@ const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { createImageJob } = require("../_shared/imageJobs");
 const { IMAGE_QUALITIES, generateGptImage } = require("../_shared/gptImage");
+const { buildImagePrompt } = require("../_shared/imagePrompt");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -31,9 +32,19 @@ module.exports = async function (context, req) {
 
   const modelPolicy = await ensureModelPolicy(identity.tenantId);
   const selectedModel = modelPolicy.defaultModel;
-  const { prompt, aspectRatio, imageSize, imageUrl, quality } = req.body || {};
-  if (!prompt) {
-    context.res = error("缺少 prompt", "bad_request", 400);
+  const {
+    userScript,
+    stylePrompt,
+    styleTags,
+    purpose,
+    imageLanguage,
+    aspectRatio,
+    imageSize,
+    imageUrl,
+    quality,
+  } = req.body || {};
+  if (!userScript || !String(userScript).trim()) {
+    context.res = error("缺少 userScript", "bad_request", 400);
     return;
   }
   if (quality && !IMAGE_QUALITIES.includes(quality)) {
@@ -42,6 +53,14 @@ module.exports = async function (context, req) {
   }
 
   try {
+    const prompt = buildImagePrompt({
+      userScript,
+      stylePrompt,
+      styleTags,
+      purpose,
+      imageLanguage,
+    });
+
     if (selectedModel === "gpt-image-2") {
       if (process.env.FUNCTIONS_WORKER_RUNTIME) {
         const result = await generateGptImage({ prompt, aspectRatio, quality });

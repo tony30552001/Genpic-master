@@ -55,7 +55,7 @@ export default function ScriptEditor({
   onOptimizedPromptEnChange,
   onPaletteStyleChange,
   onGenerate,
-  paletteStyle = "",
+  paletteStyleTags = [],
   imageLanguage = "",
 }) {
   const [isDraging, setIsDraging] = useState(false);
@@ -76,7 +76,7 @@ export default function ScriptEditor({
   const handlePaletteChange = useCallback((newSelected) => {
     setPaletteSelected(newSelected);
     const allTags = STYLE_DIMENSIONS.flatMap((d) => newSelected[d.id] || []);
-    onPaletteStyleChange?.(allTags.length > 0 ? allTags.join("，") : "");
+    onPaletteStyleChange?.(allTags);
     setShowStyleSource(true);
     setStyleSourceTab("palette");
   }, [onPaletteStyleChange]);
@@ -126,7 +126,7 @@ export default function ScriptEditor({
     try {
       const result = await optimizePrompt({
         userScript,
-        styleContext: [analyzedStyle, paletteStyle, selectedStyleInfo?.name]
+        styleContext: [analyzedStyle, paletteStyleTags.join("，"), selectedStyleInfo?.name]
           .filter(Boolean)
           .join("，") || "",
         imageLanguage,

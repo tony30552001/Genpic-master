@@ -88,7 +88,7 @@ export default function useImageGeneration() {
   }, []);
 
   const runGeneration = useCallback(
-    async ({ userScript, analyzedStyle: stylePrompt, aspectRatio, imageSize, imageQuality, imageLanguage, contentImageUrl, model, updatePreview = true }) => {
+    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageSize, imageQuality, imageLanguage, contentImageUrl, model, updatePreview = true }) => {
       if (!userScript) {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
@@ -125,32 +125,20 @@ export default function useImageGeneration() {
           });
 
 
-        // 語系指令
-        const LANG_DIRECTIVES = {
-          'en': 'All text in the image MUST be in English.',
-          'zh-TW': '圖片中的所有文字必須使用繁體中文(Traditional Chinese)。文字必須清晰可讀、字體端正、無錯字。使用標準繁體中文字形（如「體」非「体」、「為」非「为」），避免簡體字或日文漢字。確保文字排版美觀、對齊工整。All text in the image MUST be in Traditional Chinese (zh-TW) with correct traditional stroke forms. Text must be crisp, legible, properly aligned and aesthetically pleasing. Never use simplified Chinese characters.',
-          'zh-CN': '图片中的所有文字必须使用简体中文。All text in the image MUST be in Simplified Chinese (zh-CN).',
-          'ja': '画像内のすべてのテキストは日本語にしてください。All text in the image MUST be in Japanese.',
-          'ko': '이미지의 모든 텍스트는 한국어로 작성하세요. All text in the image MUST be in Korean.',
-          'es': 'Todo el texto en la imagen DEBE estar en español.',
-          'fr': 'Tout le texte de l\'image DOIT être en français.',
-          'de': 'Aller Text im Bild MUSS auf Deutsch sein.',
-          'none': 'Do NOT include any text, labels, titles, or words in the image. The image should be purely visual with zero text.',
-        };
-        const langDirective = imageLanguage ? (LANG_DIRECTIVES[imageLanguage] || '') : '';
-
-        const stylePart = stylePrompt ? `Create an image with the following style: ${stylePrompt}. ` : "";
-        const finalPrompt = `${stylePart}The content/subject of the image is: ${userScript}. Ensure the composition is suitable for an infographic or presentation slide.${langDirective ? ` ${langDirective}` : ''}`;
-
+        // 最終 prompt 由後端的 api/_shared/imagePrompt.js 組裝，前端只送出創作輸入
         let result = await generateImage({
-          prompt: finalPrompt,
+          userScript,
+          stylePrompt,
+          styleTags,
+          purpose,
+          imageLanguage,
           aspectRatio,
           imageSize,
           imageQuality,
           imageUrl: contentImageUrl,
-          model,
           signal: abortController.signal,
         });
+        const finalPrompt = result?.prompt || "";
 
         if (result?.jobId) {
           result = await waitForImageJob({

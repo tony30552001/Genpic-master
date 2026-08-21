@@ -115,7 +115,7 @@ export default function useImageTransform() {
     setTransformError("");
   }, []);
 
-  const runTransform = useCallback(async ({ model = DEFAULT_IMAGE_MODEL, imageQuality } = {}) => {
+  const runTransform = useCallback(async ({ model = DEFAULT_IMAGE_MODEL, imageQuality, imageLanguage } = {}) => {
     if (!sourcePreview) {
       setTransformError("請先上傳來源圖片。");
       return null;
@@ -149,13 +149,13 @@ export default function useImageTransform() {
         prompt: mergedPrompt,
         aspectRatio,
         imageQuality,
-        model,
+        imageLanguage,
         signal: abortController.signal,
       });
       setResult(res.imageUrl);
       return {
         imageUrl: res.imageUrl,
-        mergedPrompt,
+        mergedPrompt: res.prompt || mergedPrompt,
         model: res.model || model || DEFAULT_IMAGE_MODEL,
       };
     } catch (err) {

@@ -210,6 +210,7 @@ export default function ImageTransformPanel({
 
   // Global model (read-only, from Settings)
   globalModelLabel,
+  imageLanguage = "",
 
   // Result
   result,
@@ -266,7 +267,7 @@ export default function ImageTransformPanel({
       const styleContext = [activeModeInfo.label, paletteTagsStr, appliedStyleName]
         .filter(Boolean)
         .join("，");
-      const result = await optimizePrompt({ userScript: prompt, styleContext });
+      const result = await optimizePrompt({ userScript: prompt, styleContext, imageLanguage });
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
         setSuggestionData({
           originalText: prompt,

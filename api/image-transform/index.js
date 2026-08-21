@@ -6,28 +6,7 @@ const { isUrlAllowed } = require("../_shared/urlValidator");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { IMAGE_QUALITIES, editGptImage } = require("../_shared/gptImage");
-
-/**
- * 依轉換模式建構圖像編輯指令。
- * 圖像模型不是對話模型：直接下達畫面指令，不使用角色扮演前綴。
- */
-const buildTransformPrompt = (mode, userPrompt) => {
-  const base = userPrompt ? userPrompt.trim() : "";
-  switch (mode) {
-    case "style_transfer":
-      return `Redraw this image in the following artistic style: ${base || "a fresh artistic style"}. Keep every subject, object, and their spatial arrangement exactly as they appear in the source image. Change only the rendering style, brushwork, texture, and color treatment.`;
-
-    case "element_extract":
-      return `Take the main foreground subjects out of this image and keep their appearance, details, and proportions exactly as they are. Place them into this new scene: ${base || "a new environment"}. Match the lighting direction, cast realistic shadows, and blend the subjects naturally into their new surroundings.`;
-
-    case "bg_replace":
-      return `Replace only the background of this image with: ${base || "a new background"}. Keep the foreground subjects unchanged — the same appearance, clothing, expressions, pose, and position. Relight them so they match the new background and the result looks photorealistic.`;
-
-    case "reference_gen":
-    default:
-      return `Use this image only as a visual reference for its color palette, lighting, mood, and compositional structure. Create an entirely new image showing: ${base || "an original scene inspired by this reference"}. Keep the same aesthetic atmosphere and production quality, but none of the original content.`;
-  }
-};
+const { buildTransformPrompt } = require("../_shared/imagePrompt");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -52,7 +31,7 @@ module.exports = async function (context, req) {
 
   const modelPolicy = await ensureModelPolicy(identity.tenantId);
   const selectedModel = modelPolicy.defaultModel;
-  const { imageBase64, mimeType, imageUrl, mode, prompt, aspectRatio, imageSize, quality } =
+  const { imageBase64, mimeType, imageUrl, mode, prompt, aspectRatio, imageSize, quality, imageLanguage } =
     req.body || {};
 
   if (!imageBase64 && !imageUrl) {
@@ -65,7 +44,7 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const textPrompt = buildTransformPrompt(mode, prompt);
+    const textPrompt = buildTransformPrompt({ mode, prompt, imageLanguage });
 
     if (selectedModel === "gpt-image-2") {
       let sourceBase64 = imageBase64 || null;
@@ -92,6 +71,7 @@ module.exports = async function (context, req) {
       context.res = ok({
         ...result,
         mode,
+        prompt: textPrompt,
         aspectRatio: aspectRatio || "1:1",
         model: selectedModel,
       });
@@ -185,6 +165,7 @@ module.exports = async function (context, req) {
     context.res = ok({
       imageUrl: `data:${outputMimeType};base64,${base64Image}`,
       mode,
+      prompt: fullPrompt,
       aspectRatio: aspectRatio || "16:9",
       model: selectedModel,
     });
