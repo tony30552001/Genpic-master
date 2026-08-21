@@ -47,25 +47,36 @@ describe("buildImagePrompt", () => {
     expect(prompt).not.toContain("infographic");
   });
 
-  it("adds no composition directive for freeform images", () => {
+  it("adds no system directive at all for freeform images", () => {
     const prompt = buildImagePrompt({
       userScript: "An orange tabby asleep on a windowsill",
       purpose: "freeform",
+      imageLanguage: "zh-TW",
     });
 
     expect(prompt).toBe("An orange tabby asleep on a windowsill.");
   });
 
-  it("appends the image text language directive", () => {
+  it("appends the image text language directive as a default, not an override", () => {
     const prompt = buildImagePrompt({
-      userScript: "A quarterly revenue chart",
+      userScript: 'A can whose label reads "NORTHBOUND"',
       imageLanguage: "zh-TW",
     });
 
-    expect(prompt).toContain("繁體中文");
+    expect(prompt).toContain(
+      "Render any text the description quotes exactly as written, in its original language."
+    );
+    expect(prompt).toContain("Any other text in the image must be in Traditional Chinese");
+    expect(prompt).not.toContain("MUST be in Traditional Chinese");
     expect(
       buildImagePrompt({ userScript: "A quarterly revenue chart", imageLanguage: "none" })
     ).toContain("Do NOT include any text");
+  });
+
+  it("leaves an author-specified framing alone", () => {
+    expect(
+      buildImagePrompt({ userScript: "Shot on an 85mm lens at f/2", purpose: "infographic" })
+    ).toContain("Unless the description already specifies the framing");
   });
 
   it("rejects an empty content description", () => {
@@ -97,6 +108,6 @@ describe("buildTransformPrompt", () => {
   it("shares the image text language directive with generation", () => {
     expect(
       buildTransformPrompt({ mode: "style_transfer", prompt: "oil painting", imageLanguage: "ja" })
-    ).toContain("日本語");
+    ).toContain("must be in Japanese");
   });
 });

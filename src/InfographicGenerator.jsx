@@ -77,6 +77,7 @@ export default function InfographicGenerator({
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [compactNavSection, setCompactNavSection] = useState(null);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
+    const [imagePurpose, setImagePurpose] = useState('infographic');
     const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
 
     useEffect(() => {
@@ -424,7 +425,7 @@ export default function InfographicGenerator({
                 userScript: finalScriptToUse,
                 analyzedStyle,
                 styleTags: paletteStyleTags,
-                purpose: 'infographic',
+                purpose: imagePurpose,
                 aspectRatio,
                 imageSize,
                 imageQuality,
@@ -896,6 +897,8 @@ export default function InfographicGenerator({
                                             onUserScriptChange={setUserScript}
                                             onOptimizedPromptEnChange={setOptimizedPromptEn}
                                             imageLanguage={imageLanguage}
+                                            imagePurpose={imagePurpose}
+                                            onImagePurposeChange={setImagePurpose}
                                             onFocus={() => setIsInputFocused(true)}
                                             onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
                                             hideGenerate

@@ -19,50 +19,54 @@ const NO_TEXT_GENERATION_DIRECTIVE =
 const NO_TEXT_OPTIMIZER_DIRECTIVE =
   "圖片中不得出現任何文字。英文 Prompt 必須明確要求畫面沒有文字、標籤或排版元素，也不要用雙引號標示任何文字內容。";
 
+/**
+ * The generation directives are defaults, never overrides: text the author
+ * spelled out in the description must survive verbatim, and only the wording
+ * the author left open follows the chosen language.
+ */
+const KEEP_QUOTED_TEXT =
+  "Render any text the description quotes exactly as written, in its original language.";
+
 const IMAGE_TEXT_LANGUAGES = Object.freeze({
   en: {
     zh: "英文",
     en: "English",
-    generationDirective: "All text in the image MUST be in English.",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in English.`,
   },
   "zh-TW": {
     zh: "繁體中文",
     en: "Traditional Chinese",
-    generationDirective:
-      "圖片中的所有文字必須使用繁體中文(Traditional Chinese)。文字必須清晰可讀、字體端正、無錯字。使用標準繁體中文字形（如「體」非「体」、「為」非「为」），避免簡體字或日文漢字。確保文字排版美觀、對齊工整。All text in the image MUST be in Traditional Chinese (zh-TW) with correct traditional stroke forms. Text must be crisp, legible, properly aligned and aesthetically pleasing. Never use simplified Chinese characters.",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Traditional Chinese (zh-TW) with correct traditional stroke forms, never simplified Chinese characters. All rendered text must be crisp, legible, correctly spelled, and neatly aligned.`,
   },
   "zh-CN": {
     zh: "簡體中文",
     en: "Simplified Chinese",
-    generationDirective:
-      "图片中的所有文字必须使用简体中文。All text in the image MUST be in Simplified Chinese (zh-CN).",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Simplified Chinese (zh-CN).`,
   },
   ja: {
     zh: "日文",
     en: "Japanese",
-    generationDirective:
-      "画像内のすべてのテキストは日本語にしてください。All text in the image MUST be in Japanese.",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Japanese.`,
   },
   ko: {
     zh: "韓文",
     en: "Korean",
-    generationDirective:
-      "이미지의 모든 텍스트는 한국어로 작성하세요. All text in the image MUST be in Korean.",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Korean.`,
   },
   es: {
     zh: "西班牙文",
     en: "Spanish",
-    generationDirective: "Todo el texto en la imagen DEBE estar en español.",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Spanish.`,
   },
   fr: {
     zh: "法文",
     en: "French",
-    generationDirective: "Tout le texte de l'image DOIT être en français.",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in French.`,
   },
   de: {
     zh: "德文",
     en: "German",
-    generationDirective: "Aller Text im Bild MUSS auf Deutsch sein.",
+    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in German.`,
   },
 });
 

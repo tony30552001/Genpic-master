@@ -22,6 +22,25 @@ import SaveTemplateDialog from "../templates/SaveTemplateDialog";
 import { STYLE_DIMENSIONS } from "./styleDimensions";
 import StyleSourceTabs from "./StyleSourceTabs";
 
+/** 決定系統是否為畫面補上構圖與文字語系指令。 */
+const IMAGE_PURPOSE_OPTIONS = [
+  {
+    id: "infographic",
+    label: "資訊圖表",
+    description: "補上簡報版面構圖與文字語系指令",
+  },
+  {
+    id: "storyboard",
+    label: "電影分鏡",
+    description: "補上電影分鏡構圖與文字語系指令",
+  },
+  {
+    id: "freeform",
+    label: "自由創作",
+    description: "完全依照你的描述，不附加任何系統指令",
+  },
+];
+
 /**
  * ScriptEditor — 內容描述編輯器
  * 支援 AI 智能優化、風格庫快速選取、內容參考圖片
@@ -57,6 +76,8 @@ export default function ScriptEditor({
   onGenerate,
   paletteStyleTags = [],
   imageLanguage = "",
+  imagePurpose = "infographic",
+  onImagePurposeChange,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -85,6 +106,10 @@ export default function ScriptEditor({
   const contentFieldId = "script-editor-content";
   const contentHelpId = "script-editor-content-help";
   const assistToolsId = "script-editor-assist-tools";
+  const purposeLabelId = "script-editor-purpose";
+  const activePurpose =
+    IMAGE_PURPOSE_OPTIONS.find((option) => option.id === imagePurpose) ||
+    IMAGE_PURPOSE_OPTIONS[0];
   const hasActiveAssistTools = Boolean(
     contentImagePreview ||
     analyzedStyle ||
@@ -248,6 +273,39 @@ export default function ScriptEditor({
               )}
             </span>
             <span className="shrink-0 tabular-nums">{charCount} 字</span>
+          </div>
+
+          <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span id={purposeLabelId} className="text-xs font-semibold text-foreground">
+                畫面用途
+              </span>
+              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                {activePurpose.description}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby={purposeLabelId}>
+              {IMAGE_PURPOSE_OPTIONS.map((option) => {
+                const isSelected = activePurpose.id === option.id;
+
+                return (
+                  <button
+                    type="button"
+                    key={option.id}
+                    onClick={() => onImagePurposeChange?.(option.id)}
+                    aria-pressed={isSelected}
+                    className={cn(
+                      "min-h-9 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      isSelected
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/60 text-muted-foreground hover:border-primary/40 hover:bg-muted/60"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
         </CardContent>

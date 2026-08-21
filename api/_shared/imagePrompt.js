@@ -15,9 +15,9 @@ const { buildGenerationTextDirective } = require("./imageTextLanguage");
 /** What the finished image is for, which decides how the frame is composed. */
 const COMPOSITION_DIRECTIVES = Object.freeze({
   infographic:
-    "Compose the frame so it works as an infographic or presentation slide, with a clear visual hierarchy, balanced negative space, and room for the key message.",
+    "Unless the description already specifies the framing, compose the frame so it works as an infographic or presentation slide, with a clear visual hierarchy and balanced negative space.",
   storyboard:
-    "Compose the frame like a cinematic storyboard panel, with a deliberate camera angle, clear staging of the subject, and a believable sense of depth.",
+    "Unless the description already specifies the framing, compose the frame like a cinematic storyboard panel, with a deliberate camera angle and a believable sense of depth.",
   freeform: "",
 });
 
@@ -49,6 +49,9 @@ const asSentence = (text) => {
  * `stylePrompt` is the prose style description produced by style analysis or a
  * saved style; `styleTags` are the palette cues picked in the UI and stay a
  * separate clause so they never dilute that prose.
+ *
+ * The `freeform` purpose sends the description untouched: no composition and no
+ * text-language directive, because the author already wrote a complete brief.
  */
 const buildImagePrompt = ({
   userScript,
@@ -64,6 +67,8 @@ const buildImagePrompt = ({
 
   const style = String(stylePrompt || "").trim();
   const tags = normalizeTags(styleTags);
+  const resolvedPurpose = normalizeImagePurpose(purpose);
+  const isFreeform = resolvedPurpose === "freeform";
 
   return [
     style ? asSentence(`Render the whole image in this style: ${style}`) : "",
@@ -71,8 +76,8 @@ const buildImagePrompt = ({
       ? asSentence(`Apply these additional style cues: ${tags.join(", ")}`)
       : "",
     asSentence(content),
-    COMPOSITION_DIRECTIVES[normalizeImagePurpose(purpose)],
-    buildGenerationTextDirective(imageLanguage),
+    COMPOSITION_DIRECTIVES[resolvedPurpose],
+    isFreeform ? "" : buildGenerationTextDirective(imageLanguage),
   ]
     .filter(Boolean)
     .join(" ");
