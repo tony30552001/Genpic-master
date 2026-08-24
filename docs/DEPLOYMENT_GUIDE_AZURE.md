@@ -119,6 +119,9 @@ node api/scripts/migrate.cjs
 若暫時 rollback 回 Azure Functions，`FUNCTIONS_WORKER_RUNTIME` 會讓 GPT Image 2
 回到原本的同步 handler 路徑；非同步 worker 只在 App Service `npm start` 中啟動。
 
+上傳 staging 的應用程式清理與 Azure lifecycle policy 的安全套用順序、drain gate、
+rollback 與查核命令，請依照 [upload-lifecycle-operations.md](upload-lifecycle-operations.md)。
+
 ## 6. 驗證與 rollback
 
 先直接測試 App Service：
