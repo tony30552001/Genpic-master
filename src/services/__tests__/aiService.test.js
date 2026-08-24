@@ -12,14 +12,19 @@ import {
   analyzeStyle,
   createDeckJob,
   generateImage,
+  transformImage,
   waitForDeckJob,
   waitForImageJob,
 } from "../aiService";
 
 describe("aiService", () => {
-  it("analyzeStyle posts reference image", async () => {
-    await analyzeStyle({ referencePreview: "data:image/png;base64,AAA" });
-    expect(apiPost).toHaveBeenCalled();
+  it("analyzeStyle posts an owner-scoped reference upload ID without a URL", async () => {
+    await analyzeStyle({ referenceUploadId: "123e4567-e89b-42d3-a456-426614174000" });
+    expect(apiPost).toHaveBeenCalledWith(
+      "/api/analyze-style",
+      { referenceUploadId: "123e4567-e89b-42d3-a456-426614174000" }
+    );
+    expect(apiPost.mock.calls.at(-1)[1]).not.toHaveProperty("imageUrl");
   });
 
   it("generateImage posts the creative inputs, not an assembled prompt", async () => {
@@ -47,7 +52,7 @@ describe("aiService", () => {
         aspectRatio: "1:1",
         imageSize: undefined,
         quality: undefined,
-        imageUrl: undefined,
+        referenceUploadId: undefined,
       },
       { signal: undefined }
     );
@@ -71,6 +76,43 @@ describe("aiService", () => {
       base64Content: undefined,
       sceneCount: 6,
     });
+  });
+
+  it("generateImage sends a reference upload ID instead of a reference URL", async () => {
+    await generateImage({
+      userScript: "use the reference",
+      referenceUploadId: "123e4567-e89b-42d3-a456-426614174000",
+    });
+
+    expect(apiPost.mock.calls.at(-1)).toEqual([
+      "/api/generate-images",
+      expect.objectContaining({
+        userScript: "use the reference",
+        referenceUploadId: "123e4567-e89b-42d3-a456-426614174000",
+      }),
+      { signal: undefined },
+    ]);
+    expect(apiPost.mock.calls.at(-1)[1]).not.toHaveProperty("imageUrl");
+  });
+
+  it("transformImage sends only an owned upload ID, never browser image bytes or URL", async () => {
+    await transformImage({
+      uploadId: "123e4567-e89b-42d3-a456-426614174000",
+      mimeType: "image/png",
+      mode: "style_transfer",
+      prompt: "watercolor",
+    });
+
+    expect(apiPost.mock.calls.at(-1)).toEqual([
+      "/api/image-transform",
+      expect.objectContaining({
+        uploadId: "123e4567-e89b-42d3-a456-426614174000",
+        mimeType: "image/png",
+      }),
+      { signal: undefined },
+    ]);
+    expect(apiPost.mock.calls.at(-1)[1]).not.toHaveProperty("imageUrl");
+    expect(apiPost.mock.calls.at(-1)[1]).not.toHaveProperty("imageBase64");
   });
 
   it("sends a source upload ID and never a caller-selected document URL for deck jobs", async () => {

@@ -54,8 +54,8 @@ export default function useImageGeneration() {
     [generationElapsedSeconds, generationModel]
   );
 
-  const runStyleAnalysis = useCallback(async ({ referencePreview, imageUrl }) => {
-    if (!referencePreview && !imageUrl) {
+  const runStyleAnalysis = useCallback(async ({ referenceUploadId }) => {
+    if (!referenceUploadId) {
       throw new Error("請先上傳參考圖片。");
     }
 
@@ -65,8 +65,7 @@ export default function useImageGeneration() {
     try {
       setAnalysisPhase("AI 正在解析風格特徵（約需 5-10 秒）...");
       const result = await analyzeStyle({
-        referencePreview,
-        imageUrl,
+        referenceUploadId,
       });
 
       setAnalysisPhase("儲存分析結果...");
@@ -88,7 +87,7 @@ export default function useImageGeneration() {
   }, []);
 
   const runGeneration = useCallback(
-    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageSize, imageQuality, imageLanguage, contentImageUrl, model, updatePreview = true }) => {
+    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageSize, imageQuality, imageLanguage, referenceUploadId, model, updatePreview = true }) => {
       if (!userScript) {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
@@ -135,7 +134,7 @@ export default function useImageGeneration() {
           aspectRatio,
           imageSize,
           imageQuality,
-          imageUrl: contentImageUrl,
+          referenceUploadId,
           signal: abortController.signal,
         });
         const finalPrompt = result?.prompt || "";

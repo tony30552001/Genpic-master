@@ -7,6 +7,10 @@ const {
 } = require("../_shared/llmModels");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
+const {
+  downloadOwnedImage,
+  resolveOwnedImageUpload,
+} = require("../_shared/imageUploads");
 
 const normalizeTags = (raw) => {
   if (Array.isArray(raw)) return raw.map((t) => String(t).trim()).filter(Boolean);
@@ -35,17 +39,6 @@ const STYLE_ANALYSIS_PROMPT = `請擔任專業視覺分析師。請分析這張�
 3. "image_content": (繁體中文) 詳細描述圖片中的具體內容、發生的劇情、人物動作、場景細節。這將作為預設的劇情腳本。
 4. "suggested_tags": (Array of Strings) 針對此風格建議的 3-5 個繁體中文標籤 (Tags)。`;
 
-const fetchImageAsBase64 = async (imageUrl) => {
-  const response = await fetch(imageUrl);
-  if (!response.ok) {
-    throw new Error("Image fetch failed");
-  }
-  const contentType = response.headers.get("content-type") || "image/png";
-  const arrayBuffer = await response.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
-  return { base64, contentType };
-};
-
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
     context.res = options();
@@ -61,33 +54,33 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { referencePreview, imageUrl } = req.body || {};
-  if (!referencePreview && !imageUrl) {
-    context.res = error("缺少參考圖片", "bad_request", 400);
+  const { referenceUploadId } = req.body || {};
+  if (typeof referenceUploadId !== "string" || !referenceUploadId.trim()) {
+    context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
     return;
   }
 
   try {
     const identity = await resolveIdentity(auth.user);
-    if (!identity.userId) {
-      // DEBUG: 暴露更多使用者資訊以利除錯
-      const debugInfo = JSON.stringify(auth.user);
-      console.error("[Identity Error] User resolution failed:", debugInfo);
-      context.res = error(`無法辨識使用者: ${debugInfo}`, "unauthorized", 401);
+    if (!identity.userId || !identity.tenantId) {
+      context.res = error("無法辨識使用者", "unauthorized", 401);
+      return;
+    }
+
+    const upload = await resolveOwnedImageUpload({
+      uploadId: referenceUploadId,
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+    });
+    if (!upload) {
+      context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
       return;
     }
 
     const llm = await resolveRoleModel(identity.tenantId, "style_analysis");
-    let base64Data = null;
-    let mimeType = "image/png";
-
-    if (imageUrl) {
-      const fetched = await fetchImageAsBase64(imageUrl);
-      base64Data = fetched.base64;
-      mimeType = fetched.contentType;
-    } else {
-      base64Data = referencePreview.split(",")[1];
-    }
+    const source = await downloadOwnedImage(upload);
+    const base64Data = source.buffer.toString("base64");
+    const mimeType = source.contentType;
 
     const raw = await generateJson({
       llm,

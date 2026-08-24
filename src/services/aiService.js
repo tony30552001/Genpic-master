@@ -1,8 +1,8 @@
 import { API_BASE_URL } from "../config";
 import { apiGet, apiGetBlob, apiPost } from "./apiClient";
 
-export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
-  apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
+export const analyzeStyle = async ({ referenceUploadId }) =>
+  apiPost(`${API_BASE_URL}/analyze-style`, { referenceUploadId });
 
 export const generateImage = async ({
   userScript,
@@ -13,7 +13,7 @@ export const generateImage = async ({
   aspectRatio,
   imageSize,
   imageQuality,
-  imageUrl,
+  referenceUploadId,
   signal,
 }) => {
   return apiPost(
@@ -27,7 +27,7 @@ export const generateImage = async ({
       aspectRatio,
       imageSize,
       quality: imageQuality,
-      imageUrl,
+      referenceUploadId,
     },
     { signal }
   );
@@ -227,8 +227,7 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
 /**
  * AI 圖片轉換 — 支援 Gemini（後端）和 GPT-Image-2（前端 edit API）
  * @param {Object} params
- * @param {string} params.imageDataUrl - 來源圖片 base64 data URL
- * @param {string} [params.imageBlobSasUrl] - 來源圖片 Blob SAS URL（Gemini 路徑優先使用）
+ * @param {string} params.uploadId - 來源圖片的 owner-scoped upload ID
  * @param {string} params.mimeType - 圖片 MIME 類型
  * @param {'style_transfer'|'reference_gen'|'element_extract'|'bg_replace'} params.mode - 轉換模式
  * @param {string} params.prompt - 使用者自訂描述
@@ -239,8 +238,7 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
  * @returns {Promise<{imageUrl: string, prompt: string}>}
  */
 export const transformImage = async ({
-  imageDataUrl,
-  imageBlobSasUrl,
+  uploadId,
   mimeType,
   mode,
   prompt,
@@ -250,12 +248,10 @@ export const transformImage = async ({
   imageLanguage,
   signal,
 }) => {
-  const imageBase64 = imageDataUrl ? imageDataUrl.split(",")[1] : null;
   return apiPost(
     `${API_BASE_URL}/image-transform`,
     {
-      imageBase64,
-      imageUrl: imageBlobSasUrl || null,
+      uploadId,
       mimeType,
       mode,
       prompt,
