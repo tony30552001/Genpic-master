@@ -62,3 +62,15 @@ The Azure management policy is an external mutation. Local tests and a parsed JS
 - A failed Blob deletion leaves the row pending, stores `blob_delete_failed`, and releases the cleanup lease for retry.
 - A missing staging Blob is treated as successfully deleted and the row is marked expired.
 - Ready objects and generated objects are outside the lifecycle prefix and must remain untouched.
+
+## Local verification evidence (2026-08-24)
+
+The following evidence was collected from the isolated feature worktree. It contains no account keys, cookies, SAS tokens, user filenames, or complete Blob URLs:
+
+- Focused security and contract suites for Tasks 1–11 passed at their task checkpoints, including the lifecycle policy test (1/1), cleanup worker tests (4/4), LINE sharing (9/9), image upload consumers (33/33), deck source migration (37/37), and document/upload migrations.
+- Final direct Vitest regression: **55 test files passed, 1 skipped; 450 tests passed, 1 skipped**. One existing `api/uploads/__tests__/index.test.js` App Service route test timed out while starting its local server in the parallel full-suite run; the focused upload route rerun passed 65/65. This timing failure is outside the changed cleanup/policy paths.
+- Direct `vite build` passed (2,126 modules transformed). Vite emitted only the existing large-chunk warning.
+- Targeted ESLint for all changed production/test files, `node --check` for changed CommonJS modules, and `git diff --check` passed. A repository-wide ESLint run still reports 11 pre-existing errors in `src/hooks/useLineConfig.js` and `test-gemini-response.js`.
+- The requested `pnpm test`, `pnpm lint`, and `pnpm build` commands were attempted but the environment's dependency guard stopped them at install with `ERR_PNPM_IGNORED_BUILDS` for `core-js` and `esbuild`; the direct lockfile-installed binaries above were used instead.
+- No Azure account, staging environment, production deployment, database migration execution, Blob prefix inventory, or live lifecycle-policy application was performed in this local run. Those checks remain rollout gates and must be recorded with redacted status/ID/count evidence before enablement.
+- The final security contract search found no caller-controlled container/path signer and no migrated SAS/URL state. Remaining matches are expected generated-image response fields, the deprecated `/api/blob-sas` route/tests, internal short read grants, and the explicitly isolated legacy `source_document_url` drain branch.
