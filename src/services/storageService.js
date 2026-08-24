@@ -55,7 +55,7 @@ export const searchStylesByEmbedding = async ({ embedding, topK }) =>
 const invalidUploadGrant = () => new Error("Invalid upload grant");
 
 const validateUploadGrant = (grant) => {
-  const requiredStrings = [
+  const values = [
     grant?.uploadId,
     grant?.status,
     grant?.blobUrl,
@@ -64,7 +64,7 @@ const validateUploadGrant = (grant) => {
   ];
 
   if (
-    requiredStrings.some((value) => typeof value !== "string" || value.length === 0) ||
+    values.some((value) => typeof value !== "string" || value.length === 0) ||
     grant.status !== "pending"
   ) {
     throw invalidUploadGrant();
@@ -89,20 +89,40 @@ export const createUpload = async ({ fileName, contentType, sizeBytes, purpose }
     })
   );
 
-export const putUploadBytes = async ({ blobUrl, sasToken, file }) => {
+const joinUploadUrl = (blobUrl, sasToken) => {
   if (typeof blobUrl !== "string" || !blobUrl || typeof sasToken !== "string" || !sasToken) {
     throw invalidUploadGrant();
   }
 
-  const uploadUrl = `${blobUrl}${sasToken.startsWith("?") ? "" : "?"}${sasToken}`;
-  const response = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "x-ms-blob-type": "BlockBlob",
-      "Content-Type": file.type,
-    },
-    body: file,
-  });
+  try {
+    new URL(blobUrl);
+  } catch {
+    throw invalidUploadGrant();
+  }
+
+  const token = sasToken.startsWith("?") ? sasToken.slice(1) : sasToken;
+  const separator = blobUrl.includes("?")
+    ? (blobUrl.endsWith("?") || blobUrl.endsWith("&") ? "" : "&")
+    : "?";
+  return `${blobUrl}${separator}${token}`;
+};
+
+export const putUploadBytes = async ({ blobUrl, sasToken, file, contentType }) => {
+  const uploadUrl = joinUploadUrl(blobUrl, sasToken);
+  let response;
+
+  try {
+    response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "x-ms-blob-type": "BlockBlob",
+        "Content-Type": contentType || file.type,
+      },
+      body: file,
+    });
+  } catch {
+    throw new Error("Upload failed");
+  }
 
   if (!response.ok) {
     throw new Error(`Upload failed: ${response.status}`);
@@ -125,6 +145,7 @@ export const uploadFile = async (file, purpose) => {
     blobUrl: grant.blobUrl,
     sasToken: grant.sasToken,
     file,
+    contentType,
   });
 
   const completion = await completeUpload(grant.uploadId);
@@ -132,10 +153,7 @@ export const uploadFile = async (file, purpose) => {
     throw new Error("Invalid upload completion");
   }
 
-  return {
-    uploadId: completion.uploadId,
-    status: "ready",
-  };
+  return { uploadId: completion.uploadId, status: "ready" };
 };
 
 export const uploadFileToBlob = (file, ignoredContainer) => {

@@ -111,6 +111,11 @@ describe("storageService", () => {
       contentType: "application/pdf",
       sizeBytes: 42,
       purpose: "document",
+      container: "caller-selected-container",
+      blobName: "caller-selected-name",
+      path: "caller-selected-path",
+      tenantId: "tenant-123",
+      userId: "user-123",
     });
 
     expect(apiPost).toHaveBeenCalledWith(`${API_BASE_URL}/uploads`, {
@@ -144,6 +149,62 @@ describe("storageService", () => {
     );
   });
 
+  it("appends a SAS token to an existing Blob query without a second question mark", async () => {
+    fetch.mockResolvedValueOnce({ ok: true });
+    const file = new File(["image"], "photo.png", { type: "image/png" });
+
+    await putUploadBytes({
+      blobUrl: "https://storage.example.test/uploads/upload-123?version=1",
+      sasToken: "sig=secret",
+      file,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://storage.example.test/uploads/upload-123?version=1&sig=secret",
+      expect.anything()
+    );
+  });
+
+  it("joins a question-mark SAS token onto an existing Blob query", async () => {
+    fetch.mockResolvedValueOnce({ ok: true });
+    const file = new File(["image"], "photo.png", { type: "image/png" });
+
+    await putUploadBytes({
+      blobUrl: "https://storage.example.test/uploads/upload-123?version=1",
+      sasToken: "?sig=secret",
+      file,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://storage.example.test/uploads/upload-123?version=1&sig=secret",
+      expect.anything()
+    );
+  });
+
+  it("rejects malformed Blob URLs before fetching", async () => {
+    const file = new File(["image"], "photo.png", { type: "image/png" });
+
+    await expect(
+      putUploadBytes({ blobUrl: "not a URL", sasToken: "sig=secret", file })
+    ).rejects.toThrow("Invalid upload grant");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not expose a signed URL when Blob fetch rejects", async () => {
+    const signedUrl = "https://storage.example.test/uploads/upload-123?sig=secret";
+    fetch.mockRejectedValueOnce(new Error(`network failure: ${signedUrl}`));
+    const file = new File(["image"], "photo.png", { type: "image/png" });
+
+    const error = await putUploadBytes({
+        blobUrl: "https://storage.example.test/uploads/upload-123",
+        sasToken: "sig=secret",
+        file,
+      }).catch((error) => error);
+
+    expect(error.message).toBe("Upload failed");
+    expect(error.message).not.toContain(signedUrl);
+  });
+
   it("orchestrates create, PUT, and completion without exposing grant data", async () => {
     apiPost
       .mockResolvedValueOnce({
@@ -164,6 +225,35 @@ describe("storageService", () => {
     expect(fetch.mock.invocationCallOrder[0]).toBeLessThan(apiPost.mock.invocationCallOrder[1]);
     expect(apiPost).toHaveBeenLastCalledWith(
       `${API_BASE_URL}/uploads/upload-123/complete`
+    );
+  });
+
+  it("uses inferred document MIME type for both create and Blob PUT", async () => {
+    apiPost
+      .mockResolvedValueOnce({
+        uploadId: "upload-123",
+        status: "pending",
+        blobUrl: "https://storage.example.test/uploads/upload-123",
+        sasToken: "sig=secret",
+        expiresAt: "2026-08-25T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({ uploadId: "upload-123", status: "ready" });
+    fetch.mockResolvedValueOnce({ ok: true });
+    const file = new File(["pdf"], "report.pdf", { type: "" });
+
+    await uploadFile(file, "document");
+
+    expect(apiPost.mock.calls[0]).toEqual([`${API_BASE_URL}/uploads`, {
+      fileName: "report.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 3,
+      purpose: "document",
+    }]);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://storage.example.test/uploads/upload-123?sig=secret",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/pdf" }),
+      })
     );
   });
 
