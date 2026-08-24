@@ -389,4 +389,20 @@ describe("analyze-document upload ownership", () => {
     expect(JSON.stringify(response)).not.toContain("database host");
     expect(uploadStorage.downloadUploadBuffer).not.toHaveBeenCalled();
   });
+
+  it("exposes the same owner-scoped analysis runner for background jobs", async () => {
+    const result = await handler.runDocumentAnalysis({
+      requestBody: { uploadId: UPLOAD_ID, sceneCount: "auto" },
+      owner,
+      context: { log: vi.fn() },
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      total_scenes: 1,
+    }));
+    expect(result.scenes).toEqual([
+      expect.objectContaining(successfulModelResponse.scenes[0]),
+    ]);
+    expect(uploadStorage.downloadUploadBuffer).toHaveBeenCalledWith(readyUpload());
+  });
 });

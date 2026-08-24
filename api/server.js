@@ -10,6 +10,8 @@ const auth = require("./auth");
 const blobSas = require("./blob-sas");
 const deckJobs = require("./deck-jobs");
 const { startDeckJobWorker } = require("./_shared/deckJobs");
+const documentAnalysisJobs = require("./document-analysis-jobs");
+const { startDocumentAnalysisWorker } = require("./_shared/documentAnalysisJobs");
 const { startUploadCleanupWorker } = require("./_shared/uploadCleanup");
 const embeddings = require("./embeddings");
 const generateFilename = require("./generate-filename");
@@ -122,6 +124,8 @@ registerRoutes(["/api/auth/session"], ["GET", "OPTIONS"], auth);
 registerRoutes(["/api/auth/logout"], ["POST", "OPTIONS"], auth);
 registerRoutes(["/api/me"], ["GET", "OPTIONS"], me);
 registerRoutes(["/api/analyze-document"], ["POST", "OPTIONS"], analyzeDocument);
+registerRoutes(["/api/document-analysis-jobs"], ["POST", "OPTIONS"], documentAnalysisJobs);
+registerRoutes(["/api/document-analysis-jobs/:id"], ["GET", "OPTIONS"], documentAnalysisJobs);
 registerRoutes(["/api/analyze-style"], ["POST", "OPTIONS"], analyzeStyle);
 registerRoutes(["/api/blob-sas"], ["POST", "OPTIONS"], blobSas);
 registerRoutes(["/api/uploads"], ["POST", "OPTIONS"], uploads);
@@ -222,6 +226,14 @@ const start = () => {
   });
   startImageJobWorker();
   startDeckJobWorker();
+  startDocumentAnalysisWorker({
+    analyze: ({ uploadId, sceneCount, owner }) =>
+      analyzeDocument.runDocumentAnalysis({
+        requestBody: { uploadId, sceneCount },
+        owner,
+        context: { log: createLogger() },
+      }),
+  });
   const stopUploadCleanupWorker = startUploadCleanupWorker();
   server.once("close", stopUploadCleanupWorker);
   return server;

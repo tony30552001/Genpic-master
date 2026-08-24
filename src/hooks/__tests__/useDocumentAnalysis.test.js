@@ -92,7 +92,9 @@ describe("useDocumentAnalysis", () => {
     await act(async () => {
       finishUpload({ uploadId: "123e4567-e89b-42d3-a456-426614174000" });
     });
-    expect(result.current.analysisPhase).toBe("AI 正在分析文件內容（約需 15-30 秒）...");
+    expect(result.current.analysisPhase).toBe(
+      "AI 正在背景分析文件內容，完成後會自動顯示結果..."
+    );
 
     await act(async () => {
       finishAnalysis(successfulAnalysis);

@@ -82,6 +82,45 @@ export const waitForImageJob = async ({
   throw new Error("圖片生成工作逾時，請稍後重試");
 };
 
+export const createDocumentAnalysisJob = async ({ uploadId, sceneCount, signal }) =>
+  apiPost(
+    `${API_BASE_URL}/document-analysis-jobs`,
+    { uploadId, sceneCount },
+    { signal }
+  );
+
+export const getDocumentAnalysisJob = async ({ jobId, signal }) =>
+  apiGet(`${API_BASE_URL}/document-analysis-jobs/${encodeURIComponent(jobId)}`, {
+    signal,
+  });
+
+export const waitForDocumentAnalysisJob = async ({
+  jobId,
+  signal,
+  onProgress,
+  pollIntervalMs = 2000,
+  timeoutMs = 20 * 60 * 1000,
+}) => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const job = await getDocumentAnalysisJob({ jobId, signal });
+    onProgress?.(job);
+
+    if (job?.status === "succeeded") return job;
+    if (job?.status === "failed") {
+      const failure = new Error(job.error?.message || "文件分析失敗，請稍後重試");
+      failure.jobFailed = true;
+      failure.code = job.error?.code || "analysis_failed";
+      throw failure;
+    }
+
+    await abortableDelay(pollIntervalMs, signal);
+  }
+
+  throw new Error("文件分析工作逾時，請稍後重試");
+};
+
 export const embedText = async ({ text }) =>
   apiPost(`${API_BASE_URL}/embeddings`, { text });
 
@@ -99,6 +138,7 @@ export const generateFilename = async ({ userScript }) =>
  * @param {string} params.contentType - MIME 類型
  * @param {string} params.base64Content - Base64 編碼的文件內容（可選）
  * @param {number|'auto'} params.sceneCount - 分鏡數量
+ * @param {AbortSignal} params.signal - 可選的取消訊號
  * @returns {Promise<Object>} 包含 scenes 的分析結果
  */
 export const analyzeDocument = async ({
@@ -107,14 +147,34 @@ export const analyzeDocument = async ({
   contentType,
   base64Content,
   sceneCount,
-}) =>
-  apiPost(`${API_BASE_URL}/analyze-document`, {
+  signal,
+}) => {
+  if (uploadId) {
+    return createDocumentAnalysisJob({ uploadId, sceneCount, signal }).then(
+      async (job) => {
+        if (!job?.jobId) {
+          throw new Error("文件分析工作建立失敗，請稍後重試");
+        }
+        const completed = await waitForDocumentAnalysisJob({
+          jobId: job.jobId,
+          signal,
+        });
+        return completed.result || {};
+      }
+    );
+  }
+
+  const body = {
     uploadId,
     fileName,
     contentType,
     base64Content,
     sceneCount,
-  });
+  };
+  return signal
+    ? apiPost(`${API_BASE_URL}/analyze-document`, body, { signal })
+    : apiPost(`${API_BASE_URL}/analyze-document`, body);
+};
 
 export const listPptTemplates = async ({ signal } = {}) =>
   apiGet(`${API_BASE_URL}/ppt-templates`, { signal });

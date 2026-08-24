@@ -152,7 +152,7 @@ const decodeBase64Content = (base64Content) => {
   return { buffer, mimeType };
 };
 
-module.exports = async function (context, req) {
+const analyzeDocumentHandler = async function (context, req) {
   context.log("[analyze-document] Function invoked, method:", req.method);
 
   // 最外層保護 — 確保任何未預期錯誤都會回傳 JSON 而非 crash
@@ -162,13 +162,17 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // 驗證身份
+    // 驗證身份。背景 worker 已在建立工作時完成 owner 綁定，重試時
+    // 不應再次依賴瀏覽器 Cookie；這也讓分析工作能在 API 45 秒代理期限外完成。
     context.log("[analyze-document] Step 1: Auth");
-    const auth = await requireAuth(context, req);
+    const isBackgroundJob = Boolean(context._documentOwner);
+    const auth = isBackgroundJob
+      ? { user: null }
+      : await requireAuth(context, req);
     if (!auth) return;
 
     // 速率限制
-    const limited = rateLimit(req, auth.user);
+    const limited = isBackgroundJob ? { limited: false } : rateLimit(req, auth.user);
     if (limited.limited) {
       context.res = error("請求過於頻繁", "rate_limited", 429);
       return;
@@ -238,7 +242,7 @@ module.exports = async function (context, req) {
       }
       const canonicalUploadId = uploadId.toLowerCase();
 
-      owner = await resolveIdentity(auth.user);
+      owner = context._documentOwner || await resolveIdentity(auth.user);
       if (!owner?.tenantId || !owner?.userId) {
         context.res = error("無法辨識使用者", "unauthorized", 401);
         return;
@@ -506,3 +510,41 @@ module.exports = async function (context, req) {
     );
   }
 };
+
+const runDocumentAnalysis = async ({ requestBody, owner, context = {} }) => {
+  if (!owner?.tenantId || !owner?.userId) {
+    const invalidOwner = new Error("無法辨識使用者");
+    invalidOwner.code = "unauthorized";
+    invalidOwner.status = 401;
+    throw invalidOwner;
+  }
+
+  const log = typeof context.log === "function" ? context.log : () => {};
+  if (typeof log.warn !== "function") log.warn = () => {};
+  if (typeof log.error !== "function") log.error = () => {};
+  const workerContext = {
+    ...context,
+    log,
+    _documentOwner: owner,
+    res: undefined,
+  };
+
+  await analyzeDocumentHandler(workerContext, {
+    method: "POST",
+    headers: {},
+    body: requestBody || {},
+  });
+
+  const response = workerContext.res;
+  if (!response || response.status < 200 || response.status >= 300) {
+    const failure = response?.body?.error || {};
+    const error = new Error(failure.message || "文件分析失敗，請稍後重試");
+    error.code = failure.code || "analysis_failed";
+    error.status = response?.status || 500;
+    throw error;
+  }
+  return response.body;
+};
+
+module.exports = analyzeDocumentHandler;
+module.exports.runDocumentAnalysis = runDocumentAnalysis;

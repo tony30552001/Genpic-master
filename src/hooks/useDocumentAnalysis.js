@@ -75,7 +75,7 @@ export default function useDocumentAnalysis() {
       }
 
       // 呼叫 AI 分析
-      setAnalysisPhase("AI 正在分析文件內容（約需 15-30 秒）...");
+      setAnalysisPhase("AI 正在背景分析文件內容，完成後會自動顯示結果...");
 
       const result = await analyzeDocument(analysisParams);
 

@@ -252,6 +252,22 @@ addOperation("/api/analyze-document", "post", {
   csrf: true,
 });
 
+addOperation("/api/document-analysis-jobs", "post", {
+  summary: "Queue an uploaded document for asynchronous analysis",
+  description:
+    "Creates an owner-scoped analysis job and returns before document parsing and model work begins.",
+  tags: ["AI"],
+  body: true,
+  csrf: true,
+  successStatuses: [202],
+});
+
+addOperation("/api/document-analysis-jobs/{id}", "get", {
+  summary: "Get the status and result of a document analysis job",
+  tags: ["AI"],
+  parameters: pathParameters("id"),
+});
+
 addOperation("/api/analyze-style", "post", {
   summary: "Analyze a visual style",
   tags: ["AI"],
