@@ -172,17 +172,6 @@ export const uploadFile = async (file, purpose) => {
   return { uploadId: completion.uploadId, status: "ready" };
 };
 
-export const uploadFileToBlob = (file, ignoredContainer) => {
-  void ignoredContainer;
-  return uploadFile(file, "document");
-};
-
-export const requestBlobSas = async () => {
-  const error = new Error("upload_api_replaced");
-  error.code = "upload_api_replaced";
-  throw error;
-};
-
 // ── Templates API ──
 
 export const listTemplates = async (category) =>

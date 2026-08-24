@@ -1,113 +1,30 @@
-const {
-  BlobSASPermissions,
-  StorageSharedKeyCredential,
-  generateBlobSASQueryParameters,
-} = require("@azure/storage-blob");
-
-const { ok, error, options } = require("../_shared/http");
+const { error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const {
-  SUPPORTED_MIME_TYPES,
-  inferMimeType,
-} = require("../_shared/documentParser");
 const { rateLimit } = require("../_shared/rateLimit");
 
-const isValidBlobName = (name) => {
-  if (!name || typeof name !== "string") return false;
-  if (name.includes("..") || name.includes("\\") || name.startsWith("/")) return false;
-  return name.length <= 200;
-};
-
+/**
+ * The arbitrary Blob SAS contract has been retired. Keep this route during
+ * the stale-bundle drain so callers receive a deterministic migration error
+ * instead of a signer that accepts caller-controlled paths and containers.
+ */
 module.exports = async function (context, req) {
-  // CORS 預檢處理
   if ((req.method || "").toUpperCase() === "OPTIONS") {
     context.res = options();
     return;
   }
 
-  // 身份驗證
   const auth = await requireAuth(context, req);
   if (!auth) return;
 
-  // 速率限制
   const limited = rateLimit(req, auth.user);
   if (limited.limited) {
     context.res = error("請求過於頻繁", "rate_limited", 429);
     return;
   }
 
-  const { fileName, container } = req.body || {};
-  let { contentType } = req.body || {};
-
-  if (!isValidBlobName(fileName)) {
-    context.res = error("檔名不合法", "bad_request", 400);
-    return;
-  }
-
-  // 如果 contentType 為空或不在允許清單，嘗試從檔名推斷
-  if (!contentType || !SUPPORTED_MIME_TYPES.has(contentType)) {
-    const inferred = inferMimeType(fileName);
-    if (inferred !== "application/octet-stream") {
-      contentType = inferred;
-    } else if (!SUPPORTED_MIME_TYPES.has(contentType)) {
-      context.res = error("不支援的檔案格式", "bad_request", 400);
-      return;
-    }
-  }
-
-  const account = process.env.AZURE_STORAGE_ACCOUNT;
-  const key = process.env.AZURE_STORAGE_KEY;
-  const containerName = container || process.env.BLOB_CONTAINER_DEFAULT || "uploads";
-
-  if (!account || !key) {
-    context.res = error("Storage 設定缺失", "storage_config_missing", 500);
-    return;
-  }
-
-  try {
-    const sharedKey = new StorageSharedKeyCredential(account, key);
-    const startsOn = new Date(new Date().valueOf() - 5 * 60 * 1000); // 提前 5 分鐘避免時差問題
-    const expiresOn = new Date(startsOn.getTime() + 15 * 60 * 1000); // 15 分鐘有效期
-
-    const sasToken = generateBlobSASQueryParameters(
-      {
-        containerName,
-        blobName: fileName,
-        permissions: BlobSASPermissions.parse("crw"),
-        startsOn,
-        expiresOn,
-        contentType,
-      },
-      sharedKey
-    ).toString();
-
-    const readExpiresOn = new Date(startsOn.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year
-    const readSasToken = generateBlobSASQueryParameters(
-      {
-        containerName,
-        blobName: fileName,
-        permissions: BlobSASPermissions.parse("r"),
-        startsOn,
-        expiresOn: readExpiresOn,
-        contentType,
-      },
-      sharedKey
-    ).toString();
-
-    const blobUrl = `https://${account}.blob.core.windows.net/${containerName}/${encodeURIComponent(
-      fileName
-    )}`;
-
-    const readUrl = `${blobUrl}?${readSasToken}`;
-
-    context.res = ok({
-      blobUrl,
-      readUrl,
-      sasToken,
-      expiresAt: expiresOn.toISOString(),
-      blobName: fileName
-    });
-  } catch (err) {
-    context.res = error("生成 SAS Token 失敗: " + err.message, "internal_error", 500);
-  }
+  context.res = error(
+    "舊版 Blob SAS API 已停用，請改用 /api/uploads",
+    "upload_api_replaced",
+    410
+  );
 };

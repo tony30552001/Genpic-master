@@ -12,7 +12,6 @@ vi.mock("../../services/aiService", () => ({
 
 vi.mock("../../services/storageService", () => ({
   uploadFile: vi.fn(),
-  uploadFileToBlob: vi.fn(),
 }));
 
 import {

@@ -145,7 +145,9 @@ const uploadResponse = (description, schema) =>
 
 const operation = ({
   summary,
+  description,
   tags,
+  deprecated = false,
   auth = true,
   body = false,
   csrf = false,
@@ -155,6 +157,8 @@ const operation = ({
   parameters = [],
 }) => ({
   summary,
+  ...(description ? { description } : {}),
+  ...(deprecated ? { deprecated: true } : {}),
   tags,
   ...(auth
     ? {
@@ -256,7 +260,9 @@ addOperation("/api/analyze-style", "post", {
 });
 
 addOperation("/api/blob-sas", "post", {
-  summary: "Create a blob upload SAS URL",
+  summary: "Deprecated: arbitrary Blob SAS signing",
+  description: "This route is retired. Use POST /api/uploads for owner-scoped staged uploads.",
+  deprecated: true,
   tags: ["Storage"],
   body: true,
   csrf: true,

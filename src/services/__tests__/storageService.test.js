@@ -22,9 +22,8 @@ import {
   createUpload,
   putUploadBytes,
   uploadFile,
-  uploadFileToBlob,
-  requestBlobSas,
 } from "../storageService";
+import * as storageService from "../storageService";
 import { apiGet, apiPost, apiPut, apiDelete } from "../apiClient";
 import { API_BASE_URL } from "../../config";
 
@@ -316,16 +315,8 @@ describe("storageService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("keeps deprecated helpers local and free of the obsolete SAS endpoint", async () => {
-    const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
-    apiPost.mockResolvedValueOnce({
-      uploadId: "upload-123", status: "pending", blobUrl: "https://account.blob.core.windows.net/uploads/upload-123", sasToken: "sig=secret", expiresAt: "2026-08-25T00:00:00.000Z",
-    }).mockResolvedValueOnce({ uploadId: "upload-123", status: "ready" });
-    fetch.mockResolvedValueOnce({ ok: true });
-
-    await expect(requestBlobSas({ fileName: file.name })).rejects.toMatchObject({ code: "upload_api_replaced", message: "upload_api_replaced" });
-    await expect(uploadFileToBlob(file, "caller-controlled-container")).resolves.toEqual({ uploadId: "upload-123", status: "ready" });
-    expect(apiPost).not.toHaveBeenCalledWith(expect.stringContaining("blob-sas"), expect.anything());
-    expect(apiPost).toHaveBeenCalledWith(`${API_BASE_URL}/uploads`, expect.not.objectContaining({ container: expect.anything() }));
+  it("does not expose the retired arbitrary Blob SAS helpers", () => {
+    expect(storageService).not.toHaveProperty("requestBlobSas");
+    expect(storageService).not.toHaveProperty("uploadFileToBlob");
   });
 });
