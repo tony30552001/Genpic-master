@@ -1,5 +1,3 @@
-const { StorageSharedKeyCredential } = require("@azure/storage-blob");
-
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const {
@@ -15,10 +13,21 @@ const {
 } = require("../_shared/llmModels");
 const { generateJson } = require("../_shared/llmRuntime");
 const { rateLimit } = require("../_shared/rateLimit");
-const { isUrlAllowed } = require("../_shared/urlValidator");
+const { getOwnedUpload } = require("../_shared/uploads");
+const { downloadUploadBuffer } = require("../_shared/uploadStorage");
 const {
   normalizeDocumentScene,
 } = require("../_shared/documentScene");
+
+const MAX_BASE64_BYTES = 80 * 1024;
+const MAX_BASE64_ENCODED_LENGTH = Math.ceil(MAX_BASE64_BYTES / 3) * 4;
+const MAX_DATA_URL_HEADER_LENGTH = 256;
+const MAX_BASE64_INPUT_LENGTH =
+  MAX_BASE64_ENCODED_LENGTH + MAX_DATA_URL_HEADER_LENGTH;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MIME_TYPE_PATTERN =
+  /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 
 const safeString = (value, fallback = "") =>
   value == null ? fallback : typeof value === "string" ? value : String(value);
@@ -90,71 +99,57 @@ const buildAnalysisPrompt = (sceneCount) => {
   return prompt;
 };
 
-/**
- * 從 Azure Blob Storage 直接下載文件（使用 SDK，不受公共存取設定影響）
- * @param {string} documentUrl - Blob URL，格式: https://<account>.blob.core.windows.net/<container>/<blobName>
- * @returns {{ buffer: Buffer, contentType: string }}
- */
-const fetchDocumentAsBuffer = async (documentUrl, fileName) => {
-  const account = process.env.AZURE_STORAGE_ACCOUNT;
-  const key = process.env.AZURE_STORAGE_KEY;
+const uploadNotFound = () =>
+  error("找不到可用的上傳文件", "upload_not_found", 404);
 
-  // 如果是本帳號的 Blob URL，用 SDK 直接下載（繞過公共存取限制）
-  const blobHost = `${account}.blob.core.windows.net`;
-  if (account && key && documentUrl.includes(blobHost)) {
-    const url = new URL(documentUrl);
-    const pathParts = url.pathname.split("/").filter(Boolean);
-    if (pathParts.length >= 2) {
-      const containerName = pathParts[0];
-      const blobName = decodeURIComponent(pathParts.slice(1).join("/"));
+const hasUsableExpiry = (upload) => {
+  const expiresAt = new Date(upload?.expires_at).getTime();
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+};
 
-      const { BlobServiceClient } = require("@azure/storage-blob");
-      const sharedKey = new StorageSharedKeyCredential(account, key);
-      const blobServiceClient = new BlobServiceClient(
-        `https://${account}.blob.core.windows.net`,
-        sharedKey
-      );
+const isOwnedReadyDocument = (upload, owner, uploadId) =>
+  upload?.id === uploadId &&
+  upload.tenant_id === owner.tenantId &&
+  upload.user_id === owner.userId &&
+  upload.purpose === "document" &&
+  upload.status === "ready" &&
+  hasUsableExpiry(upload);
 
-      const blobClient = blobServiceClient
-        .getContainerClient(containerName)
-        .getBlobClient(blobName);
+const decodeBase64Content = (base64Content) => {
+  if (typeof base64Content !== "string") return { invalid: true };
+  if (base64Content.length > MAX_BASE64_INPUT_LENGTH) {
+    return { tooLarge: true };
+  }
 
-      const downloadResponse = await blobClient.download(0);
-      let contentType = downloadResponse.contentType || "";
-
-      // 若 Blob 儲存的 contentType 不可用（空或 octet-stream），依檔名推斷
-      if (!contentType || contentType === "application/octet-stream") {
-        const inferredName = fileName || blobName;
-        contentType = inferMimeType(inferredName);
-      }
-
-      // 讀取 stream 為 buffer
-      const chunks = [];
-      for await (const chunk of downloadResponse.readableStreamBody) {
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-      return { buffer, contentType };
+  let encoded = base64Content;
+  let mimeType = null;
+  if (base64Content.slice(0, 5).toLowerCase() === "data:") {
+    const commaIndex = base64Content.indexOf(",");
+    if (commaIndex < 0 || commaIndex + 1 > MAX_DATA_URL_HEADER_LENGTH) {
+      return { invalid: true };
     }
+    const header = base64Content.slice(0, commaIndex + 1);
+    const envelope = /^data:([^;,]+);base64,$/i.exec(header);
+    const mimeMatch = envelope && MIME_TYPE_PATTERN.exec(envelope[1]);
+    if (!envelope || !mimeMatch || mimeMatch[0].length !== envelope[1].length) {
+      return { invalid: true };
+    }
+    mimeType = envelope[1].toLowerCase();
+    encoded = base64Content.slice(commaIndex + 1);
   }
 
-  // 非 Blob URL 時用一般 HTTP fetch
-  // SSRF 防護：驗證 URL 是否在白名單內再發起請求
-  if (!isUrlAllowed(documentUrl)) {
-    throw new Error(`不允許的文件 URL，請確認文件來源是否為合法的 Azure Blob Storage`);
+  if (encoded.length > MAX_BASE64_ENCODED_LENGTH) return { tooLarge: true };
+  if (!encoded || encoded.length % 4 !== 0) return { invalid: true };
+
+  const alphabetMatch = /^[a-z0-9+/]*={0,2}/i.exec(encoded);
+  if (!alphabetMatch || alphabetMatch[0].length !== encoded.length) {
+    return { invalid: true };
   }
 
-  const response = await fetch(documentUrl);
-  if (!response.ok) {
-    throw new Error(`Document fetch failed: ${response.status}`);
-  }
-  let contentType = response.headers.get("content-type") || "";
-  // 若 HTTP 回傳的 content-type 是 octet-stream，依檔名推斷
-  if (!contentType || contentType === "application/octet-stream") {
-    contentType = fileName ? inferMimeType(fileName) : "application/pdf";
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return { buffer: Buffer.from(arrayBuffer), contentType };
+  const buffer = Buffer.from(encoded, "base64");
+  if (buffer.toString("base64") !== encoded) return { invalid: true };
+  if (buffer.length > MAX_BASE64_BYTES) return { tooLarge: true };
+  return { buffer, mimeType };
 };
 
 module.exports = async function (context, req) {
@@ -180,31 +175,109 @@ module.exports = async function (context, req) {
     }
 
     // 取得請求參數
+    const requestBody = req.body || {};
     const {
-      documentUrl,
-      fileName,
+      uploadId,
+      fileName: requestedFileName,
       contentType,
       base64Content,
       sceneCount,
-    } = req.body || {};
+    } = requestBody;
+    const hasBase64Content = Object.prototype.hasOwnProperty.call(
+      requestBody,
+      "base64Content"
+    );
     context.log("[analyze-document] Step 2: Params -",
-      "fileName:", fileName,
-      "contentType:", contentType,
-      "hasBase64:", !!base64Content,
-      "base64Len:", base64Content?.length || 0,
-      "hasUrl:", !!documentUrl,
+      "hasBase64:", hasBase64Content,
+      "hasUpload:", !!uploadId,
       "sceneCount:", sceneCount || "auto"
     );
 
     // 驗證必要參數
-    if (!documentUrl && !base64Content) {
-      context.res = error("缺少文件內容（需提供 documentUrl 或 base64Content）", "bad_request", 400);
+    if (!uploadId && !hasBase64Content) {
+      context.res = error("缺少文件內容（需提供 uploadId 或 base64Content）", "bad_request", 400);
+      return;
+    }
+    if (uploadId && hasBase64Content) {
+      context.res = error("請勿同時提供 uploadId 與 base64Content", "bad_request", 400);
       return;
     }
 
-    // 驗證檔案格式
-    const mimeType = contentType || inferMimeType(fileName);
-    if (!isSupportedDocument(mimeType, fileName)) {
+    // 取得文件內容
+    context.log("[analyze-document] Step 3: Prepare content");
+    let documentBuffer;
+    let finalMimeType;
+    let trustedFileName = requestedFileName;
+    let owner;
+
+    if (hasBase64Content) {
+      const decoded = decodeBase64Content(base64Content);
+      if (decoded.tooLarge) {
+        context.res = error(
+          "Base64 文件內容超過 80 KiB 限制",
+          "base64_too_large",
+          413
+        );
+        return;
+      }
+      if (decoded.invalid) {
+        context.res = error(
+          "Base64 文件內容格式錯誤",
+          "invalid_base64",
+          400
+        );
+        return;
+      }
+
+      documentBuffer = decoded.buffer;
+      finalMimeType = decoded.mimeType || contentType || inferMimeType(trustedFileName);
+    } else {
+      if (typeof uploadId !== "string" || !UUID_PATTERN.test(uploadId)) {
+        context.res = uploadNotFound();
+        return;
+      }
+      const canonicalUploadId = uploadId.toLowerCase();
+
+      owner = await resolveIdentity(auth.user);
+      if (!owner?.tenantId || !owner?.userId) {
+        context.res = error("無法辨識使用者", "unauthorized", 401);
+        return;
+      }
+
+      const upload = await getOwnedUpload({
+        uploadId: canonicalUploadId,
+        tenantId: owner.tenantId,
+        userId: owner.userId,
+        purpose: "document",
+        status: "ready",
+      });
+      if (!isOwnedReadyDocument(upload, owner, canonicalUploadId)) {
+        context.res = uploadNotFound();
+        return;
+      }
+
+      trustedFileName = upload.original_file_name;
+      if (typeof trustedFileName !== "string" || !trustedFileName) {
+        context.res = uploadNotFound();
+        return;
+      }
+      const storedContentType = String(upload.content_type || "")
+        .split(";", 1)[0]
+        .trim()
+        .toLowerCase();
+      finalMimeType = !storedContentType || storedContentType === "application/octet-stream"
+        ? inferMimeType(trustedFileName)
+        : storedContentType;
+      documentBuffer = await downloadUploadBuffer(upload);
+    }
+
+    if (!documentBuffer?.length) {
+      context.res = error("無法取得文件內容", "document_fetch_failed", 400);
+      return;
+    }
+
+    // 驗證可信任中繼資料對應的檔案格式
+    if (!isSupportedDocument(finalMimeType, trustedFileName)) {
       context.res = error(
         "不支援的檔案格式。支援 PDF、Word、PowerPoint、Excel、OpenDocument、RTF、EPUB、CSV、TXT、MD、PNG 與 JPG",
         "unsupported_format",
@@ -213,41 +286,11 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // 取得文件內容
-    context.log("[analyze-document] Step 3: Prepare content, mimeType:", mimeType);
-    let documentBuffer;
-    let finalMimeType = mimeType;
-
-    if (base64Content) {
-      // 處理 Data URL 格式 (data:application/pdf;base64,xxxxx)
-      if (base64Content.includes(",")) {
-        documentBuffer = Buffer.from(base64Content.split(",")[1], "base64");
-        const mimeMatch = base64Content.match(/data:([^;]+);/);
-        if (mimeMatch) {
-          finalMimeType = mimeMatch[1];
-        }
-      } else {
-        documentBuffer = Buffer.from(base64Content, "base64");
-      }
-    } else if (documentUrl) {
-      const fetched = await fetchDocumentAsBuffer(documentUrl, fileName);
-      documentBuffer = fetched.buffer;
-      // 若抓回來的 mimeType 仍是 octet-stream，再用 fileName 推斷一次
-      finalMimeType = (fetched.contentType && fetched.contentType !== "application/octet-stream")
-        ? fetched.contentType
-        : inferMimeType(fileName);
-    }
-
-    if (!documentBuffer?.length) {
-      context.res = error("無法取得文件內容", "document_fetch_failed", 400);
-      return;
-    }
-
     let parsedDocument;
     try {
       parsedDocument = await parseDocumentBuffer({
         buffer: documentBuffer,
-        fileName,
+        fileName: trustedFileName,
         mimeType: finalMimeType,
       });
       context.log(
@@ -275,8 +318,8 @@ module.exports = async function (context, req) {
 
     let llm;
     try {
-      const identity = await resolveIdentity(auth.user);
-      llm = await resolveRoleModel(identity.tenantId, "document_analysis");
+      if (!owner) owner = await resolveIdentity(auth.user);
+      llm = await resolveRoleModel(owner.tenantId, "document_analysis");
     } catch (configError) {
       if (configError instanceof LlmConfigurationError) {
         context.res = error(configError.message, configError.code, configError.status);
@@ -336,7 +379,7 @@ module.exports = async function (context, req) {
         systemMessage: analysisPrompt,
         userMessage,
         attachment,
-        fileName,
+        fileName: trustedFileName,
         maxOutputTokens: 8192,
       });
       context.log(
@@ -361,7 +404,7 @@ module.exports = async function (context, req) {
     // 模型有時會直接回傳 scenes 陣列而非物件
     if (Array.isArray(data)) {
       context.log("[analyze-document] data is array, wrapping...");
-      data = { scenes: data, title: fileName || "未命名文件", summary: "" };
+      data = { scenes: data, title: trustedFileName || "未命名文件", summary: "" };
     }
 
     if (!data || typeof data !== "object") {
@@ -436,7 +479,7 @@ module.exports = async function (context, req) {
 
     // 回傳標準化結果
     const response = {
-      title: data.title || fileName || "未命名文件",
+      title: data.title || trustedFileName || "未命名文件",
       summary: data.summary || "",
       recommended_style: recommendedStyle,
       content_type: data.content_type || data.contentType || "document",
@@ -453,12 +496,11 @@ module.exports = async function (context, req) {
 
     context.log("[analyze-document] Step 7: Success, total_scenes:", response.total_scenes);
     context.res = ok(response);
-  } catch (err) {
+  } catch {
     // 最外層 catch — 防止任何未預期錯誤導致函式崩潰
-    context.log.error("[analyze-document] UNHANDLED ERROR:", err.message);
-    context.log.error("[analyze-document] Stack:", err.stack);
+    context.log.error("[analyze-document] Unexpected analysis failure");
     context.res = error(
-      err.message || "文件分析失敗，請稍後重試",
+      "文件分析失敗，請稍後重試",
       "analysis_failed",
       500
     );

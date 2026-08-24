@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { transformImage } from "../services/aiService";
-import { requestBlobSas } from "../services/storageService";
+import { uploadFile } from "../services/storageService";
 import { DEFAULT_IMAGE_MODEL } from "../config";
 import { STYLE_DIMENSIONS } from "../components/create/styleDimensions";
 
@@ -10,28 +10,11 @@ const INITIAL_ASPECT_RATIO = "1:1";
 const isAbortError = (error) =>
   error?.name === "AbortError" || error?.code === 20;
 
-const uploadBlobWithProgress = ({ blobUrl, sasToken, file, contentType, onProgress }) =>
-  new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", `${blobUrl}?${sasToken}`, true);
-    xhr.setRequestHeader("x-ms-blob-type", "BlockBlob");
-    xhr.setRequestHeader("Content-Type", contentType);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve(blobUrl)
-        : reject(new Error(`Upload failed: ${xhr.status}`));
-    xhr.onerror = () => reject(new Error("Upload failed"));
-    xhr.send(file);
-  });
-
 export default function useImageTransform() {
   // Source image state
   const [sourceFile, setSourceFile] = useState(null);
   const [sourcePreview, setSourcePreview] = useState(null);
-  const [sourceBlobSasUrl, setSourceBlobSasUrl] = useState(null);
+  const [sourceUploadId, setSourceUploadId] = useState(null);
   const [sourceMimeType, setSourceMimeType] = useState("image/jpeg");
   const [isUploadingSource, setIsUploadingSource] = useState(false);
   const [sourceUploadProgress, setSourceUploadProgress] = useState(0);
@@ -67,28 +50,15 @@ export default function useImageTransform() {
       setIsUploadingSource(true);
       setSourceUploadProgress(0);
 
-      const safeName = `transform-${Date.now()}-${file.name}`.replace(/\s+/g, "-");
-      const sasPromise = requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("上傳請求逾時，請確認網路連線或重新登入")), 30000)
-      );
-      const sas = await Promise.race([sasPromise, timeoutPromise]);
-      if (!sas?.blobUrl || !sas?.sasToken) throw new Error("無法取得上傳授權，請確認已登入");
-
-      await uploadBlobWithProgress({
-        blobUrl: sas.blobUrl,
-        sasToken: sas.sasToken,
-        file,
-        contentType: file.type,
-        onProgress: setSourceUploadProgress,
-      });
-      const blobSasUrl = `${sas.blobUrl}?${sas.sasToken}`;
+      const uploadResult = await uploadFile(file, "image");
+      if (!uploadResult?.uploadId) throw new Error("無法完成圖片上傳，請確認已登入");
+      setSourceUploadProgress(100);
 
       const reader = new FileReader();
       reader.onloadend = () => {
         setSourceFile(file);
         setSourcePreview(reader.result);
-        setSourceBlobSasUrl(blobSasUrl);
+        setSourceUploadId(uploadResult.uploadId);
         setSourceMimeType(file.type || "image/jpeg");
         setTimeout(() => {
           setIsUploadingSource(false);
@@ -107,7 +77,7 @@ export default function useImageTransform() {
   const clearSource = useCallback(() => {
     setSourceFile(null);
     setSourcePreview(null);
-    setSourceBlobSasUrl(null);
+    setSourceUploadId(null);
     setSourceMimeType("image/jpeg");
     setIsUploadingSource(false);
     setSourceUploadProgress(0);
@@ -116,7 +86,7 @@ export default function useImageTransform() {
   }, []);
 
   const runTransform = useCallback(async ({ model = DEFAULT_IMAGE_MODEL, imageSize, imageQuality, imageLanguage } = {}) => {
-    if (!sourcePreview) {
+    if (!sourcePreview || !sourceUploadId) {
       setTransformError("請先上傳來源圖片。");
       return null;
     }
@@ -142,8 +112,7 @@ export default function useImageTransform() {
 
     try {
       const res = await transformImage({
-        imageDataUrl: sourcePreview,
-        imageBlobSasUrl: sourceBlobSasUrl,
+        uploadId: sourceUploadId,
         mimeType: sourceMimeType,
         mode,
         prompt: mergedPrompt,
@@ -172,7 +141,7 @@ export default function useImageTransform() {
         setIsTransforming(false);
       }
     }
-  }, [sourcePreview, sourceBlobSasUrl, sourceMimeType, mode, prompt, aspectRatio, paletteSelected, appliedStylePrompt]);
+  }, [sourcePreview, sourceUploadId, sourceMimeType, mode, prompt, aspectRatio, paletteSelected, appliedStylePrompt]);
 
   const cancelTransform = useCallback(() => {
     abortControllerRef.current?.abort();

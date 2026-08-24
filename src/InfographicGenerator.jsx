@@ -12,7 +12,7 @@ import useImageGeneration from './hooks/useImageGeneration';
 import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import useImageTransform from './hooks/useImageTransform';
-import { requestBlobSas } from './services/storageService';
+import { uploadFile } from './services/storageService';
 import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, DEFAULT_IMAGE_QUALITY, IMAGE_MODEL_OPTIONS } from './config';
 import { cn } from './lib/utils';
 
@@ -40,20 +40,16 @@ export default function InfographicGenerator({
     const [documentAnalysisMode, setDocumentAnalysisMode] = useState('storyboard');
 
     // Input States
-    const [, setReferenceImage] = useState(null);
     const [referencePreview, setReferencePreview] = useState(null);
-    const [, setReferenceBlobUrl] = useState(null);
-    const [referenceBlobSasUrl, setReferenceBlobSasUrl] = useState(null);
+    const [referenceUploadId, setReferenceUploadId] = useState(null);
 
 
     const [userScript, setUserScript] = useState('');
     const [optimizedPromptEn, setOptimizedPromptEn] = useState('');
 
     // Content Image States
-    const [, setContentImage] = useState(null);
     const [contentImagePreview, setContentImagePreview] = useState(null);
-    const [, setContentBlobUrl] = useState(null);
-    const [contentBlobSasUrl, setContentBlobSasUrl] = useState(null);
+    const [contentUploadId, setContentUploadId] = useState(null);
     const [isUploadingContent, setIsUploadingContent] = useState(false);
     const [, setContentUploadProgress] = useState(0);
 
@@ -229,22 +225,6 @@ export default function InfographicGenerator({
 
     // --- Core Logic Functions ---
 
-    const uploadBlobWithProgress = ({ blobUrl, sasToken, file, contentType, onProgress }) =>
-        new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PUT', `${blobUrl}?${sasToken}`, true);
-            xhr.setRequestHeader('x-ms-blob-type', 'BlockBlob');
-            xhr.setRequestHeader('Content-Type', contentType);
-            xhr.upload.onprogress = (event) => {
-                if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-            };
-            xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve(blobUrl) : reject(new Error(`Upload failed: ${xhr.status}`));
-            xhr.onerror = () => reject(new Error('Upload failed'));
-            xhr.send(file);
-        });
-
-
-
     const handleContentImageUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -252,26 +232,17 @@ export default function InfographicGenerator({
         try {
             setIsUploadingContent(true);
             setContentUploadProgress(0);
-            const safeName = `content-${Date.now()}-${file.name}`.replace(/\s+/g, "-");
-            // 加入超時保護，避免 auth 過期時 Promise 永遠 pending
-            const sasPromise = requestBlobSas({ fileName: safeName, contentType: file.type, container: "uploads" });
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('上傳請求逾時，請確認網路連線或重新登入')), 30000));
-            const sas = await Promise.race([sasPromise, timeoutPromise]);
-            if (!sas || !sas.blobUrl || !sas.sasToken) throw new Error('無法取得上傳授權，請確認已登入');
-            const blobUrl = await uploadBlobWithProgress({ blobUrl: sas.blobUrl, sasToken: sas.sasToken, file, contentType: file.type, onProgress: setContentUploadProgress });
-            const blobSasUrl = `${sas.blobUrl}?${sas.sasToken}`;
+            const uploadResult = await uploadFile(file, "image");
+            if (!uploadResult?.uploadId) throw new Error('無法完成圖片上傳，請確認已登入');
+            setContentUploadProgress(100);
             const reader = new FileReader();
             reader.onloadend = () => {
-                setContentImage(file);
                 setContentImagePreview(reader.result);
-                setContentBlobUrl(blobUrl);
-                setContentBlobSasUrl(blobSasUrl);
+                setContentUploadId(uploadResult.uploadId);
 
                 // 同步設定為風格參考圖，以便進行風格分析
-                setReferenceImage(file);
                 setReferencePreview(reader.result);
-                setReferenceBlobUrl(blobUrl);
-                setReferenceBlobSasUrl(blobSasUrl);
+                setReferenceUploadId(uploadResult.uploadId);
 
                 setErrorMsg('');
                 setAppliedStyleId(null);
@@ -288,18 +259,14 @@ export default function InfographicGenerator({
 
     const handleClearContentImage = (e) => {
         if (e) { e.preventDefault(); e.stopPropagation(); }
-        setContentImage(null);
         setContentImagePreview(null);
-        setContentBlobUrl(null);
-        setContentBlobSasUrl(null);
+        setContentUploadId(null);
         setIsUploadingContent(false);
         setContentUploadProgress(0);
 
         // 同步清除風格參考
-        setReferenceImage(null);
         setReferencePreview(null);
-        setReferenceBlobUrl(null);
-        setReferenceBlobSasUrl(null);
+        setReferenceUploadId(null);
         clearStyle(); // 清除已分析的風格
         setAppliedStyleId(null);
 
@@ -309,7 +276,7 @@ export default function InfographicGenerator({
 
     const analyzeImageStyle = async () => {
         try {
-            const analysisResult = await analyzeStyle({ referencePreview, imageUrl: referenceBlobSasUrl });
+            const analysisResult = await analyzeStyle({ referenceUploadId });
             setAppliedStyleId(null);
             setUserScript(typeof analysisResult.image_content === 'string' ? analysisResult.image_content : String(analysisResult.image_content || ''));
             const tags = Array.isArray(analysisResult.suggested_tags) ? analysisResult.suggested_tags : [];
@@ -430,7 +397,7 @@ export default function InfographicGenerator({
                 imageSize,
                 imageQuality,
                 imageLanguage,
-                contentImageUrl: contentBlobSasUrl,
+                referenceUploadId: contentUploadId,
                 model: imageModel
             });
             await saveHistoryItem({

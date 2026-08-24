@@ -10,6 +10,7 @@ const auth = require("./auth");
 const blobSas = require("./blob-sas");
 const deckJobs = require("./deck-jobs");
 const { startDeckJobWorker } = require("./_shared/deckJobs");
+const { startUploadCleanupWorker } = require("./_shared/uploadCleanup");
 const embeddings = require("./embeddings");
 const generateFilename = require("./generate-filename");
 const generateImages = require("./generate-images");
@@ -28,6 +29,7 @@ const styles = require("./styles");
 const stylesBackfill = require("./styles-backfill");
 const stylesSearch = require("./styles-search");
 const templates = require("./templates");
+const uploads = require("./uploads");
 
 const app = express();
 const apiBodyLimit = process.env.API_BODY_LIMIT || "100mb";
@@ -122,6 +124,9 @@ registerRoutes(["/api/me"], ["GET", "OPTIONS"], me);
 registerRoutes(["/api/analyze-document"], ["POST", "OPTIONS"], analyzeDocument);
 registerRoutes(["/api/analyze-style"], ["POST", "OPTIONS"], analyzeStyle);
 registerRoutes(["/api/blob-sas"], ["POST", "OPTIONS"], blobSas);
+registerRoutes(["/api/uploads"], ["POST", "OPTIONS"], uploads);
+registerRoutes(["/api/uploads/:id"], ["POST", "OPTIONS"], uploads);
+registerRoutes(["/api/uploads/:id/:action"], ["POST", "OPTIONS"], uploads);
 registerRoutes(["/api/deck-jobs"], ["POST", "OPTIONS"], deckJobs);
 registerRoutes(
   [
@@ -217,6 +222,8 @@ const start = () => {
   });
   startImageJobWorker();
   startDeckJobWorker();
+  const stopUploadCleanupWorker = startUploadCleanupWorker();
+  server.once("close", stopUploadCleanupWorker);
   return server;
 };
 

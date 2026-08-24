@@ -2,11 +2,14 @@ const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { getModel } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
-const { isUrlAllowed } = require("../_shared/urlValidator");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { IMAGE_QUALITIES, editGptImage } = require("../_shared/gptImage");
 const { buildTransformPrompt } = require("../_shared/imagePrompt");
+const {
+  downloadOwnedImage,
+  resolveOwnedImageUpload,
+} = require("../_shared/imageUploads");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -24,18 +27,23 @@ module.exports = async function (context, req) {
   }
 
   const identity = await resolveIdentity(auth.user);
-  if (!identity.userId) {
+  if (!identity.userId || !identity.tenantId) {
     context.res = error("無法辨識使用者", "unauthorized", 401);
     return;
   }
 
-  const modelPolicy = await ensureModelPolicy(identity.tenantId);
-  const selectedModel = modelPolicy.defaultModel;
-  const { imageBase64, mimeType, imageUrl, mode, prompt, aspectRatio, imageSize, quality, imageLanguage } =
-    req.body || {};
+  const body = req.body || {};
+  const { uploadId, mode, prompt, aspectRatio, imageSize, quality, imageLanguage } = body;
 
-  if (!imageBase64 && !imageUrl) {
-    context.res = error("缺少來源圖片 (imageBase64 or imageUrl)", "bad_request", 400);
+  if (
+    Object.prototype.hasOwnProperty.call(body, "imageBase64") ||
+    Object.prototype.hasOwnProperty.call(body, "imageUrl")
+  ) {
+    context.res = error("不接受由呼叫端提供的圖片資料", "bad_request", 400);
+    return;
+  }
+  if (typeof uploadId !== "string" || !uploadId.trim()) {
+    context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
     return;
   }
   if (quality && !IMAGE_QUALITIES.includes(quality)) {
@@ -44,23 +52,24 @@ module.exports = async function (context, req) {
   }
 
   try {
+    const upload = await resolveOwnedImageUpload({
+      uploadId,
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+    });
+    if (!upload) {
+      context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
+      return;
+    }
+    const source = await downloadOwnedImage(upload);
+    const sourceBase64 = source.buffer.toString("base64");
+    const sourceMimeType = source.contentType;
+
+    const modelPolicy = await ensureModelPolicy(identity.tenantId);
+    const selectedModel = modelPolicy.defaultModel;
     const textPrompt = buildTransformPrompt({ mode, prompt, imageLanguage });
 
     if (selectedModel === "gpt-image-2") {
-      let sourceBase64 = imageBase64 || null;
-      let sourceMimeType = mimeType || "image/jpeg";
-
-      if (!sourceBase64 && imageUrl) {
-        if (!isUrlAllowed(imageUrl)) {
-          context.res = error("提供的圖片 URL 不在允許範圍內", "bad_request", 400);
-          return;
-        }
-        const imageResponse = await fetch(imageUrl);
-        if (!imageResponse.ok) throw new Error("Failed to fetch source image");
-        sourceBase64 = Buffer.from(await imageResponse.arrayBuffer()).toString("base64");
-        sourceMimeType = imageResponse.headers.get("content-type") || sourceMimeType;
-      }
-
       const result = await editGptImage({
         imageBase64: sourceBase64,
         mimeType: sourceMimeType,
@@ -81,29 +90,13 @@ module.exports = async function (context, req) {
     const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
     const model = getModel(modelName, process.env.GOOGLE_API_KEY);
 
-    let base64Data = imageBase64 || null;
-    let imageMimeType = mimeType || "image/jpeg";
-
-    // 若前端傳 imageUrl，從 URL 取得圖片
-    if (!base64Data && imageUrl) {
-      if (!isUrlAllowed(imageUrl)) {
-        context.res = error("提供的圖片 URL 不在允許範圍內", "bad_request", 400);
-        return;
-      }
-      const imageResponse = await fetch(imageUrl);
-      if (!imageResponse.ok) throw new Error("Failed to fetch source image");
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      base64Data = Buffer.from(arrayBuffer).toString("base64");
-      imageMimeType = imageResponse.headers.get("content-type") || imageMimeType;
-    }
-
     const fullPrompt = aspectRatio
       ? `${textPrompt}\nAspect ratio: ${aspectRatio}.`
       : textPrompt;
 
     const parts = [
       { text: fullPrompt },
-      { inlineData: { mimeType: imageMimeType, data: base64Data } },
+      { inlineData: { mimeType: sourceMimeType, data: sourceBase64 } },
     ];
 
     const config = {

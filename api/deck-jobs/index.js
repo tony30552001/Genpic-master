@@ -9,6 +9,7 @@ const {
   listDeckJobEvents,
   listDeckSlidePreviews,
 } = require("../_shared/deckJobs");
+const { getOwnedUpload } = require("../_shared/uploads");
 const { downloadGeneratedBlob } = require("../_shared/blobStorage");
 const { deckImageBlobName } = require("../_shared/deckImages");
 const { inlineSlideImages } = require("../_shared/deckPreview");
@@ -31,6 +32,22 @@ const isUuid = (value) =>
   );
 
 const TEMPLATE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+const uploadNotFound = (req) =>
+  error("找不到可用的上傳文件", "upload_not_found", 404, req);
+
+const hasUsableUploadExpiry = (upload) => {
+  const expiresAt = new Date(upload?.expires_at).getTime();
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+};
+
+const isOwnedReadyDocument = (upload, uploadId, identity) =>
+  upload?.id === uploadId &&
+  upload.tenant_id === identity.tenantId &&
+  upload.user_id === identity.userId &&
+  upload.purpose === "document" &&
+  upload.status === "ready" &&
+  hasUsableUploadExpiry(upload);
 
 const normalizeTemplateId = (value) => {
   const id = String(value || "").trim();
@@ -155,7 +172,7 @@ module.exports = async function (context, req) {
   }
 
   const identity = await resolveIdentity(auth.user);
-  if (!identity.userId) {
+  if (!identity.userId || !identity.tenantId) {
     context.res = error("無法辨識使用者", "unauthorized", 401, req);
     return;
   }
@@ -229,8 +246,28 @@ module.exports = async function (context, req) {
 
   const body = req.body || {};
   const topic = String(body.topic || "").trim();
-  const documentUrl = String(body.documentUrl || "").trim();
-  const inputKind = documentUrl ? "document" : "topic";
+  const rawSourceUploadId = body.sourceUploadId;
+  const sourceUploadId =
+    typeof rawSourceUploadId === "string" ? rawSourceUploadId.trim().toLowerCase() : "";
+  const documentUrl =
+    typeof body.documentUrl === "string" ? body.documentUrl.trim() : "";
+
+  if (documentUrl || (Object.hasOwn(body, "documentUrl") && body.documentUrl != null)) {
+    context.res = error(
+      "簡報文件必須使用 sourceUploadId",
+      "bad_request",
+      400,
+      req
+    );
+    return;
+  }
+
+  if (rawSourceUploadId != null && rawSourceUploadId !== "" && !isUuid(sourceUploadId)) {
+    context.res = uploadNotFound(req);
+    return;
+  }
+
+  const inputKind = sourceUploadId ? "document" : "topic";
 
   if (inputKind === "topic" && topic.length < 4) {
     context.res = error("請輸入至少 4 個字的簡報主題", "bad_request", 400, req);
@@ -241,19 +278,49 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const job = await createDeckJob({
-    tenantId: identity.tenantId,
-    userId: identity.userId,
-    inputKind,
-    topic: topic || null,
-    sourceDocumentUrl: documentUrl || null,
-    sourceFileName: String(body.fileName || "").trim() || null,
-    slideCount: normalizeSlideCount(body.slideCount),
-    imageDensity: normalizeImageDensity(body.imageDensity),
-    styleId: normalizeTemplateId(body.styleId),
-    layoutId: normalizeTemplateId(body.layoutId),
-    brandId: normalizeTemplateId(body.brandId),
-  });
+  let sourceFileName = String(body.fileName || "").trim() || null;
+  if (sourceUploadId) {
+    let upload;
+    try {
+      upload = await getOwnedUpload({
+        uploadId: sourceUploadId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        purpose: "document",
+        status: "ready",
+      });
+    } catch {
+      context.res = error("無法建立簡報生成工作", "deck_job_create_failed", 500, req);
+      return;
+    }
+
+    if (!isOwnedReadyDocument(upload, sourceUploadId, identity)) {
+      context.res = uploadNotFound(req);
+      return;
+    }
+    sourceFileName = upload.original_file_name;
+  }
+
+  let job;
+  try {
+    job = await createDeckJob({
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+      inputKind,
+      topic: topic || null,
+      sourceUploadId: sourceUploadId || null,
+      sourceDocumentUrl: null,
+      sourceFileName,
+      slideCount: normalizeSlideCount(body.slideCount),
+      imageDensity: normalizeImageDensity(body.imageDensity),
+      styleId: normalizeTemplateId(body.styleId),
+      layoutId: normalizeTemplateId(body.layoutId),
+      brandId: normalizeTemplateId(body.brandId),
+    });
+  } catch {
+    context.res = error("無法建立簡報生成工作", "deck_job_create_failed", 500, req);
+    return;
+  }
 
   context.res = ok(
     {

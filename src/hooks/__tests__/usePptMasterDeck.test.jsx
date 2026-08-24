@@ -11,7 +11,7 @@ vi.mock("../../services/aiService", () => ({
 }));
 
 vi.mock("../../services/storageService", () => ({
-  uploadFileToBlob: vi.fn(),
+  uploadFile: vi.fn(),
 }));
 
 import {
@@ -20,6 +20,7 @@ import {
   getDeckSlidePreview,
   waitForDeckJob,
 } from "../../services/aiService";
+import { uploadFile } from "../../services/storageService";
 import usePptMasterDeck from "../usePptMasterDeck";
 
 const STORAGE_KEY = "genpic_deck_job";
@@ -130,6 +131,36 @@ describe("usePptMasterDeck", () => {
     expect(createDeckJob).toHaveBeenCalledWith(
       expect.objectContaining({ imageDensity: "every" })
     );
+  });
+
+  it("uploads document sources by owner-scoped upload ID instead of a Blob URL", async () => {
+    const file = new File(["source"], "brief.pdf", { type: "application/pdf" });
+    uploadFile.mockResolvedValue({ uploadId: "upload-doc-1", status: "ready" });
+    createDeckJob.mockResolvedValue({ jobId: "deck-upload-1", status: "queued" });
+    waitForDeckJob.mockResolvedValue({
+      jobId: "deck-upload-1",
+      status: "succeeded",
+      deckTitle: "參考文件簡報",
+      fileName: "參考文件簡報.pptx",
+      slideCount: 6,
+      progress: { current: 6, total: 6 },
+    });
+
+    const { result } = renderHook(() => usePptMasterDeck());
+    await result.current.generate({
+      file,
+      slideCount: 6,
+      imageDensity: "every",
+    });
+
+    expect(uploadFile).toHaveBeenCalledWith(file, "document");
+    expect(createDeckJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUploadId: "upload-doc-1",
+        fileName: "brief.pdf",
+      })
+    );
+    expect(createDeckJob.mock.calls[0][0]).not.toHaveProperty("documentUrl");
   });
 
   it("keeps the job id when only the polling connection broke", async () => {

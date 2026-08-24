@@ -2,12 +2,19 @@ const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { generateGeminiImage } = require("../_shared/geminiImage");
 const { rateLimit } = require("../_shared/rateLimit");
-const { isUrlAllowed } = require("../_shared/urlValidator");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { createImageJob } = require("../_shared/imageJobs");
-const { IMAGE_QUALITIES, generateGptImage } = require("../_shared/gptImage");
+const {
+  IMAGE_QUALITIES,
+  editGptImage,
+  generateGptImage,
+} = require("../_shared/gptImage");
 const { buildImagePrompt } = require("../_shared/imagePrompt");
+const {
+  downloadOwnedImage,
+  resolveOwnedImageUpload,
+} = require("../_shared/imageUploads");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -25,13 +32,12 @@ module.exports = async function (context, req) {
   }
 
   const identity = await resolveIdentity(auth.user);
-  if (!identity.userId) {
+  if (!identity.userId || !identity.tenantId) {
     context.res = error("無法辨識使用者", "unauthorized", 401);
     return;
   }
 
-  const modelPolicy = await ensureModelPolicy(identity.tenantId);
-  const selectedModel = modelPolicy.defaultModel;
+  const body = req.body || {};
   const {
     userScript,
     stylePrompt,
@@ -40,11 +46,15 @@ module.exports = async function (context, req) {
     imageLanguage,
     aspectRatio,
     imageSize,
-    imageUrl,
+    referenceUploadId,
     quality,
-  } = req.body || {};
+  } = body;
   if (!userScript || !String(userScript).trim()) {
     context.res = error("缺少 userScript", "bad_request", 400);
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "imageUrl")) {
+    context.res = error("不接受由呼叫端指定的圖片 URL", "bad_request", 400);
     return;
   }
   if (quality && !IMAGE_QUALITIES.includes(quality)) {
@@ -53,6 +63,26 @@ module.exports = async function (context, req) {
   }
 
   try {
+    let referenceImage = null;
+    if (referenceUploadId !== undefined && referenceUploadId !== null) {
+      const upload = await resolveOwnedImageUpload({
+        uploadId: referenceUploadId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+      });
+      if (!upload) {
+        context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
+        return;
+      }
+      const source = await downloadOwnedImage(upload);
+      referenceImage = {
+        base64: source.buffer.toString("base64"),
+        mimeType: source.contentType,
+      };
+    }
+
+    const modelPolicy = await ensureModelPolicy(identity.tenantId);
+    const selectedModel = modelPolicy.defaultModel;
     const prompt = buildImagePrompt({
       userScript,
       stylePrompt,
@@ -62,6 +92,23 @@ module.exports = async function (context, req) {
     });
 
     if (selectedModel === "gpt-image-2") {
+      if (referenceImage) {
+        const result = await editGptImage({
+          imageBase64: referenceImage.base64,
+          mimeType: referenceImage.mimeType,
+          prompt,
+          aspectRatio,
+          quality,
+        });
+        context.res = ok({
+          ...result,
+          aspectRatio: aspectRatio || "1:1",
+          prompt,
+          model: selectedModel,
+        });
+        return;
+      }
+
       if (process.env.FUNCTIONS_WORKER_RUNTIME) {
         const result = await generateGptImage({ prompt, aspectRatio, quality });
         context.res = ok({
@@ -95,33 +142,11 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const parts = [];
-
-    if (imageUrl) {
-      // SSRF 防護：驗證 imageUrl 是否在允許的白名單內
-      if (!isUrlAllowed(imageUrl)) {
-        context.res = error("提供的圖片 URL 不在允許範圍內", "bad_request", 400);
-        return;
-      }
-
-      try {
-        const imageResponse = await fetch(imageUrl);
-        if (!imageResponse.ok) throw new Error("Failed to fetch image");
-        const arrayBuffer = await imageResponse.arrayBuffer();
-        parts.push({
-          base64: Buffer.from(arrayBuffer).toString("base64"),
-          mimeType: imageResponse.headers.get("content-type") || "image/jpeg",
-        });
-      } catch (imgErr) {
-        context.log.warn("Failed to fetch reference image:", imgErr);
-      }
-    }
-
     const image = await generateGeminiImage({
       prompt,
       aspectRatio,
       imageSize,
-      referenceImage: parts[0],
+      referenceImage,
       logger: context.log,
     });
 

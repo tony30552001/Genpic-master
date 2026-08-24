@@ -1,8 +1,8 @@
 import { API_BASE_URL } from "../config";
 import { apiGet, apiGetBlob, apiPost } from "./apiClient";
 
-export const analyzeStyle = async ({ referencePreview, imageUrl }) =>
-  apiPost(`${API_BASE_URL}/analyze-style`, { referencePreview, imageUrl });
+export const analyzeStyle = async ({ referenceUploadId }) =>
+  apiPost(`${API_BASE_URL}/analyze-style`, { referenceUploadId });
 
 export const generateImage = async ({
   userScript,
@@ -13,7 +13,7 @@ export const generateImage = async ({
   aspectRatio,
   imageSize,
   imageQuality,
-  imageUrl,
+  referenceUploadId,
   signal,
 }) => {
   return apiPost(
@@ -27,7 +27,7 @@ export const generateImage = async ({
       aspectRatio,
       imageSize,
       quality: imageQuality,
-      imageUrl,
+      referenceUploadId,
     },
     { signal }
   );
@@ -94,7 +94,7 @@ export const generateFilename = async ({ userScript }) =>
 /**
  * 分析文件內容並提取分鏡腳本
  * @param {Object} params
- * @param {string} params.documentUrl - 文件在 Blob Storage 的 URL
+ * @param {string} params.uploadId - 已完成且屬於目前使用者的文件上傳 ID
  * @param {string} params.fileName - 檔案名稱
  * @param {string} params.contentType - MIME 類型
  * @param {string} params.base64Content - Base64 編碼的文件內容（可選）
@@ -102,14 +102,14 @@ export const generateFilename = async ({ userScript }) =>
  * @returns {Promise<Object>} 包含 scenes 的分析結果
  */
 export const analyzeDocument = async ({
-  documentUrl,
+  uploadId,
   fileName,
   contentType,
   base64Content,
   sceneCount,
 }) =>
   apiPost(`${API_BASE_URL}/analyze-document`, {
-    documentUrl,
+    uploadId,
     fileName,
     contentType,
     base64Content,
@@ -121,7 +121,7 @@ export const listPptTemplates = async ({ signal } = {}) =>
 
 export const createDeckJob = async ({
   topic,
-  documentUrl,
+  sourceUploadId,
   fileName,
   slideCount,
   imageDensity,
@@ -131,7 +131,7 @@ export const createDeckJob = async ({
 }) =>
   apiPost(
     `${API_BASE_URL}/deck-jobs`,
-    { topic, documentUrl, fileName, slideCount, imageDensity, styleId, layoutId },
+    { topic, sourceUploadId, fileName, slideCount, imageDensity, styleId, layoutId },
     { signal }
   );
 
@@ -227,8 +227,7 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
 /**
  * AI 圖片轉換 — 支援 Gemini（後端）和 GPT-Image-2（前端 edit API）
  * @param {Object} params
- * @param {string} params.imageDataUrl - 來源圖片 base64 data URL
- * @param {string} [params.imageBlobSasUrl] - 來源圖片 Blob SAS URL（Gemini 路徑優先使用）
+ * @param {string} params.uploadId - 來源圖片的 owner-scoped upload ID
  * @param {string} params.mimeType - 圖片 MIME 類型
  * @param {'style_transfer'|'reference_gen'|'element_extract'|'bg_replace'} params.mode - 轉換模式
  * @param {string} params.prompt - 使用者自訂描述
@@ -239,8 +238,7 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
  * @returns {Promise<{imageUrl: string, prompt: string}>}
  */
 export const transformImage = async ({
-  imageDataUrl,
-  imageBlobSasUrl,
+  uploadId,
   mimeType,
   mode,
   prompt,
@@ -250,12 +248,10 @@ export const transformImage = async ({
   imageLanguage,
   signal,
 }) => {
-  const imageBase64 = imageDataUrl ? imageDataUrl.split(",")[1] : null;
   return apiPost(
     `${API_BASE_URL}/image-transform`,
     {
-      imageBase64,
-      imageUrl: imageBlobSasUrl || null,
+      uploadId,
       mimeType,
       mode,
       prompt,

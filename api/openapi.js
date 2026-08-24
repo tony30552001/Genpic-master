@@ -40,9 +40,114 @@ const response = (
   },
 });
 
+const uploadCreateRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["fileName", "contentType", "sizeBytes", "purpose"],
+  properties: {
+    fileName: {
+      type: "string",
+      minLength: 1,
+      maxLength: 255,
+      pattern: "^[^\\u0000-\\u001F\\u007F-\\u009F]+$",
+      description: "Human-readable source filename; never used as a Blob path.",
+    },
+    contentType: {
+      type: "string",
+      description:
+        "Allowlisted media type. Empty or application/octet-stream may be inferred from a supported document filename.",
+    },
+    sizeBytes: {
+      type: "integer",
+      format: "int64",
+      minimum: 1,
+    },
+    purpose: {
+      type: "string",
+      enum: ["document", "image"],
+    },
+  },
+  oneOf: [
+    {
+      title: "Document upload",
+      properties: {
+        purpose: { type: "string", enum: ["document"] },
+        sizeBytes: {
+          type: "integer",
+          format: "int64",
+          minimum: 1,
+          maximum: 52428800,
+        },
+      },
+    },
+    {
+      title: "Image upload",
+      properties: {
+        purpose: { type: "string", enum: ["image"] },
+        sizeBytes: {
+          type: "integer",
+          format: "int64",
+          minimum: 1,
+          maximum: 10485760,
+        },
+      },
+    },
+  ],
+  discriminator: { propertyName: "purpose" },
+};
+
+const uploadCreateSuccessSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["uploadId", "status", "blobUrl", "sasToken", "expiresAt"],
+  properties: {
+    uploadId: { type: "string", format: "uuid" },
+    status: { type: "string", enum: ["pending"] },
+    blobUrl: { type: "string", format: "uri" },
+    sasToken: { type: "string" },
+    expiresAt: {
+      type: "string",
+      format: "date-time",
+      description: "Expiration of the short-lived upload SAS grant.",
+    },
+  },
+};
+
+const uploadReadySuccessSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["uploadId", "status"],
+  properties: {
+    uploadId: { type: "string", format: "uuid" },
+    status: { type: "string", enum: ["ready"] },
+  },
+};
+
+const uploadErrorSchema = (codes) => ({
+  type: "object",
+  additionalProperties: false,
+  required: ["error"],
+  properties: {
+    error: {
+      type: "object",
+      additionalProperties: false,
+      required: ["code", "message"],
+      properties: {
+        code: { type: "string", enum: codes },
+        message: { type: "string" },
+      },
+    },
+  },
+});
+
+const uploadResponse = (description, schema) =>
+  response(description, { schema });
+
 const operation = ({
   summary,
+  description,
   tags,
+  deprecated = false,
   auth = true,
   body = false,
   csrf = false,
@@ -52,6 +157,8 @@ const operation = ({
   parameters = [],
 }) => ({
   summary,
+  ...(description ? { description } : {}),
+  ...(deprecated ? { deprecated: true } : {}),
   tags,
   ...(auth
     ? {
@@ -153,11 +260,70 @@ addOperation("/api/analyze-style", "post", {
 });
 
 addOperation("/api/blob-sas", "post", {
-  summary: "Create a blob upload SAS URL",
+  summary: "Deprecated: arbitrary Blob SAS signing",
+  description: "This route is retired. Use POST /api/uploads for owner-scoped staged uploads.",
+  deprecated: true,
   tags: ["Storage"],
   body: true,
   csrf: true,
 });
+
+paths["/api/uploads"] = {
+  post: {
+    summary: "Create an owner-scoped staged upload",
+    tags: ["Storage"],
+    security: [{ sessionCookie: [] }],
+    parameters: [csrfHeaderParameter],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": { schema: uploadCreateRequestSchema },
+      },
+    },
+    responses: {
+      201: uploadResponse("Pending upload and short-lived write grant", uploadCreateSuccessSchema),
+      400: uploadResponse("Invalid upload metadata", uploadErrorSchema(["invalid_upload"])),
+      401: uploadResponse("Authentication required or invalid", uploadErrorSchema(["unauthorized"])),
+      403: uploadResponse("CSRF validation failed", uploadErrorSchema(["forbidden"])),
+      429: uploadResponse("Rate limit exceeded", uploadErrorSchema(["rate_limited"])),
+      500: uploadResponse(
+        "Identity, upload record, or grant creation failed",
+        uploadErrorSchema(["upload_identity_failed", "upload_create_failed"])
+      ),
+    },
+  },
+};
+
+paths["/api/uploads/{id}/complete"] = {
+  post: {
+    summary: "Validate and promote an owned staged upload",
+    tags: ["Storage"],
+    security: [{ sessionCookie: [] }],
+    parameters: [
+      {
+        name: "id",
+        in: "path",
+        required: true,
+        schema: { type: "string", format: "uuid" },
+      },
+      csrfHeaderParameter,
+    ],
+    responses: {
+      200: uploadResponse("Upload is ready", uploadReadySuccessSchema),
+      401: uploadResponse("Authentication required or invalid", uploadErrorSchema(["unauthorized"])),
+      403: uploadResponse("CSRF validation failed", uploadErrorSchema(["forbidden"])),
+      404: uploadResponse("No owned upload is available", uploadErrorSchema(["upload_not_found"])),
+      409: uploadResponse("Upload state changed concurrently", uploadErrorSchema(["upload_state_conflict"])),
+      422: uploadResponse("Stored upload declaration is invalid", uploadErrorSchema(["upload_invalid"])),
+      429: uploadResponse("Rate limit exceeded", uploadErrorSchema(["rate_limited"])),
+      500: uploadResponse(
+        "Identity or upload completion could not be persisted",
+        uploadErrorSchema(["upload_identity_failed", "upload_completion_failed"])
+      ),
+      502: uploadResponse("Staged Blob validation or promotion failed", uploadErrorSchema(["upload_promotion_failed"])),
+    },
+  },
+};
 
 addOperation("/api/embeddings", "post", {
   summary: "Create text embeddings",

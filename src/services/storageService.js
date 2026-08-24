@@ -52,62 +52,124 @@ export const deleteHistoryItem = async (itemId) =>
 export const searchStylesByEmbedding = async ({ embedding, topK }) =>
   apiPost(`${API_BASE_URL}/styles/search`, { embedding, topK });
 
-export const requestBlobSas = async ({ fileName, contentType, container }) =>
-  apiPost(`${API_BASE_URL}/blob-sas`, { fileName, contentType, container });
+const invalidUploadGrant = () => new Error("Invalid upload grant");
 
-export const uploadBlob = async ({ blobUrl, sasToken, file, contentType }) => {
-  const uploadUrl = `${blobUrl}?${sasToken}`;
-  const response = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "x-ms-blob-type": "BlockBlob",
-      "Content-Type": contentType,
-    },
-    body: file,
-  });
+const azureBlobHostSuffixes = [
+  ".blob.core.windows.net",
+  ".blob.core.chinacloudapi.cn",
+  ".blob.core.usgovcloudapi.net",
+  ".blob.core.cloudapi.de",
+];
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Upload failed: ${response.status}`);
+const isTrustedAzureBlobUrl = (value) => {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    return (
+      url.protocol === "https:" &&
+      azureBlobHostSuffixes.some((suffix) => hostname.endsWith(suffix))
+    );
+  } catch {
+    return false;
   }
-
-  return blobUrl;
 };
 
-/**
- * 上傳檔案到 Blob Storage
- * 完整流程：取得 SAS Token → 上傳檔案
- * @param {File} file - 要上傳的檔案
- * @param {string} container - Blob 容器名稱 (預設: uploads)
- * @returns {Promise<{url: string, blobName: string}>}
- */
-export const uploadFileToBlob = async (file, container = "uploads") => {
-  const contentType = inferDocumentMimeType(file);
+const validateUploadGrant = (grant) => {
+  const values = [
+    grant?.uploadId,
+    grant?.status,
+    grant?.blobUrl,
+    grant?.sasToken,
+    grant?.expiresAt,
+  ];
 
-  // 步驟 1: 請求 SAS Token
-  const sasResult = await requestBlobSas({
-    fileName: file.name,
-    contentType,
-    container,
-  });
-
-  if (!sasResult?.blobUrl || !sasResult?.sasToken) {
-    throw new Error("無法取得上傳授權");
+  if (
+    values.some((value) => typeof value !== "string" || value.length === 0) ||
+    grant.status !== "pending"
+  ) {
+    throw invalidUploadGrant();
   }
 
-  // 步驟 2: 上傳檔案
-  await uploadBlob({
-    blobUrl: sasResult.blobUrl,
-    sasToken: sasResult.sasToken,
+  if (!isTrustedAzureBlobUrl(grant.blobUrl)) {
+    throw invalidUploadGrant();
+  }
+
+  return grant;
+};
+
+export const createUpload = async ({ fileName, contentType, sizeBytes, purpose }) =>
+  validateUploadGrant(
+    await apiPost(`${API_BASE_URL}/uploads`, {
+      fileName,
+      contentType,
+      sizeBytes,
+      purpose,
+    })
+  );
+
+const joinUploadUrl = (blobUrl, sasToken) => {
+  if (typeof blobUrl !== "string" || !blobUrl || typeof sasToken !== "string" || !sasToken) {
+    throw invalidUploadGrant();
+  }
+
+  if (!isTrustedAzureBlobUrl(blobUrl)) {
+    throw invalidUploadGrant();
+  }
+
+  const token = sasToken.startsWith("?") ? sasToken.slice(1) : sasToken;
+  const separator = blobUrl.includes("?")
+    ? (blobUrl.endsWith("?") || blobUrl.endsWith("&") ? "" : "&")
+    : "?";
+  return `${blobUrl}${separator}${token}`;
+};
+
+export const putUploadBytes = async ({ blobUrl, sasToken, file, contentType }) => {
+  const uploadUrl = joinUploadUrl(blobUrl, sasToken);
+  let response;
+
+  try {
+    response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "x-ms-blob-type": "BlockBlob",
+        "Content-Type": contentType || file.type,
+      },
+      body: file,
+    });
+  } catch {
+    throw new Error("Upload failed");
+  }
+
+  if (!response.ok) {
+    throw new Error(`Upload failed: ${response.status}`);
+  }
+};
+
+export const completeUpload = async (uploadId) =>
+  apiPost(`${API_BASE_URL}/uploads/${uploadId}/complete`);
+
+export const uploadFile = async (file, purpose) => {
+  const contentType = purpose === "document" ? inferDocumentMimeType(file) : file.type;
+  const grant = await createUpload({
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+    purpose,
+  });
+
+  await putUploadBytes({
+    blobUrl: grant.blobUrl,
+    sasToken: grant.sasToken,
     file,
     contentType,
   });
 
-  return {
-    url: sasResult.blobUrl,
-    readUrl: sasResult.readUrl || sasResult.blobUrl,
-    blobName: sasResult.blobName,
-  };
+  const completion = await completeUpload(grant.uploadId);
+  if (completion?.uploadId !== grant.uploadId || completion?.status !== "ready") {
+    throw new Error("Invalid upload completion");
+  }
+
+  return { uploadId: completion.uploadId, status: "ready" };
 };
 
 // ── Templates API ──
