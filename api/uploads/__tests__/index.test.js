@@ -169,6 +169,45 @@ describe("upload API", () => {
   });
 
   it.each([
+    ["an omitted value", undefined],
+    ["an array", ["application/pdf"]],
+    ["an object", {}],
+    ["a symbol", Symbol("application/pdf")],
+    [
+      "a coercion trap",
+      { toString: () => { throw new Error("coercion secret"); } },
+    ],
+  ])("rejects contentType supplied as %s without throwing", async (_case, contentType) => {
+    const body = { ...validCreateBody };
+    if (contentType === undefined) delete body.contentType;
+    else body.contentType = contentType;
+
+    const response = await invoke({ body });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("invalid_upload");
+    expect(JSON.stringify(response.body)).not.toContain("coercion secret");
+    expect(uploads.createPendingUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inherited contentType field", async () => {
+    const body = Object.assign(
+      Object.create({ contentType: "application/pdf" }),
+      {
+        fileName: validCreateBody.fileName,
+        sizeBytes: validCreateBody.sizeBytes,
+        purpose: validCreateBody.purpose,
+      }
+    );
+
+    const response = await invoke({ body });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("invalid_upload");
+    expect(uploads.createPendingUpload).not.toHaveBeenCalled();
+  });
+
+  it.each([
     ["empty", ""],
     ["generic binary", "application/octet-stream"],
   ])("infers a supported document MIME type when content type is %s", async (_case, contentType) => {
@@ -339,6 +378,46 @@ describe("upload API", () => {
     });
   });
 
+  it.each([
+    ["a pg bigint decimal string", "123"],
+    ["a JavaScript bigint", 123n],
+  ])("normalizes %s before validating and promoting", async (_case, sizeBytes) => {
+    uploads.getOwnedUpload.mockResolvedValueOnce(
+      pendingUpload({ size_bytes: sizeBytes })
+    );
+
+    const response = await invoke({ params: { id: UPLOAD_ID, action: "complete" } });
+
+    expect(response.status).toBe(200);
+    expect(uploadStorage.promoteUpload).toHaveBeenCalledWith({
+      uploadId: UPLOAD_ID,
+      expectedSizeBytes: 123,
+      expectedContentType: "application/pdf",
+    });
+  });
+
+  it.each([
+    ["zero decimal", "0"],
+    ["negative decimal", "-1"],
+    ["fractional decimal", "1.5"],
+    ["decimal with leading zero", "0123"],
+    ["decimal with whitespace", " 123 "],
+    ["exponent notation", "1e2"],
+    ["trailing characters", "123x"],
+    ["safe-integer overflow string", "9007199254740992"],
+    ["safe-integer overflow bigint", 9007199254740992n],
+  ])("rejects persisted size_bytes in %s form before Azure access", async (_case, sizeBytes) => {
+    uploads.getOwnedUpload.mockResolvedValueOnce(
+      pendingUpload({ size_bytes: sizeBytes })
+    );
+
+    const response = await invoke({ params: { id: UPLOAD_ID, action: "complete" } });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe("upload_invalid");
+    expect(uploadStorage.promoteUpload).not.toHaveBeenCalled();
+  });
+
   it("re-reads the same owner after a concurrent caller marks the row ready", async () => {
     uploads.getOwnedUpload
       .mockResolvedValueOnce(pendingUpload())
@@ -409,6 +488,19 @@ describe("upload OpenAPI contract", () => {
     expect(operation.responses[401].content["application/json"].schema).toBeDefined();
   });
 
+  it("documents the purpose-specific document and image byte limits", () => {
+    const document = require("../../openapi");
+    const schema =
+      document.paths["/api/uploads"].post.requestBody.content["application/json"].schema;
+    const branchFor = (purpose) =>
+      schema.oneOf.find((branch) =>
+        branch.properties.purpose.enum.includes(purpose)
+      );
+
+    expect(branchFor("document").properties.sizeBytes.maximum).toBe(52428800);
+    expect(branchFor("image").properties.sizeBytes.maximum).toBe(10485760);
+  });
+
   it("documents owner-scoped completion with ready and upload-not-found schemas", () => {
     const document = require("../../openapi");
     const operation = document.paths["/api/uploads/{id}/complete"].post;
@@ -421,5 +513,31 @@ describe("upload OpenAPI contract", () => {
     expect(operation.responses[200].content["application/json"].schema).toBeDefined();
     expect(operation.responses[404].content["application/json"].schema).toBeDefined();
     expect(operation.responses[404].description).toContain("owned upload");
+  });
+});
+
+describe("upload App Service routes", () => {
+  it("routes POST /api/uploads/:id through the stable missing-action response", async () => {
+    const { app } = require("../../server");
+    const server = await new Promise((resolve) => {
+      const listening = app.listen(0, "127.0.0.1", () => resolve(listening));
+    });
+
+    try {
+      const { port } = server.address();
+      const response = await fetch(
+        `http://127.0.0.1:${port}/api/uploads/${UPLOAD_ID}`,
+        { method: "POST" }
+      );
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({
+        error: { code: "upload_not_found" },
+      });
+    } finally {
+      await new Promise((resolve, reject) =>
+        server.close((closeError) => closeError ? reject(closeError) : resolve())
+      );
+    }
   });
 });

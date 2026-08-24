@@ -46,9 +46,28 @@ const isAllowedContentType = (purpose, contentType) =>
     ? SUPPORTED_MIME_TYPES.has(contentType)
     : purpose === "image" && IMAGE_MIME_TYPES.has(contentType);
 
+const normalizeStoredSizeBytes = (value) => {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+  if (typeof value === "bigint") {
+    return value > 0n && value <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(value)
+      : null;
+  }
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
+
 const parseCreateInput = (body) => {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   if (Object.keys(body).some((key) => !ALLOWED_FIELDS.has(key))) return null;
+  if (!Object.hasOwn(body, "contentType") || typeof body.contentType !== "string") {
+    return null;
+  }
 
   const fileName = typeof body.fileName === "string" ? body.fileName.trim() : "";
   if (
@@ -84,18 +103,19 @@ const parseCreateInput = (body) => {
   return { fileName, contentType, sizeBytes, purpose };
 };
 
-const isPendingUploadValid = (upload) => {
+const normalizePendingUpload = (upload) => {
   const maxBytes = maxBytesForPurpose(upload.purpose);
-  return (
-    maxBytes !== null &&
-    Number.isSafeInteger(upload.size_bytes) &&
-    upload.size_bytes > 0 &&
-    upload.size_bytes <= maxBytes &&
-    isAllowedContentType(
-      upload.purpose,
-      normalizeContentType(upload.content_type)
-    )
-  );
+  const sizeBytes = normalizeStoredSizeBytes(upload.size_bytes);
+  const contentType = normalizeContentType(upload.content_type);
+  if (
+    maxBytes === null ||
+    sizeBytes === null ||
+    sizeBytes > maxBytes ||
+    !isAllowedContentType(upload.purpose, contentType)
+  ) {
+    return null;
+  }
+  return { sizeBytes, contentType };
 };
 
 const uploadNotFound = (req) =>
@@ -182,7 +202,8 @@ const handleComplete = async (context, req, identity, uploadId) => {
     context.res = uploadNotFound(req);
     return;
   }
-  if (!isPendingUploadValid(upload)) {
+  const normalizedUpload = normalizePendingUpload(upload);
+  if (!normalizedUpload) {
     context.res = error("上傳資料無效", "upload_invalid", 422, req);
     return;
   }
@@ -190,8 +211,8 @@ const handleComplete = async (context, req, identity, uploadId) => {
   try {
     await promoteUpload({
       uploadId,
-      expectedSizeBytes: upload.size_bytes,
-      expectedContentType: normalizeContentType(upload.content_type),
+      expectedSizeBytes: normalizedUpload.sizeBytes,
+      expectedContentType: normalizedUpload.contentType,
     });
   } catch {
     context.res = error(

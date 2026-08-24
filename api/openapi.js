@@ -61,13 +61,39 @@ const uploadCreateRequestSchema = {
       type: "integer",
       format: "int64",
       minimum: 1,
-      maximum: 52428800,
     },
     purpose: {
       type: "string",
       enum: ["document", "image"],
     },
   },
+  oneOf: [
+    {
+      title: "Document upload",
+      properties: {
+        purpose: { type: "string", enum: ["document"] },
+        sizeBytes: {
+          type: "integer",
+          format: "int64",
+          minimum: 1,
+          maximum: 52428800,
+        },
+      },
+    },
+    {
+      title: "Image upload",
+      properties: {
+        purpose: { type: "string", enum: ["image"] },
+        sizeBytes: {
+          type: "integer",
+          format: "int64",
+          minimum: 1,
+          maximum: 10485760,
+        },
+      },
+    },
+  ],
+  discriminator: { propertyName: "purpose" },
 };
 
 const uploadCreateSuccessSchema = {

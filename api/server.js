@@ -124,6 +124,7 @@ registerRoutes(["/api/analyze-document"], ["POST", "OPTIONS"], analyzeDocument);
 registerRoutes(["/api/analyze-style"], ["POST", "OPTIONS"], analyzeStyle);
 registerRoutes(["/api/blob-sas"], ["POST", "OPTIONS"], blobSas);
 registerRoutes(["/api/uploads"], ["POST", "OPTIONS"], uploads);
+registerRoutes(["/api/uploads/:id"], ["POST", "OPTIONS"], uploads);
 registerRoutes(["/api/uploads/:id/:action"], ["POST", "OPTIONS"], uploads);
 registerRoutes(["/api/deck-jobs"], ["POST", "OPTIONS"], deckJobs);
 registerRoutes(
