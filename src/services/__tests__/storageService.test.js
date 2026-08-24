@@ -19,6 +19,11 @@ import {
   markStyleUsed,
   addHistoryItem,
   deleteHistoryItem,
+  createUpload,
+  putUploadBytes,
+  uploadFile,
+  uploadFileToBlob,
+  requestBlobSas,
 } from "../storageService";
 import { apiGet, apiPost, apiPut, apiDelete } from "../apiClient";
 import { API_BASE_URL } from "../../config";
@@ -26,6 +31,7 @@ import { API_BASE_URL } from "../../config";
 describe("storageService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn());
   });
 
   it("listHistory calls apiGet", async () => {
@@ -89,5 +95,133 @@ describe("storageService", () => {
   it("deleteHistoryItem calls delete", async () => {
     await deleteHistoryItem("item-id");
     expect(apiDelete).toHaveBeenCalled();
+  });
+
+  it("creates an upload without client-controlled storage fields", async () => {
+    apiPost.mockResolvedValueOnce({
+      uploadId: "upload-123",
+      status: "pending",
+      blobUrl: "https://storage.example.test/uploads/upload-123",
+      sasToken: "sig=secret",
+      expiresAt: "2026-08-25T00:00:00.000Z",
+    });
+
+    await createUpload({
+      fileName: "report.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 42,
+      purpose: "document",
+    });
+
+    expect(apiPost).toHaveBeenCalledWith(`${API_BASE_URL}/uploads`, {
+      fileName: "report.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 42,
+      purpose: "document",
+    });
+  });
+
+  it("puts bytes at the granted URL when the SAS token starts with a question mark", async () => {
+    fetch.mockResolvedValueOnce({ ok: true });
+    const file = new File(["image"], "photo.png", { type: "image/png" });
+
+    await putUploadBytes({
+      blobUrl: "https://storage.example.test/uploads/upload-123",
+      sasToken: "?sig=secret",
+      file,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://storage.example.test/uploads/upload-123?sig=secret",
+      expect.objectContaining({
+        method: "PUT",
+        headers: {
+          "x-ms-blob-type": "BlockBlob",
+          "Content-Type": "image/png",
+        },
+        body: file,
+      })
+    );
+  });
+
+  it("orchestrates create, PUT, and completion without exposing grant data", async () => {
+    apiPost
+      .mockResolvedValueOnce({
+        uploadId: "upload-123",
+        status: "pending",
+        blobUrl: "https://storage.example.test/uploads/upload-123",
+        sasToken: "sig=secret",
+        expiresAt: "2026-08-25T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({ uploadId: "upload-123", status: "ready" });
+    fetch.mockResolvedValueOnce({ ok: true });
+    const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
+
+    const result = await uploadFile(file, "document");
+
+    expect(result).toEqual({ uploadId: "upload-123", status: "ready" });
+    expect(Object.keys(result)).toEqual(["uploadId", "status"]);
+    expect(fetch.mock.invocationCallOrder[0]).toBeLessThan(apiPost.mock.invocationCallOrder[1]);
+    expect(apiPost).toHaveBeenLastCalledWith(
+      `${API_BASE_URL}/uploads/upload-123/complete`
+    );
+  });
+
+  it("does not complete when the Blob PUT fails", async () => {
+    apiPost.mockResolvedValueOnce({
+      uploadId: "upload-123",
+      status: "pending",
+      blobUrl: "https://storage.example.test/uploads/upload-123",
+      sasToken: "sig=secret",
+      expiresAt: "2026-08-25T00:00:00.000Z",
+    });
+    fetch.mockResolvedValueOnce({ ok: false, status: 403, text: vi.fn().mockResolvedValue("sig=secret") });
+    const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
+
+    await expect(uploadFile(file, "document")).rejects.toThrow("Upload failed: 403");
+    expect(apiPost).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not return an upload ID when completion fails", async () => {
+    apiPost
+      .mockResolvedValueOnce({
+        uploadId: "upload-123",
+        status: "pending",
+        blobUrl: "https://storage.example.test/uploads/upload-123",
+        sasToken: "sig=secret",
+        expiresAt: "2026-08-25T00:00:00.000Z",
+      })
+      .mockRejectedValueOnce(new Error("completion rejected"));
+    fetch.mockResolvedValueOnce({ ok: true });
+    const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
+
+    await expect(uploadFile(file, "document")).rejects.toThrow("completion rejected");
+  });
+
+  it("rejects malformed grants before attempting a Blob PUT", async () => {
+    apiPost.mockResolvedValueOnce({
+      uploadId: "upload-123",
+      status: "pending",
+      blobUrl: "https://storage.example.test/uploads/upload-123",
+      sasToken: "",
+      expiresAt: "2026-08-25T00:00:00.000Z",
+    });
+    const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
+
+    await expect(uploadFile(file, "document")).rejects.toThrow("Invalid upload grant");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps deprecated helpers local and free of the obsolete SAS endpoint", async () => {
+    const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
+    apiPost.mockResolvedValueOnce({
+      uploadId: "upload-123", status: "pending", blobUrl: "https://storage.example.test/uploads/upload-123", sasToken: "sig=secret", expiresAt: "2026-08-25T00:00:00.000Z",
+    }).mockResolvedValueOnce({ uploadId: "upload-123", status: "ready" });
+    fetch.mockResolvedValueOnce({ ok: true });
+
+    await expect(requestBlobSas({ fileName: file.name })).rejects.toMatchObject({ code: "upload_api_replaced", message: "upload_api_replaced" });
+    await expect(uploadFileToBlob(file, "caller-controlled-container")).resolves.toEqual({ uploadId: "upload-123", status: "ready" });
+    expect(apiPost).not.toHaveBeenCalledWith(expect.stringContaining("blob-sas"), expect.anything());
+    expect(apiPost).toHaveBeenCalledWith(`${API_BASE_URL}/uploads`, expect.not.objectContaining({ container: expect.anything() }));
   });
 });

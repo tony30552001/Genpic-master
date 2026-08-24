@@ -52,62 +52,101 @@ export const deleteHistoryItem = async (itemId) =>
 export const searchStylesByEmbedding = async ({ embedding, topK }) =>
   apiPost(`${API_BASE_URL}/styles/search`, { embedding, topK });
 
-export const requestBlobSas = async ({ fileName, contentType, container }) =>
-  apiPost(`${API_BASE_URL}/blob-sas`, { fileName, contentType, container });
+const invalidUploadGrant = () => new Error("Invalid upload grant");
 
-export const uploadBlob = async ({ blobUrl, sasToken, file, contentType }) => {
-  const uploadUrl = `${blobUrl}?${sasToken}`;
+const validateUploadGrant = (grant) => {
+  const requiredStrings = [
+    grant?.uploadId,
+    grant?.status,
+    grant?.blobUrl,
+    grant?.sasToken,
+    grant?.expiresAt,
+  ];
+
+  if (
+    requiredStrings.some((value) => typeof value !== "string" || value.length === 0) ||
+    grant.status !== "pending"
+  ) {
+    throw invalidUploadGrant();
+  }
+
+  try {
+    new URL(grant.blobUrl);
+  } catch {
+    throw invalidUploadGrant();
+  }
+
+  return grant;
+};
+
+export const createUpload = async ({ fileName, contentType, sizeBytes, purpose }) =>
+  validateUploadGrant(
+    await apiPost(`${API_BASE_URL}/uploads`, {
+      fileName,
+      contentType,
+      sizeBytes,
+      purpose,
+    })
+  );
+
+export const putUploadBytes = async ({ blobUrl, sasToken, file }) => {
+  if (typeof blobUrl !== "string" || !blobUrl || typeof sasToken !== "string" || !sasToken) {
+    throw invalidUploadGrant();
+  }
+
+  const uploadUrl = `${blobUrl}${sasToken.startsWith("?") ? "" : "?"}${sasToken}`;
   const response = await fetch(uploadUrl, {
     method: "PUT",
     headers: {
       "x-ms-blob-type": "BlockBlob",
-      "Content-Type": contentType,
+      "Content-Type": file.type,
     },
     body: file,
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Upload failed: ${response.status}`);
+    throw new Error(`Upload failed: ${response.status}`);
   }
-
-  return blobUrl;
 };
 
-/**
- * 上傳檔案到 Blob Storage
- * 完整流程：取得 SAS Token → 上傳檔案
- * @param {File} file - 要上傳的檔案
- * @param {string} container - Blob 容器名稱 (預設: uploads)
- * @returns {Promise<{url: string, blobName: string}>}
- */
-export const uploadFileToBlob = async (file, container = "uploads") => {
-  const contentType = inferDocumentMimeType(file);
+export const completeUpload = async (uploadId) =>
+  apiPost(`${API_BASE_URL}/uploads/${uploadId}/complete`);
 
-  // 步驟 1: 請求 SAS Token
-  const sasResult = await requestBlobSas({
+export const uploadFile = async (file, purpose) => {
+  const contentType = purpose === "document" ? inferDocumentMimeType(file) : file.type;
+  const grant = await createUpload({
     fileName: file.name,
     contentType,
-    container,
+    sizeBytes: file.size,
+    purpose,
   });
 
-  if (!sasResult?.blobUrl || !sasResult?.sasToken) {
-    throw new Error("無法取得上傳授權");
+  await putUploadBytes({
+    blobUrl: grant.blobUrl,
+    sasToken: grant.sasToken,
+    file,
+  });
+
+  const completion = await completeUpload(grant.uploadId);
+  if (completion?.uploadId !== grant.uploadId || completion?.status !== "ready") {
+    throw new Error("Invalid upload completion");
   }
 
-  // 步驟 2: 上傳檔案
-  await uploadBlob({
-    blobUrl: sasResult.blobUrl,
-    sasToken: sasResult.sasToken,
-    file,
-    contentType,
-  });
-
   return {
-    url: sasResult.blobUrl,
-    readUrl: sasResult.readUrl || sasResult.blobUrl,
-    blobName: sasResult.blobName,
+    uploadId: completion.uploadId,
+    status: "ready",
   };
+};
+
+export const uploadFileToBlob = (file, ignoredContainer) => {
+  void ignoredContainer;
+  return uploadFile(file, "document");
+};
+
+export const requestBlobSas = async () => {
+  const error = new Error("upload_api_replaced");
+  error.code = "upload_api_replaced";
+  throw error;
 };
 
 // ── Templates API ──
