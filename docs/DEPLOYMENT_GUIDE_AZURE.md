@@ -44,6 +44,9 @@
 - `RATE_LIMIT_PER_MINUTE=60`
 - `API_BODY_LIMIT=100mb`
 - `IMAGE_JOB_POLL_MS=2000`（可選，App Service worker 掃描 queued jobs 的間隔）
+- `UPLOAD_CLEANUP_ENABLED=true`（可選，清理逾期 staging upload；預設開啟）
+- `UPLOAD_CLEANUP_INTERVAL_MS=3600000`（可選，清理 worker 間隔；預設每小時）
+- `UPLOAD_CLEANUP_BATCH_SIZE=100`（可選，每批上限 500；預設 100）
 
 App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 production port。
 

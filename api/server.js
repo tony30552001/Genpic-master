@@ -10,6 +10,7 @@ const auth = require("./auth");
 const blobSas = require("./blob-sas");
 const deckJobs = require("./deck-jobs");
 const { startDeckJobWorker } = require("./_shared/deckJobs");
+const { startUploadCleanupWorker } = require("./_shared/uploadCleanup");
 const embeddings = require("./embeddings");
 const generateFilename = require("./generate-filename");
 const generateImages = require("./generate-images");
@@ -221,6 +222,8 @@ const start = () => {
   });
   startImageJobWorker();
   startDeckJobWorker();
+  const stopUploadCleanupWorker = startUploadCleanupWorker();
+  server.once("close", stopUploadCleanupWorker);
   return server;
 };
 
