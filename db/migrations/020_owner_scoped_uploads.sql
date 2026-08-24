@@ -1,7 +1,10 @@
+ALTER TABLE users
+  ADD CONSTRAINT users_tenant_id_id_key UNIQUE (tenant_id, id);
+
 CREATE TABLE uploads (
   id uuid PRIMARY KEY,
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
   purpose text NOT NULL CHECK (purpose IN ('document', 'image')),
   original_file_name text NOT NULL,
   content_type text NOT NULL,
@@ -14,7 +17,11 @@ CREATE TABLE uploads (
   cleanup_attempts integer NOT NULL DEFAULT 0,
   last_cleanup_error text,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uploads_tenant_user_fkey
+    FOREIGN KEY (tenant_id, user_id)
+    REFERENCES users(tenant_id, id)
+    ON DELETE CASCADE
 );
 
 CREATE INDEX idx_uploads_owner

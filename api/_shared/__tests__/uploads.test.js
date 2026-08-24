@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 
@@ -69,13 +71,12 @@ describe("owner-scoped upload repository", () => {
     expect(params).toEqual(["upload-1", "tenant-1", "user-1", "image", "ready"]);
   });
 
-  it("marks an upload ready only for the same owner", async () => {
+  it("derives the ready blob name while restricting the transition to the same owner", async () => {
     db.query.mockResolvedValue({ rows: [{ id: "upload-1", status: "ready" }] });
 
     await markUploadReady({
       uploadId: "upload-1",
       ...owner,
-      readyBlobName: "uploads/upload-1.pdf",
     });
 
     const [sql, params] = db.query.mock.calls[0];
@@ -83,7 +84,7 @@ describe("owner-scoped upload repository", () => {
     expect(sql).toContain("blob_name = $4");
     expect(sql).toContain("tenant_id = $2");
     expect(sql).toContain("user_id = $3");
-    expect(params).toEqual(["upload-1", "tenant-1", "user-1", "uploads/upload-1.pdf"]);
+    expect(params).toEqual(["upload-1", "tenant-1", "user-1", "ready/upload-1"]);
   });
 
   it("claims an expiry batch atomically with a skip-locked stale-lease retry", async () => {
@@ -91,7 +92,14 @@ describe("owner-scoped upload repository", () => {
       query: vi
         .fn()
         .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ id: "expired-upload" }] })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "expired-upload",
+              cleanup_claimed_at: "2026-08-24T12:00:00.000Z",
+            },
+          ],
+        })
         .mockResolvedValueOnce({ rows: [] }),
       release: vi.fn(),
     };
@@ -99,7 +107,12 @@ describe("owner-scoped upload repository", () => {
 
     const claimed = await claimExpiredUploads({ limit: 7 });
 
-    expect(claimed).toEqual([{ id: "expired-upload" }]);
+    expect(claimed).toEqual([
+      {
+        id: "expired-upload",
+        cleanup_claimed_at: "2026-08-24T12:00:00.000Z",
+      },
+    ]);
     expect(client.query.mock.calls[0]).toEqual(["BEGIN"]);
     const [sql, params] = client.query.mock.calls[1];
     expect(sql).toContain("FOR UPDATE SKIP LOCKED");
@@ -112,24 +125,51 @@ describe("owner-scoped upload repository", () => {
     expect(client.release).toHaveBeenCalledOnce();
   });
 
-  it("marks a claimed upload expired", async () => {
+  it("does not expire a cleanup claim with a stale timestamp", async () => {
     db.query.mockResolvedValue({ rows: [] });
 
-    await markUploadExpired({ uploadId: "upload-1" });
+    const expired = await markUploadExpired({
+      uploadId: "upload-1",
+      cleanupClaimedAt: "2026-08-24T11:45:00.000Z",
+    });
 
+    expect(expired).toBeNull();
     expect(db.query.mock.calls[0][0]).toContain("SET status = 'expired'");
     expect(db.query.mock.calls[0][0]).toContain("cleanup_claimed_at = NULL");
-    expect(db.query.mock.calls[0][1]).toEqual(["upload-1"]);
+    expect(db.query.mock.calls[0][0]).toContain("cleanup_claimed_at = $2");
+    expect(db.query.mock.calls[0][1]).toEqual(["upload-1", "2026-08-24T11:45:00.000Z"]);
   });
 
-  it("releases a failed cleanup lease for retry", async () => {
+  it("does not release a cleanup claim with a stale timestamp", async () => {
     db.query.mockResolvedValue({ rows: [] });
 
-    await releaseUploadCleanupClaim({ uploadId: "upload-1", errorCode: "blob_delete_failed" });
+    const released = await releaseUploadCleanupClaim({
+      uploadId: "upload-1",
+      cleanupClaimedAt: "2026-08-24T11:45:00.000Z",
+      errorCode: "blob_delete_failed",
+    });
 
+    expect(released).toBeNull();
     expect(db.query).toHaveBeenCalledOnce();
-    expect(db.query.mock.calls[0][0]).toContain("last_cleanup_error = $2");
+    expect(db.query.mock.calls[0][0]).toContain("last_cleanup_error = $3");
     expect(db.query.mock.calls[0][0]).toContain("cleanup_claimed_at = NULL");
-    expect(db.query.mock.calls[0][1]).toEqual(["upload-1", "blob_delete_failed"]);
+    expect(db.query.mock.calls[0][0]).toContain("cleanup_claimed_at = $2");
+    expect(db.query.mock.calls[0][1]).toEqual([
+      "upload-1",
+      "2026-08-24T11:45:00.000Z",
+      "blob_delete_failed",
+    ]);
+  });
+
+  it("migration binds each upload user to the same tenant", () => {
+    const migration = readFileSync(
+      resolve(process.cwd(), "db/migrations/020_owner_scoped_uploads.sql"),
+      "utf8"
+    );
+
+    expect(migration).toContain("UNIQUE (tenant_id, id)");
+    expect(migration).toContain("FOREIGN KEY (tenant_id, user_id)");
+    expect(migration).toContain("REFERENCES users(tenant_id, id)");
+    expect(migration).not.toContain("user_id uuid NOT NULL REFERENCES users(id)");
   });
 });

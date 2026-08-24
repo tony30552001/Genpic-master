@@ -50,7 +50,7 @@ const getOwnedUpload = async ({ uploadId, tenantId, userId, purpose, status }) =
   return result.rows[0] || null;
 };
 
-const markUploadReady = async ({ uploadId, tenantId, userId, readyBlobName }) => {
+const markUploadReady = async ({ uploadId, tenantId, userId }) => {
   const result = await query(
     `UPDATE uploads
      SET status = 'ready',
@@ -62,7 +62,7 @@ const markUploadReady = async ({ uploadId, tenantId, userId, readyBlobName }) =>
        AND user_id = $3
        AND status = 'pending'
      RETURNING *`,
-    [uploadId, tenantId, userId, readyBlobName]
+    [uploadId, tenantId, userId, `ready/${uploadId}`]
   );
   return result.rows[0] || null;
 };
@@ -104,7 +104,7 @@ const claimExpiredUploads = async ({ limit }) => {
   }
 };
 
-const markUploadExpired = async ({ uploadId }) => {
+const markUploadExpired = async ({ uploadId, cleanupClaimedAt }) => {
   const result = await query(
     `UPDATE uploads
      SET status = 'expired',
@@ -113,22 +113,24 @@ const markUploadExpired = async ({ uploadId }) => {
          updated_at = now()
      WHERE id = $1
        AND status = 'pending'
+       AND cleanup_claimed_at = $2
      RETURNING *`,
-    [uploadId]
+    [uploadId, cleanupClaimedAt]
   );
   return result.rows[0] || null;
 };
 
-const releaseUploadCleanupClaim = async ({ uploadId, errorCode }) => {
+const releaseUploadCleanupClaim = async ({ uploadId, cleanupClaimedAt, errorCode }) => {
   const result = await query(
     `UPDATE uploads
      SET cleanup_claimed_at = NULL,
-         last_cleanup_error = $2,
+         last_cleanup_error = $3,
          updated_at = now()
      WHERE id = $1
        AND status = 'pending'
+       AND cleanup_claimed_at = $2
      RETURNING *`,
-    [uploadId, errorCode]
+    [uploadId, cleanupClaimedAt, errorCode]
   );
   return result.rows[0] || null;
 };
