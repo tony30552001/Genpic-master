@@ -6,7 +6,7 @@ import {
   isSupportedDocumentFile,
 } from "../lib/documentFormats";
 import { analyzeDocument } from "../services/aiService";
-import { uploadFileToBlob } from "../services/storageService";
+import { uploadFile } from "../services/storageService";
 
 /**
  * 文件分鏡 Hook
@@ -53,8 +53,8 @@ export default function useDocumentAnalysis() {
       // 統一走 Blob Storage 上傳（避免 Azure SWA 請求大小限制）
       setAnalysisPhase("上傳文件到雲端儲存空間...");
       try {
-        const uploadResult = await uploadFileToBlob(file, "uploads");
-        analysisParams.documentUrl = uploadResult.url;
+        const uploadResult = await uploadFile(file, "document");
+        analysisParams.uploadId = uploadResult.uploadId;
       } catch (uploadErr) {
         console.warn("Blob upload failed, trying base64 for small files:", uploadErr);
 

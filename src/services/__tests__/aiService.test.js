@@ -53,9 +53,9 @@ describe("aiService", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("sends document metadata to the analysis endpoint", async () => {
+  it("sends an upload ID and no caller-selected document URL to document analysis", async () => {
     await analyzeDocument({
-      documentUrl: "https://storage.example/report.docx",
+      uploadId: "123e4567-e89b-42d3-a456-426614174000",
       fileName: "report.docx",
       contentType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -63,7 +63,7 @@ describe("aiService", () => {
     });
 
     expect(apiPost).toHaveBeenCalledWith("/api/analyze-document", {
-      documentUrl: "https://storage.example/report.docx",
+      uploadId: "123e4567-e89b-42d3-a456-426614174000",
       fileName: "report.docx",
       contentType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

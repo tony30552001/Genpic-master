@@ -94,7 +94,7 @@ export const generateFilename = async ({ userScript }) =>
 /**
  * 分析文件內容並提取分鏡腳本
  * @param {Object} params
- * @param {string} params.documentUrl - 文件在 Blob Storage 的 URL
+ * @param {string} params.uploadId - 已完成且屬於目前使用者的文件上傳 ID
  * @param {string} params.fileName - 檔案名稱
  * @param {string} params.contentType - MIME 類型
  * @param {string} params.base64Content - Base64 編碼的文件內容（可選）
@@ -102,14 +102,14 @@ export const generateFilename = async ({ userScript }) =>
  * @returns {Promise<Object>} 包含 scenes 的分析結果
  */
 export const analyzeDocument = async ({
-  documentUrl,
+  uploadId,
   fileName,
   contentType,
   base64Content,
   sceneCount,
 }) =>
   apiPost(`${API_BASE_URL}/analyze-document`, {
-    documentUrl,
+    uploadId,
     fileName,
     contentType,
     base64Content,
