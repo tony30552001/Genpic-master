@@ -4,7 +4,7 @@
  * Dual-track LINE image sending endpoint.
  *
  * POST /api/send-line-image
- * Body: { imageUrl: string, message?: string }
+ * Body: { uploadId: string, message?: string }
  *
  * Track A: User has a bound LINE Official Account → push via Messaging API
  * Track B: No binding → return { track: "liff" } so frontend opens LIFF shareTargetPicker
@@ -16,18 +16,23 @@ const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
 const { decrypt } = require("../_shared/secretCrypto");
+const { resolveOwnedImageUpload } = require("../_shared/imageUploads");
+const { issueReadGrant } = require("../_shared/uploadStorage");
 
 // ─── Push image via LINE Messaging API ────────────────────────────────────
-const pushImageMessage = async (channelAccessToken, targetId, imageUrl) => {
+const pushImageMessage = async (channelAccessToken, targetId, imageUrl, message) => {
+    const messages = [];
+    if (typeof message === "string" && message.trim()) {
+        messages.push({ type: "text", text: message.trim().slice(0, 2000) });
+    }
+    messages.push({
+        type: "image",
+        originalContentUrl: imageUrl,
+        previewImageUrl: imageUrl,
+    });
     const payload = {
         to: targetId,
-        messages: [
-            {
-                type: "image",
-                originalContentUrl: imageUrl,
-                previewImageUrl: imageUrl,
-            },
-        ],
+        messages,
     };
 
     const resp = await fetch("https://api.line.me/v2/bot/message/push", {
@@ -70,15 +75,35 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const { imageUrl, message } = req.body || {};
-    if (!imageUrl) {
-        context.res = error("缺少 imageUrl", "bad_request", 400);
+    const body = req.body || {};
+    if (Object.prototype.hasOwnProperty.call(body, "imageUrl")) {
+        context.res = error("不接受由呼叫端指定的圖片 URL", "bad_request", 400);
+        return;
+    }
+
+    const { uploadId, message } = body;
+    if (typeof uploadId !== "string" || !uploadId.trim()) {
+        context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
+        return;
+    }
+    if (message !== undefined && message !== null && typeof message !== "string") {
+        context.res = error("message 格式不正確", "bad_request", 400);
         return;
     }
 
     const identity = await resolveIdentity(auth.user);
-    if (!identity.userId) {
+    if (!identity.userId || !identity.tenantId) {
         context.res = error("無法辨識使用者", "unauthorized", 401);
+        return;
+    }
+
+    const upload = await resolveOwnedImageUpload({
+        uploadId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+    });
+    if (!upload) {
+        context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
         return;
     }
 
@@ -114,7 +139,12 @@ module.exports = async function (context, req) {
     // Track A: Push via user's Official Account
     try {
         const token = decrypt(config.channel_access_token_enc);
-        await pushImageMessage(token, config.target_id, imageUrl);
+        // The read SAS is generated and consumed entirely on the server. It is
+        // never returned to the browser or persisted in the LINE config.
+        const readGrant = issueReadGrant(upload);
+        const tokenValue = String(readGrant.sasToken || "").replace(/^\?/, "");
+        const readUrl = `${readGrant.blobUrl}${readGrant.blobUrl.includes("?") ? "&" : "?"}${tokenValue}`;
+        await pushImageMessage(token, config.target_id, readUrl, message);
         context.res = ok({ track: "bot", success: true });
     } catch (err) {
         console.error("[send-line-image] Error:", err.message);

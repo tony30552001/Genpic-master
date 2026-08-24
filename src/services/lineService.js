@@ -44,14 +44,15 @@ export const verifyLineToken = (channelAccessToken) =>
 /**
  * Send an image to LINE using the bound Official Account (Push API).
  *
- * @param {string} imageUrl - The image URL to send
- * @param {string} [message] - Optional text message
+ * @param {object} params
+ * @param {string} params.uploadId - Owner-scoped ready image upload ID
+ * @param {string} [params.message] - Optional text message
  * @returns {Promise<{ success: boolean }>}
  */
-export const sendImageToLine = async (imageUrl, message) => {
+export const sendImageToLine = async ({ uploadId, message } = {}) => {
     try {
         const result = await apiPost(`${API_BASE_URL}/send-line-image`, {
-            imageUrl,
+            uploadId,
             message,
         });
         return { success: true, ...result };
