@@ -12,7 +12,7 @@ const PURPOSE_LIMITS = Object.freeze({
 });
 const UPLOAD_SAS_TTL_MS = 15 * 60 * 1000;
 const COPY_POLL_INTERVAL_MS = 200;
-const COPY_POLL_ATTEMPTS = 150;
+const COPY_TIMEOUT_MS = 30 * 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const canonicalUploadId = (uploadId) => {
@@ -28,7 +28,8 @@ const buildStagingBlobName = (uploadId) => `staging/${canonicalUploadId(uploadId
 
 const buildReadyBlobName = (uploadId) => `ready/${canonicalUploadId(uploadId)}`;
 
-const maxBytesForPurpose = (purpose) => PURPOSE_LIMITS[purpose] || null;
+const maxBytesForPurpose = (purpose) =>
+  Object.hasOwn(PURPOSE_LIMITS, purpose) ? PURPOSE_LIMITS[purpose] : null;
 
 const getStorageCredential = () => {
   const account = process.env.AZURE_STORAGE_ACCOUNT;
@@ -100,20 +101,50 @@ const assertExpectedProperties = (properties, { expectedSizeBytes, expectedConte
   if (properties.contentLength !== expectedSizeBytes) {
     throw new Error("Upload blob size does not match the pending upload");
   }
-  if (properties.contentType !== expectedContentType) {
+  const actualContentType = String(properties.contentType || "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  const requiredContentType = String(expectedContentType || "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (actualContentType !== requiredContentType) {
     throw new Error("Upload blob content type does not match the pending upload");
   }
 };
 
+const getCopyPropertiesBeforeDeadline = async (destinationBlobClient, deadline) => {
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) throw new Error("Blob copy timed out");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), remainingMs);
+  timeout.unref?.();
+  try {
+    return await destinationBlobClient.getProperties({ abortSignal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error("Blob copy poll aborted at deadline");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const waitForCompletedCopy = async (destinationBlobClient) => {
-  for (let attempt = 0; attempt < COPY_POLL_ATTEMPTS; attempt += 1) {
-    const properties = await destinationBlobClient.getProperties();
-    const status = String(properties.copyStatus || "success").toLowerCase();
+  const deadline = Date.now() + COPY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const properties = await getCopyPropertiesBeforeDeadline(destinationBlobClient, deadline);
+    const status = typeof properties.copyStatus === "string" ? properties.copyStatus.toLowerCase() : "";
     if (status === "success") return properties;
     if (status === "failed" || status === "aborted") {
       throw new Error(`Blob copy ${status}`);
     }
-    await new Promise((resolve) => setTimeout(resolve, COPY_POLL_INTERVAL_MS));
+    if (status !== "pending") throw new Error("Blob copy has an unknown status");
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(COPY_POLL_INTERVAL_MS, remainingMs)));
   }
   throw new Error("Blob copy timed out");
 };
@@ -122,7 +153,6 @@ const sourceReadUrl = ({ account, uploadId }) => {
   const stagingBlobName = buildStagingBlobName(uploadId);
   const expiresOn = new Date(Date.now() + UPLOAD_SAS_TTL_MS);
   const grant = issueBlobGrant({
-    uploadId,
     permissions: "r",
     expiresOn,
     blobName: stagingBlobName,
@@ -180,16 +210,12 @@ const downloadUploadBuffer = async (upload) => {
   return containerClient.getBlockBlobClient(readyBlobName).downloadToBuffer();
 };
 
-const issueReadGrant = (upload, expiresAt) => {
+const issueReadGrant = (upload) => {
   const readyBlobName = assertVerifiedReadyUpload(upload);
-  const parsedExpiry = new Date(expiresAt);
-  if (Number.isNaN(parsedExpiry.valueOf()) || parsedExpiry <= new Date()) {
-    throw new Error("Read grant expiry must be in the future");
-  }
   return issueBlobGrant({
     contentType: upload.content_type,
     permissions: "r",
-    expiresOn: parsedExpiry,
+    expiresOn: new Date(Date.now() + UPLOAD_SAS_TTL_MS),
     blobName: readyBlobName,
   });
 };

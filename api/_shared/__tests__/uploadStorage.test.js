@@ -81,6 +81,9 @@ describe("fixed-container upload storage", () => {
     expect(maxBytesForPurpose("document")).toBe(50 * 1024 * 1024);
     expect(maxBytesForPurpose("image")).toBe(10 * 1024 * 1024);
     expect(maxBytesForPurpose("archive")).toBeNull();
+    expect(maxBytesForPurpose("constructor")).toBeNull();
+    expect(maxBytesForPurpose("toString")).toBeNull();
+    expect(maxBytesForPurpose("__proto__")).toBeNull();
   });
 
   it("issues a short HTTPS create-write grant for only the canonical staging blob", () => {
@@ -190,6 +193,110 @@ describe("fixed-container upload storage", () => {
     expect(source.deleteIfExists).not.toHaveBeenCalled();
   });
 
+  it("accepts equivalent content types while validating a completed destination copy", async () => {
+    const source = blob({
+      getProperties: vi.fn().mockResolvedValue({ contentLength: 7, contentType: "Application/PDF; charset=UTF-8" }),
+    });
+    const destination = blob({
+      getProperties: vi
+        .fn()
+        .mockRejectedValueOnce(missingBlob())
+        .mockResolvedValueOnce({
+          copyStatus: "success",
+          contentLength: 7,
+          contentType: " application/pdf ; charset=utf-8 ",
+        }),
+      beginCopyFromURL: vi.fn().mockResolvedValue({}),
+    });
+    azure.state.blobs.set(`staging/${canonicalUploadId}`, source);
+    azure.state.blobs.set(`ready/${canonicalUploadId}`, destination);
+    const { promoteUpload } = require("../uploadStorage");
+
+    await expect(
+      promoteUpload({ uploadId, expectedSizeBytes: 7, expectedContentType: "application/pdf" })
+    ).resolves.toEqual({ alreadyReady: false, blobName: `ready/${canonicalUploadId}` });
+    expect(source.deleteIfExists).toHaveBeenCalledOnce();
+  });
+
+  it("never deletes staging after a completed copy has the wrong content type", async () => {
+    const source = blob({
+      getProperties: vi.fn().mockResolvedValue({ contentLength: 7, contentType: "application/pdf" }),
+    });
+    const destination = blob({
+      getProperties: vi
+        .fn()
+        .mockRejectedValueOnce(missingBlob())
+        .mockResolvedValueOnce({ copyStatus: "success", contentLength: 7, contentType: "image/png" }),
+      beginCopyFromURL: vi.fn().mockResolvedValue({}),
+    });
+    azure.state.blobs.set(`staging/${canonicalUploadId}`, source);
+    azure.state.blobs.set(`ready/${canonicalUploadId}`, destination);
+    const { promoteUpload } = require("../uploadStorage");
+
+    await expect(
+      promoteUpload({ uploadId, expectedSizeBytes: 7, expectedContentType: "application/pdf" })
+    ).rejects.toThrow(/content type/i);
+    expect(source.deleteIfExists).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "mystery", "failed", "aborted"])(
+    "fails closed for a %s copy status without deleting staging",
+    async (copyStatus) => {
+      const source = blob({
+        getProperties: vi.fn().mockResolvedValue({ contentLength: 7, contentType: "application/pdf" }),
+      });
+      const destination = blob({
+        getProperties: vi
+          .fn()
+          .mockRejectedValueOnce(missingBlob())
+          .mockResolvedValueOnce({ copyStatus, contentLength: 7, contentType: "application/pdf" }),
+        beginCopyFromURL: vi.fn().mockResolvedValue({}),
+      });
+      azure.state.blobs.set(`staging/${canonicalUploadId}`, source);
+      azure.state.blobs.set(`ready/${canonicalUploadId}`, destination);
+      const { promoteUpload } = require("../uploadStorage");
+
+      await expect(
+        promoteUpload({ uploadId, expectedSizeBytes: 7, expectedContentType: "application/pdf" })
+      ).rejects.toThrow(/copy/i);
+      expect(source.deleteIfExists).not.toHaveBeenCalled();
+    }
+  );
+
+  it("aborts a hung copy-status poll at the 30-second deadline without deleting staging", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T03:00:00.000Z"));
+    const source = blob({
+      getProperties: vi.fn().mockResolvedValue({ contentLength: 7, contentType: "application/pdf" }),
+    });
+    const destination = blob({
+      getProperties: vi
+        .fn()
+        .mockRejectedValueOnce(missingBlob())
+        .mockImplementationOnce(
+          ({ abortSignal }) =>
+            new Promise((resolve, reject) => {
+              abortSignal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true });
+            })
+        ),
+      beginCopyFromURL: vi.fn().mockResolvedValue({}),
+    });
+    azure.state.blobs.set(`staging/${canonicalUploadId}`, source);
+    azure.state.blobs.set(`ready/${canonicalUploadId}`, destination);
+    const { promoteUpload } = require("../uploadStorage");
+
+    const promotion = promoteUpload({
+      uploadId,
+      expectedSizeBytes: 7,
+      expectedContentType: "application/pdf",
+    });
+    const rejectedPromotion = expect(promotion).rejects.toThrow(/aborted/i);
+    await vi.advanceTimersByTimeAsync(30_001);
+
+    await rejectedPromotion;
+    expect(source.deleteIfExists).not.toHaveBeenCalled();
+  });
+
   it("downloads only a verified stored ready path", async () => {
     const ready = blob({ downloadToBuffer: vi.fn().mockResolvedValue(Buffer.from("safe")) });
     azure.state.blobs.set(`ready/${canonicalUploadId}`, ready);
@@ -205,7 +312,9 @@ describe("fixed-container upload storage", () => {
     expect(azure.getBlob).toHaveBeenCalledWith(`ready/${canonicalUploadId}`);
   });
 
-  it("issues a read-only grant only for a verified ready upload", () => {
+  it("issues a server-computed short read-only grant only for a verified ready upload", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T03:00:00.000Z"));
     const { issueReadGrant } = require("../uploadStorage");
     const upload = {
       id: uploadId,
@@ -214,14 +323,15 @@ describe("fixed-container upload storage", () => {
       content_type: "application/pdf",
     };
 
-    const grant = issueReadGrant(upload, "2026-08-25T03:00:00.000Z");
+    const grant = issueReadGrant(upload, "2036-08-24T03:00:00.000Z");
 
     expect(grant.blobName).toBe(`ready/${canonicalUploadId}`);
+    expect(grant.expiresAt).toBe("2026-08-24T03:15:00.000Z");
     expect(azure.generateBlobSASQueryParameters).toHaveBeenCalledWith(
       expect.objectContaining({ permissions: "r", blobName: `ready/${canonicalUploadId}` }),
       expect.anything()
     );
-    expect(() => issueReadGrant({ ...upload, blob_name: "staging/other" }, "2026-08-25T03:00:00.000Z")).toThrow(
+    expect(() => issueReadGrant({ ...upload, blob_name: "staging/other" }, "2036-08-24T03:00:00.000Z")).toThrow(
       /ready blob/i
     );
   });
