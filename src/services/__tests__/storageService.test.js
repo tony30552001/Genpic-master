@@ -101,7 +101,7 @@ describe("storageService", () => {
     apiPost.mockResolvedValueOnce({
       uploadId: "upload-123",
       status: "pending",
-      blobUrl: "https://storage.example.test/uploads/upload-123",
+      blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
       sasToken: "sig=secret",
       expiresAt: "2026-08-25T00:00:00.000Z",
     });
@@ -131,13 +131,13 @@ describe("storageService", () => {
     const file = new File(["image"], "photo.png", { type: "image/png" });
 
     await putUploadBytes({
-      blobUrl: "https://storage.example.test/uploads/upload-123",
+      blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
       sasToken: "?sig=secret",
       file,
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://storage.example.test/uploads/upload-123?sig=secret",
+      "https://account.blob.core.windows.net/uploads/upload-123?sig=secret",
       expect.objectContaining({
         method: "PUT",
         headers: {
@@ -154,13 +154,13 @@ describe("storageService", () => {
     const file = new File(["image"], "photo.png", { type: "image/png" });
 
     await putUploadBytes({
-      blobUrl: "https://storage.example.test/uploads/upload-123?version=1",
+      blobUrl: "https://account.blob.core.windows.net/uploads/upload-123?version=1",
       sasToken: "sig=secret",
       file,
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://storage.example.test/uploads/upload-123?version=1&sig=secret",
+      "https://account.blob.core.windows.net/uploads/upload-123?version=1&sig=secret",
       expect.anything()
     );
   });
@@ -170,13 +170,13 @@ describe("storageService", () => {
     const file = new File(["image"], "photo.png", { type: "image/png" });
 
     await putUploadBytes({
-      blobUrl: "https://storage.example.test/uploads/upload-123?version=1",
+      blobUrl: "https://account.blob.core.windows.net/uploads/upload-123?version=1",
       sasToken: "?sig=secret",
       file,
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://storage.example.test/uploads/upload-123?version=1&sig=secret",
+      "https://account.blob.core.windows.net/uploads/upload-123?version=1&sig=secret",
       expect.anything()
     );
   });
@@ -190,13 +190,27 @@ describe("storageService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "http://account.blob.core.windows.net/uploads/upload-123",
+    "javascript:alert(1)",
+    "https://storage.example.test/uploads/upload-123",
+    "https://evilblob.core.windows.net.evil.example/uploads/upload-123",
+  ])("rejects untrusted Blob URL %s before sending a SAS token", async (blobUrl) => {
+    const file = new File(["image"], "photo.png", { type: "image/png" });
+
+    await expect(
+      putUploadBytes({ blobUrl, sasToken: "sig=secret", file })
+    ).rejects.toThrow("Invalid upload grant");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not expose a signed URL when Blob fetch rejects", async () => {
-    const signedUrl = "https://storage.example.test/uploads/upload-123?sig=secret";
+    const signedUrl = "https://account.blob.core.windows.net/uploads/upload-123?sig=secret";
     fetch.mockRejectedValueOnce(new Error(`network failure: ${signedUrl}`));
     const file = new File(["image"], "photo.png", { type: "image/png" });
 
     const error = await putUploadBytes({
-        blobUrl: "https://storage.example.test/uploads/upload-123",
+        blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
         sasToken: "sig=secret",
         file,
       }).catch((error) => error);
@@ -210,7 +224,7 @@ describe("storageService", () => {
       .mockResolvedValueOnce({
         uploadId: "upload-123",
         status: "pending",
-        blobUrl: "https://storage.example.test/uploads/upload-123",
+        blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
         sasToken: "sig=secret",
         expiresAt: "2026-08-25T00:00:00.000Z",
       })
@@ -233,7 +247,7 @@ describe("storageService", () => {
       .mockResolvedValueOnce({
         uploadId: "upload-123",
         status: "pending",
-        blobUrl: "https://storage.example.test/uploads/upload-123",
+        blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
         sasToken: "sig=secret",
         expiresAt: "2026-08-25T00:00:00.000Z",
       })
@@ -250,7 +264,7 @@ describe("storageService", () => {
       purpose: "document",
     }]);
     expect(fetch).toHaveBeenCalledWith(
-      "https://storage.example.test/uploads/upload-123?sig=secret",
+      "https://account.blob.core.windows.net/uploads/upload-123?sig=secret",
       expect.objectContaining({
         headers: expect.objectContaining({ "Content-Type": "application/pdf" }),
       })
@@ -261,7 +275,7 @@ describe("storageService", () => {
     apiPost.mockResolvedValueOnce({
       uploadId: "upload-123",
       status: "pending",
-      blobUrl: "https://storage.example.test/uploads/upload-123",
+      blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
       sasToken: "sig=secret",
       expiresAt: "2026-08-25T00:00:00.000Z",
     });
@@ -277,7 +291,7 @@ describe("storageService", () => {
       .mockResolvedValueOnce({
         uploadId: "upload-123",
         status: "pending",
-        blobUrl: "https://storage.example.test/uploads/upload-123",
+        blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
         sasToken: "sig=secret",
         expiresAt: "2026-08-25T00:00:00.000Z",
       })
@@ -292,7 +306,7 @@ describe("storageService", () => {
     apiPost.mockResolvedValueOnce({
       uploadId: "upload-123",
       status: "pending",
-      blobUrl: "https://storage.example.test/uploads/upload-123",
+      blobUrl: "https://account.blob.core.windows.net/uploads/upload-123",
       sasToken: "",
       expiresAt: "2026-08-25T00:00:00.000Z",
     });
@@ -305,7 +319,7 @@ describe("storageService", () => {
   it("keeps deprecated helpers local and free of the obsolete SAS endpoint", async () => {
     const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
     apiPost.mockResolvedValueOnce({
-      uploadId: "upload-123", status: "pending", blobUrl: "https://storage.example.test/uploads/upload-123", sasToken: "sig=secret", expiresAt: "2026-08-25T00:00:00.000Z",
+      uploadId: "upload-123", status: "pending", blobUrl: "https://account.blob.core.windows.net/uploads/upload-123", sasToken: "sig=secret", expiresAt: "2026-08-25T00:00:00.000Z",
     }).mockResolvedValueOnce({ uploadId: "upload-123", status: "ready" });
     fetch.mockResolvedValueOnce({ ok: true });
 

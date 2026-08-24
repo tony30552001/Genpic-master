@@ -54,6 +54,26 @@ export const searchStylesByEmbedding = async ({ embedding, topK }) =>
 
 const invalidUploadGrant = () => new Error("Invalid upload grant");
 
+const azureBlobHostSuffixes = [
+  ".blob.core.windows.net",
+  ".blob.core.chinacloudapi.cn",
+  ".blob.core.usgovcloudapi.net",
+  ".blob.core.cloudapi.de",
+];
+
+const isTrustedAzureBlobUrl = (value) => {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    return (
+      url.protocol === "https:" &&
+      azureBlobHostSuffixes.some((suffix) => hostname.endsWith(suffix))
+    );
+  } catch {
+    return false;
+  }
+};
+
 const validateUploadGrant = (grant) => {
   const values = [
     grant?.uploadId,
@@ -70,9 +90,7 @@ const validateUploadGrant = (grant) => {
     throw invalidUploadGrant();
   }
 
-  try {
-    new URL(grant.blobUrl);
-  } catch {
+  if (!isTrustedAzureBlobUrl(grant.blobUrl)) {
     throw invalidUploadGrant();
   }
 
@@ -94,9 +112,7 @@ const joinUploadUrl = (blobUrl, sasToken) => {
     throw invalidUploadGrant();
   }
 
-  try {
-    new URL(blobUrl);
-  } catch {
+  if (!isTrustedAzureBlobUrl(blobUrl)) {
     throw invalidUploadGrant();
   }
 
