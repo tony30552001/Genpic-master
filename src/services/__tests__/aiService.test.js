@@ -10,6 +10,7 @@ import { apiGet, apiPost } from "../apiClient";
 import {
   analyzeDocument,
   analyzeStyle,
+  createDeckJob,
   generateImage,
   waitForDeckJob,
   waitForImageJob,
@@ -70,6 +71,33 @@ describe("aiService", () => {
       base64Content: undefined,
       sceneCount: 6,
     });
+  });
+
+  it("sends a source upload ID and never a caller-selected document URL for deck jobs", async () => {
+    await createDeckJob({
+      topic: null,
+      sourceUploadId: "123e4567-e89b-42d3-a456-426614174000",
+      fileName: "brief.pdf",
+      slideCount: 8,
+      imageDensity: "every",
+      styleId: null,
+      layoutId: null,
+    });
+
+    expect(apiPost).toHaveBeenCalledWith(
+      "/api/deck-jobs",
+      {
+        topic: null,
+        sourceUploadId: "123e4567-e89b-42d3-a456-426614174000",
+        fileName: "brief.pdf",
+        slideCount: 8,
+        imageDensity: "every",
+        styleId: null,
+        layoutId: null,
+      },
+      { signal: undefined }
+    );
+    expect(apiPost.mock.calls.at(-1)[1]).not.toHaveProperty("documentUrl");
   });
 
   it("waits for queued image jobs until the result is ready", async () => {

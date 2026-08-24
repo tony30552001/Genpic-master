@@ -12,7 +12,7 @@ import {
   listPptTemplates,
   waitForDeckJob,
 } from "../services/aiService";
-import { uploadFileToBlob } from "../services/storageService";
+import { uploadFile } from "../services/storageService";
 
 const INITIAL_PROGRESS = { phase: "", current: 0, total: 0, startedAt: null };
 const ACTIVE_JOB_STORAGE_KEY = "genpic_deck_job";
@@ -317,16 +317,17 @@ export default function usePptMasterDeck() {
       });
 
       try {
-        let documentUrl = null;
+        let sourceUploadId = null;
         if (file) {
           setProgress((current) => ({ ...current, phase: "上傳文件到雲端儲存空間" }));
-          const uploadResult = await uploadFileToBlob(file, "uploads");
-          documentUrl = uploadResult.url;
+          const uploadResult = await uploadFile(file, "document");
+          sourceUploadId = uploadResult?.uploadId || null;
+          if (!sourceUploadId) throw new Error("文件上傳未完成，請稍後重試。");
         }
 
         const job = await createDeckJob({
           topic: trimmedTopic || null,
-          documentUrl,
+          sourceUploadId,
           fileName: file?.name || null,
           slideCount,
           imageDensity,

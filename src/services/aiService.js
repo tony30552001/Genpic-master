@@ -121,7 +121,7 @@ export const listPptTemplates = async ({ signal } = {}) =>
 
 export const createDeckJob = async ({
   topic,
-  documentUrl,
+  sourceUploadId,
   fileName,
   slideCount,
   imageDensity,
@@ -131,7 +131,7 @@ export const createDeckJob = async ({
 }) =>
   apiPost(
     `${API_BASE_URL}/deck-jobs`,
-    { topic, documentUrl, fileName, slideCount, imageDensity, styleId, layoutId },
+    { topic, sourceUploadId, fileName, slideCount, imageDensity, styleId, layoutId },
     { signal }
   );
 

@@ -2,6 +2,8 @@ const { StorageSharedKeyCredential, BlobServiceClient } = require("@azure/storag
 
 const { query, getPool } = require("./db");
 const { uploadGeneratedBlob } = require("./blobStorage");
+const { getOwnedUpload } = require("./uploads");
+const { downloadUploadBuffer } = require("./uploadStorage");
 const { isUrlAllowed } = require("./urlValidator");
 const {
   DocumentConversionError,
@@ -22,12 +24,15 @@ const {
 const MAX_ATTEMPTS = 2;
 const LOCK_TIMEOUT_MINUTES = Number(process.env.DECK_JOB_TIMEOUT_MINUTES || 40);
 const RETRY_DELAY_SECONDS = 15;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const createDeckJob = async ({
   tenantId,
   userId,
   inputKind,
   topic,
+  sourceUploadId,
   sourceDocumentUrl,
   sourceFileName,
   slideCount,
@@ -38,15 +43,17 @@ const createDeckJob = async ({
 }) => {
   const result = await query(
     `INSERT INTO deck_generation_jobs
-       (tenant_id, user_id, input_kind, topic, source_document_url, source_file_name,
-        slide_count, style_id, layout_id, brand_id, image_density, progress_total)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $7)
+       (tenant_id, user_id, input_kind, topic, source_upload_id, source_document_url,
+        source_file_name, slide_count, style_id, layout_id, brand_id, image_density,
+        progress_total)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $8)
      RETURNING id, status, created_at`,
     [
       tenantId,
       userId,
       inputKind,
       topic || null,
+      sourceUploadId || null,
       sourceDocumentUrl || null,
       sourceFileName || null,
       slideCount,
@@ -57,6 +64,39 @@ const createDeckJob = async ({
     ]
   );
   return result.rows[0];
+};
+
+const hasUsableUploadExpiry = (upload) => {
+  const expiresAt = new Date(upload?.expires_at).getTime();
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+};
+
+const resolveDeckSourceUpload = async ({ sourceUploadId, tenantId, userId }) => {
+  const canonicalUploadId =
+    typeof sourceUploadId === "string" ? sourceUploadId.toLowerCase() : "";
+  if (!UUID_PATTERN.test(canonicalUploadId)) {
+    throw new Error("Source upload unavailable");
+  }
+
+  const upload = await getOwnedUpload({
+    uploadId: canonicalUploadId,
+    tenantId,
+    userId,
+    purpose: "document",
+    status: "ready",
+  });
+  if (
+    !upload ||
+    upload.id !== canonicalUploadId ||
+    upload.tenant_id !== tenantId ||
+    upload.user_id !== userId ||
+    upload.purpose !== "document" ||
+    upload.status !== "ready" ||
+    !hasUsableUploadExpiry(upload)
+  ) {
+    throw new Error("Source upload unavailable");
+  }
+  return upload;
 };
 
 const getDeckJobForUser = async ({ jobId, tenantId, userId }) => {
@@ -195,10 +235,11 @@ const claimNextDeckJob = async () => {
            updated_at = now()
        FROM candidate
        WHERE jobs.id = candidate.id
-       RETURNING jobs.id, jobs.input_kind, jobs.topic, jobs.source_document_url,
-                 jobs.source_file_name, jobs.slide_count, jobs.image_density,
-                 jobs.style_id, jobs.layout_id, jobs.brand_id, jobs.attempts,
-                 jobs.tenant_id`,
+       RETURNING jobs.id, jobs.input_kind, jobs.topic, jobs.source_upload_id,
+                 jobs.source_document_url, jobs.source_file_name, jobs.slide_count,
+                 jobs.image_density,
+                  jobs.style_id, jobs.layout_id, jobs.brand_id, jobs.attempts,
+                  jobs.tenant_id, jobs.user_id`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
     );
 
@@ -322,14 +363,33 @@ const fetchSourceDocument = async ({ documentUrl, fileName }) => {
  * Extract Markdown from the uploaded source. AnyDoc handles the common office
  * formats; PDFs it cannot convert fall back to the sidecar's PyMuPDF backend.
  */
-const extractSourceMarkdown = async ({ documentUrl, fileName }) => {
-  const { buffer, contentType } = await fetchSourceDocument({ documentUrl, fileName });
+const extractSourceMarkdown = async ({ documentUrl, fileName, sourceUpload }) => {
+  const sourceFileName = sourceUpload?.original_file_name || fileName || "document.pdf";
+  let buffer;
+  let contentType;
+
+  if (sourceUpload) {
+    buffer = await downloadUploadBuffer(sourceUpload);
+    const storedContentType = String(sourceUpload.content_type || "")
+      .split(";", 1)[0]
+      .trim()
+      .toLowerCase();
+    contentType =
+      storedContentType && storedContentType !== "application/octet-stream"
+        ? storedContentType
+        : inferMimeType(sourceFileName);
+  } else {
+    ({ buffer, contentType } = await fetchSourceDocument({
+      documentUrl,
+      fileName: sourceFileName,
+    }));
+  }
 
   let parsed = null;
   try {
     parsed = await parseDocumentBuffer({
       buffer,
-      fileName: fileName || "document.pdf",
+      fileName: sourceFileName,
       mimeType: contentType,
     });
   } catch (error) {
@@ -342,7 +402,7 @@ const extractSourceMarkdown = async ({ documentUrl, fileName }) => {
   }
 
   const converted = await pptMaster.convertSource({
-    fileName: fileName || "document.pdf",
+    fileName: sourceFileName,
     buffer,
     contentType,
   });
@@ -389,14 +449,25 @@ const processDeckJob = async (job) => {
     let sourceMarkdown = null;
     if (job.input_kind === "document") {
       await report({ step: "source", detail: "解析素材", current: 0, total: job.slide_count });
+      const sourceUpload = job.source_upload_id
+        ? await resolveDeckSourceUpload({
+          sourceUploadId: job.source_upload_id,
+          tenantId: job.tenant_id,
+          userId: job.user_id,
+        })
+        : null;
+      if (!sourceUpload && !job.source_document_url) {
+        throw new Error("Source document is unavailable");
+      }
       sourceMarkdown = await extractSourceMarkdown({
-        documentUrl: job.source_document_url,
-        fileName: job.source_file_name,
+        documentUrl: sourceUpload ? null : job.source_document_url,
+        fileName: sourceUpload?.original_file_name || job.source_file_name,
+        sourceUpload,
       });
       await report({
         step: "source",
         status: "succeeded",
-        detail: `已讀取 ${job.source_file_name || "參考文件"}`,
+        detail: `已讀取 ${sourceUpload?.original_file_name || job.source_file_name || "參考文件"}`,
       });
     } else {
       await report({
@@ -570,9 +641,11 @@ const startDeckJobWorker = () => {
 
 module.exports = {
   createDeckJob,
+  extractSourceMarkdown,
   getDeckJobForUser,
   getDeckSlidePreview,
   listDeckJobEvents,
   listDeckSlidePreviews,
+  resolveDeckSourceUpload,
   startDeckJobWorker,
 };
