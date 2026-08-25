@@ -32,6 +32,21 @@ For schema changes, run migrations only against a disposable database and check 
 
 For a session/authentication change, run the focused browser and API tests documented by [browser application](../frontend/application.md) and [server sessions](../backend/sessions.md), then use non-production configuration to check this sequence: BFF login returns to the requested local route, `GET /api/auth/session` reports a user and CSRF value, a mutation includes cookie plus CSRF, logout clears the session, and an expired/revoked session produces recovery UI. This is conditional integration validation, not a baseline for unrelated frontend work.
 
+## Owner-scoped upload rollout
+
+The `/api/uploads` lifecycle is a security boundary, not a replacement spelling for arbitrary Blob SAS. It fixes the uploads container (`BLOB_CONTAINER_UPLOADS`, default `uploads`), grants a 15-minute HTTPS create/write SAS only for `staging/<UUID>`, verifies the stored size/MIME during copy to `ready/<UUID>`, and allows consumers to use only an owned ready record. The runtime contract and consumer matrix are canonical in [Owner-scoped uploads and staged Blob storage](../backend/uploads.md); `020_owner_scoped_uploads.sql` must precede application code and `021_document_analysis_jobs.sql` must precede document-job worker startup.
+
+Apply migrations to a disposable database in order, then deploy matched browser/API builds with cleanup initially disabled. `UPLOAD_CLEANUP_ENABLED=false` disables the in-process cleanup scheduler; any value other than `false`, `0`, `no`, or `off` enables it. When enabled, the worker starts from `api/server.js`, runs immediately and then at `UPLOAD_CLEANUP_INTERVAL_MS` (default one hour), and uses `UPLOAD_CLEANUP_BATCH_SIZE` (default 100, capped 500). It only deletes expired staging objects; it does not delete ready or generated assets. For document jobs, `DOCUMENT_ANALYSIS_JOB_POLL_MS` controls the API worker polling interval (default 2000 ms).
+
+The Azure management policy in `infra/azure/storage-lifecycle-policy.json` is a second safety net for exactly the `uploads/staging/` prefix. Apply it only after confirming the prefix contains the UUID staging convention and cleanup has been observed. The complete rollout, rollback, and active-policy verification procedure is in `docs/upload-lifecycle-operations.md`; it is operational evidence, not the canonical runtime contract. Conditional checks for an upload/cleanup/lifecycle change:
+
+```sh
+pnpm test --run api/uploads/__tests__/index.test.js api/_shared/__tests__/uploadStorage.test.js api/_shared/__tests__/uploadCleanup.test.js api/_shared/__tests__/uploadLifecyclePolicy.test.js
+node api/scripts/migrate.cjs 020_owner_scoped_uploads.sql 021_document_analysis_jobs.sql
+```
+
+Do not use a production database or storage account as routine validation. Applying or changing the Azure lifecycle policy is an external mutation: after approved application, retrieve the active policy through the operational procedure; a parsed local JSON file is insufficient.
+
 ## Analysis-model secret configuration
 
 `SECRET_ENCRYPTION_KEY` is an API-only 64-character hex value used by `api/_shared/secretCrypto.js` for AES-256-GCM encryption of LINE channel tokens and tenant analysis-model API keys. It must be stable: replacing it makes existing ciphertext unreadable. Existing deployments using `LINE_TOKEN_ENCRYPTION_KEY` need to retain its key material under `SECRET_ENCRYPTION_KEY` before reading pre-existing LINE records. Generate and store the value through the deployment secret mechanism; never put it in Vite configuration, a migration, or this wiki.

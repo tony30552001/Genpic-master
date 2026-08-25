@@ -6,10 +6,10 @@ tags: [backend, resources, storage, line, history]
 openwiki:
   roles: [domain, integration, workflow]
   change_kinds: [resource-api, storage, history-attribution]
-  source_paths: [api/history/index.js, api/_shared/historySource.js, api/blob-sas/index.js, api/styles/index.js, api/templates/index.js]
-  symbols: [normalizeHistorySource, HISTORY_SOURCES, saveHistoryItem, uploadFileToBlob]
-  test_paths: [api/admin/__tests__/adminResources.test.js, src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx, src/services/__tests__/storageService.test.js]
-  invariants: [History records remain tenant and user scoped., A history source is general document image-transform or null for legacy or unrecognized values., Blob SAS authorization is distinct from Blob object ownership.]
+  source_paths: [api/history/index.js, api/_shared/historySource.js, api/blob-sas/index.js, api/styles/index.js, api/templates/index.js, api/uploads/index.js]
+  symbols: [normalizeHistorySource, HISTORY_SOURCES, saveHistoryItem, uploadFile]
+  test_paths: [api/admin/__tests__/adminResources.test.js, src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx, src/services/__tests__/storageService.test.js, api/uploads/__tests__/index.test.js, api/send-line-image/__tests__/index.test.js, src/services/__tests__/lineService.test.js]
+  invariants: [History records remain tenant and user scoped., A history source is general document image-transform or null for legacy or unrecognized values., User-upload authorization is established by a ready owner-scoped upload record, not a Blob URL.]
   validation_commands: [pnpm test --run api/admin/__tests__/adminResources.test.js src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx]
 ---
 
@@ -37,28 +37,20 @@ pnpm test --run api/admin/__tests__/adminResources.test.js src/components/admin/
 
 `PUT /styles/:id` is a partial update: it changes only supplied `name`, `prompt`, `description`, `tags`, `previewUrl`, or `category` fields and requires creator ownership. `PUT /templates/:id`, however, requires `name` and replaces every persisted template field: omitted `userScript`, `stylePrompt`, `styleId`, and `previewUrl` become `null`, while omitted `category` becomes `general`. The [Asset Center](../frontend/asset-center.md) accounts for this by sending those retained fields from the selected template with its metadata edits. Keep that client payload complete while the handler remains a replacement update; a newly added replacement field must be wired through it, and a partial-update handler would require an intentional client-contract change.
 
-## Blob asset lifecycle
+## Upload-backed Blob assets
 
-```mermaid
-flowchart TD
-  Upload[Browser file] --> Sas[POST blob-sas]
-  Sas --> Blob[Blob upload]
-  Blob --> Analyze[analyze-document]
-  Blob --> Transform[image-transform URL]
-  Job[GPT job worker] --> Generated[generated Blob]
-  Generated --> Poll[image-jobs data URL]
-```
+The arbitrary `/blob-sas` signer is retired: it now returns `410 upload_api_replaced` after session/rate-limit checks so stale bundles fail deterministically. New browser uploads must use the owner-scoped staged lifecycle in [Owner-scoped uploads and staged Blob storage](uploads.md). That system fixes the container and UUID object names server-side, verifies size/MIME during staging-to-ready promotion, and supplies only a ready `uploadId` to consumers.
 
-`POST /blob-sas` runs `requireAuth` and the in-memory `rateLimit` before minting. The limiter keys by token `oid`/`sub` or forwarded/client/real IP and permits `RATE_LIMIT_PER_MINUTE` (default 60) requests in a 60-second process-local window; excess receives `429 { error: { code: "rate_limited" } }`. It rejects names with `..`, backslash, leading slash, or length above 200 with `400 bad_request`; an unsupported/unresolvable MIME likewise returns `400 bad_request`. Its `SUPPORTED_MIME_TYPES` and filename inference come from `_shared/documentParser.js`: PDF; Word, PowerPoint, and Excel variants; OpenDocument; RTF; EPUB; CSV; plain text/Markdown; and PNG/JPEG are accepted. An absent or unaccepted content type is replaced only when a recognized filename suffix can infer one; `application/octet-stream` alone is not a sufficient accepted type. The requested `container` is used verbatim, falling back to `BLOB_CONTAINER_DEFAULT` or `uploads`; Blob URL is account/container/encoded filename. It returns a 15-minute `crw` SAS and a separate one-year `r` SAS/read URL. Missing storage configuration returns `500 storage_config_missing`; SAS failures return `500 internal_error`. The browser directly PUTs via `uploadFileToBlob`; documents feed [AI generation](ai-generation.md), transform sources are fetched only after `isUrlAllowed`, and the durable job worker uses a separate generated container helper.
+The document extension policy remains deliberately parallel: `src/lib/documentFormats.js` controls browser acceptance/MIME fallback while `_shared/documentParser.js` is the server authority. Change both deliberately, then run `pnpm test --run src/lib/__tests__/documentFormats.test.js api/_shared/__tests__/documentParser.test.js`. That coverage proves format recognition and parsing, not Blob authorization or a live upload.
 
-The browser's extension policy is a parallel implementation in `src/lib/documentFormats.js`, not an imported server module. Add or remove formats in both places deliberately, then run `pnpm test --run src/lib/__tests__/documentFormats.test.js api/_shared/__tests__/documentParser.test.js`. That focused coverage proves MIME policy and parser behavior, not Blob authorization or a live SAS upload.
-
-**Current authorization boundary:** the API authenticates but accepts a caller-selected container and un-namespaced original filename. It grants `crw` permissions and does not check tenant/user/object ownership, prevent same-name collisions, or clean up/expire objects. The long-lived `readUrl` is a bearer URL. Preserve these facts when changing access/retention; do not infer isolation from database tenancy. `isUrlAllowed` is SSRF protection for server fetches, not object authorization.
+Generated job output remains a separate Blob domain: image/deck workers use generated-storage helpers and return their consumer contracts through their owning workflows. Do not substitute a user upload ID for generated output ownership, or infer authorization from a signed URL. The consumer-specific ownership checks for document, image, deck, and LINE inputs are centralized in [Owner-scoped uploads and staged Blob storage](uploads.md).
 
 ## LINE configuration and sharing
 
-`line_configs` is one row per user+tenant. `/line-config?action=verify` calls LINE bot info and returns `{ valid: true, channelName, pictureUrl }` or `200 { valid: false, message }`; GET never returns credentials. POST AES-256-GCM encrypts supplied credentials, preserves existing encrypted fields when UI sends `********`, and upserts target/name; DELETE removes it. `/send-line-image` first requires the caller's active configuration and target, decrypts its access token, then POSTs `{ to: targetId, messages: [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }] }` to Messaging API. It returns `{ track: "bot", success: true }`, or errors for missing binding, disabled config, missing target, malformed target, and provider failures. Although the request accepts `message`, current payload construction ignores it: it never delivers text.
+`line_configs` is one row per user+tenant. `/line-config?action=verify` calls LINE bot info and returns `{ valid: true, channelName, pictureUrl }` or `200 { valid: false, message }`; GET never returns credentials. POST AES-256-GCM encrypts supplied credentials, preserves existing encrypted fields when UI sends `********`, and upserts target/name; DELETE removes it.
 
-`ShareToLineButton` uploads a data URL to Blob first, then invokes bot push. It rejects an unbound user. `{ success: true }` means the LINE Messaging API accepted the push request; the repository does not receive a delivery receipt and makes no guarantee about recipient delivery after acceptance (for example, recipient/network/platform outcomes). Although `@line/liff` and LIFF deployment configuration exist, no `src` code consumes LIFF and no implemented LIFF fallback exists; do not document one as runtime behavior.
+`POST /send-line-image` accepts `uploadId` and optional text `message`, explicitly rejects caller-supplied `imageUrl`, resolves only the caller's ready owned image upload, and creates its short read grant entirely on the server. It then requires an active configuration and target, decrypts the configured access token, and POSTs an optional text message (trimmed/capped at 2,000 characters) followed by the image message to LINE Messaging API. The read SAS is not returned to the browser or persisted in the LINE configuration. It returns `{ track: "bot", success: true }`, or errors for missing/expired/unowned upload, missing binding, disabled config, missing target, malformed target, and provider failures. The upload ownership/read-grant boundary is owned by [Owner-scoped uploads and staged Blob storage](uploads.md).
 
-Focused frontend tests cover `storageService`; no dedicated handler/LINE tests were found. The schema invariant is documented in [schema](../data/schema.md).
+`ShareToLineButton` creates and completes an image upload through the browser storage adapter, then invokes bot push with its `uploadId`. `{ success: true }` means the LINE Messaging API accepted the push request; the repository does not receive a delivery receipt and makes no guarantee about recipient delivery after acceptance (for example, recipient/network/platform outcomes). Although `@line/liff` and LIFF deployment configuration exist, no `src` code consumes LIFF and no implemented LIFF fallback exists; do not document one as runtime behavior.
+
+`api/send-line-image/__tests__/index.test.js` covers owner-scoped upload use and server-side grants; `src/services/__tests__/lineService.test.js` covers the client payload. The schema invariant is documented in [schema](../data/schema.md).

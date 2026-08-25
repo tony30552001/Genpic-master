@@ -1,12 +1,12 @@
 ---
 type: data model
 title: PostgreSQL schema and migrations
-description: Tenant-scoped persistence model, ordered SQL evolution, encrypted analysis-model configuration, vector search, durable image and PPT Master deck jobs, and opaque authentication sessions.
-tags: [database, postgres, migrations, image-generation, sessions, deck-jobs, llm]
+description: Tenant-scoped persistence model, ordered SQL evolution, encrypted analysis-model configuration, owner-scoped uploads, durable image/document/deck jobs, and opaque authentication sessions.
+tags: [database, postgres, migrations, uploads, image-generation, document-analysis, sessions, deck-jobs, llm]
 openwiki:
   roles: [domain, operations, testing]
   change_kinds: [schema, migrations, image-generation, session-lifecycle]
-  source_paths: [db/migrations, db/migrations/009_image_generation_jobs.sql, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, db/migrations/013_deck_slide_previews.sql, db/migrations/014_llm_models.sql, db/migrations/016_admin_list_indexes.sql, db/migrations/017_user_auth_provider.sql, db/migrations/018_history_source.sql, db/migrations/019_image_job_quality.sql, api/_shared/imageJobs.js, api/_shared/gptImage.js, api/_shared/historySource.js, api/_shared/identity.js, api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/_shared/deckJobs.js, api/scripts/migrate.cjs]
+  source_paths: [db/migrations, db/migrations/009_image_generation_jobs.sql, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, db/migrations/013_deck_slide_previews.sql, db/migrations/014_llm_models.sql, db/migrations/016_admin_list_indexes.sql, db/migrations/017_user_auth_provider.sql, db/migrations/018_history_source.sql, db/migrations/019_image_job_quality.sql, api/_shared/imageJobs.js, api/_shared/gptImage.js, api/_shared/historySource.js, api/_shared/identity.js, api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/_shared/deckJobs.js, api/_shared/uploads.js, api/_shared/documentAnalysisJobs.js, api/scripts/migrate.cjs]
   invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "An optional migrator argument must exactly name an existing .sql migration; selected files still execute in lexicographic order.", "GPT Image jobs persist only low medium or high quality and default existing/new unspecified jobs to medium.", "Authentication session records store token hashes, never raw browser tokens.", "A user's nullable last authentication provider is constrained to entra or google, backfilled from its newest session, and updated only after a successful active sign-in.", "History source is null or one of general document image-transform, and legacy rows retain null rather than a guessed source.", "Each analysis role assignment uses tenant-local primary and optional distinct fallback models; provider choice is a runtime dispatch concern.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck image density is persisted as none, key, or every and defaults to key.", "Deck job events are append-only, constrained to known steps and statuses, and cascade with their job.", "Deck slide previews have one row per job and page; a quality rewrite increments revision and deletion of the job cascades."]
   validation_commands: [node api/scripts/migrate.cjs 019_image_job_quality.sql, cd api && npm run migrate]
 ---
@@ -23,7 +23,11 @@ erDiagram
   tenants ||--o{ styles : owns
   users ||--o{ history : creates
   users ||--o{ templates : creates
+  users ||--o{ uploads : owns
+  uploads ||--o{ document_analysis_jobs : sources
+  users ||--o{ document_analysis_jobs : owns
   users ||--o{ image_generation_jobs : owns
+  uploads ||--o{ deck_generation_jobs : sources
   tenants ||--o{ deck_generation_jobs : scopes
   users ||--o{ deck_generation_jobs : owns
   tenants ||--o{ llm_models : configures
@@ -53,6 +57,20 @@ node api/scripts/migrate.cjs 019_image_job_quality.sql
 ```
 
 `016_admin_list_indexes.sql` aligns PostgreSQL indexes with the management-list and style-delete query shapes owned by [authentication, tenancy, and administration](../backend/auth-tenancy-admin.md). It adds `history (tenant_id, created_at DESC, id DESC)` for unfiltered history pagination and `history (tenant_id, user_id, created_at DESC, id DESC)` for its user-filtered variant, `styles (tenant_id, updated_at DESC, created_at DESC, id DESC)` for style-list ordering, and a partial `history (style_id) WHERE style_id IS NOT NULL` index for clearing references before administrative style deletion. The migration drops the now-covered single-column tenant/user indexes. Apply it before relying on management-list performance; do not reintroduce those prefix indexes without a query plan that demonstrates a different workload.
+
+## Owner-scoped uploads and document analysis jobs
+
+`020_owner_scoped_uploads.sql` adds `uploads`, the durable identity record behind [Owner-scoped uploads and staged Blob storage](../backend/uploads.md). A row has a UUID primary key; tenant/user ownership, with a composite foreign key to a user in that tenant; purpose constrained to `document|image`; declared filename/MIME/positive size; a unique canonical Blob name; `pending|ready|expired` state; expiry; and cleanup lease/error fields. The owner index supports access checks. The partial pending-expiry index supports lease-safe cleanup without scanning ready data. `source_upload_id` is also an optional restrict-delete foreign key on deck jobs, allowing legacy URL jobs to drain while new deck inputs bind to this record.
+
+`021_document_analysis_jobs.sql` adds the document queue used by [AI generation](../backend/ai-generation.md). Each job references a non-deletable source upload and the same tenant/user pair, stores `auto` or requested scene count, and moves through `queued|processing|succeeded|failed`; attempts, availability/lock/start/completion timestamps, normalized JSON result, and safe error fields support retry and polling. Its `(status, available_at, created_at)` index is the worker claim order, while `(tenant_id, user_id, created_at DESC)` is the authorized status lookup. Apply `020` before `021` and before code that creates/consumes upload IDs; deploy `021` before starting the document worker or registering the job API.
+
+The lifecycle state is deliberately split: a successful Blob copy is not authoritative until `markUploadReady` updates the owned row, and an analysis result is not public until its job reaches `succeeded`. Cleanup only claims expired `pending` records, so it never targets ready inputs. See the upload page for the storage and cleanup behavior, and [development, migrations, and deployment](../operations/development-deployment.md) for rollout order.
+
+For either migration, use a disposable database and apply the exact files in order:
+
+```sh
+node api/scripts/migrate.cjs 020_owner_scoped_uploads.sql 021_document_analysis_jobs.sql
+```
 
 ## History source attribution
 

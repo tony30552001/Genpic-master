@@ -6,8 +6,8 @@ tags: [backend, ai-generation, image-generation, document-analysis, storyboard, 
 openwiki:
   roles: [workflow, integration, operations]
   change_kinds: [image-generation, document-analysis, response-contract, provider-adapter, model-configuration]
-  source_paths: [api/_shared/gptImage.js, api/_shared/imageJobs.js, api/_shared/imagePrompt.js, api/_shared/imageTextLanguage.js, api/generate-images/index.js, api/image-transform/index.js, api/optimize-prompt/index.js, api/optimize-scene/index.js, api/analyze-style/index.js, api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/analyze-document/index.js, api/_shared/documentScene.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js, api/_shared/gemini.js]
-  symbols: [IMAGE_QUALITIES, DEFAULT_IMAGE_QUALITY, normalizeImageQuality, generateGptImage, editGptImage, createImageJob, IMAGE_TEXT_LANGUAGES, buildImageTextDirective, buildGenerationTextDirective, buildImagePrompt, buildTransformPrompt, normalizeImagePurpose, OUTPUT_TRUNCATED, LLM_ROLES, resolveRoleModel, generateJson, normalizeDocumentScene, normalizeRecommendedStyle, buildAnalysisPrompt]
+  source_paths: [api/_shared/gptImage.js, api/_shared/imageJobs.js, api/_shared/imagePrompt.js, api/_shared/imageTextLanguage.js, api/generate-images/index.js, api/image-transform/index.js, api/optimize-prompt/index.js, api/optimize-scene/index.js, api/analyze-style/index.js, api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/analyze-document/index.js, api/document-analysis-jobs/index.js, api/_shared/documentAnalysisJobs.js, api/_shared/documentScene.js, api/_shared/documentParser.js, api/_shared/azureOpenAI.js, api/_shared/gemini.js]
+  symbols: [IMAGE_QUALITIES, DEFAULT_IMAGE_QUALITY, normalizeImageQuality, generateGptImage, editGptImage, createImageJob, IMAGE_TEXT_LANGUAGES, buildImageTextDirective, buildGenerationTextDirective, buildImagePrompt, buildTransformPrompt, normalizeImagePurpose, OUTPUT_TRUNCATED, LLM_ROLES, resolveRoleModel, generateJson, normalizeDocumentScene, normalizeRecommendedStyle, buildAnalysisPrompt, createDocumentAnalysisJob, processNextDocumentAnalysisJob]
   test_paths: [api/_shared/__tests__/gptImage.test.js, api/_shared/__tests__/imagePrompt.test.js, api/_shared/__tests__/imageTextLanguage.test.js, api/_shared/__tests__/llmModels.test.js, api/_shared/__tests__/llmRuntime.test.js, api/_shared/__tests__/documentScene.test.js, api/_shared/__tests__/documentParser.test.js, api/_shared/__tests__/azureOpenAI.test.js]
   invariants: [Document analysis produces storyboard scenes and a required recommended-style prompt, not editable presentation slides., Every analysis role resolves a tenant-assigned primary and optional fallback model or returns llm_not_configured rather than using environment configuration., API keys are encrypted at rest and never returned through management responses., Prompt and scene optimization emit English prose rather than a comma-delimited keyword list and preserve quoted literal in-image text in the requested language., Generation accepts creative inputs and assembles the final provider prompt on the server; it does not accept a browser-assembled prompt., Freeform generation adds no system composition or language directive; infographic and storyboard composition is a default that does not override author-specified framing., A supported generation language preserves quoted text verbatim and applies the chosen language only to otherwise-unspecified text; missing or unsupported input adds no directive and none directs the model to render no text., GPT Image accepts only low medium or high quality at its public handlers; omitted or internal invalid values normalize to medium., A durable GPT image job retains its normalized quality through claiming and worker execution., The provider-neutral runtime makes at most four total attempts for retryable failures and retries recognized truncation on the same model with a larger budget.]
   validation_commands: [pnpm test --run api/_shared/__tests__/imagePrompt.test.js api/_shared/__tests__/imageTextLanguage.test.js, pnpm test --run api/_shared/__tests__/gptImage.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js api/_shared/__tests__/azureOpenAI.test.js, pnpm test --run api/_shared/__tests__/documentScene.test.js api/_shared/__tests__/documentParser.test.js]
@@ -65,56 +65,49 @@ The pure contract is covered by `imagePrompt.test.js`: purpose normalization/def
 pnpm test --run api/_shared/__tests__/imagePrompt.test.js api/_shared/__tests__/imageTextLanguage.test.js src/services/__tests__/aiService.test.js
 ```
 
-## Document storyboard contract
+## Document storyboard contract and durable queue
 
-`POST /analyze-document` accepts `documentUrl` or `base64Content`, `fileName`, `contentType`, and optional `sceneCount`. `sceneCount` is clamped to 1–10. The handler supports the shared format set from `_shared/documentParser.js`: PDF; Word, PowerPoint, and Excel variants; OpenDocument; RTF; EPUB; CSV; TXT/Markdown; and PNG/JPEG. A same-account Blob URL is downloaded with the Storage SDK; another URL must pass `isUrlAllowed`; an absent or octet-stream MIME type falls back to the filename.
+A completed document upload now normally enters `POST /document-analysis-jobs`, not a synchronous long analysis request. The endpoint requires an owned, unexpired, `ready` document `uploadId`, accepts `sceneCount` of `auto` or 1–10, creates a tenant/user-scoped `queued` row, and returns `202 { jobId, status }`. `GET /document-analysis-jobs/:id` exposes the same owner's status/attempts/timestamps and only returns `result` when succeeded or the stored safe error when failed. The state table and indexes are defined by `021_document_analysis_jobs.sql` in [schema](../data/schema.md); upload ownership and readiness are canonical in [Owner-scoped uploads and staged Blob storage](uploads.md).
 
 ```mermaid
 sequenceDiagram
   participant Browser
+  participant Jobs as document-analysis-jobs
+  participant Db as PostgreSQL
+  participant Worker as document worker
+  participant Analyze as analyze-document
   participant Blob as Azure Blob Storage
-  participant Handler as analyze-document
-  participant Parser as documentParser
-  participant Runtime as LLM runtime
-  participant Provider as assigned LLM provider
-  Browser->>Blob: upload document
-  Browser->>Handler: document URL or base64 and sceneCount
-  opt document URL is provided
-    Handler->>Blob: download same-account document
-  end
-  Handler->>Parser: parse buffer and identify input kind
-  alt text or converted document
-    Parser-->>Handler: text and parser metadata
-    Handler->>Runtime: JSON request with text
-  else image or scanned PDF
-    Parser-->>Handler: vision buffer and parser metadata
-    Handler->>Runtime: JSON request with attachment
-  end
-  Runtime->>Provider: dispatch assigned model
-  Provider-->>Runtime: structured analysis
-  Runtime-->>Handler: structured analysis
-  Handler-->>Browser: normalized storyboard scenes
+  participant Llm as assigned LLM
+  Browser->>Jobs: POST ready uploadId and sceneCount
+  Jobs->>Db: create queued owner-scoped job
+  Jobs-->>Browser: 202 jobId
+  Worker->>Db: claim one job with row lock
+  Worker->>Analyze: run with retained owner and uploadId
+  Analyze->>Blob: download verified ready document
+  Analyze->>Llm: parse and generate normalized storyboard
+  Analyze->>Db: persist succeeded result or retry/failure
+  Browser->>Jobs: GET jobId while pending
 ```
 
-This flow shows the only document-analysis result contract: scenes, a document-level recommended style, characters, and provenance.
+`startDocumentAnalysisWorker` is started by `api/server.js`; it polls at `DOCUMENT_ANALYSIS_JOB_POLL_MS` (default 2000 ms) and prevents overlapping local cycles. `claimNextDocumentAnalysisJob` uses `FOR UPDATE SKIP LOCKED`, reclaims a 15-minute stale processing lock only while attempts are below two, and permanently marks timed-out jobs at the attempt limit. A failing first attempt is requeued after 15 seconds; the second failure is terminal. The worker calls `runDocumentAnalysis` with the persisted owner, which rechecks its source upload before any Blob read. It exists to keep large analysis outside the 45-second Static Web Apps API proxy window.
 
-`parseDocumentBuffer` reads TXT/Markdown directly, converts other recognized document formats to Markdown through `@firecrawl/anydoc`, sends unsupported PDFs as PDF attachments, and sends images as image attachments. The handler rejects text exceeding `DOCUMENT_ANALYSIS_MAX_CHARS` (default `500000`) with `413 document_text_too_large`; it never truncates input. It resolves the `document_analysis` model assignment and calls `generateJson` with JSON output and `maxOutputTokens: 8192`.
+The legacy/small-file endpoint remains `POST /analyze-document`: it accepts either an owned ready `uploadId` or base64 content, but not both. Base64 is strict and limited to 80 KiB raw content; it is a fallback rather than an authorization bypass. For upload input, filename and MIME come from the persisted record, not browser metadata. `parseDocumentBuffer` reads TXT/Markdown directly, converts recognized office/document formats through `@firecrawl/anydoc`, and sends PDF/image vision inputs as attachments. Text above `DOCUMENT_ANALYSIS_MAX_CHARS` (default 500000) is rejected rather than truncated. The handler resolves the tenant `document_analysis` role and calls `generateJson` with an 8192-token output budget.
 
-A successful result requires a nonempty `scenes` array and `recommended_style.prompt`. `normalizeRecommendedStyle` supplies safe scalar fields and splits comma-delimited tags, but a missing/blank prompt is `502 invalid_response`. `documentScene.js::normalizeDocumentScene` accepts snake/camel aliases, supplies safe scene number/title/layout fallbacks, and allows at most one normalized table and chart per scene. Tables are capped at eight columns and ten rows; charts at twelve labels and four series. Empty visuals disappear, numeric values are normalized with zero fill, and `column`/`donut` map to `bar`/`doughnut`.
+A successful result has nonempty normalized `scenes` and `recommended_style.prompt`, as before. `normalizeDocumentScene` handles aliases and bounds one table (eight columns/ten rows) and one chart (twelve labels/four series) per scene; the browser re-normalizes editable export input. The payload also retains document title, summary, characters, provider/model, and parser provenance.
 
 ### Change and validation guide
 
-For a format, parser, attachment, prompt, or response-normalization change, start with `documentParser.js`, `llmRuntime.js`, the relevant provider adapter, `documentScene.js`, and `analyze-document/index.js`; then follow the browser consumer in [creation workflows](../frontend/create-workflows.md). Do not change the table/chart bounds in only one layer: the browser export re-normalizes editable scenes independently.
+For queue changes, follow `document-analysis-jobs/index.js`, `_shared/documentAnalysisJobs.js`, `server.js`, `analyze-document/index.js`, migration `021`, and the polling consumer in [creation workflows](../frontend/create-workflows.md). Preserve the complete surface: route registration, public OpenAPI description, worker startup, owner recheck, polling result shape, and migration. For parser/prompt/normalization work also change `documentParser.js`, `llmRuntime.js`, provider adapter, and `documentScene.js`; do not change table/chart bounds in only one layer.
 
-`documentScene.test.js` covers safe scene fallbacks, chart aliases, and invalid visual removal. `documentParser.test.js` covers format/MIME recognition, text and CSV paths, image routing, and conversion-error mapping. `aiService.test.js` verifies the browser sends document metadata and `sceneCount`. No focused handler test covers authorization, URL/base64 branching, required recommended-style rejection, or response status mapping; add handler coverage before changing those branches.
+`documentAnalysisJobs.test.js` covers queue creation, owner-scoped retrieval, lock-safe claim, completion, and worker forwarding; the handler test covers 202 creation and owner-scoped status. `documentScene.test.js` and `documentParser.test.js` cover normalization/parser behavior. `aiService.test.js` is the browser request/poll serialization location. Run the focused queue and parser checks:
 
 ```sh
-pnpm test --run api/_shared/__tests__/documentScene.test.js api/_shared/__tests__/documentParser.test.js src/services/__tests__/aiService.test.js
+pnpm test --run api/_shared/__tests__/documentAnalysisJobs.test.js api/document-analysis-jobs/__tests__/index.test.js api/analyze-document/__tests__/index.test.js api/_shared/__tests__/documentScene.test.js api/_shared/__tests__/documentParser.test.js src/services/__tests__/aiService.test.js
 ```
 
 ## Image generation jobs
 
-`POST /generate-images` requires `userScript`, assembles its provider prompt as described above, loads the tenant default model, and does not honor a client-selected model as policy. `POST /image-transform` accepts base64 or an allowed Blob URL plus optional `imageLanguage`; it uses the same shared image-model directive when it builds the mode-specific prompt. Its transformation modes are `style_transfer`, `element_extract`, `bg_replace`, and `reference_gen`, and production URL fetching is constrained by `isUrlAllowed`.
+`POST /generate-images` requires `userScript`, assembles its provider prompt as described above, loads the tenant default model, and does not honor a client-selected model as policy. An optional `referenceUploadId` is resolved only as the caller's ready, unexpired image upload; caller-provided `imageUrl` is rejected. `POST /image-transform` likewise requires an owned image `uploadId` and rejects `imageBase64` and `imageUrl`. Both load bytes through `resolveOwnedImageUpload`/`downloadOwnedImage`, so signed URLs are not an image-input authorization surface. Transform modes are `style_transfer`, `element_extract`, `bg_replace`, and `reference_gen`; the shared image-model directive still receives optional `imageLanguage`. The owner-check contract is canonical in [Owner-scoped uploads and staged Blob storage](uploads.md).
 
 Both handlers accept an optional, exact lowercase `quality` value of `low`, `medium`, or `high`; a supplied value outside that enum is `400 bad_request`. This is a GPT Image rendering-effort parameter, not Gemini image resolution or a tenant policy setting. `gptImage.js::normalizeImageQuality` lowercases/trims internal input and defaults omitted or invalid values to `medium`; `generateGptImage` sends it in the Azure JSON request and `editGptImage` sends it in multipart form data. Gemini ignores the field. The browser's `imageQuality` state is serialized as the API key `quality`; that client path is documented in [creation workflows](../frontend/create-workflows.md).
 

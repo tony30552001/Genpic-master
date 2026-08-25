@@ -6,8 +6,8 @@ tags: [frontend, creation, image-generation, document-analysis, storyboard, expo
 openwiki:
   roles: [workflow, frontend]
   change_kinds: [image-generation, document-analysis, client-export, client-progress]
-  source_paths: [src/InfographicGenerator.jsx, src/config.js, src/components/create/GenerateBar.jsx, src/components/create/ScriptEditor.jsx, src/components/create/ImageTransformPanel.jsx, src/hooks/useImageGeneration.js, src/hooks/useImageTransform.js, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/utils/pptxExport.js]
-  symbols: [IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_QUALITY, IMAGE_PURPOSE_OPTIONS, GenerateBar, ScriptEditor, ImageTransformPanel, useImageGeneration, useImageTransform, generateImage, transformImage, optimizePrompt, optimizeScene, useDocumentAnalysis, updateScene, removeScene, DocumentUploader, DocumentScenes, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx]
+  source_paths: [src/InfographicGenerator.jsx, src/config.js, src/components/create/GenerateBar.jsx, src/components/create/ScriptEditor.jsx, src/components/create/ImageTransformPanel.jsx, src/hooks/useImageGeneration.js, src/hooks/useImageTransform.js, src/components/create/DocumentUploader.jsx, src/components/create/DocumentScenes.jsx, src/components/create/PptMasterStudio.jsx, src/hooks/useDocumentAnalysis.js, src/hooks/usePptMasterDeck.js, src/services/aiService.js, src/services/storageService.js, src/utils/pptxExport.js]
+  symbols: [IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_QUALITY, IMAGE_PURPOSE_OPTIONS, GenerateBar, ScriptEditor, ImageTransformPanel, useImageGeneration, useImageTransform, generateImage, transformImage, optimizePrompt, optimizeScene, useDocumentAnalysis, uploadFile, createDocumentAnalysisJob, waitForDocumentAnalysisJob, updateScene, removeScene, DocumentUploader, DocumentScenes, PptMasterStudio, usePptMasterDeck, waitForDeckJob, exportToPptx]
   test_paths: [api/_shared/__tests__/imagePrompt.test.js, api/_shared/__tests__/imageTextLanguage.test.js, src/lib/__tests__/documentFormats.test.js, src/services/__tests__/aiService.test.js, src/hooks/__tests__/usePptMasterDeck.test.jsx, src/components/create/__tests__/PptMasterStudio.test.jsx, src/utils/__tests__/pptxExport.test.js]
   invariants: [General generation and transforms share `imageSize` and GPT Image quality state through `GenerateBar`; quality defaults to medium and is serialized for both., General creation selects infographic storyboard or freeform purpose, while storyboard-scene generation remains fixed to storyboard., Generation sends creative inputs rather than a final prompt and preserves palette tags as an array for server normalization., The persisted image-text language preference is forwarded to generation, transforms, and general-prompt and storyboard-scene optimization as imageLanguage; freeform generation intentionally omits its server-side directive, while missing or unsupported values add no directive., Document analysis produces only storyboard scenes., The hook uploads first and falls back to base64 only for files no larger than 80 KB., Deleting a storyboard scene re-numbers scene_number and updates total_scenes., PPT Master job state is separate from storyboard state and persists its active job ID for resumption.]
   validation_commands: [pnpm test --run api/_shared/__tests__/imagePrompt.test.js src/services/__tests__/aiService.test.js api/_shared/__tests__/gptImage.test.js, pnpm test --run api/_shared/__tests__/imageTextLanguage.test.js, pnpm test --run src/lib/__tests__/documentFormats.test.js src/utils/__tests__/pptxExport.test.js, pnpm test --run src/components/create/__tests__/PptMasterStudio.test.jsx src/hooks/__tests__/usePptMasterDeck.test.jsx]
@@ -59,24 +59,28 @@ sequenceDiagram
   participant Handler as analyze-document
   participant View as DocumentScenes
   Workspace->>Hook: file and sceneCount
-  Hook->>Blob: upload selected file
+  Hook->>Blob: create, PUT, and complete owner-scoped upload
   alt upload succeeds
-    Hook->>Handler: document URL and sceneCount
+    Hook->>Handler: create analysis job with uploadId
+    loop poll up to twenty minutes
+      Hook->>Handler: get analysis job
+    end
+    Handler-->>Hook: succeeded result or terminal error
   else file is no larger than 80 KB
     Hook->>Handler: base64 document and sceneCount
+    Handler-->>Hook: storyboard scenes and style
   end
-  Handler-->>Hook: storyboard scenes and style
   Hook->>View: commit matching result
 ```
 
-This diagram covers client transport only; parsing, SSRF checks, model selection, and normalization are server responsibilities in [AI generation](../backend/ai-generation.md).
+This diagram covers client transport only; server-owned upload authorization is canonical in [Owner-scoped uploads and staged Blob storage](../backend/uploads.md), while parsing, model selection, normalization, and the durable queue are in [AI generation](../backend/ai-generation.md).
 
-`useDocumentAnalysis` uploads to `uploads` first to avoid Static Web App request limits. After an upload failure it sends base64 only for files at most 80 KB. It commits state only when `result.scenes` is nonempty. `AnalysisProgress` is elapsed-time/coarse-phase feedback capped below completion; it is not server telemetry. `clearDocument` clears the local result, selected-file metadata, phase, and error.
+`useDocumentAnalysis` uses `storageService::uploadFile` first: create the record, direct-PUT the fixed staging URL, and complete promotion before it calls `aiService::analyzeDocument`. With an `uploadId`, that adapter creates a document job and polls it every two seconds for up to twenty minutes; it returns the persisted `result` only after `succeeded`, and propagates terminal job errors. After an upload failure it sends base64 only for files at most 80 KB to the synchronous fallback. It commits state only when `result.scenes` is nonempty. `AnalysisProgress` is elapsed-time/coarse-phase feedback capped below completion; it is not queue telemetry. `clearDocument` clears the local result, selected-file metadata, phase, and error.
 
-For browser format or request-shape work, update `documentFormats.js`, `DocumentUploader.jsx`, `useDocumentAnalysis.js`, and `aiService.js` together, then align the server in [AI generation](../backend/ai-generation.md). `documentFormats.test.js` covers extension acceptance, MIME fallback, and the accept list; `aiService.test.js` verifies the `/api/analyze-document` metadata payload.
+For browser format, upload, or request-shape work, update `documentFormats.js`, `DocumentUploader.jsx`, `useDocumentAnalysis.js`, `storageService.js`, and `aiService.js` together, then align the server pages linked above. Do not send a document URL, SAS token, container, or filename as a trusted analysis source once an upload ID exists. `documentFormats.test.js` covers extension acceptance/MIME fallback; `storageService.test.js` covers browser grant validation and the create-PUT-complete flow; `aiService.test.js` covers document-job serialization/polling.
 
 ```sh
-pnpm test --run src/lib/__tests__/documentFormats.test.js src/services/__tests__/aiService.test.js
+pnpm test --run src/lib/__tests__/documentFormats.test.js src/services/__tests__/storageService.test.js src/services/__tests__/aiService.test.js src/hooks/__tests__/useDocumentAnalysis.test.js
 ```
 
 ## Storyboard editing and browser exports
