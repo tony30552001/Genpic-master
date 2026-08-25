@@ -6,8 +6,8 @@ tags: [operations, development, deployment, sessions, entra, llm, ppt-master]
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations]
-  source_paths: [package.json, api/package.json, api/scripts/migrate.cjs, api/_shared/http.js, api/_shared/session.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
-  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 012_deck_job_events.sql, pnpm test --run api/_shared/__tests__/deckContract.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
+  source_paths: [package.json, src/index.css, api/package.json, api/scripts/migrate.cjs, api/_shared/http.js, api/_shared/session.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, api/_shared/deckFrames.js, api/_shared/deckContract.js, api/_shared/svgAuthoringPrompt.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 012_deck_job_events.sql, pnpm test --run api/_shared/__tests__/deckFrames.test.js api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/svgAuthoringPrompt.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
 ---
 
 # Development, migrations, and deployment
@@ -50,11 +50,13 @@ The optional PPT Master workflow uses a separately deployed FastAPI container be
 
 The API always registers the public deck routes, but creation and template lookup return unavailable when `PPT_MASTER_SERVICE_URL` and `PPT_MASTER_SERVICE_KEY` are absent; the standalone worker does not start without them. Other non-secret configuration categories are request timeout, worker poll interval, lock timeout, and the optional brand-catalog flag; use the source/defaults rather than placing these values in browser configuration. Deck outline/SVG authoring resolves the tenant's assigned `deck_authoring` model and optional fallback; it no longer reads Azure deployment settings. Deck illustrations use the tenant model policy's default image model in Node: `gemini-imagen` requires the Google API key, while `gpt-image-2` requires `GPT_IMAGE_ENDPOINT` and `GPT_IMAGE_API_KEY`. If the selected image model is unavailable, the worker records the image step as failed and continues with a layout-only deck. The sidecar requires the same service key, a Python work directory, and its command timeout. No model credential belongs in the sidecar; see [PPT Master deck jobs](../backend/ppt-master-decks.md) for the model boundary and [AI generation](../backend/ai-generation.md) for retry semantics.
 
-The sidecar Dockerfile pins the immutable `ppt-master` skill to `v4.8.0` and verifies its archive checksum before running the upstream attribution guard; a skill upgrade therefore changes the shipped compilation surface, not merely documentation. For a container or upstream-skill change, build and run the zero-AI smoke pipeline from `services/ppt-master-service/README.md`; it writes a minimal SVG, runs the authoritative gate, and exports a PPTX. This is conditional and more expensive than the Node contract test. For API outline/SVG validation changes, run the narrow check:
+The sidecar Dockerfile pins the immutable `ppt-master` skill to `v5.0.0` and verifies its archive checksum before running the upstream attribution guard; a skill upgrade therefore changes the shipped compilation surface, not merely documentation. For a container or upstream-skill change, build and run the zero-AI smoke pipeline from `services/ppt-master-service/README.md`; it writes a minimal SVG, runs the authoritative gate, and exports a PPTX. This is conditional and more expensive than the Node contract test. For API page-frame, outline, or SVG-prompt validation changes, run the narrow check:
 
 ```sh
-pnpm test --run api/_shared/__tests__/deckContract.test.js
+pnpm test --run api/_shared/__tests__/deckFrames.test.js api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/svgAuthoringPrompt.test.js
 ```
+
+The frame catalog's safe-area geometry and the prompt's measured text-metric guidance are calibrated to the pinned skill. Re-run the conditional container smoke pipeline after a skill pin upgrade; local Node tests do not exercise the authoritative Python gate.
 
 `.github/workflows/ppt-master-service.yml` builds in Azure Container Registry and updates a distinct Azure Container App for `main` pushes that touch the service/workflow paths. The Docker build runs the skill-integrity gate. Because ingress accepts only App Service outbound IPs, the GitHub runner cannot poll `/health`; instead, the workflow retrieves the latest revision and polls its Azure Container Apps `runningState` for `Running` or `RunningAtMaxScale`, failing on `Failed`, `Degraded`, or a timeout. The service should be internally reachable only by the API; do not expose the shared-key control plane as a browser API.
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DECK_IMAGE_ROLES,
   DECK_MAX_SLIDES,
   DECK_MIN_SLIDES,
   applyImagePolicy,
@@ -193,15 +194,68 @@ describe("applyImagePolicy", () => {
     expect(outline.slides[4].image_prompt).toBe("a team at work");
   });
 
-  it("defaults the image role from the page role", () => {
+  it("lets the frame decide what the illustration does on the page", () => {
     const { outline } = applyImagePolicy({
       outline: outlineOf(nineSlides),
       density: "every",
     });
 
+    for (const slide of outline.slides) {
+      if (!slide.needs_image) continue;
+      expect(slide.image_role, `slide ${slide.slide_number}`).toBeTruthy();
+      expect(DECK_IMAGE_ROLES).toContain(slide.image_role);
+    }
+
+    expect(outline.slides[0].frame).toBe("cover-bleed");
     expect(outline.slides[0].image_role).toBe("background");
-    expect(outline.slides[3].image_role).toBe("hero");
-    expect(outline.slides[2].image_role).toBe("accent");
+  });
+
+  it("moves a page to its illustrated sibling when the policy adds a picture", () => {
+    const { outline } = applyImagePolicy({
+      outline: outlineOf([
+        { title: "封面", page_role: "cover", frame: "cover-centered" },
+        { title: "論點", page_role: "content", frame: "content-bullets" },
+        { title: "結語", page_role: "ending", frame: "ending-statement" },
+      ]),
+      density: "every",
+    });
+
+    expect(outline.slides[0].frame).toBe("cover-bleed");
+    expect(outline.slides[1].frame).toBe("text-image-split");
+    expect(outline.slides[2].frame).toBe("ending-bleed");
+    expect(outline.slides.every((slide) => slide.needs_image)).toBe(true);
+  });
+
+  it("drops the frame's image module when the policy takes the picture away", () => {
+    const { outline } = applyImagePolicy({
+      outline: outlineOf([
+        { title: "封面", page_role: "cover", frame: "cover-bleed" },
+        { title: "論點", page_role: "content", frame: "text-image-split" },
+        { title: "結語", page_role: "ending", frame: "ending-bleed" },
+      ]),
+      density: "none",
+    });
+
+    expect(outline.slides[0].frame).toBe("cover-centered");
+    expect(outline.slides[1].frame).toBe("content-bullets");
+    expect(outline.slides[2].frame).toBe("ending-statement");
+    expect(outline.slides.every((slide) => slide.needs_image === false)).toBe(true);
+  });
+
+  it("keeps a structural frame and gives up the picture instead", () => {
+    const { outline, synthesizedPrompts } = applyImagePolicy({
+      outline: outlineOf([
+        { title: "封面", page_role: "cover", frame: "cover-centered" },
+        { title: "四象限", page_role: "content", frame: "matrix-2x2" },
+        { title: "結語", page_role: "ending", frame: "ending-statement" },
+      ]),
+      density: "every",
+    });
+
+    expect(outline.slides[1].frame).toBe("matrix-2x2");
+    expect(outline.slides[1].needs_image).toBe(false);
+    expect(outline.slides[1].image_prompt).toBe("");
+    expect(synthesizedPrompts).not.toContain(2);
   });
 
   it("never asks for fewer than two pictures in a short deck", () => {

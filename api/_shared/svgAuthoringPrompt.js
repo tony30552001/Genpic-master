@@ -4,6 +4,7 @@ const {
   DECK_MAX_SLIDES,
   normalizeImageDensity,
 } = require("./deckContract");
+const { describeFrameCatalog, describeFrameGeometry } = require("./deckFrames");
 
 /**
  * Distilled authoring contract for ppt-master's canonical SVG dialect.
@@ -12,6 +13,11 @@ const {
  * are actually enforced live in svg_quality_checker.py, and those are captured
  * here so one compact system prompt can drive slide authoring. The Python
  * quality gate stays authoritative; violations come back as repair feedback.
+ *
+ * The text-metric numbers below were measured against the pinned skill release
+ * rather than copied from its release notes: probe slides with known CJK, bold
+ * and halfwidth runs were fed to the gate and the passing bounds were read back
+ * from its own overflow reports. Re-measure whenever the skill pin changes.
  */
 const SVG_GRAMMAR = `你是簡報視覺設計師，輸出 ppt-master 專案的標準 SVG 中介格式。
 每一頁都是一個獨立、完整、可直接編譯成原生 PowerPoint 形狀的 SVG。
@@ -27,7 +33,7 @@ const SVG_GRAMMAR = `你是簡報視覺設計師，輸出 ppt-master 專案的�
   1. 頁內唯一且具描述性的 id，例如 id="cover-title"、id="points"。
   2. data-pptx-bounds="x y width height"，為該群組在根座標系的實際外框，數值為正且完全落在畫布內。
 - 巢狀 <g> 不可寫 data-pptx-bounds。
-- 不要用單一 <g> 包住整頁；也不要讓大量圖元散落在根層。合理頁面約 3 到 6 個根層群組。
+- 不要用單一 <g> 包住整頁；也不要讓大量圖元散落在根層。每一頁的根層群組由該頁指定的版面骨架決定。
 - 整頁背景色請用根層的 <rect x="0" y="0" width="${DECK_CANVAS_WIDTH}" height="${DECK_CANVAS_HEIGHT}">，並給它 id 與 data-pptx-role="background"，不需要 bounds。
 
 # 數值
@@ -47,8 +53,9 @@ const SVG_GRAMMAR = `你是簡報視覺設計師，輸出 ppt-master 專案的�
 - text-anchor 只能寫在 <text> 上，不可寫在 <tspan> 上。
 - 行距建議：標題 1.2 到 1.3 倍字級，內文 1.5 到 1.6 倍字級（換算成 dy 的絕對數值）。
 - 檢查器估算的文字外框是：上緣 = y - 0.85 × font-size，下緣 = y + 0.35 × font-size，
-  寬度約等於字符前進量（中日文字元約 1.0 × font-size，西文平均約 0.55 × font-size）。
-- 文字超出所屬群組 data-pptx-bounds 超過 5% 會失敗；任何文字超出畫布一定失敗。
+  寬度等於字符前進量總和：中日文字元 1.00 × font-size（**粗體不會變寬**），
+  西文與半形字元約 0.54 × font-size。
+- 群組 data-pptx-bounds 只要不比文字實際外框窄超過 5% 就通過；任何文字超出畫布一定失敗。
   請保守估算寬度，寧可縮小字級或減少字數。
 - 版面安全邊界：內容請留在 x 96 到 1184、y 80 到 640 之間。
 
@@ -82,7 +89,7 @@ const buildTemplateGuidance = (templateSpecs) => {
   return specs
     .map(
       (spec) =>
-        `# 設計範本規範（${spec.kind}／${spec.id}）\n請完全遵守以下設計語言，包含色票、字級、排版節奏與敘事方法：\n\n${spec.spec}`
+        `# 設計範本規範（${spec.kind}／${spec.id}）\n請遵守以下設計語言的色票、字級、排版節奏與敘事方法。\n若其中的版面配置敘述與該頁指定的版面骨架衝突，一律以骨架的 bounds 為準：\n骨架決定幾何，設計範本決定色彩與調性。\n\n${spec.spec}`
     )
     .join("\n\n");
 };
@@ -109,22 +116,26 @@ const buildOutlineSystemPrompt = ({ imageDensity } = {}) => {
 規則：
 - 第一頁是封面（page_role = cover），最後一頁是結尾（page_role = ending）。
 - 中間頁使用 content，必要時可用 section 當作章節轉場。
-- 每頁 key_points 最多 5 條，每條 40 字以內，必須具體、有資訊量，不要空話。
+- 每條 key_points 40 字以內，必須具體、有資訊量，不要空話；條數依所選骨架的容納量。
 - 全份簡報最多 ${DECK_MAX_SLIDES} 頁。
 - 使用與輸入素材相同的語言撰寫，但 art_direction 與 image_prompt 一律使用英文。
+
+${describeFrameCatalog()}
+
+選擇骨架的規則：
+- 先想清楚這一頁的內容是什麼結構（比較、流程、指標、時序、主張），再挑對應的骨架。
+- 不要連續兩頁使用同一個骨架；整份簡報也不要只用 content-bullets。
+- 內容條數必須落在該骨架的容納範圍內，超出的部分會被截掉，請改選容量更大的骨架或拆成兩頁。
 
 配圖規則：
 ${IMAGE_DENSITY_GUIDANCE[density]}
 - image_prompt 描述畫面本身，不要出現任何文字、字母、圖表或浮水印。
-- image_role 說明這張圖在版面上的角色：
-  - background：滿版底圖，文字會壓在上面，畫面必須低對比、留白多、沒有中央焦點。
-  - hero：佔半個版面的主視覺，主體明確、構圖偏向一側。
-  - accent：小面積點綴，單一主體、構圖簡潔。
+- 圖片在版面上的角色由骨架決定，你只需要決定哪幾頁值得配圖。
 - art_direction 是一句英文，描述整份簡報共用的視覺調性（色調、筆觸、質感、視角），
   所有配圖都會沿用它，請與指定的設計範本規範一致。
 
 請只回傳 JSON：
-{"title":"簡報標題","summary":"一句話摘要","art_direction":"Muted editorial illustration, restrained two-tone palette, soft geometric shapes, flat perspective","slides":[{"page_role":"cover","title":"","subtitle":"","key_points":[],"speaker_notes":"","needs_image":true,"image_role":"background","image_prompt":"Wide abstract composition of layered translucent planes, low contrast, generous empty space"}]}`;
+{"title":"簡報標題","summary":"一句話摘要","art_direction":"Muted editorial illustration, restrained two-tone palette, soft geometric shapes, flat perspective","slides":[{"page_role":"cover","frame":"cover-bleed","title":"","subtitle":"","key_points":[],"speaker_notes":"","needs_image":true,"image_prompt":"Wide abstract composition of layered translucent planes, low contrast, generous empty space"}]}`;
 };
 
 const buildOutlineUserMessage = ({ material, slideCount, templateSpecs }) => {
@@ -139,13 +150,6 @@ const buildOutlineUserMessage = ({ material, slideCount, templateSpecs }) => {
   return `${material}\n\n請規劃 ${slideCount} 頁的簡報大綱。${guidance}`;
 };
 
-const IMAGE_ROLE_PLACEMENT = {
-  background:
-    "這張圖是滿版底圖：請鋪滿整個畫布，並把文字放在圖上方，必要時加一層半透明色塊確保可讀性。",
-  hero: "這張圖是主視覺：請讓它佔據約半個版面，與文字區左右或上下分工。",
-  accent: "這張圖是點綴：請控制在版面的一小塊區域，不要搶走文字的視覺重量。",
-};
-
 const buildSlideUserMessage = ({ deckTitle, slide, totalSlides, availableImages }) => {
   const points =
     slide.key_points.length > 0
@@ -155,10 +159,8 @@ const buildSlideUserMessage = ({ deckTitle, slide, totalSlides, availableImages 
     Array.isArray(availableImages) && availableImages.length > 0
       ? `\n可用圖片（僅能使用這些檔名）：\n${availableImages
           .map((name) => `- ../images/${name}`)
-          .join("\n")}\n${IMAGE_ROLE_PLACEMENT[slide.image_role] || IMAGE_ROLE_PLACEMENT.accent}
-圖片本身是橫幅（約 3:2），且以 preserveAspectRatio="xMidYMid slice" 填滿你給的框，
-超出的部分會被裁掉。請不要把它放進極端狹長或接近正方形的框。`
-      : "\n本頁沒有可用圖片，請勿使用 <image>。";
+          .join("\n")}`
+      : "\n本頁沒有可用圖片。";
 
   return `簡報標題：${deckTitle}
 這是第 ${slide.slide_number} 頁，共 ${totalSlides} 頁。
@@ -167,6 +169,8 @@ const buildSlideUserMessage = ({ deckTitle, slide, totalSlides, availableImages 
 副標題：${slide.subtitle || "（無）"}
 重點：
 ${points}${images}
+
+${describeFrameGeometry(slide.frame)}
 
 請輸出這一頁的 SVG。只回傳 JSON：{"svg":"<svg ...>...</svg>"}`;
 };
@@ -180,7 +184,13 @@ ${problems.map((problem, index) => `${index + 1}. ${problem}`).join("\n")}
 原始 SVG：
 ${previousSvg}
 
-修正原則：只修正錯誤，保持設計不變；若是文字溢出，請縮小字級、減少字數或調整 data-pptx-bounds。
+${describeFrameGeometry(slide.frame)}
+
+修正原則：
+1. 先把每個根層群組的 id 與 data-pptx-bounds 改回上面骨架指定的數值，多數錯誤源自偏離骨架。
+2. 再把該群組內的文字排回它自己的框內：調整 x／y、改用 <tspan> 換行、或收斂行距。
+3. 只有在文字量確實超過該框的容量時，才縮小字級或精簡文字。
+4. 其餘設計（色彩、字體、層級）保持不變。
 第 ${slide.slide_number} 頁的 data-pptx-page-role 必須維持 ${slide.page_role}。
 只回傳 JSON：{"svg":"<svg ...>...</svg>"}`;
 

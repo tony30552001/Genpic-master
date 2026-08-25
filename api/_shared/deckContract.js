@@ -1,3 +1,9 @@
+const {
+  getFrame,
+  illustratedVariantOf,
+  normalizeFrameId,
+} = require("./deckFrames");
+
 const DECK_MIN_SLIDES = 4;
 const DECK_MAX_SLIDES = 12;
 const DECK_CANVAS_WIDTH = 1280;
@@ -25,20 +31,10 @@ const DECK_IMAGE_DENSITIES = Object.freeze(["none", "key", "every"]);
 const DECK_DEFAULT_IMAGE_DENSITY = "key";
 
 /**
- * What an illustration does on the page. The outline picks one so both the
- * image prompt and the slide authoring prompt agree on how much room the
- * picture owns.
+ * What an illustration does on the page. The frame declares this, because the
+ * frame is what reserves the room for the picture.
  */
 const DECK_IMAGE_ROLES = Object.freeze(["background", "hero", "accent"]);
-
-/** Fallback role per page role, used when the model omits or invents one. */
-const DEFAULT_IMAGE_ROLE_BY_PAGE = Object.freeze({
-  cover: "background",
-  section: "hero",
-  toc: "accent",
-  content: "accent",
-  ending: "accent",
-});
 
 const normalizeImageDensity = (value) => {
   const density = String(value || "").trim().toLowerCase();
@@ -71,26 +67,36 @@ const normalizeSlideCount = (value) => {
 const slideFileName = (index) =>
   `${String(index + 1).padStart(2, "0")}_slide.svg`;
 
-const normalizeImageRole = (value, pageRole) => {
-  const role = toText(value).toLowerCase();
-  if (DECK_IMAGE_ROLES.includes(role)) return role;
-  return DEFAULT_IMAGE_ROLE_BY_PAGE[pageRole] || "accent";
+/**
+ * Bind a slide to a frame. The frame owns capacity and the illustration's job
+ * on the page, so both follow it rather than the model's separate guesses.
+ */
+const withFrame = (slide, frameId) => {
+  const frame = getFrame(frameId);
+  return {
+    ...slide,
+    frame: frameId,
+    key_points: slide.key_points.slice(0, frame.pointsRange[1]),
+    image_role: frame.imageRole,
+  };
 };
 
 const normalizeOutlineSlide = (slide, index, total) => {
   const raw = slide && typeof slide === "object" && !Array.isArray(slide) ? slide : {};
   const pageRole = normalizePageRole(raw.page_role ?? raw.pageRole, index, total);
-  return {
-    slide_number: index + 1,
-    page_role: pageRole,
-    title: toText(raw.title) || `投影片 ${index + 1}`,
-    subtitle: toText(raw.subtitle),
-    key_points: normalizeTextArray(raw.key_points ?? raw.keyPoints).slice(0, 5),
-    speaker_notes: toText(raw.speaker_notes ?? raw.speakerNotes),
-    needs_image: Boolean(raw.needs_image ?? raw.needsImage),
-    image_role: normalizeImageRole(raw.image_role ?? raw.imageRole, pageRole),
-    image_prompt: toText(raw.image_prompt ?? raw.imagePrompt),
-  };
+  return withFrame(
+    {
+      slide_number: index + 1,
+      page_role: pageRole,
+      title: toText(raw.title) || `投影片 ${index + 1}`,
+      subtitle: toText(raw.subtitle),
+      key_points: normalizeTextArray(raw.key_points ?? raw.keyPoints),
+      speaker_notes: toText(raw.speaker_notes ?? raw.speakerNotes),
+      needs_image: Boolean(raw.needs_image ?? raw.needsImage),
+      image_prompt: toText(raw.image_prompt ?? raw.imagePrompt),
+    },
+    normalizeFrameId(raw.frame, pageRole)
+  );
 };
 
 const normalizeOutline = (outline, { slideCount } = {}) => {
@@ -136,6 +142,32 @@ const synthesizeImagePrompt = (deckTitle, slide) => {
 };
 
 /**
+ * Keep the frame and the illustration decision consistent.
+ *
+ * The density policy runs after the outline committed to a frame, so it can
+ * strand a page either way: a frame with an image module but no picture leaves
+ * a hole, and a picture on a frame with nowhere to put it has no geometry to
+ * occupy. Frames declare their illustrated and unillustrated siblings, so the
+ * page moves to whichever one matches the decision.
+ *
+ * A frame whose structure carries the meaning has no illustrated sibling. Such
+ * a page keeps its structure and gives up the picture: density is a target for
+ * the deck, not a promise for every page.
+ */
+const reconcileFrameWithImage = (slide, wanted) => {
+  const frame = getFrame(slide.frame);
+  if (wanted === Boolean(frame.imageRole)) return slide;
+
+  if (!wanted) {
+    return withFrame(slide, frame.fallbackWithoutImage);
+  }
+
+  const illustrated = illustratedVariantOf(frame.id);
+  if (!illustrated) return null;
+  return withFrame(slide, illustrated);
+};
+
+/**
  * Decide which pages get an illustration.
  *
  * The outline model only nominates candidates and describes them; the count is
@@ -163,16 +195,18 @@ const applyImagePolicy = ({ outline, density }) => {
   const synthesizedPrompts = [];
   const decidedSlides = slides.map((slide) => {
     const wanted = selected.has(slide.slide_number);
-    if (!wanted) {
-      return { ...slide, needs_image: false, image_prompt: "" };
+    const reframed = reconcileFrameWithImage(slide, wanted);
+
+    if (!wanted || !reframed) {
+      return { ...(reframed || slide), needs_image: false, image_prompt: "" };
     }
 
-    let prompt = slide.image_prompt;
+    let prompt = reframed.image_prompt;
     if (!prompt) {
-      prompt = synthesizeImagePrompt(outline.title, slide);
-      synthesizedPrompts.push(slide.slide_number);
+      prompt = synthesizeImagePrompt(outline.title, reframed);
+      synthesizedPrompts.push(reframed.slide_number);
     }
-    return { ...slide, needs_image: true, image_prompt: prompt };
+    return { ...reframed, needs_image: true, image_prompt: prompt };
   });
 
   return {
