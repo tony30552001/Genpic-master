@@ -521,6 +521,7 @@ describe("upload OpenAPI contract", () => {
 });
 
 describe("upload App Service routes", () => {
+  // 這支測試會載入整個 Express app 並開一個真實 socket，在完整套件並行時遠慢於預設 5 秒。
   it("routes POST /api/uploads/:id through the stable missing-action response", async () => {
     const { app } = require("../../server");
     const server = await new Promise((resolve) => {
@@ -543,5 +544,5 @@ describe("upload App Service routes", () => {
         server.close((closeError) => closeError ? reject(closeError) : resolve())
       );
     }
-  });
+  }, 30_000);
 });

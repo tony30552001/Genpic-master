@@ -313,6 +313,31 @@ describe("buildAuthoringSystemPrompt", () => {
     expect(prompt).toContain("完整畫出來");
   });
 
+  /**
+   * A preview run put two 2px rules straight through an 84px cover title: both
+   * sat inside the glyph band while still clearing the group's bounds, which
+   * the contract allows because a non-text group may overlap text.
+   */
+  it("keeps decorative rules out of the glyph band rather than the group bounds", () => {
+    const prompt = buildAuthoringSystemPrompt({});
+
+    expect(prompt).toContain("裝飾線不可穿過文字");
+    expect(prompt).toContain("不要用群組的 data-pptx-bounds 判斷");
+  });
+
+  /**
+   * Chart geometry is drawn inside a single group, so no contract rule can
+   * catch a bar that overruns its category label or a value label that floats
+   * away from the bar it belongs to. The prompt has to prevent both.
+   */
+  it("pins chart geometry so bars and their labels cannot drift apart", () => {
+    const prompt = buildAuthoringSystemPrompt({});
+
+    expect(prompt).toContain("所有 series 的最大值");
+    expect(prompt).toContain("禁止把數值另外排成一列");
+    expect(prompt).toContain("禁止把不同 category 接成一條連續的長條");
+  });
+
   it("leaves the per-page geometry out of the shared system prompt", () => {
     const prompt = buildAuthoringSystemPrompt({});
     expect(prompt).not.toContain("本頁版面骨架");
