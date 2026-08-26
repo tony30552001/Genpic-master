@@ -6,7 +6,7 @@ tags: [operations, development, deployment, sessions, entra, llm, ppt-master]
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations]
-  source_paths: [package.json, src/index.css, api/package.json, api/scripts/migrate.cjs, api/_shared/http.js, api/_shared/session.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, api/_shared/deckFrames.js, api/_shared/deckContract.js, api/_shared/svgAuthoringPrompt.js, api/scripts/generate-style-previews.cjs, api/scripts/previewAssets.js, api/scripts/deck-repair-stats.cjs, api/scripts/deckRepairStats.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  source_paths: [package.json, src/index.css, api/package.json, api/scripts/migrate.cjs, api/scripts/cleanup-legacy-upload-blobs.cjs, api/scripts/legacyUploadBlobs.js, api/_shared/http.js, api/_shared/session.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, api/_shared/deckFrames.js, api/_shared/deckContract.js, api/_shared/svgAuthoringPrompt.js, api/scripts/generate-style-previews.cjs, api/scripts/previewAssets.js, api/scripts/deck-repair-stats.cjs, api/scripts/deckRepairStats.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
   validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 023_deck_event_design_step.sql, pnpm test --run api/_shared/__tests__/deckFrames.test.js api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckEventSteps.test.js api/_shared/__tests__/svgAuthoringPrompt.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
 ---
 
@@ -46,6 +46,16 @@ node api/scripts/migrate.cjs 020_owner_scoped_uploads.sql 021_document_analysis_
 ```
 
 Do not use a production database or storage account as routine validation. Applying or changing the Azure lifecycle policy is an external mutation: after approved application, retrieve the active policy through the operational procedure; a parsed local JSON file is insufficient.
+
+### One-off legacy upload-blob sweep
+
+The lifecycle worker and Azure policy do not remove historical flat names created by the retired arbitrary-SAS endpoint. `api/scripts/cleanup-legacy-upload-blobs.cjs` is the separate, conditional remedy described in [owner-scoped uploads](../backend/uploads.md). It uses `DATABASE_URL` and the configured upload container to classify every object as lifecycle-managed (`staging/` or `ready/`), database-referenced, or orphaned. It discovers all current public text/varying-character columns before matching raw and URL-encoded blob-name forms, so database references are protected without relying on an obsolete table list.
+
+Start with a read-only classification and keep the resulting manifest for review; `--apply` is the only destructive flag and deletes every current orphan candidate with snapshots. Run it only with approved database/storage access, a reviewed manifest, and a confirmed Blob soft-delete or backup recovery window. Do not run `--apply` as CI or routine deployment validation; a new listing/classification is required before retrying after any error or environmental change. The pure logic check is local and non-destructive:
+
+```sh
+pnpm test --run api/scripts/__tests__/legacyUploadBlobs.test.js
+```
 
 ## Analysis-model secret configuration
 

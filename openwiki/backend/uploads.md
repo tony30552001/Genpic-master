@@ -1,16 +1,16 @@
 ---
 type: backend workflow
 title: Owner-scoped uploads and staged Blob storage
-description: Authenticated upload creation, verified staging-to-ready promotion, tenant/user ownership checks, downstream consumers, and cleanup of expired staging objects.
-tags: [backend, uploads, storage, security, blob]
+description: Authenticated upload creation, verified staging-to-ready promotion, tenant/user ownership checks, expiry cleanup, and safe one-off classification of legacy flat Blob objects.
+tags: [backend, uploads, storage, security, blob, legacy-cleanup]
 openwiki:
   roles: [workflow, integration, operations]
   change_kinds: [upload-lifecycle, storage, authorization]
-  source_paths: [api/uploads/index.js, api/_shared/uploads.js, api/_shared/uploadStorage.js, api/_shared/uploadCleanup.js, api/_shared/imageUploads.js, db/migrations/020_owner_scoped_uploads.sql]
-  symbols: [createPendingUpload, getOwnedUpload, issueUploadGrant, promoteUpload, assertVerifiedReadyUpload, resolveOwnedImageUpload, cleanupExpiredUploads]
-  test_paths: [api/uploads/__tests__/index.test.js, api/_shared/__tests__/uploadStorage.test.js, api/_shared/__tests__/uploads.test.js, api/_shared/__tests__/uploadCleanup.test.js]
-  invariants: [A browser may upload only to the server-selected UUID staging object in the configured container., A consumer accepts only a ready unexpired upload owned by its tenant and user., Promotion verifies the staged size and MIME type before moving it to its canonical ready object., Cleanup operates only on pending expired staging uploads.]
-  validation_commands: [pnpm test --run api/uploads/__tests__/index.test.js api/_shared/__tests__/uploadStorage.test.js api/_shared/__tests__/uploadCleanup.test.js]
+  source_paths: [api/uploads/index.js, api/_shared/uploads.js, api/_shared/uploadStorage.js, api/_shared/uploadCleanup.js, api/_shared/imageUploads.js, api/scripts/cleanup-legacy-upload-blobs.cjs, api/scripts/legacyUploadBlobs.js, db/migrations/020_owner_scoped_uploads.sql]
+  symbols: [createPendingUpload, getOwnedUpload, issueUploadGrant, promoteUpload, assertVerifiedReadyUpload, resolveOwnedImageUpload, cleanupExpiredUploads, getUploadContainerClient, classifyUploadBlobs]
+  test_paths: [api/uploads/__tests__/index.test.js, api/_shared/__tests__/uploadStorage.test.js, api/_shared/__tests__/uploads.test.js, api/_shared/__tests__/uploadCleanup.test.js, api/scripts/__tests__/legacyUploadBlobs.test.js]
+  invariants: [A browser may upload only to the server-selected UUID staging object in the configured container., A consumer accepts only a ready unexpired upload owned by its tenant and user., Promotion verifies the staged size and MIME type before moving it to its canonical ready object., Cleanup operates only on pending expired staging uploads., Legacy remediation never deletes lifecycle-managed prefixes or database-referenced Blob names without the explicit --apply flag.]
+  validation_commands: [pnpm test --run api/uploads/__tests__/index.test.js api/_shared/__tests__/uploadStorage.test.js api/_shared/__tests__/uploadCleanup.test.js, pnpm test --run api/scripts/__tests__/legacyUploadBlobs.test.js]
 ---
 
 # Owner-scoped uploads and staged Blob storage
@@ -68,5 +68,19 @@ The Azure policy artifact `infra/azure/storage-lifecycle-policy.json` is a secon
 ```sh
 pnpm test --run api/_shared/__tests__/uploadCleanup.test.js api/_shared/__tests__/uploadLifecyclePolicy.test.js
 ```
+
+## Legacy flat-blob remediation
+
+`api/scripts/cleanup-legacy-upload-blobs.cjs` is a one-off operator command for flat objects left by the retired `/api/blob-sas` endpoint. It is not part of `startUploadCleanupWorker`: the ongoing worker only claims expired `pending` database rows and deletes their canonical `staging/<UUID>` objects. The remediation command protects both lifecycle-managed prefixes (`staging/`, `ready/`) and any legacy object whose exact raw, URI-encoded, or component-encoded name appears after `/<configured container>/` in a text or `character varying` value in any public database table. All other flat names are classified as orphaned candidates.
+
+The command requires the configured Blob client and `DATABASE_URL`. By default it is read-only: it discovers candidate text columns through `information_schema`, lists the configured uploads container, prints managed/referenced/orphaned counts and bytes, and optionally writes the complete classification with `--manifest <path>`. Only `--apply` calls Blob deletion, including snapshots. Blob-account soft-delete settings determine whether deleted objects remain recoverable; the script itself has no rollback. Because reference discovery intentionally scans all current text columns, do not replace it with a hand-maintained list of tables when adding a URL-bearing column.
+
+Use this only as an approved storage-remediation operation, after reviewing a dry-run manifest and confirming backup/soft-delete policy. A partial deletion failure exits nonzero and reports each failed blob; rerun a new dry run before any further apply attempt. The pure classifier is the narrow validation and covers managed prefixes, raw/encoded references, JSON-contained URLs, false-prefix avoidance, and byte accounting:
+
+```sh
+pnpm test --run api/scripts/__tests__/legacyUploadBlobs.test.js
+```
+
+For the conditional external operation, consult [development, migrations, and deployment](../operations/development-deployment.md); it owns the safe execution sequence. This command protects legacy references but cannot prove that an unreferenced object has no business value outside the database.
 
 Do not use the legacy `/api/blob-sas` route for new work, manually make ready object names, or treat a signed URL as an ownership proof.

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -21,6 +21,10 @@ uploadStorage.promoteUpload = vi.fn();
 const handler = require("../index");
 
 const UPLOAD_ID = "123e4567-e89b-42d3-a456-426614174000";
+// Every expiry in this suite is expressed relative to this instant: the SAS
+// grant lapses 15 minutes later and a pending upload 48 hours later. The clock
+// is pinned so those fixtures cannot drift into the past as real time passes.
+const NOW = new Date("2026-08-24T00:00:00.000Z");
 const authUser = { sub: "provider-user-1" };
 const owner = { tenantId: "tenant-1", userId: "user-1" };
 const validCreateBody = {
@@ -57,7 +61,8 @@ const pendingUpload = (overrides = {}) => ({
 describe("upload API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useRealTimers();
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     auth.requireAuth.mockResolvedValue({ user: authUser });
     identity.resolveIdentity.mockResolvedValue(owner);
     rateLimit.rateLimit.mockReturnValue({ limited: false });
@@ -76,6 +81,10 @@ describe("upload API", () => {
     uploads.markUploadReady.mockResolvedValue(
       pendingUpload({ status: "ready", blob_name: `ready/${UPLOAD_ID}` })
     );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it.each([
@@ -231,9 +240,6 @@ describe("upload API", () => {
   });
 
   it("creates an owner-scoped pending row with 48-hour retention and returns only the short grant", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-24T00:00:00.000Z"));
-
     const response = await invoke({ body: validCreateBody });
 
     expect(identity.resolveIdentity).toHaveBeenCalledWith(authUser);
@@ -314,8 +320,6 @@ describe("upload API", () => {
     ["an expired status", { status: "expired" }],
     ["an elapsed pending expiry", { expires_at: "2026-08-23T23:59:59.000Z" }],
   ])("returns the common 404 before Azure access for %s", async (_case, override) => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-24T00:00:00.000Z"));
     uploads.getOwnedUpload.mockResolvedValueOnce(pendingUpload(override));
 
     const response = await invoke({ params: { id: UPLOAD_ID, action: "complete" } });
