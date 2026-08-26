@@ -9,6 +9,7 @@ export const TASK_TEMPLATES = Object.freeze([
     id: "infographic",
     title: "資訊圖引擎",
     description: "把主題拆成可掃讀的資訊模組。",
+    previewUrl: "/task-templates/infographic-editorial.webp",
     badge: "適合報告",
     purpose: "infographic",
     defaultModules: 4,
@@ -28,6 +29,7 @@ export const TASK_TEMPLATES = Object.freeze([
     id: "poster",
     title: "敘事海報",
     description: "用單一主視覺傳達一個明確訊息。",
+    previewUrl: "/task-templates/poster-narrative.webp",
     badge: "適合宣傳",
     purpose: "freeform",
     defaultModules: 3,
@@ -47,6 +49,7 @@ export const TASK_TEMPLATES = Object.freeze([
     id: "product",
     title: "商品展示",
     description: "突出產品、材質與使用情境。",
+    previewUrl: "/task-templates/product-showcase.webp",
     badge: "適合產品",
     purpose: "freeform",
     defaultModules: 3,
@@ -66,6 +69,7 @@ export const TASK_TEMPLATES = Object.freeze([
     id: "storyboard",
     title: "電影分鏡",
     description: "以鏡頭與場景節奏組織敘事。",
+    previewUrl: "/task-templates/storyboard-cinematic.webp",
     badge: "適合劇情",
     purpose: "storyboard",
     defaultModules: 4,
@@ -88,7 +92,7 @@ export const STYLE_PRESETS = Object.freeze([
     id: "dawn",
     title: "晨光編輯感",
     description: "溫暖、乾淨",
-    previewUrl: "/style-presets/dawn-editorial.svg",
+    previewUrl: "/style-presets/dawn-editorial.webp",
     prompt:
       "a warm editorial visual language with natural morning light, clean neutral surfaces, restrained composition, and gentle documentary realism",
     palette: {
@@ -103,7 +107,7 @@ export const STYLE_PRESETS = Object.freeze([
     id: "editorial",
     title: "冷靜編輯藍",
     description: "專業、清晰",
-    previewUrl: "/style-presets/cool-editorial-blue.svg",
+    previewUrl: "/style-presets/cool-editorial-blue.webp",
     prompt:
       "a calm editorial visual language with cool blue accents, crisp flat illustration, restrained low-saturation color, and generous negative space",
     palette: {
@@ -118,7 +122,7 @@ export const STYLE_PRESETS = Object.freeze([
     id: "paper",
     title: "紙張手作感",
     description: "柔和、有溫度",
-    previewUrl: "/style-presets/paper-handmade.svg",
+    previewUrl: "/style-presets/paper-handmade.webp",
     prompt:
       "a tactile handmade paper visual language with soft picture-book forms, pastel colors, warm studio light, and visible paper texture",
     palette: {
@@ -133,7 +137,7 @@ export const STYLE_PRESETS = Object.freeze([
     id: "night",
     title: "夜色電影感",
     description: "強烈、有張力",
-    previewUrl: "/style-presets/night-cinematic.svg",
+    previewUrl: "/style-presets/night-cinematic.webp",
     prompt:
       "a cinematic night visual language with dramatic high-contrast lighting, monochrome neon tones, wide-angle energy, and atmospheric depth",
     palette: {

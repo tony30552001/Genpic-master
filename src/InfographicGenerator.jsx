@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 
 import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
+import GenerationSummary from './components/create/GenerationSummary';
 import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
 import PptMasterStudio from './components/create/PptMasterStudio';
@@ -960,6 +961,14 @@ export default function InfographicGenerator({
                                                 onDownload={handleDownload}
                                                 user={user}
                                             />
+                                            {!generatedImage && !isGenerating && (
+                                                <GenerationSummary
+                                                    templateContext={templateContext}
+                                                    stylePreset={stylePreset}
+                                                    paletteStyleTags={paletteStyleTags}
+                                                    aspectRatio={aspectRatio}
+                                                />
+                                            )}
                                         </div>
                                     </div>
                                 </div>

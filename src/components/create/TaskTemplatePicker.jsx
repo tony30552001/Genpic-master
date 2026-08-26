@@ -1,13 +1,13 @@
 import React from "react";
 import {
   ArrowDown,
-  ArrowRight,
   Check,
   CircleHelp,
   LayoutTemplate,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   TASK_TEMPLATES,
@@ -15,65 +15,30 @@ import {
   getTaskTemplate,
 } from "./styleSourceData";
 
-const TEMPLATE_ART = {
-  infographic: {
-    className: "bg-blue-50 dark:bg-blue-950/40",
-    content: (
-      <>
-        <span className="absolute left-3 top-3 h-2 w-20 rounded-full bg-blue-700/80 dark:bg-blue-300/80" />
-        <span className="absolute left-3 top-8 h-2 w-12 rounded-full bg-blue-500/40" />
-        <span className="absolute bottom-3 left-3 h-14 w-12 rounded-lg bg-white shadow-sm dark:bg-blue-100/90" />
-        <span className="absolute bottom-3 left-[4.5rem] h-14 w-16 rounded-lg bg-blue-200/80 dark:bg-blue-300/60" />
-        <ArrowRight className="absolute bottom-7 right-4 h-5 w-5 text-blue-700/70 dark:text-blue-200" aria-hidden="true" />
-      </>
-    ),
-  },
-  poster: {
-    className: "bg-amber-50 dark:bg-amber-950/40",
-    content: (
-      <>
-        <span className="absolute left-1/2 top-6 h-20 w-20 -translate-x-1/2 rounded-full bg-amber-400/70" />
-        <span className="absolute bottom-4 left-1/2 h-2 w-24 -translate-x-1/2 rounded-full bg-amber-900/55 dark:bg-amber-200/70" />
-        <span className="absolute bottom-1 left-1/2 h-2 w-14 -translate-x-1/2 rounded-full bg-amber-700/30" />
-      </>
-    ),
-  },
-  product: {
-    className: "bg-emerald-50 dark:bg-emerald-950/40",
-    content: (
-      <>
-        <span className="absolute bottom-4 left-8 h-20 w-16 rounded-xl bg-white shadow-md dark:bg-emerald-100/90" />
-        <span className="absolute bottom-7 left-12 h-8 w-8 rounded-full bg-emerald-400/70" />
-        <span className="absolute right-5 top-5 h-12 w-20 rounded-lg border-2 border-emerald-700/40 dark:border-emerald-200/60" />
-        <span className="absolute right-5 top-[4.5rem] h-2 w-14 rounded-full bg-emerald-700/40 dark:bg-emerald-200/60" />
-      </>
-    ),
-  },
-  storyboard: {
-    className: "bg-violet-50 dark:bg-violet-950/40",
-    content: (
-      <>
-        <span className="absolute left-3 top-4 h-12 w-20 rounded-lg border-2 border-violet-700/35 dark:border-violet-200/60" />
-        <span className="absolute left-[6.5rem] top-4 h-12 w-20 rounded-lg border-2 border-violet-700/35 dark:border-violet-200/60" />
-        <span className="absolute bottom-4 left-3 h-12 w-20 rounded-lg border-2 border-violet-700/35 dark:border-violet-200/60" />
-        <span className="absolute bottom-4 left-[6.5rem] h-12 w-20 rounded-lg border-2 border-violet-700/35 dark:border-violet-200/60" />
-      </>
-    ),
-  },
-};
-
-function TemplatePreview({ templateId }) {
-  const art = TEMPLATE_ART[templateId] || TEMPLATE_ART.infographic;
+function TemplatePreview({ template }) {
+  const [failed, setFailed] = useState(false);
 
   return (
     <span
-      className={cn(
-        "relative block h-28 overflow-hidden rounded-xl border border-border/70",
-        art.className
-      )}
-      aria-hidden="true"
+      className="relative block aspect-[2.1/1] overflow-hidden rounded-xl border border-border/70 bg-muted"
     >
-      {art.content}
+      {template.previewUrl && !failed ? (
+        <img
+          src={template.previewUrl}
+          alt={`${template.title} 預覽`}
+          width={640}
+          height={320}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover motion-reduce:transition-none"
+        />
+      ) : (
+        <span className="flex h-full items-center justify-center gap-2 px-3 text-xs font-medium text-muted-foreground">
+          <LayoutTemplate className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {template.title}
+        </span>
+      )}
     </span>
   );
 }
@@ -161,7 +126,7 @@ export default function TaskTemplatePicker({
                   : "border-border hover:border-primary/40 hover:bg-muted/30"
               )}
             >
-              <TemplatePreview templateId={template.id} />
+              <TemplatePreview template={template} />
               <span className="flex items-start gap-2 px-1 pb-1 pt-3">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-foreground">

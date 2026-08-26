@@ -31,6 +31,10 @@ describe("style source controls", () => {
         informationFlow: "主視覺聚焦",
       })
     );
+    expect(screen.getByRole("img", { name: "資訊圖引擎 預覽" })).toHaveAttribute(
+      "src",
+      "/task-templates/infographic-editorial.webp"
+    );
   });
 
   it("allows only one value per visual dimension", () => {
@@ -38,7 +42,6 @@ describe("style source controls", () => {
     render(
       <MemoryRouter>
         <StyleSourceTabs
-          open
           templateContext={buildTaskTemplateContext("infographic")}
           selectedPalette={{}}
           onPaletteChange={onChange}
@@ -67,7 +70,7 @@ describe("style source controls", () => {
     expect(onSelect).toHaveBeenCalledWith(STYLE_PRESETS[0]);
     expect(screen.getByRole("img", { name: "晨光編輯感 預覽" })).toHaveAttribute(
       "src",
-      "/style-presets/dawn-editorial.svg"
+      "/style-presets/dawn-editorial.webp"
     );
   });
 
@@ -75,7 +78,6 @@ describe("style source controls", () => {
     render(
       <MemoryRouter>
         <StyleSourceTabs
-          open
           templateContext={buildTaskTemplateContext("infographic")}
           selectedPalette={{}}
           onPaletteChange={vi.fn()}
@@ -85,5 +87,21 @@ describe("style source controls", () => {
 
     expect(screen.getByText("資訊圖引擎設定")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /風格預設/ })).toBeInTheDocument();
+  });
+
+  it("exposes the numbered steps without an extra collapse layer", () => {
+    render(
+      <MemoryRouter>
+        <StyleSourceTabs
+          templateContext={buildTaskTemplateContext("infographic")}
+          selectedPalette={{}}
+          onPaletteChange={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole("button", { name: /參考與風格/ })).toBeNull();
+    expect(screen.getByText("01")).toBeInTheDocument();
+    expect(screen.getByText("02")).toBeInTheDocument();
   });
 });

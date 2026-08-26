@@ -291,8 +291,6 @@ function SavedStylePanel({
 }
 
 export default function StyleSourceTabs({
-  open = false,
-  onOpenChange,
   activeTab = "presets",
   onActiveTabChange,
   templateContext = emptyContext,
@@ -310,15 +308,6 @@ export default function StyleSourceTabs({
   const [showMoreDimensions, setShowMoreDimensions] = useState(false);
   const navigate = useNavigate();
 
-  const selectedPaletteCount = STYLE_DIMENSIONS.reduce(
-    (total, dimension) => total + (selectedPalette?.[dimension.id]?.length || 0),
-    0
-  );
-  const selectedPreset = STYLE_PRESETS.find((preset) => preset.id === selectedPresetId);
-  const selectedStyleName =
-    appliedStyle?.name ||
-    selectedPreset?.title ||
-    (selectedPaletteCount > 0 ? "自訂視覺微調" : "尚未選擇風格");
   const normalizedSelection = normalizeSelection(selectedPalette);
 
   const updatePalette = (nextSelection) => {
@@ -375,219 +364,163 @@ export default function StyleSourceTabs({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card" aria-labelledby={`${idPrefix}-title`}>
-      <button
-        type="button"
-        onClick={() => onOpenChange?.(!open)}
-        className="sticky top-0 z-20 flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 border-b border-transparent bg-card/95 px-4 py-3 text-left backdrop-blur-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-        aria-expanded={open}
-        aria-controls={`${idPrefix}-content`}
-      >
-        <span className="min-w-0">
-          <span id={`${idPrefix}-title`} className="block text-sm font-semibold text-foreground">
-            參考與風格
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            {templateContext?.title
-              ? `${templateContext.title} · ${selectedStyleName}`
-              : selectedStyleName}
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          {selectedPaletteCount > 0 && (
-            <span className="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary sm:text-xs">
-              {selectedPaletteCount} 個細節
-            </span>
-          )}
-          {open ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          )}
-        </span>
-      </button>
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="space-y-7 p-4 sm:p-5">
+        <TaskTemplatePicker
+          context={templateContext}
+          onChange={onTemplateChange}
+        />
 
-      <div
-        id={`${idPrefix}-content`}
-        aria-hidden={!open}
-        inert={!open}
-        className={cn(
-          "grid overflow-hidden border-t border-border transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-          open
-            ? "grid-rows-[1fr] opacity-100"
-            : "pointer-events-none grid-rows-[0fr] opacity-0"
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <div className="space-y-7 p-4 sm:p-5">
-            <TaskTemplatePicker
-              context={templateContext}
-              onChange={onTemplateChange}
-            />
+        <section className="space-y-4 border-t border-border pt-6" aria-labelledby={`${idPrefix}-visual-title`}>
+          <div className="space-y-1">
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-primary">
+              <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5">
+                02
+              </span>
+              視覺風格
+            </p>
+            <h3 id={`${idPrefix}-visual-title`} className="text-base font-semibold text-foreground">
+              選一組方向，再決定細節
+            </h3>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              先用視覺預設快速選擇，避免一開始面對大量專有名詞。
+            </p>
+          </div>
 
-            <section className="space-y-4 border-t border-border pt-6" aria-labelledby={`${idPrefix}-visual-title`}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
-                  <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-primary">
-                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5">
-                      02
-                    </span>
-                    視覺風格
-                  </p>
-                  <h3 id={`${idPrefix}-visual-title`} className="text-base font-semibold text-foreground">
-                    選一組方向，再決定細節
-                  </h3>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    先用視覺預設快速選擇，避免一開始面對大量專有名詞。
+          <div
+            role="tablist"
+            aria-label="視覺風格來源"
+            className="grid grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1"
+          >
+            {STYLE_TABS.map(({ id, label }) => {
+              const isActive = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  id={`${idPrefix}-tab-${id}`}
+                  type="button"
+                  role="tab"
+                  tabIndex={isActive ? 0 : -1}
+                  aria-selected={isActive}
+                  aria-controls={`${idPrefix}-panel-${id}`}
+                  onClick={() => onActiveTabChange?.(id)}
+                  onKeyDown={(event) => handleTabKeyDown(event, id)}
+                  className={cn(
+                    "flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-[background-color,box-shadow,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    isActive
+                      ? "bg-background text-primary shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {id === "presets" ? (
+                    <Palette className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <Library className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTab === "presets" && (
+            <div
+              id={`${idPrefix}-panel-presets`}
+              role="tabpanel"
+              aria-labelledby={`${idPrefix}-tab-presets`}
+              tabIndex={0}
+              className="space-y-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <StylePresetPicker
+                selectedPresetId={selectedPresetId}
+                onSelect={handlePresetSelect}
+              />
+
+              <div className="space-y-3 rounded-2xl border border-border bg-background p-3 sm:p-4">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">核心維度</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    每個維度選一項，保留清楚的視覺方向。
                   </p>
                 </div>
-                <span className="inline-flex min-h-9 items-center gap-1.5 self-start rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  每個維度單選
-                </span>
-              </div>
-
-              <div
-                role="tablist"
-                aria-label="視覺風格來源"
-                className="grid grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1"
-              >
-                {STYLE_TABS.map(({ id, label }) => {
-                  const isActive = activeTab === id;
-                  return (
-                    <button
-                      key={id}
-                      id={`${idPrefix}-tab-${id}`}
-                      type="button"
-                      role="tab"
-                      tabIndex={isActive ? 0 : -1}
-                      aria-selected={isActive}
-                      aria-controls={`${idPrefix}-panel-${id}`}
-                      onClick={() => onActiveTabChange?.(id)}
-                      onKeyDown={(event) => handleTabKeyDown(event, id)}
-                      className={cn(
-                        "flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-[background-color,box-shadow,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        isActive
-                          ? "bg-background text-primary shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {id === "presets" ? (
-                        <Palette className="h-3.5 w-3.5" aria-hidden="true" />
-                      ) : (
-                        <Library className="h-3.5 w-3.5" aria-hidden="true" />
-                      )}
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {activeTab === "presets" && (
-                <div
-                  id={`${idPrefix}-panel-presets`}
-                  role="tabpanel"
-                  aria-labelledby={`${idPrefix}-tab-presets`}
-                  tabIndex={0}
-                  className="space-y-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                <StylePalette
+                  collapsible={false}
+                  selected={normalizedSelection}
+                  onSelectedChange={handlePaletteChange}
+                  dimensions={CORE_STYLE_DIMENSIONS}
+                  selectionMode="single"
+                  showClear={false}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMoreDimensions((openMore) => !openMore)}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-expanded={showMoreDimensions}
+                  aria-controls={`${idPrefix}-more-dimensions`}
                 >
-                  <StylePresetPicker
-                    selectedPresetId={selectedPresetId}
-                    onSelect={handlePresetSelect}
-                  />
-
-                  <div className="space-y-3 rounded-2xl border border-border bg-background p-3 sm:p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-foreground">核心維度</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          每個維度選一項，保留清楚的視覺方向。
-                        </p>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {selectedPaletteCount} 項
-                      </span>
-                    </div>
+                  {showMoreDimensions ? "收起更多維度" : "微調更多維度"}
+                  {showMoreDimensions ? (
+                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+                {showMoreDimensions && (
+                  <div id={`${idPrefix}-more-dimensions`} className="border-t border-border pt-3">
                     <StylePalette
                       collapsible={false}
                       selected={normalizedSelection}
                       onSelectedChange={handlePaletteChange}
-                      dimensions={CORE_STYLE_DIMENSIONS}
+                      dimensions={MORE_STYLE_DIMENSIONS}
                       selectionMode="single"
                       showClear={false}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowMoreDimensions((openMore) => !openMore)}
-                      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-expanded={showMoreDimensions}
-                      aria-controls={`${idPrefix}-more-dimensions`}
-                    >
-                      {showMoreDimensions ? "收起更多維度" : "微調更多維度"}
-                      {showMoreDimensions ? (
-                        <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                      )}
-                    </button>
-                    {showMoreDimensions && (
-                      <div id={`${idPrefix}-more-dimensions`} className="border-t border-border pt-3">
-                        <StylePalette
-                          collapsible={false}
-                          selected={normalizedSelection}
-                          onSelectedChange={handlePaletteChange}
-                          dimensions={MORE_STYLE_DIMENSIONS}
-                          selectionMode="single"
-                          showClear={false}
-                        />
-                      </div>
-                    )}
                   </div>
+                )}
+              </div>
 
-                  <SelectionChips
-                    selected={normalizedSelection}
-                    onRemove={handleRemoveDimension}
-                    onClear={() => handlePaletteChange({})}
-                  />
-                </div>
-              )}
-
-              {activeTab === "saved" && (
-                <div
-                  id={`${idPrefix}-panel-saved`}
-                  role="tabpanel"
-                  aria-labelledby={`${idPrefix}-tab-saved`}
-                  tabIndex={0}
-                  className="space-y-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <SavedStylePanel
-                    savedStyles={savedStyles}
-                    appliedStyle={appliedStyle}
-                    onApply={handleApplyStyle}
-                    onClear={handleClearAppliedStyle}
-                  />
-                </div>
-              )}
-            </section>
-
-            <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                可隨時移除細節，主題文字會保持不變。
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  const section = activeTab === "saved" ? "styles" : "templates";
-                  navigate(`/library?section=${section}`);
-                }}
-                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-              >
-                <Library className="h-3.5 w-3.5" aria-hidden="true" />
-                開啟素材中心管理
-              </button>
+              <SelectionChips
+                selected={normalizedSelection}
+                onRemove={handleRemoveDimension}
+                onClear={() => handlePaletteChange({})}
+              />
             </div>
-          </div>
+          )}
+
+          {activeTab === "saved" && (
+            <div
+              id={`${idPrefix}-panel-saved`}
+              role="tabpanel"
+              aria-labelledby={`${idPrefix}-tab-saved`}
+              tabIndex={0}
+              className="space-y-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <SavedStylePanel
+                savedStyles={savedStyles}
+                appliedStyle={appliedStyle}
+                onApply={handleApplyStyle}
+                onClear={handleClearAppliedStyle}
+              />
+            </div>
+          )}
+        </section>
+
+        <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            可隨時移除細節，主題文字會保持不變。
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const section = activeTab === "saved" ? "styles" : "templates";
+              navigate(`/library?section=${section}`);
+            }}
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
+            <Library className="h-3.5 w-3.5" aria-hidden="true" />
+            開啟素材中心管理
+          </button>
         </div>
       </div>
     </section>

@@ -72,7 +72,7 @@ export default function ScriptEditor({
   const [suggestionData, setSuggestionData] = useState(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showAssistTools, setShowAssistTools] = useState(false);
-  const [showStyleSource, setShowStyleSource] = useState(false);
+  const [hasStyleSourceEdits, setHasStyleSourceEdits] = useState(false);
   const [styleSourceTab, setStyleSourceTab] = useState("presets");
   const [paletteSelected, setPaletteSelected] = useState(() =>
     tagsToSelection(paletteStyleTags)
@@ -83,7 +83,7 @@ export default function ScriptEditor({
     setPaletteSelected(newSelected);
     const allTags = selectionToTags(newSelected);
     onPaletteStyleChange?.(allTags);
-    setShowStyleSource(true);
+    setHasStyleSourceEdits(true);
     setStyleSourceTab("presets");
   }, [onPaletteStyleChange]);
 
@@ -96,10 +96,22 @@ export default function ScriptEditor({
     analyzedStyle ||
     analysisResultData ||
     selectedStyleInfo ||
-    showStyleSource ||
+    hasStyleSourceEdits ||
     showSaveTemplate
   );
   const assistToolsOpen = showAssistTools || hasActiveAssistTools;
+
+  const paletteDetailCount = Object.values(paletteSelected || {}).reduce(
+    (total, values) => total + (Array.isArray(values) ? values.length : values ? 1 : 0),
+    0
+  );
+  const activeStyleName =
+    selectedStyleInfo?.name ||
+    stylePreset?.title ||
+    (paletteDetailCount > 0 ? "自訂視覺微調" : "尚未選擇風格");
+  const assistToolsSummary = templateContext?.title
+    ? `${templateContext.title} · ${activeStyleName}`
+    : activeStyleName;
 
   const handleChange = useCallback((e) => {
     const text = e.target.value;
@@ -114,7 +126,7 @@ export default function ScriptEditor({
     setSelectedStyleId(style.id);
     setSelectedStyleInfo({ name: style.name, tags: style.tags, previewUrl: style.previewUrl });
     onApplyStyle?.(style);
-    setShowStyleSource(true);
+    setHasStyleSourceEdits(true);
     setStyleSourceTab("saved");
   };
 
@@ -282,10 +294,15 @@ export default function ScriptEditor({
           <span className="min-w-0 space-y-0.5">
             <span className="block text-sm font-semibold text-foreground">參考與風格</span>
             <span className="block truncate text-xs text-muted-foreground">
-              需要時再加入參考圖片、風格分析、風格庫或範本保存。
+              {assistToolsSummary}
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-2">
+            {paletteDetailCount > 0 && (
+              <span className="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary sm:text-xs">
+                {paletteDetailCount} 個細節
+              </span>
+            )}
             {hasActiveAssistTools && (
               <Badge variant="outline" className="border-primary/20 bg-primary/5 px-2 py-0 text-primary">
                 已套用
@@ -312,11 +329,33 @@ export default function ScriptEditor({
         >
           <div className="min-h-0 overflow-hidden">
             <CardContent className="space-y-4 border-t border-border bg-background/80 p-4">
+            <StyleSourceTabs
+              activeTab={styleSourceTab}
+              onActiveTabChange={setStyleSourceTab}
+              templateContext={templateContext}
+              onTemplateChange={handleTemplateChange}
+              selectedPalette={paletteSelected}
+              onPaletteChange={handlePaletteChange}
+              selectedPresetId={stylePreset?.id || null}
+              onPresetChange={onStylePresetChange}
+              savedStyles={savedStyles}
+              appliedStyle={selectedStyleInfo ? { id: selectedStyleId, ...selectedStyleInfo } : null}
+              onApplyStyle={handleApplyStyle}
+              onClearAppliedStyle={handleClearStyle}
+              idPrefix="general-style-source"
+            />
+
               <section className="space-y-3 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="reference-style-title">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <h3 id="reference-style-title" className="text-xs font-semibold text-foreground">
+                  <div className="space-y-1">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-primary">
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5">
+                        03
+                      </span>
                       參考圖片
+                    </p>
+                    <h3 id="reference-style-title" className="text-xs font-semibold text-foreground">
+                      用一張圖補強方向（選用）
                     </h3>
                     <p className="text-xs text-muted-foreground">
                       加入一張參考圖，分析並保存可重複使用的風格。
@@ -489,24 +528,6 @@ export default function ScriptEditor({
               )}
 
             </section>
-
-            <StyleSourceTabs
-              open={showStyleSource}
-              onOpenChange={setShowStyleSource}
-              activeTab={styleSourceTab}
-              onActiveTabChange={setStyleSourceTab}
-              templateContext={templateContext}
-              onTemplateChange={handleTemplateChange}
-              selectedPalette={paletteSelected}
-              onPaletteChange={handlePaletteChange}
-              selectedPresetId={stylePreset?.id || null}
-              onPresetChange={onStylePresetChange}
-              savedStyles={savedStyles}
-              appliedStyle={selectedStyleInfo ? { id: selectedStyleId, ...selectedStyleInfo } : null}
-              onApplyStyle={handleApplyStyle}
-              onClearAppliedStyle={handleClearStyle}
-              idPrefix="general-style-source"
-            />
 
             {onSaveTemplate && (
               <section className="space-y-2 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="template-save-title">

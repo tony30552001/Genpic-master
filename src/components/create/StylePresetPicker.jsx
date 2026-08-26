@@ -1,7 +1,33 @@
-import React from "react";
-import { Check } from "lucide-react";
+import React, { useState } from "react";
+import { Check, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { STYLE_PRESETS } from "./styleSourceData";
+
+function PresetPreview({ preset }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!preset.previewUrl || failed) {
+    return (
+      <span className="flex h-full items-center justify-center gap-2 px-3 text-xs font-medium text-muted-foreground">
+        <Palette className="h-4 w-4 shrink-0" aria-hidden="true" />
+        {preset.title}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={preset.previewUrl}
+      alt={`${preset.title} 預覽`}
+      width={640}
+      height={320}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:transform-none"
+    />
+  );
+}
 
 export default function StylePresetPicker({
   selectedPresetId,
@@ -29,15 +55,7 @@ export default function StylePresetPicker({
             )}
           >
             <span className="relative block aspect-[2.1/1] overflow-hidden bg-muted">
-              <img
-                src={preset.previewUrl}
-                alt={`${preset.title} 預覽`}
-                width={640}
-                height={320}
-                loading="lazy"
-                decoding="async"
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:transform-none"
-              />
+              <PresetPreview preset={preset} />
               <span
                 className={cn(
                   "absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition-colors",
