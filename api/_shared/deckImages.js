@@ -62,8 +62,19 @@ const mapWithConcurrency = async (items, limit, worker) => {
  * A failed illustration must not fail the whole deck: the slide is simply
  * authored without an image, and the reason is reported as a failed step event
  * so the user can see which page lost its illustration.
+ *
+ * `artDirection` comes from the deck design system rather than the outline, so
+ * illustrations and page layouts are governed by one description of the deck's
+ * visual language instead of two that can drift apart.
  */
-const generateDeckImages = async ({ deckId, jobId, outline, model, onProgress }) => {
+const generateDeckImages = async ({
+  deckId,
+  jobId,
+  outline,
+  artDirection,
+  model,
+  onProgress,
+}) => {
   const wanted = outline.slides.filter(
     (slide) => slide.needs_image && slide.image_prompt
   );
@@ -108,7 +119,7 @@ const generateDeckImages = async ({ deckId, jobId, outline, model, onProgress })
         model,
         prompt: buildIllustrationPrompt({
           slide,
-          artDirection: outline.art_direction,
+          artDirection,
         }),
         aspectRatio: "16:9",
       });

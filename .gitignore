@@ -20,6 +20,9 @@ local.settings.json
 api/local.settings.json
 api/*.settings.*.json
 
+# pnpm content-addressable store (local package cache)
+.pnpm-store/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

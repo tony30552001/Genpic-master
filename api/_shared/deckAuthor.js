@@ -8,12 +8,19 @@ const {
   slideFileName,
 } = require("./deckContract");
 const {
+  DEFAULT_DESIGN_SYSTEM,
+  buildDesignSystemPrompt,
+  buildDesignSystemUserMessage,
+  normalizeDesignSystem,
+} = require("./deckDesign");
+const {
   buildAuthoringSystemPrompt,
   buildOutlineSystemPrompt,
   buildOutlineUserMessage,
   buildRepairUserMessage,
   buildSlideUserMessage,
 } = require("./svgAuthoringPrompt");
+const { buildRecipePlan } = require("./deckRecipes");
 
 const SOURCE_EXCERPT_LIMIT = 60000;
 
@@ -33,6 +40,8 @@ const generateOutline = async ({
   slideCount,
   imageDensity,
   templateSpecs,
+  recipeId,
+  brief,
   llm,
 }) => {
   const material = sourceMarkdown
@@ -40,17 +49,61 @@ const generateOutline = async ({
     : `簡報主題：${topic}\n請依據這個主題自行建構完整、具體且有實質內容的簡報論述。`;
 
   const outline = await generateJson({
-    systemMessage: buildOutlineSystemPrompt({ imageDensity }),
-    userMessage: buildOutlineUserMessage({ material, slideCount, templateSpecs }),
+    systemMessage: buildOutlineSystemPrompt({ imageDensity, recipeId, slideCount }),
+    userMessage: buildOutlineUserMessage({ material, slideCount, templateSpecs, brief }),
     maxOutputTokens: 16000,
     llm,
   });
 
-  const normalized = normalizeOutline(outline, { slideCount });
+  const normalized = normalizeOutline(outline, {
+    slideCount,
+    spine: buildRecipePlan(recipeId, slideCount),
+  });
   if (normalized.slides.length === 0) {
     throw new Error("AI 未能產生簡報大綱，請調整主題或更換文件");
   }
   return applyImagePolicy({ outline: normalized, density: imageDensity });
+};
+
+/**
+ * The deck's visual constitution.
+ *
+ * Pages are authored one call at a time and page 7 never sees page 6, so
+ * without a shared palette, type scale and grid a free-form deck arrives as a
+ * set of individually pleasant but unrelated slides. This step is what makes
+ * them one document.
+ *
+ * It never fails the job: a deck built on the default system is worth far more
+ * than no deck, so a failure is recorded as an event and the default is used.
+ */
+const generateDesignSystem = async ({ outline, templateSpecs, brief, llm, onProgress }) => {
+  try {
+    const raw = await generateJson({
+      systemMessage: buildDesignSystemPrompt({ templateSpecs }),
+      userMessage: buildDesignSystemUserMessage({
+        deckTitle: outline.title,
+        summary: outline.summary,
+        slides: outline.slides,
+        brief,
+      }),
+      maxOutputTokens: 4000,
+      llm,
+    });
+    const designSystem = normalizeDesignSystem(raw);
+    await onProgress?.({
+      step: "design",
+      status: "succeeded",
+      detail: `設計系統：${designSystem.name}`,
+    });
+    return designSystem;
+  } catch (error) {
+    await onProgress?.({
+      step: "design",
+      status: "failed",
+      detail: `設計系統建立失敗，改用預設樣式：${error.message}`,
+    });
+    return DEFAULT_DESIGN_SYSTEM;
+  }
 };
 
 const authorSlideSvg = async ({ systemMessage, userMessage, llm }) => {
@@ -74,6 +127,52 @@ const collectSlideProblems = (report, fileName) => {
     problems.push(...report.projectIssues.filter((issue) => String(issue).includes(fileName)));
   }
   return problems;
+};
+
+/**
+ * One page: author it, then repair it against the local contract until it
+ * passes or the rounds run out. Returns the remaining problems rather than
+ * throwing so the caller can decide whether to retreat to fixed geometry.
+ */
+const authorSlideWithRepair = async ({
+  systemMessage,
+  llm,
+  deckTitle,
+  slide,
+  totalSlides,
+  availableImages,
+  frameGeometry,
+}) => {
+  let svg = await authorSlideSvg({
+    systemMessage,
+    llm,
+    userMessage: buildSlideUserMessage({
+      deckTitle,
+      slide,
+      totalSlides,
+      availableImages,
+      frameGeometry,
+    }),
+  });
+
+  let problems = inspectSlideSvg(svg);
+  let attempts = 0;
+  while (problems.length > 0 && attempts < DECK_MAX_REPAIR_ROUNDS) {
+    attempts += 1;
+    svg = await authorSlideSvg({
+      systemMessage,
+      llm,
+      userMessage: buildRepairUserMessage({
+        slide,
+        previousSvg: svg,
+        problems,
+        frameGeometry,
+      }),
+    });
+    problems = inspectSlideSvg(svg);
+  }
+
+  return { svg, attempts, problems };
 };
 
 /**
@@ -110,33 +209,49 @@ const authorDeck = async ({
 
     const fileName = slideFileName(index);
     const availableImages = imagesBySlide[slide.slide_number] || [];
-    let svg = await authorSlideSvg({
+    let { svg, attempts, problems } = await authorSlideWithRepair({
       systemMessage,
       llm,
-      userMessage: buildSlideUserMessage({
+      deckTitle: outline.title,
+      slide,
+      totalSlides,
+      availableImages,
+      frameGeometry: false,
+    });
+
+    /**
+     * The retreat. Free-form layout is the default because it produces better
+     * pages, but a page that cannot satisfy the compiler contract after a full
+     * repair loop gets rebuilt on the frame's pre-solved bounds instead of
+     * failing the whole deck. The event is deliberately visible: a rising
+     * retreat rate is the signal that the inversion is not working.
+     */
+    let retreated = false;
+    if (problems.length > 0) {
+      retreated = true;
+      await onProgress?.({
+        step: "slides",
+        slideNumber: slide.slide_number,
+        detail: `第 ${slide.slide_number} 頁自由版面未通過，改用固定骨架 ${slide.frame} 重新產生`,
+        current: index,
+        total: totalSlides,
+      });
+
+      const fallback = await authorSlideWithRepair({
+        systemMessage,
+        llm,
         deckTitle: outline.title,
         slide,
         totalSlides,
         availableImages,
-      }),
-    });
-
-    let localProblems = inspectSlideSvg(svg);
-    let attempt = 0;
-    while (localProblems.length > 0 && attempt < DECK_MAX_REPAIR_ROUNDS) {
-      attempt += 1;
-      svg = await authorSlideSvg({
-        systemMessage,
-        llm,
-        userMessage: buildRepairUserMessage({
-          slide,
-          previousSvg: svg,
-          problems: localProblems,
-        }),
+        frameGeometry: true,
       });
-      localProblems = inspectSlideSvg(svg);
+      svg = fallback.svg;
+      attempts += fallback.attempts + 1;
+      problems = fallback.problems;
     }
-    if (localProblems.length > 0) {
+
+    if (problems.length > 0) {
       await onProgress?.({
         step: "slides",
         status: "failed",
@@ -144,12 +259,12 @@ const authorDeck = async ({
         detail: `第 ${slide.slide_number} 頁不符合 SVG 規範`,
       });
       throw new Error(
-        `第 ${slide.slide_number} 頁不符合 SVG 規範：${localProblems.join("；")}`
+        `第 ${slide.slide_number} 頁不符合 SVG 規範：${problems.join("；")}`
       );
     }
 
     await pptMaster.writeSlide({ deckId, name: fileName, content: svg });
-    authored.push({ slide, fileName, svg });
+    authored.push({ slide, fileName, svg, retreated });
     await onSlidePreview?.({
       slideNumber: slide.slide_number,
       title: slide.title,
@@ -160,19 +275,24 @@ const authorDeck = async ({
       step: "slides",
       status: "succeeded",
       slideNumber: slide.slide_number,
-      detail:
-        attempt > 0
-          ? `第 ${slide.slide_number} 頁完成（自我修正 ${attempt} 次）`
+      detail: retreated
+        ? `第 ${slide.slide_number} 頁完成（已退回固定骨架）`
+        : attempts > 0
+          ? `第 ${slide.slide_number} 頁完成（自我修正 ${attempts} 次）`
           : `第 ${slide.slide_number} 頁完成`,
       current: index + 1,
       total: totalSlides,
     });
   }
 
+  const retreatedCount = authored.filter((item) => item.retreated).length;
   await onProgress?.({
     step: "slides",
     status: "succeeded",
-    detail: `${totalSlides} 頁版面完成`,
+    detail:
+      retreatedCount > 0
+        ? `${totalSlides} 頁版面完成（其中 ${retreatedCount} 頁退回固定骨架）`
+        : `${totalSlides} 頁版面完成`,
     current: totalSlides,
     total: totalSlides,
   });
@@ -207,6 +327,7 @@ const authorDeck = async ({
           slide: item.slide,
           previousSvg: item.svg,
           problems,
+          frameGeometry: item.retreated,
         }),
       });
       item.svg = repaired;
@@ -248,6 +369,7 @@ const authorDeck = async ({
 module.exports = {
   authorDeck,
   buildAuthoringSystemPrompt,
+  generateDesignSystem,
   generateOutline,
   stripSvgWrapper,
 };

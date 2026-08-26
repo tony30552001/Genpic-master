@@ -1,11 +1,33 @@
 import { Check, Sparkles } from "lucide-react";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { describeLayout, describeStyle } from "./pptTemplateCopy";
+import { describeTemplatePreview } from "./templatePreviewManifest";
 
-function TemplateGroup({ label, hint, options, value, onChange, describe }) {
+/**
+ * 縮圖缺席是正常狀態：某個範本可能還沒跑過預覽腳本，或資產被刪。
+ * 這種情況下靜靜退回純文字卡片，不讓破圖出現在選擇器裡。
+ */
+function TemplateThumbnail({ src, alt }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return null;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="aspect-video w-full rounded border border-border/60 bg-white object-cover"
+    />
+  );
+}
+
+function TemplateGroup({ label, hint, options, value, onChange, describe, previewKind }) {
   if (options.length === 0) return null;
+
+  const selectedPreviews = value ? describeTemplatePreview(previewKind, value) : [];
 
   return (
     <div className="space-y-2">
@@ -37,6 +59,7 @@ function TemplateGroup({ label, hint, options, value, onChange, describe }) {
         {options.map((option) => {
           const selected = value === option.id;
           const copy = describe(option);
+          const previews = describeTemplatePreview(previewKind, option.id);
           return (
             <button
               key={option.id}
@@ -51,6 +74,7 @@ function TemplateGroup({ label, hint, options, value, onChange, describe }) {
                   : "border-border hover:border-primary/40 hover:bg-muted/50"
               )}
             >
+              <TemplateThumbnail src={previews[0]} alt={`${copy.name} 版面樣本`} />
               <span className="flex w-full items-center gap-1.5">
                 <span className="min-w-0 truncate text-sm font-medium">{copy.name}</span>
                 {selected && (
@@ -78,6 +102,25 @@ function TemplateGroup({ label, hint, options, value, onChange, describe }) {
           );
         })}
       </div>
+
+      {selectedPreviews.length > 0 && (
+        <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {selectedPreviews.map((src, index) => (
+              <img
+                key={src}
+                src={src}
+                alt={`${label}樣本第 ${index + 1} 頁`}
+                loading="lazy"
+                className="aspect-video w-full rounded border border-border/60 bg-white object-contain"
+              />
+            ))}
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            預覽是樣本，不是保證：版面由 AI 逐次設計，重跑會得到不同排列。可以參考的是配色、字級與裝飾語彙。
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -102,6 +145,7 @@ export default function PptTemplatePicker({
         value={styleId}
         onChange={onStyleChange}
         describe={describeStyle}
+        previewKind="styles"
       />
       <TemplateGroup
         label="版面骨架"
@@ -110,6 +154,7 @@ export default function PptTemplatePicker({
         value={layoutId}
         onChange={onLayoutChange}
         describe={describeLayout}
+        previewKind="layouts"
       />
     </fieldset>
   );

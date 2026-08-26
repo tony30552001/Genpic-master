@@ -1,17 +1,27 @@
 /**
- * Page frame vocabulary: the geometric half of deck authoring.
+ * Page frame vocabulary: the structural half of deck authoring.
  *
- * Without a vocabulary the model invents module bounds on every page, which
- * pushes it toward one generic "title plus bullets" shape and makes the repair
- * loop resolve layout pressure by deleting content. A frame supplies geometry
- * that is already solved, so authoring becomes filling a known skeleton.
+ * A frame declares what kind of page this is — how many points it holds, what
+ * relationship the content has, whether it carries a picture or a chart. Its
+ * `modules` also carry solved geometry, but that geometry now serves two very
+ * different consumers:
  *
- * This is deliberately orthogonal to the upstream template specs injected
- * alongside it: `design_spec.md` owns palette, type scale and narrative tone,
- * a frame owns where things sit. It is also unrelated to `job.layout_id`,
- * which selects a deck-wide upstream template rather than a per-page skeleton.
+ * - `describeFrameIntent` (the main path) publishes the *meaning* only. The
+ *   author places modules itself, aligned to the deck design system's grid.
+ * - `describeFrameGeometry` (the retreat path) publishes the exact bounds, and
+ *   is reached only after a page has failed the preflight repair loop.
  *
- * Every bound below is calibrated against the pinned skill's measured text
+ * The inversion is deliberate. Fixed bounds made every deck the same fifteen
+ * shapes in different colours; a modern authoring model produces better pages
+ * when it owns the geometry. Keeping the numbers costs nothing and buys a
+ * safety net that is already calibrated, so they stay.
+ *
+ * This is orthogonal to the upstream template specs injected alongside it:
+ * `design_spec.md` owns narrative tone, `deckDesign.js` owns palette, type
+ * scale and grid, a frame owns page structure. It is also unrelated to
+ * `job.layout_id`, which selects a deck-wide upstream template.
+ *
+ * The retreat geometry is calibrated against the pinned skill's measured text
  * metrics: CJK advances 1.00 x font-size per character, Latin and halfwidth
  * about 0.54, a text box reaches 0.85 x font-size above its baseline and 0.35
  * below, and a module may be up to 5% narrower than its content before the
@@ -34,6 +44,9 @@ const frame = (definition) => Object.freeze({
   imageRole: null,
   fallbackWithoutImage: null,
   imageModule: null,
+  native: null,
+  chartType: null,
+  drawing: null,
   ...definition,
   modules: Object.freeze(definition.modules.map((module) => Object.freeze({ optional: false, bleed: false, ...module }))),
 });
@@ -226,6 +239,82 @@ const FRAME_LIST = [
     ],
   }),
   frame({
+    id: "chart-bars",
+    label: "長條圖",
+    intent: "比較數個項目的量值或排名，例如各季營收、各通路佔比",
+    pageRoles: ["content"],
+    pointsRange: [1, 3],
+    native: "chart",
+    chartType: "column",
+    drawing: [
+      "資料區請畫出真正的長條圖：先取數列最大值當作滿刻度，每根長條的長度＝數值 ÷ 最大值 × 資料區高度，由共同基線往上長。",
+      "每根長條寬度一致、間距一致；長條顏色依序取自設計系統的 chartPalette。",
+      "每根長條上方標數值、下方標分類名稱，字級用 typeScale.caption。",
+      "畫一條基線，並視需要加 2 到 3 條淡色水平參考線；不要畫刻度標籤以外的座標軸文字。",
+    ].join(""),
+    modules: [
+      { id: "title", label: "頁面標題", bounds: [96, 80, 1088, 90] },
+      { id: "chart", label: "長條圖資料區", bounds: [96, 210, 700, 400] },
+      { id: "readout", label: "這張圖說明了什麼", bounds: [840, 240, 344, 340] },
+    ],
+  }),
+  frame({
+    id: "chart-donut",
+    label: "環圈圖",
+    intent: "呈現組成比例或單一佔比，例如市佔、預算分配",
+    pageRoles: ["content"],
+    pointsRange: [1, 3],
+    native: "chart",
+    chartType: "doughnut",
+    drawing: [
+      "資料區請畫出真正的環圈圖：各段角度＝數值 ÷ 總和 × 360 度，從十二點鐘方向順時針排列。",
+      '每一段用 <path> 的弧線指令繪製（M 起點 A rx ry 0 largeArc sweep 終點 …），外圈半徑與內圈半徑相差約外圈的三分之一，形成環狀；largeArc 在該段超過 180 度時為 1。',
+      "各段顏色依序取自設計系統的 chartPalette；環圈中央放最重要的那個數字，字級用 typeScale.display 或 title。",
+      "旁邊列出圖例：小色塊加分類名稱與百分比，字級用 typeScale.caption。",
+    ].join(""),
+    modules: [
+      { id: "title", label: "頁面標題", bounds: [96, 80, 1088, 90] },
+      { id: "chart", label: "環圈圖資料區", bounds: [96, 200, 560, 420] },
+      { id: "readout", label: "這個比例代表什麼", bounds: [716, 240, 468, 340] },
+    ],
+  }),
+  frame({
+    id: "data-table",
+    label: "資料表",
+    intent: "多個項目在多個欄位上的對照，例如方案比較、預算明細",
+    pageRoles: ["content"],
+    pointsRange: [0, 2],
+    native: "table",
+    drawing: [
+      "資料區請畫出真正的表格：表頭列用設計系統的 accent 或 surface 當底色、文字加粗；",
+      "每一列高度一致，欄寬依內容分配但左右緣必須落在網格欄線上；",
+      "以細線分隔列，或改用隔列淡色底色，兩者擇一不要並用；數值欄請靠右對齊、文字欄靠左對齊。",
+    ].join(""),
+    modules: [
+      { id: "title", label: "頁面標題", bounds: [96, 80, 1088, 90] },
+      { id: "table", label: "表格資料區", bounds: [96, 200, 1088, 380] },
+      { id: "note", label: "表格附註或結論", bounds: [96, 596, 1088, 44], optional: true },
+    ],
+  }),
+  frame({
+    id: "kpi-four",
+    label: "四欄數據",
+    intent: "四個並列的關鍵指標或數字",
+    pageRoles: ["content"],
+    pointsRange: [4, 4],
+    drawing: [
+      "四欄等寬並列，每一欄的數字用 typeScale.display、標籤用 typeScale.caption，數字與標籤的基線在四欄之間必須對齊。",
+      "這一頁是純 SVG，不要加原生物件標記。",
+    ].join(""),
+    modules: [
+      { id: "title", label: "頁面標題", bounds: [96, 80, 1088, 90] },
+      { id: "kpi-1", label: "第一個指標：數字加標籤", bounds: [96, 250, 248, 240] },
+      { id: "kpi-2", label: "第二個指標：數字加標籤", bounds: [376, 250, 248, 240] },
+      { id: "kpi-3", label: "第三個指標：數字加標籤", bounds: [656, 250, 248, 240] },
+      { id: "kpi-4", label: "第四個指標：數字加標籤", bounds: [936, 250, 248, 240] },
+    ],
+  }),
+  frame({
     id: "ending-statement",
     label: "結語",
     intent: "收束全份簡報的最後一頁",
@@ -316,7 +405,11 @@ const formatBounds = (bounds) => bounds.join(" ");
  * meaning, and only the chosen frame's numbers reach the authoring call.
  */
 const describeFrameCatalog = () =>
-  ["# 版面骨架詞彙（frame）", "為每一頁選一個最貼合內容結構的骨架，不要因為某個骨架存在就使用它。"]
+  [
+    "# 版面骨架詞彙（frame）",
+    "為每一頁選一個最貼合內容結構的骨架，不要因為某個骨架存在就使用它。",
+    "只要來源內容有具體數字，就優先選擇資料骨架，並把數據填進該頁的 chart 或 table 欄位，不要把數據寫成條列文字。",
+  ]
     .concat(
       ["cover", "toc", "section", "content", "ending"].flatMap((pageRole) => {
         const items = framesForPageRole(pageRole);
@@ -327,7 +420,13 @@ const describeFrameCatalog = () =>
             const [min, max] = item.pointsRange;
             const points = min === max ? `${min} 條重點` : `${min} 到 ${max} 條重點`;
             const image = item.imageRole ? `，需要 ${item.imageRole} 配圖` : "";
-            return `- ${item.id}（${item.label}）：${item.intent}。容納 ${points}${image}。`;
+            const data =
+              item.native === "chart"
+                ? `，必須填寫 chart 欄位（type: "${item.chartType}"）`
+                : item.native === "table"
+                  ? "，必須填寫 table 欄位"
+                  : "";
+            return `- ${item.id}（${item.label}）：${item.intent}。容納 ${points}${image}${data}。`;
           }),
         ];
       })
@@ -335,8 +434,60 @@ const describeFrameCatalog = () =>
     .join("\n");
 
 /**
- * The one frame this page committed to. Injected per slide so the authoring
- * call carries exact geometry instead of the whole vocabulary.
+ * What this page is, without saying where anything sits.
+ *
+ * This is the main authoring path. The author receives structural intent, the
+ * drawing method for data pages, and the image contract — then resolves
+ * geometry itself against the design system's grid, which is what keeps pages
+ * consistent with one another now that they no longer share bounds.
+ */
+const describeFrameIntent = (id) => {
+  const item = getFrame(id);
+  if (!item) return "";
+
+  const [min, max] = item.pointsRange;
+  const lines = [
+    `# 本頁結構：${item.label}（${item.id}）`,
+    `適用情境：${item.intent}`,
+  ];
+
+  if (max > 0) {
+    lines.push(
+      min === max
+        ? `建議承載 ${min} 條重點。`
+        : `建議承載 ${min} 到 ${max} 條重點；實際容量由你依網格與字級判斷，寧可留白也不要塞滿。`
+    );
+  }
+
+  lines.push(
+    "版面由你決定：請依設計系統的網格安排各個根層群組的位置與大小，每個群組都要有 data-pptx-bounds，且左右緣落在欄線上、頁標題基線與全份一致。"
+  );
+
+  if (item.drawing) lines.push(item.drawing);
+
+  if (item.imageModule) {
+    const module = item.modules.find((entry) => entry.id === item.imageModule);
+    lines.push(
+      item.imageRole === "background"
+        ? '本頁有一張約 3:2 的橫幅圖片，請用 <image> 鋪滿整個 1280x720 畫布，該群組加上 data-pptx-bleed="true"，並在圖與文字之間鋪一層半透明色塊確保可讀性。'
+        : `本頁有一張約 3:2 的橫幅圖片（${module ? module.label : "主視覺"}），請安排它的位置與大小；<image> 需加上 preserveAspectRatio="xMidYMid slice"，超出的部分會被裁掉。`
+    );
+  } else {
+    lines.push("本頁沒有圖片，請勿使用 <image>。");
+  }
+
+  lines.push(
+    '整頁背景色使用根層的 <rect data-pptx-role="background">，它不是群組、不需要 bounds。'
+  );
+
+  return lines.join("\n");
+};
+
+/**
+ * The retreat path: exact geometry for a page whose free-form attempt failed
+ * the preflight repair loop. Reaching this function means we gave up on the
+ * model's own layout for one page, so it hands over numbers that are already
+ * known to compile rather than asking for another attempt.
  */
 const describeFrameGeometry = (id) => {
   const item = getFrame(id);
@@ -379,6 +530,7 @@ module.exports = {
   FRAME_SAFE_AREA,
   describeFrameCatalog,
   describeFrameGeometry,
+  describeFrameIntent,
   framesForPageRole,
   getFrame,
   illustratedVariantOf,

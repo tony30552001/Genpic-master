@@ -9,6 +9,7 @@
 export const DECK_STEPS = [
   { id: "source", label: "解析素材" },
   { id: "outline", label: "規劃簡報大綱" },
+  { id: "design", label: "建立設計系統" },
   { id: "images", label: "產生配圖" },
   { id: "slides", label: "逐頁設計版面" },
   { id: "quality", label: "版面品質檢查" },

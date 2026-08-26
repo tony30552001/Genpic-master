@@ -11,7 +11,7 @@ const {
   parseDocumentBuffer,
 } = require("./documentParser");
 const pptMaster = require("./pptMasterClient");
-const { authorDeck, generateOutline } = require("./deckAuthor");
+const { authorDeck, generateDesignSystem, generateOutline } = require("./deckAuthor");
 const { LlmConfigurationError, resolveRoleModel } = require("./llmModels");
 const { ensureModelPolicy } = require("./modelPolicy");
 const { generateDeckImages } = require("./deckImages");
@@ -20,9 +20,15 @@ const {
   DECK_STEP_LABELS: STEP_LABELS,
   normalizeImageDensity,
 } = require("./deckContract");
+const { normalizeRecipeId } = require("./deckRecipes");
 
 const MAX_ATTEMPTS = 2;
-const LOCK_TIMEOUT_MINUTES = Number(process.env.DECK_JOB_TIMEOUT_MINUTES || 40);
+/**
+ * A 20-page deck runs an outline call, a design-system call, illustrations and
+ * then one authoring call per page plus its repair rounds, so the lock has to
+ * outlast a worst case that is far longer than the 12-page ceiling assumed.
+ */
+const LOCK_TIMEOUT_MINUTES = Number(process.env.DECK_JOB_TIMEOUT_MINUTES || 60);
 const RETRY_DELAY_SECONDS = 15;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -40,13 +46,18 @@ const createDeckJob = async ({
   styleId,
   layoutId,
   brandId,
+  recipeId,
+  briefPurpose,
+  briefAudience,
+  briefOutcome,
 }) => {
   const result = await query(
     `INSERT INTO deck_generation_jobs
        (tenant_id, user_id, input_kind, topic, source_upload_id, source_document_url,
         source_file_name, slide_count, style_id, layout_id, brand_id, image_density,
+        recipe_id, brief_purpose, brief_audience, brief_outcome,
         progress_total)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $8)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $8)
      RETURNING id, status, created_at`,
     [
       tenantId,
@@ -61,6 +72,10 @@ const createDeckJob = async ({
       layoutId || null,
       brandId || null,
       normalizeImageDensity(imageDensity),
+      normalizeRecipeId(recipeId),
+      briefPurpose || null,
+      briefAudience || null,
+      briefOutcome || null,
     ]
   );
   return result.rows[0];
@@ -102,7 +117,8 @@ const resolveDeckSourceUpload = async ({ sourceUploadId, tenantId, userId }) => 
 const getDeckJobForUser = async ({ jobId, tenantId, userId }) => {
   const result = await query(
     `SELECT id, input_kind, topic, source_file_name, slide_count, image_density,
-            style_id, layout_id, brand_id, deck_title, status, phase,
+            style_id, layout_id, brand_id, recipe_id,
+            brief_purpose, brief_audience, brief_outcome, deck_title, status, phase,
             progress_current, progress_total, attempts, result_blob_name,
             result_file_name, error_code, error_message,
             created_at, started_at, completed_at
@@ -238,8 +254,9 @@ const claimNextDeckJob = async () => {
        RETURNING jobs.id, jobs.input_kind, jobs.topic, jobs.source_upload_id,
                  jobs.source_document_url, jobs.source_file_name, jobs.slide_count,
                  jobs.image_density,
-                  jobs.style_id, jobs.layout_id, jobs.brand_id, jobs.attempts,
-                  jobs.tenant_id, jobs.user_id`,
+                  jobs.style_id, jobs.layout_id, jobs.brand_id, jobs.recipe_id,
+                  jobs.brief_purpose, jobs.brief_audience, jobs.brief_outcome,
+                  jobs.attempts, jobs.tenant_id, jobs.user_id`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
     );
 
@@ -492,16 +509,25 @@ const processDeckJob = async (job) => {
     ]);
 
     /**
-     * The outline reads the template specs so its art direction already speaks
-     * the chosen design language; every illustration then inherits that one
-     * sentence instead of drifting page by page.
+     * The outline decides structure and content; the design system that
+     * follows decides how the whole deck looks. Splitting them keeps each
+     * call focused, and lets a failed design system fall back to the default
+     * without costing us the outline.
      */
+    const brief = {
+      purpose: job.brief_purpose,
+      audience: job.brief_audience,
+      outcome: job.brief_outcome,
+    };
+
     const { outline, synthesizedPrompts } = await generateOutline({
       topic: job.topic,
       sourceMarkdown,
       slideCount: job.slide_count,
       imageDensity: job.image_density,
       templateSpecs,
+      recipeId: job.recipe_id,
+      brief,
       llm,
     });
     const illustrated = outline.slides.filter((slide) => slide.needs_image).length;
@@ -523,12 +549,27 @@ const processDeckJob = async (job) => {
       });
     }
 
+    await report({
+      step: "design",
+      detail: "建立設計系統",
+      current: 0,
+      total: outline.slides.length,
+    });
+    const designSystem = await generateDesignSystem({
+      outline,
+      templateSpecs,
+      brief,
+      llm,
+      onProgress: report,
+    });
+
     const deck = await pptMaster.createDeck({ name: "pixora_deck" });
     try {
       const imagesBySlide = await generateDeckImages({
         deckId: deck.deckId,
         jobId: job.id,
         outline,
+        artDirection: designSystem.artDirection,
         model: modelPolicy.defaultModel,
         onProgress: report,
       });
@@ -541,6 +582,7 @@ const processDeckJob = async (job) => {
         systemMessage: buildAuthoringSystemPrompt({
           fontFamilies: fonts?.families,
           templateSpecs,
+          designSystem,
         }),
         onProgress: report,
         onSlidePreview: ({ slideNumber, title, svg }) =>

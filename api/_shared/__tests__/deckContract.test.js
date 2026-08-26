@@ -8,9 +8,12 @@ import {
   inspectSlideSvg,
   normalizeImageDensity,
   normalizeOutline,
+  normalizeSlideChart,
   normalizeSlideCount,
+  normalizeSlideTable,
   slideFileName,
 } from "../deckContract";
+import { buildRecipePlan } from "../deckRecipes";
 
 const validSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" data-pptx-page-role="cover">
   <g id="title-block" data-pptx-bounds="120 260 1040 140">
@@ -122,6 +125,198 @@ describe("inspectSlideSvg", () => {
       '<g><text x="120" y="330"'
     ).replace("</text>\n  </g>", "</text></g>\n  </g>");
     expect(inspectSlideSvg(nested)).toEqual([]);
+  });
+});
+
+/**
+ * These rules replace what frames used to prevent by construction. They are
+ * deliberately mechanical: they catch structural mistakes without expressing an
+ * opinion about the design.
+ */
+describe("inspectSlideSvg free-form guardrails", () => {
+  const page = (body) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" data-pptx-page-role="content">${body}</svg>`;
+  const textGroup = (id, bounds, extra = "") =>
+    `<g id="${id}" data-pptx-bounds="${bounds}"${extra}><text x="120" y="200" font-size="20" fill="#111111">內容</text></g>`;
+
+  it("rejects a module that leaves the safe area", () => {
+    expect(inspectSlideSvg(page(textGroup("stray", "0 0 400 200"))).join()).toContain(
+      "超出安全邊界"
+    );
+  });
+
+  it("exempts a module that declares itself full-bleed", () => {
+    expect(
+      inspectSlideSvg(page(textGroup("hero", "0 0 1280 300", ' data-pptx-bleed="true"')))
+    ).toEqual([]);
+  });
+
+  it("rejects modules too small to hold anything legible", () => {
+    expect(inspectSlideSvg(page(textGroup("chip", "120 120 20 10"))).join()).toContain(
+      "尺寸過小"
+    );
+  });
+
+  it("rejects text stacked on text", () => {
+    const body = textGroup("first", "120 120 400 200") + textGroup("second", "130 130 400 200");
+    expect(inspectSlideSvg(page(body)).join()).toContain("重疊過多");
+  });
+
+  /**
+   * The counter-example that keeps the overlap rule usable: text sitting on a
+   * decorative panel is legitimate design and must survive.
+   */
+  it("allows text laid over a decorative panel", () => {
+    const panel =
+      '<g id="panel" data-pptx-bounds="120 120 500 300"><rect x="120" y="120" width="500" height="300" fill="#EEEEEE"/></g>';
+    expect(inspectSlideSvg(page(panel + textGroup("caption", "150 150 400 200")))).toEqual([]);
+  });
+
+  it("allows text modules that merely touch without meaningful overlap", () => {
+    const body = textGroup("left", "120 120 400 200") + textGroup("right", "500 120 400 200");
+    expect(inspectSlideSvg(page(body))).toEqual([]);
+  });
+});
+
+describe("inspectSlideSvg native replacement markers", () => {
+  const chartGroup = (metadata, drawing = '<rect x="150" y="150" width="80" height="200" fill="#2F6FEB"/>') =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" data-pptx-page-role="content"><g id="revenue-chart" data-pptx-replace-with="chart" data-pptx-bounds="120 120 600 400">${metadata}${drawing}</g></svg>`;
+  const payload = (type) =>
+    `<metadata type="application/json">{"name":"revenue-chart","type":"${type}","categories":["Q1","Q2"],"series":[{"name":"雲端","values":[12,15]}]}</metadata>`;
+
+  it("accepts a marker carrying metadata and a visible fallback", () => {
+    expect(inspectSlideSvg(chartGroup(payload("column")))).toEqual([]);
+  });
+
+  it("requires the JSON metadata child", () => {
+    expect(inspectSlideSvg(chartGroup("")).join()).toContain("<metadata type=\"application/json\">");
+  });
+
+  it("rejects unparseable metadata", () => {
+    expect(
+      inspectSlideSvg(chartGroup('<metadata type="application/json">{oops}</metadata>')).join()
+    ).toContain("不是合法 JSON");
+  });
+
+  it("rejects a chart type the exporter does not support", () => {
+    expect(inspectSlideSvg(chartGroup(payload("donut"))).join()).toContain("metadata type 必須是");
+  });
+
+  /** Upstream requires the visible fallback regardless of native eligibility. */
+  it("rejects a marker with no visible drawing", () => {
+    expect(inspectSlideSvg(chartGroup(payload("column"), "")).join()).toContain(
+      "必須畫出完整可見的圖形"
+    );
+  });
+});
+
+describe("normalizeSlideChart", () => {
+  it("keeps upstream chart type spelling and drops unknown types", () => {
+    expect(
+      normalizeSlideChart({
+        type: "doughnut",
+        categories: ["A", "B"],
+        series: [{ name: "占比", values: [1, 2] }],
+      })
+    ).toMatchObject({ type: "doughnut", categories: ["A", "B"] });
+    expect(
+      normalizeSlideChart({ type: "donut", categories: ["A"], series: [{ values: [1] }] })
+    ).toBeNull();
+  });
+
+  it("drops series whose length does not match the categories", () => {
+    expect(
+      normalizeSlideChart({
+        type: "column",
+        categories: ["A", "B"],
+        series: [{ name: "短", values: [1] }],
+      })
+    ).toBeNull();
+  });
+
+  it("keeps a single ring for pie and doughnut", () => {
+    const chart = normalizeSlideChart({
+      type: "pie",
+      categories: ["A", "B"],
+      series: [
+        { name: "一", values: [1, 2] },
+        { name: "二", values: [3, 4] },
+      ],
+    });
+    expect(chart.series).toHaveLength(1);
+  });
+});
+
+describe("normalizeSlideTable", () => {
+  it("pads short rows and drops a table with no rows", () => {
+    const table = normalizeSlideTable({
+      headers: ["項目", "金額"],
+      rows: [["授權", "120"], ["服務"]],
+    });
+    expect(table.rows).toEqual([
+      ["授權", "120"],
+      ["服務", ""],
+    ]);
+    expect(normalizeSlideTable({ headers: ["項目"], rows: [] })).toBeNull();
+  });
+});
+
+describe("normalizeOutline with a recipe spine", () => {
+  const outlineOf = (roles) => ({
+    title: "投資提案",
+    summary: "",
+    slides: roles.map((role, index) => ({
+      page_role: role,
+      title: `第 ${index + 1} 頁`,
+      key_points: ["重點"],
+      frame: "content-bullets",
+    })),
+  });
+
+  it("corrects a role the model drifted on", () => {
+    const spine = buildRecipePlan("pitch-deck", 4);
+    const outline = normalizeOutline(outlineOf(["cover", "content", "content", "content"]), {
+      slideCount: 4,
+      spine,
+    });
+
+    expect(outline.slides.map((slide) => slide.page_role)).toEqual(
+      spine.map((section) => section.role)
+    );
+    expect(outline.slides[3].page_role).toBe("ending");
+  });
+
+  /** The recipe owns the shape of the argument, never the material. */
+  it("leaves titles and points untouched", () => {
+    const outline = normalizeOutline(outlineOf(["cover", "content", "content", "content"]), {
+      slideCount: 4,
+      spine: buildRecipePlan("pitch-deck", 4),
+    });
+
+    expect(outline.slides[3].title).toBe("第 4 頁");
+    expect(outline.slides[3].key_points).toEqual(["重點"]);
+  });
+
+  it("re-resolves a frame the corrected role no longer supports", () => {
+    const outline = normalizeOutline(outlineOf(["cover", "content", "content", "content"]), {
+      slideCount: 4,
+      spine: buildRecipePlan("pitch-deck", 4),
+    });
+
+    expect(outline.slides[3].frame).toBe("ending-statement");
+  });
+
+  it("ignores a spine that does not match the page count", () => {
+    const outline = normalizeOutline(outlineOf(["cover", "content", "ending"]), {
+      slideCount: 3,
+      spine: buildRecipePlan("pitch-deck", 8),
+    });
+
+    expect(outline.slides.map((slide) => slide.page_role)).toEqual([
+      "cover",
+      "content",
+      "ending",
+    ]);
   });
 });
 

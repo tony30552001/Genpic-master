@@ -19,15 +19,19 @@ import { DOCUMENT_ACCEPT } from "@/lib/documentFormats";
 import usePptMasterDeck from "@/hooks/usePptMasterDeck";
 import DeckProgress from "./DeckProgress";
 import DeckImageDensityPicker from "./DeckImageDensityPicker";
+import DeckRecipePicker from "./DeckRecipePicker";
 import DeckSetupSummary from "./DeckSetupSummary";
 import DeckSlideRail from "./DeckSlideRail";
 import DeckTimeline from "./DeckTimeline";
 import PptTemplatePicker from "./PptTemplatePicker";
 import { authoringSlideNumber } from "./deckSteps";
 import { describeImageDensity, describeLayout, describeStyle } from "./pptTemplateCopy";
+import { DEFAULT_RECIPE_ID, describeRecipe } from "./pptRecipeCopy";
 
 const MIN_SLIDES = 4;
-const MAX_SLIDES = 12;
+const MAX_SLIDES = 20;
+/** 與 api/deck-jobs 的 BRIEF_MAX_LENGTH 一致：超過的部分伺服器會截掉。 */
+const BRIEF_MAX_LENGTH = 200;
 
 /**
  * 「設計簡報」子頁籤：以 ppt-master 的設計語彙，從主題或文件一次產出完整 PPTX。
@@ -39,6 +43,10 @@ export default function PptMasterStudio() {
   const [imageDensity, setImageDensity] = useState("key");
   const [styleId, setStyleId] = useState(null);
   const [layoutId, setLayoutId] = useState(null);
+  const [recipeId, setRecipeId] = useState(DEFAULT_RECIPE_ID);
+  const [briefPurpose, setBriefPurpose] = useState("");
+  const [briefAudience, setBriefAudience] = useState("");
+  const [briefOutcome, setBriefOutcome] = useState("");
   const [downloadError, setDownloadError] = useState(null);
   const [showSetup, setShowSetup] = useState(false);
   const [selectedSlide, setSelectedSlide] = useState(null);
@@ -67,7 +75,9 @@ export default function PptMasterStudio() {
   const selectedStyle = templates.styles.find((option) => option.id === styleId);
   const selectedLayout = templates.layouts.find((option) => option.id === layoutId);
   const setupTitle = topic.trim() || file?.name || "尚未填寫主題";
+  const recipe = describeRecipe(recipeId);
   const setupMeta = [
+    recipeId === DEFAULT_RECIPE_ID ? null : recipe.name,
     `${slideCount} 頁`,
     describeImageDensity(imageDensity).name,
     selectedStyle ? describeStyle(selectedStyle).name : "預設風格",
@@ -77,12 +87,40 @@ export default function PptMasterStudio() {
     .filter(Boolean)
     .join(" · ");
 
+  /**
+   * 配方帶來的是建議值，不是鎖：預填頁數、配圖密度與設計風格之後，
+   * 三者仍可個別調整。預選風格只有在該風格確實存在於範本清單時才套用。
+   */
+  const handleRecipeChange = (nextRecipeId) => {
+    setRecipeId(nextRecipeId);
+    const next = describeRecipe(nextRecipeId);
+    if (next.defaultSlideCount) setSlideCount(next.defaultSlideCount);
+    if (next.defaultImageDensity) setImageDensity(next.defaultImageDensity);
+    if (
+      next.preferredStyleId &&
+      templates.styles.some((option) => option.id === next.preferredStyleId)
+    ) {
+      setStyleId(next.preferredStyleId);
+    }
+  };
+
   const handleGenerate = async () => {
     setDownloadError(null);
     setShowSetup(false);
     setSelectedSlide(null);
     try {
-      await generate({ topic, file, slideCount, imageDensity, styleId, layoutId });
+      await generate({
+        topic,
+        file,
+        slideCount,
+        imageDensity,
+        styleId,
+        layoutId,
+        recipeId,
+        briefPurpose,
+        briefAudience,
+        briefOutcome,
+      });
     } catch (generationError) {
       if (generationError?.name !== "AbortError") {
         console.error("Deck generation failed:", generationError);
@@ -110,6 +148,12 @@ export default function PptMasterStudio() {
     <>
       <Card>
         <CardContent className="space-y-4 p-4 sm:p-6">
+          <DeckRecipePicker
+            value={recipeId}
+            onChange={handleRecipeChange}
+            disabled={isGenerating}
+          />
+
           <div className="space-y-2">
             <Label htmlFor="deck-topic">簡報主題</Label>
             <Textarea
@@ -198,6 +242,54 @@ export default function PptMasterStudio() {
             onChange={setImageDensity}
             disabled={isGenerating}
           />
+
+          {/* 目的、聽眾與期望成果會直接影響大綱取捨與設計系統的語氣。 */}
+          <fieldset disabled={isGenerating} className="space-y-2 disabled:opacity-60">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <legend className="text-sm font-medium text-foreground">簡報任務（選填）</legend>
+              <span className="text-xs text-muted-foreground">
+                填得越具體，AI 越知道該講深哪些、該刪掉哪些
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="deck-brief-purpose" className="text-xs font-normal">
+                  簡報目的
+                </Label>
+                <Input
+                  id="deck-brief-purpose"
+                  value={briefPurpose}
+                  onChange={(event) => setBriefPurpose(event.target.value)}
+                  placeholder="例如：爭取下一年度預算"
+                  maxLength={BRIEF_MAX_LENGTH}
+                />
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="deck-brief-audience" className="text-xs font-normal">
+                  聽眾對象
+                </Label>
+                <Input
+                  id="deck-brief-audience"
+                  value={briefAudience}
+                  onChange={(event) => setBriefAudience(event.target.value)}
+                  placeholder="例如：財務長與事業處主管"
+                  maxLength={BRIEF_MAX_LENGTH}
+                />
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="deck-brief-outcome" className="text-xs font-normal">
+                  期望成果
+                </Label>
+                <Input
+                  id="deck-brief-outcome"
+                  value={briefOutcome}
+                  onChange={(event) => setBriefOutcome(event.target.value)}
+                  placeholder="例如：當場核准立項"
+                  maxLength={BRIEF_MAX_LENGTH}
+                />
+              </div>
+            </div>
+          </fieldset>
         </CardContent>
       </Card>
 

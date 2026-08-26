@@ -167,4 +167,56 @@ describe("PptMasterStudio image density", () => {
       expect.objectContaining({ imageDensity: "every" })
     );
   });
+
+  it("prefills the suggested slide count and density when a recipe is picked", async () => {
+    const user = userEvent.setup();
+    render(<PptMasterStudio />);
+
+    await user.type(screen.getByLabelText("簡報主題"), "生成式 AI 導入策略");
+    await user.click(screen.getByRole("button", { name: /研究分析/ }));
+
+    expect(screen.getByLabelText("投影片頁數")).toHaveValue(14);
+
+    await user.click(screen.getByRole("button", { name: /產生簡報/ }));
+
+    expect(deckState.current.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipeId: "research-report",
+        slideCount: 14,
+        imageDensity: "none",
+      })
+    );
+  });
+
+  it("does not prefill a preferred style that the tenant does not offer", async () => {
+    const user = userEvent.setup();
+    render(<PptMasterStudio />);
+
+    await user.type(screen.getByLabelText("簡報主題"), "生成式 AI 導入策略");
+    await user.click(screen.getByRole("button", { name: /投資提案/ }));
+    await user.click(screen.getByRole("button", { name: /產生簡報/ }));
+
+    expect(deckState.current.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ recipeId: "pitch-deck", styleId: null })
+    );
+  });
+
+  it("sends the structured brief to the generator", async () => {
+    const user = userEvent.setup();
+    render(<PptMasterStudio />);
+
+    await user.type(screen.getByLabelText("簡報主題"), "生成式 AI 導入策略");
+    await user.type(screen.getByLabelText("簡報目的"), "爭取預算");
+    await user.type(screen.getByLabelText("聽眾對象"), "財務長");
+    await user.type(screen.getByLabelText("期望成果"), "當場核准");
+    await user.click(screen.getByRole("button", { name: /產生簡報/ }));
+
+    expect(deckState.current.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        briefPurpose: "爭取預算",
+        briefAudience: "財務長",
+        briefOutcome: "當場核准",
+      })
+    );
+  });
 });

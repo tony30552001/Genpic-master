@@ -66,6 +66,10 @@ describe("deck job source uploads", () => {
       styleId: null,
       layoutId: null,
       brandId: null,
+      recipeId: "pitch-deck",
+      briefPurpose: "說服投資人",
+      briefAudience: null,
+      briefOutcome: null,
     });
 
     const [sql, params] = db.query.mock.calls[0];
@@ -84,7 +88,32 @@ describe("deck job source uploads", () => {
       null,
       null,
       "every",
+      "pitch-deck",
+      "說服投資人",
+      null,
+      null,
     ]);
+  });
+
+  /** An unknown recipe must never reach the column; the id set grows in code. */
+  it("collapses an unknown recipe to general before it is stored", async () => {
+    await createDeckJob({
+      ...OWNER,
+      inputKind: "topic",
+      topic: "AI 策略",
+      sourceUploadId: null,
+      sourceDocumentUrl: null,
+      sourceFileName: null,
+      slideCount: 8,
+      imageDensity: "key",
+      styleId: null,
+      layoutId: null,
+      brandId: null,
+      recipeId: "made-up-recipe",
+    });
+
+    const [, params] = db.query.mock.calls[0];
+    expect(params[12]).toBe("general");
   });
 
   it("re-resolves a ready document upload by the job owner before reading bytes", async () => {

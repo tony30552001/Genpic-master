@@ -187,11 +187,27 @@ export const createDeckJob = async ({
   imageDensity,
   styleId,
   layoutId,
+  recipeId,
+  briefPurpose,
+  briefAudience,
+  briefOutcome,
   signal,
 }) =>
   apiPost(
     `${API_BASE_URL}/deck-jobs`,
-    { topic, sourceUploadId, fileName, slideCount, imageDensity, styleId, layoutId },
+    {
+      topic,
+      sourceUploadId,
+      fileName,
+      slideCount,
+      imageDensity,
+      styleId,
+      layoutId,
+      recipeId,
+      briefPurpose,
+      briefAudience,
+      briefOutcome,
+    },
     { signal }
   );
 

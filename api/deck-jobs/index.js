@@ -18,6 +18,7 @@ const {
   normalizeImageDensity,
   normalizeSlideCount,
 } = require("../_shared/deckContract");
+const { normalizeRecipeId } = require("../_shared/deckRecipes");
 
 const IMAGE_CONTENT_TYPES = {
   png: "image/png",
@@ -55,6 +56,17 @@ const normalizeTemplateId = (value) => {
   return TEMPLATE_ID.test(id) ? id : null;
 };
 
+const BRIEF_MAX_LENGTH = 200;
+
+/** Single-line, bounded free text. Empty stays null so the prompt is untouched. */
+const normalizeBriefField = (value) => {
+  const text = String(value == null ? "" : value)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, BRIEF_MAX_LENGTH);
+  return text || null;
+};
+
 const buildJobBody = (job, events = [], slides = []) => {
   const body = {
     jobId: job.id,
@@ -62,6 +74,7 @@ const buildJobBody = (job, events = [], slides = []) => {
     inputKind: job.input_kind,
     slideCount: job.slide_count,
     imageDensity: job.image_density,
+    recipeId: job.recipe_id,
     deckTitle: job.deck_title,
     phase: job.phase,
     progress: {
@@ -316,6 +329,10 @@ module.exports = async function (context, req) {
       styleId: normalizeTemplateId(body.styleId),
       layoutId: normalizeTemplateId(body.layoutId),
       brandId: normalizeTemplateId(body.brandId),
+      recipeId: normalizeRecipeId(body.recipeId),
+      briefPurpose: normalizeBriefField(body.briefPurpose),
+      briefAudience: normalizeBriefField(body.briefAudience),
+      briefOutcome: normalizeBriefField(body.briefOutcome),
     });
   } catch {
     context.res = error("無法建立簡報生成工作", "deck_job_create_failed", 500, req);
