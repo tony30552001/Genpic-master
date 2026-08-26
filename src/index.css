@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@plugin "tailwindcss-animate";
+@import "tw-animate-css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -51,71 +51,7 @@
   --font-sans: "Noto Sans TC", "Geist", "Avenir Next", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
 
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
-  --animate-fade-in: fadeIn 0.3s ease-out;
-  --animate-slide-up: slideUp 0.2s ease-out;
-  --animate-scale-in: scaleIn 0.15s ease-in;
-  --animate-shimmer: shimmer 2s linear infinite;
   --animate-preview-dot: previewDot 1.8s ease-in-out infinite;
-
-  @keyframes accordion-down {
-    from {
-      height: 0;
-    }
-    to {
-      height: var(--radix-accordion-content-height);
-    }
-  }
-
-  @keyframes accordion-up {
-    from {
-      height: var(--radix-accordion-content-height);
-    }
-    to {
-      height: 0;
-    }
-  }
-
-  @keyframes fadeIn {
-    0% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
-
-  @keyframes slideUp {
-    0% {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes scaleIn {
-    0% {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
-  }
 
   @keyframes previewDot {
     0%, 100% {
@@ -127,6 +63,13 @@
       transform: scale(1.18);
     }
   }
+}
+
+@theme {
+  /* ── Motion easing ──
+     emphasized: 進場、展開、位移；exit: 離場、收合 */
+  --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @utility bg-gradient-header {
@@ -186,6 +129,12 @@
     --ring: 221.2 83.2% 53.3%;
 
     --radius: 0.5rem;
+
+    /* ── Motion Tokens ──
+       單一時長來源；prefers-reduced-motion 時整組壓成瞬時 */
+    --motion-enter: 250ms;   /* 進場、展開 */
+    --motion-exit: 150ms;    /* 離場、收合 */
+    --motion-hover: 200ms;   /* hover、focus 等狀態回饋 */
 
     /* ── Pixora Brand Tokens (Blue-aligned) ── */
     --brand-primary: 221.2 83.2% 53.3%;        /* Match primary */
@@ -270,6 +219,16 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* 使用 motion token 的動態一律變為瞬時；個別元素若需完全移除位移或
+     停用無限迴圈動畫，仍以 motion-reduce:* utility 明示。 */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --motion-enter: 0.01ms;
+      --motion-exit: 0.01ms;
+      --motion-hover: 0.01ms;
+    }
+  }
 }
 
 /* ── Custom scrollbar (unchanged) ── */
@@ -285,6 +244,17 @@
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
+}
+
+/* Hide native number spinners when the UI provides its own −/+ steppers */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .image-preview-dot {

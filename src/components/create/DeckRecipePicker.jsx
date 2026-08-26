@@ -18,7 +18,7 @@ export default function DeckRecipePicker({ value, onChange, disabled }) {
           決定章節順序與語調，並預填下方設定
         </span>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
         {DECK_RECIPE_OPTIONS.map((option) => {
           const selected = value === option.id;
           return (
@@ -28,7 +28,7 @@ export default function DeckRecipePicker({ value, onChange, disabled }) {
               onClick={() => onChange(option.id)}
               aria-pressed={selected}
               className={cn(
-                "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
+                "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left touch-manipulation transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 selected
                   ? "border-primary bg-primary/5"

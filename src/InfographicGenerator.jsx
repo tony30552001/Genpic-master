@@ -845,7 +845,7 @@ export default function InfographicGenerator({
                                     </TabsContent>
                                     <TabsContent
                                         value="pptmaster"
-                                        className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
+                                        className="mt-3 min-h-0 flex-1 overflow-hidden"
                                     >
                                         {documentAnalysisMode === "pptmaster" && <PptMasterStudio />}
                                     </TabsContent>

@@ -27,21 +27,19 @@ function TemplateThumbnail({ src, alt }) {
 function TemplateGroup({ label, hint, options, value, onChange, describe, previewKind }) {
   if (options.length === 0) return null;
 
-  const selectedPreviews = value ? describeTemplatePreview(previewKind, value) : [];
-
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <h4 className="text-sm font-medium text-foreground">{label}</h4>
         <span className="text-xs text-muted-foreground">{hint}</span>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
         <button
           type="button"
           onClick={() => onChange(null)}
           aria-pressed={!value}
           className={cn(
-            "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
+            "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left touch-manipulation transition-colors",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             !value
               ? "border-primary bg-primary/5"
@@ -67,7 +65,7 @@ function TemplateGroup({ label, hint, options, value, onChange, describe, previe
               onClick={() => onChange(selected ? null : option.id)}
               aria-pressed={selected}
               className={cn(
-                "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
+                "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left touch-manipulation transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 selected
                   ? "border-primary bg-primary/5"
@@ -102,25 +100,6 @@ function TemplateGroup({ label, hint, options, value, onChange, describe, previe
           );
         })}
       </div>
-
-      {selectedPreviews.length > 0 && (
-        <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {selectedPreviews.map((src, index) => (
-              <img
-                key={src}
-                src={src}
-                alt={`${label}樣本第 ${index + 1} 頁`}
-                loading="lazy"
-                className="aspect-video w-full rounded border border-border/60 bg-white object-contain"
-              />
-            ))}
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            預覽是樣本，不是保證：版面由 AI 逐次設計，重跑會得到不同排列。可以參考的是配色、字級與裝飾語彙。
-          </p>
-        </div>
-      )}
     </div>
   );
 }

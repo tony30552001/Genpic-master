@@ -4,7 +4,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /**
- * PowerPoint 式的垂直縮圖列：每一頁設計完成就出現在這裡，還沒產出的頁先以骨架佔位。
+ * PowerPoint 式的縮圖列：每一頁設計完成就出現在這裡，還沒產出的頁先以骨架佔位。
+ *
+ * 以格狀排列而非單欄，讓右側舞台在筆電寬度也能一次看到六頁以上，
+ * 減少長簡報時的捲動距離。
  *
  * 縮圖是伺服器保存的授稿 SVG——也就是最終 PPTX 的同一份來源，
  * 用 `<img>` 渲染（瀏覽器的沙盒模式），所以模型產生的內容不會進到頁面的 DOM。
@@ -24,16 +27,16 @@ export default function DeckSlideRail({
   const pages = Array.from({ length: pageCount }, (_, index) => index + 1);
 
   return (
-    <div className="rounded-lg border border-border bg-muted/40">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
         <h3 className="min-w-0 truncate text-sm font-medium">投影片預覽</h3>
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {slides.length}/{pageCount}
         </span>
       </div>
 
-      <div className="max-h-[28rem] overflow-y-auto lg:max-h-[calc(100vh-14rem)]">
-        <ol className="space-y-2 p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
+        <ol className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 xl:grid-cols-4">
           {pages.map((slideNumber) => {
             const preview = previews[slideNumber];
             const title = titleBySlide.get(slideNumber) || preview?.title || "";
@@ -41,7 +44,7 @@ export default function DeckSlideRail({
             const isSelected = selectedSlideNumber === slideNumber;
 
             return (
-              <li key={slideNumber}>
+              <li key={slideNumber} className="min-w-0">
                 <button
                   type="button"
                   onClick={() => onSelect?.(isSelected ? null : slideNumber)}
@@ -49,15 +52,15 @@ export default function DeckSlideRail({
                   aria-pressed={isSelected}
                   aria-label={`第 ${slideNumber} 頁${title ? `：${title}` : ""}`}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md border p-1.5 text-left transition-colors",
+                    "flex w-full min-w-0 flex-col gap-1 rounded-lg border p-1.5 text-left touch-manipulation transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isSelected
                       ? "border-primary bg-primary/5"
-                      : "border-transparent hover:border-border hover:bg-background",
+                      : "border-transparent hover:border-border hover:bg-muted/60",
                     !preview && "cursor-default"
                   )}
                 >
-                  <span className="relative aspect-video w-24 shrink-0 overflow-hidden rounded border border-border bg-background">
+                  <span className="relative block aspect-video w-full overflow-hidden rounded border border-border bg-background">
                     {preview ? (
                       <img
                         src={preview.url}
@@ -73,14 +76,12 @@ export default function DeckSlideRail({
                         aria-hidden="true"
                       />
                     )}
+                    <span className="absolute left-1 top-1 rounded bg-background/85 px-1 text-[10px] font-medium tabular-nums text-muted-foreground">
+                      {slideNumber}
+                    </span>
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-medium tabular-nums text-muted-foreground">
-                      第 {slideNumber} 頁
-                    </span>
-                    <span className="block truncate text-xs text-foreground">
-                      {title || (isAuthoring ? "設計中…" : "尚未產出")}
-                    </span>
+                  <span className="block truncate text-xs text-foreground">
+                    {title || (isAuthoring ? "設計中…" : "尚未產出")}
                   </span>
                 </button>
               </li>

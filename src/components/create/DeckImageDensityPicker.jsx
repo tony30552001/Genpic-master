@@ -28,7 +28,7 @@ export default function DeckImageDensityPicker({ value, onChange, disabled }) {
               onClick={() => onChange(option.id)}
               aria-pressed={selected}
               className={cn(
-                "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
+                "flex min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left touch-manipulation transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 selected
                   ? "border-primary bg-primary/5"
