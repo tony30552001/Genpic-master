@@ -15,24 +15,39 @@ export default function StylePalette({
   onSelectedChange,
   collapsible = true,
   defaultCollapsed = true,
+  dimensions = STYLE_DIMENSIONS,
+  selectionMode = "multiple",
+  showClear = true,
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const activeCount = useMemo(
-    () => STYLE_DIMENSIONS.reduce((sum, d) => sum + (selected[d.id]?.length ?? 0), 0),
-    [selected]
+    () => dimensions.reduce((sum, d) => sum + (selected[d.id]?.length ?? 0), 0),
+    [dimensions, selected]
   );
 
   const toggleTag = useCallback(
     (dimensionId, tag) => {
-      const dimTags = selected[dimensionId] || [];
+      const dimTags = Array.isArray(selected[dimensionId])
+        ? selected[dimensionId]
+        : selected[dimensionId]
+          ? [selected[dimensionId]]
+          : [];
       const isActive = dimTags.includes(tag);
-      const next = isActive
-        ? { ...selected, [dimensionId]: dimTags.filter((t) => t !== tag) }
-        : { ...selected, [dimensionId]: [...dimTags, tag] };
+      const nextTags = isActive
+        ? dimTags.filter((t) => t !== tag)
+        : selectionMode === "single"
+          ? [tag]
+          : [...dimTags, tag];
+      const next = { ...selected };
+      if (nextTags.length > 0) {
+        next[dimensionId] = nextTags;
+      } else {
+        delete next[dimensionId];
+      }
       onSelectedChange?.(next);
     },
-    [selected, onSelectedChange]
+    [onSelectedChange, selected, selectionMode]
   );
 
   const handleClear = useCallback(() => {
@@ -42,17 +57,29 @@ export default function StylePalette({
   const paletteContent = (
     <CardContent className="space-y-4 border-t border-border bg-background/80 p-4">
       <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
-        {STYLE_DIMENSIONS.map(({ id, label, tags }) => (
+        {dimensions.map(({ id, label, tags }) => (
           <div key={id} className="space-y-2">
             <p className="text-sm font-semibold text-foreground">{label}</p>
-            <div className="flex flex-wrap gap-1.5">
+            <div
+              className="flex flex-wrap gap-1.5"
+              role={selectionMode === "single" ? "radiogroup" : "group"}
+              aria-label={label}
+            >
               {tags.map((tag) => {
-                const isActive = (selected[id] || []).includes(tag);
+                const selectedTags = Array.isArray(selected[id])
+                  ? selected[id]
+                  : selected[id]
+                    ? [selected[id]]
+                    : [];
+                const isActive = selectedTags.includes(tag);
                 return (
                   <button
                     key={tag}
                     type="button"
                     onClick={() => toggleTag(id, tag)}
+                    role={selectionMode === "single" ? "radio" : undefined}
+                    aria-checked={selectionMode === "single" ? isActive : undefined}
+                    aria-pressed={selectionMode === "multiple" ? isActive : undefined}
                     className={cn(
                       "min-h-11 touch-manipulation rounded-full border px-3 py-2 text-sm leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
                       isActive
@@ -69,15 +96,17 @@ export default function StylePalette({
         ))}
       </div>
 
-      <div className="border-t border-border/60 pt-3">
-        <button
-          type="button"
-          onClick={handleClear}
-          className="min-h-11 touch-manipulation rounded-lg border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-border/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        >
-          清空風格
-        </button>
-      </div>
+      {showClear && (
+        <div className="border-t border-border/60 pt-3">
+          <button
+            type="button"
+            onClick={handleClear}
+            className="min-h-11 touch-manipulation rounded-lg border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-border/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
+            清空風格
+          </button>
+        </div>
+      )}
     </CardContent>
   );
 

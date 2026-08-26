@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320" role="img" aria-labelledby="title desc">
+  <title id="title">Warm editorial visual preview</title>
+  <desc id="desc">Warm paper, sunrise light, and a restrained editorial composition.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff7ed"/>
+      <stop offset="1" stop-color="#fed7aa"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fb923c"/>
+      <stop offset="1" stop-color="#facc15"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="320" fill="url(#bg)"/>
+  <circle cx="500" cy="80" r="86" fill="url(#sun)" opacity=".86"/>
+  <path d="M0 244C92 203 153 224 229 196s141-2 203 8 115-15 208-55v171H0Z" fill="#d97706" opacity=".2"/>
+  <rect x="48" y="48" width="250" height="18" rx="9" fill="#9a3412" opacity=".82"/>
+  <rect x="48" y="82" width="180" height="10" rx="5" fill="#c2410c" opacity=".42"/>
+  <rect x="48" y="130" width="144" height="96" rx="14" fill="#fff" opacity=".76"/>
+  <rect x="208" y="130" width="112" height="96" rx="14" fill="#fed7aa" opacity=".85"/>
+  <rect x="352" y="186" width="192" height="16" rx="8" fill="#9a3412" opacity=".34"/>
+  <rect x="352" y="216" width="144" height="12" rx="6" fill="#9a3412" opacity=".22"/>
+</svg>

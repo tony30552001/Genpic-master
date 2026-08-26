@@ -29,6 +29,13 @@ import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import ImageTransformPanel from './components/create/ImageTransformPanel';
 import AssetCenter from './components/library/AssetCenter';
+import {
+    buildTaskTemplateContext,
+    DEFAULT_STYLE_PRESET_ID,
+    getStylePreset,
+    paletteToSelection,
+    selectionToTags,
+} from './components/create/styleSourceData';
 
 export default function InfographicGenerator({
     initialTab = 'general',
@@ -72,8 +79,12 @@ export default function InfographicGenerator({
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [compactNavSection, setCompactNavSection] = useState(null);
-    const [paletteStyleTags, setPaletteStyleTags] = useState([]);
-    const [imagePurpose, setImagePurpose] = useState('infographic');
+    const defaultStylePreset = getStylePreset(DEFAULT_STYLE_PRESET_ID);
+    const [paletteStyleTags, setPaletteStyleTags] = useState(() =>
+        selectionToTags(paletteToSelection(defaultStylePreset?.palette))
+    );
+    const [templateContext, setTemplateContext] = useState(() => buildTaskTemplateContext());
+    const [stylePreset, setStylePreset] = useState(defaultStylePreset);
     const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
 
     useEffect(() => {
@@ -390,9 +401,10 @@ export default function InfographicGenerator({
 
             const { imageUrl, finalPrompt, model } = await generateImage({
                 userScript: finalScriptToUse,
-                analyzedStyle,
+                analyzedStyle: [analyzedStyle, stylePreset?.prompt].filter(Boolean).join(" "),
                 styleTags: paletteStyleTags,
-                purpose: imagePurpose,
+                purpose: templateContext?.purpose || "freeform",
+                templateContext,
                 aspectRatio,
                 imageSize,
                 imageQuality,
@@ -403,7 +415,11 @@ export default function InfographicGenerator({
             await saveHistoryItem({
                 imageUrl,
                 userScript,
-                stylePrompt: [analyzedStyle, paletteStyleTags.join('，')].filter(Boolean).join('，'),
+                stylePrompt: [
+                    analyzedStyle,
+                    stylePreset?.prompt,
+                    paletteStyleTags.join('，'),
+                ].filter(Boolean).join('，'),
                 fullPrompt: finalPrompt,
                 styleId: appliedStyleId || analysisResultData?.styleId || null,
                 model: model || imageModel,
@@ -864,8 +880,10 @@ export default function InfographicGenerator({
                                             onUserScriptChange={setUserScript}
                                             onOptimizedPromptEnChange={setOptimizedPromptEn}
                                             imageLanguage={imageLanguage}
-                                            imagePurpose={imagePurpose}
-                                            onImagePurposeChange={setImagePurpose}
+                                            templateContext={templateContext}
+                                            onTemplateContextChange={setTemplateContext}
+                                            stylePreset={stylePreset}
+                                            onStylePresetChange={setStylePreset}
                                             onFocus={() => setIsInputFocused(true)}
                                             onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
                                             hideGenerate

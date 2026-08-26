@@ -19,27 +19,8 @@ import { cn } from "@/lib/utils";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
-import { STYLE_DIMENSIONS } from "./styleDimensions";
+import { selectionToTags, tagsToSelection } from "./styleSourceData";
 import StyleSourceTabs from "./StyleSourceTabs";
-
-/** 決定系統是否為畫面補上構圖與文字語系指令。 */
-const IMAGE_PURPOSE_OPTIONS = [
-  {
-    id: "infographic",
-    label: "資訊圖表",
-    description: "補上簡報版面構圖與文字語系指令",
-  },
-  {
-    id: "storyboard",
-    label: "電影分鏡",
-    description: "補上電影分鏡構圖與文字語系指令",
-  },
-  {
-    id: "freeform",
-    label: "自由創作",
-    description: "完全依照你的描述，不附加任何系統指令",
-  },
-];
 
 /**
  * ScriptEditor — 內容描述編輯器
@@ -76,8 +57,10 @@ export default function ScriptEditor({
   onGenerate,
   paletteStyleTags = [],
   imageLanguage = "",
-  imagePurpose = "infographic",
-  onImagePurposeChange,
+  templateContext = null,
+  onTemplateContextChange,
+  stylePreset = null,
+  onStylePresetChange,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -90,26 +73,24 @@ export default function ScriptEditor({
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showAssistTools, setShowAssistTools] = useState(false);
   const [showStyleSource, setShowStyleSource] = useState(false);
-  const [styleSourceTab, setStyleSourceTab] = useState("templates");
-  const [paletteSelected, setPaletteSelected] = useState({});
+  const [styleSourceTab, setStyleSourceTab] = useState("presets");
+  const [paletteSelected, setPaletteSelected] = useState(() =>
+    tagsToSelection(paletteStyleTags)
+  );
 
   // 調色盤 tag 選擇變更時，計算風格字串並通知父元件
   const handlePaletteChange = useCallback((newSelected) => {
     setPaletteSelected(newSelected);
-    const allTags = STYLE_DIMENSIONS.flatMap((d) => newSelected[d.id] || []);
+    const allTags = selectionToTags(newSelected);
     onPaletteStyleChange?.(allTags);
     setShowStyleSource(true);
-    setStyleSourceTab("palette");
+    setStyleSourceTab("presets");
   }, [onPaletteStyleChange]);
 
   const charCount = userScript?.length || 0;
   const contentFieldId = "script-editor-content";
   const contentHelpId = "script-editor-content-help";
   const assistToolsId = "script-editor-assist-tools";
-  const purposeLabelId = "script-editor-purpose";
-  const activePurpose =
-    IMAGE_PURPOSE_OPTIONS.find((option) => option.id === imagePurpose) ||
-    IMAGE_PURPOSE_OPTIONS[0];
   const hasActiveAssistTools = Boolean(
     contentImagePreview ||
     analyzedStyle ||
@@ -140,7 +121,13 @@ export default function ScriptEditor({
   const handleClearStyle = () => {
     setSelectedStyleId(null);
     setSelectedStyleInfo(null);
+    onStylePresetChange?.(null);
     onClearStyle?.();
+  };
+
+  const handleTemplateChange = (nextContext) => {
+    onTemplateContextChange?.(nextContext);
+    onOptimizedPromptEnChange?.("");
   };
 
   const handleSmartOptimize = async () => {
@@ -151,10 +138,16 @@ export default function ScriptEditor({
     try {
       const result = await optimizePrompt({
         userScript,
-        styleContext: [analyzedStyle, paletteStyleTags.join("，"), selectedStyleInfo?.name]
+        styleContext: [
+          analyzedStyle,
+          stylePreset?.prompt,
+          paletteStyleTags.join("，"),
+          selectedStyleInfo?.name,
+        ]
           .filter(Boolean)
           .join("，") || "",
         imageLanguage,
+        templateContext,
       });
 
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
@@ -273,39 +266,6 @@ export default function ScriptEditor({
               )}
             </span>
             <span className="shrink-0 tabular-nums">{charCount} 字</span>
-          </div>
-
-          <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span id={purposeLabelId} className="text-xs font-semibold text-foreground">
-                畫面用途
-              </span>
-              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                {activePurpose.description}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby={purposeLabelId}>
-              {IMAGE_PURPOSE_OPTIONS.map((option) => {
-                const isSelected = activePurpose.id === option.id;
-
-                return (
-                  <button
-                    type="button"
-                    key={option.id}
-                    onClick={() => onImagePurposeChange?.(option.id)}
-                    aria-pressed={isSelected}
-                    className={cn(
-                      "min-h-9 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                      isSelected
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border/60 text-muted-foreground hover:border-primary/40 hover:bg-muted/60"
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
         </CardContent>
@@ -535,15 +495,12 @@ export default function ScriptEditor({
               onOpenChange={setShowStyleSource}
               activeTab={styleSourceTab}
               onActiveTabChange={setStyleSourceTab}
+              templateContext={templateContext}
+              onTemplateChange={handleTemplateChange}
               selectedPalette={paletteSelected}
               onPaletteChange={handlePaletteChange}
-              onTemplateFill={(text, palette) => {
-                onUserScriptChange(text);
-                if (onOptimizedPromptEnChange) onOptimizedPromptEnChange("");
-                if (palette) handlePaletteChange(palette);
-                setShowStyleSource(true);
-                setStyleSourceTab("templates");
-              }}
+              selectedPresetId={stylePreset?.id || null}
+              onPresetChange={onStylePresetChange}
               savedStyles={savedStyles}
               appliedStyle={selectedStyleInfo ? { id: selectedStyleId, ...selectedStyleInfo } : null}
               onApplyStyle={handleApplyStyle}

@@ -12,6 +12,7 @@ import {
   analyzeStyle,
   createDeckJob,
   generateImage,
+  optimizePrompt,
   transformImage,
   waitForDeckJob,
   waitForImageJob,
@@ -191,6 +192,57 @@ describe("aiService", () => {
     expect(apiGet).toHaveBeenCalledWith("/api/image-jobs/job-1", {
       signal: undefined,
     });
+  });
+
+  it("includes template context only when the caller provides it", async () => {
+    const templateContext = {
+      version: 1,
+      id: "infographic",
+      outputType: "infographic",
+      moduleCount: 4,
+      informationFlow: "橫向流程",
+      guidance: ["保留清楚的閱讀順序。"],
+      pitfalls: ["避免長段正文。"],
+    };
+
+    await generateImage({
+      userScript: "prompt",
+      templateContext,
+    });
+
+    expect(apiPost.mock.calls.at(-1)[1]).toHaveProperty(
+      "templateContext",
+      templateContext
+    );
+  });
+
+  it("forwards template context to prompt optimization", async () => {
+    const templateContext = {
+      version: 1,
+      id: "poster",
+      outputType: "poster",
+      moduleCount: 3,
+      informationFlow: "主視覺聚焦",
+      guidance: ["保持單一視覺焦點。"],
+      pitfalls: ["避免資訊牆。"],
+    };
+
+    await optimizePrompt({
+      userScript: "a product launch poster",
+      styleContext: "editorial",
+      imageLanguage: "zh-TW",
+      templateContext,
+    });
+
+    expect(apiPost.mock.calls.at(-1)).toEqual([
+      "/api/optimize-prompt",
+      {
+        userScript: "a product launch poster",
+        styleContext: "editorial",
+        imageLanguage: "zh-TW",
+        templateContext,
+      },
+    ]);
   });
 
   it("keeps watching a deck job through transient poll failures", async () => {
