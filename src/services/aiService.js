@@ -15,26 +15,20 @@ export const generateImage = async ({
   imageQuality,
   referenceUploadId,
   signal,
-  templateContext,
 }) => {
-  const body = {
-    userScript,
-    stylePrompt,
-    styleTags,
-    purpose,
-    imageLanguage,
-    aspectRatio,
-    imageSize,
-    quality: imageQuality,
-    referenceUploadId,
-  };
-  if (templateContext !== undefined && templateContext !== null) {
-    body.templateContext = templateContext;
-  }
-
   return apiPost(
     `${API_BASE_URL}/generate-images`,
-    body,
+    {
+      userScript,
+      stylePrompt,
+      styleTags,
+      purpose,
+      imageLanguage,
+      aspectRatio,
+      imageSize,
+      quality: imageQuality,
+      referenceUploadId,
+    },
     { signal }
   );
 };
@@ -130,18 +124,8 @@ export const waitForDocumentAnalysisJob = async ({
 export const embedText = async ({ text }) =>
   apiPost(`${API_BASE_URL}/embeddings`, { text });
 
-export const optimizePrompt = async ({
-  userScript,
-  styleContext,
-  imageLanguage,
-  templateContext,
-}) => {
-  const body = { userScript, styleContext, imageLanguage };
-  if (templateContext !== undefined && templateContext !== null) {
-    body.templateContext = templateContext;
-  }
-  return apiPost(`${API_BASE_URL}/optimize-prompt`, body);
-};
+export const optimizePrompt = async ({ userScript, styleContext, imageLanguage }) =>
+  apiPost(`${API_BASE_URL}/optimize-prompt`, { userScript, styleContext, imageLanguage });
 
 export const generateFilename = async ({ userScript }) =>
   apiPost(`${API_BASE_URL}/generate-filename`, { userScript });

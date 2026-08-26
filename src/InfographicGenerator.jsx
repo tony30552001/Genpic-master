@@ -22,7 +22,6 @@ import { Button } from '@/components/ui/button';
 
 import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
-import GenerationSummary from './components/create/GenerationSummary';
 import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
 import PptMasterStudio from './components/create/PptMasterStudio';
@@ -30,13 +29,6 @@ import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import ImageTransformPanel from './components/create/ImageTransformPanel';
 import AssetCenter from './components/library/AssetCenter';
-import {
-    buildTaskTemplateContext,
-    DEFAULT_STYLE_PRESET_ID,
-    getStylePreset,
-    paletteToSelection,
-    selectionToTags,
-} from './components/create/styleSourceData';
 
 export default function InfographicGenerator({
     initialTab = 'general',
@@ -80,12 +72,8 @@ export default function InfographicGenerator({
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [compactNavSection, setCompactNavSection] = useState(null);
-    const defaultStylePreset = getStylePreset(DEFAULT_STYLE_PRESET_ID);
-    const [paletteStyleTags, setPaletteStyleTags] = useState(() =>
-        selectionToTags(paletteToSelection(defaultStylePreset?.palette))
-    );
-    const [templateContext, setTemplateContext] = useState(() => buildTaskTemplateContext());
-    const [stylePreset, setStylePreset] = useState(defaultStylePreset);
+    const [paletteStyleTags, setPaletteStyleTags] = useState([]);
+    const [imagePurpose, setImagePurpose] = useState('infographic');
     const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
 
     useEffect(() => {
@@ -402,10 +390,9 @@ export default function InfographicGenerator({
 
             const { imageUrl, finalPrompt, model } = await generateImage({
                 userScript: finalScriptToUse,
-                analyzedStyle: [analyzedStyle, stylePreset?.prompt].filter(Boolean).join(" "),
+                analyzedStyle,
                 styleTags: paletteStyleTags,
-                purpose: templateContext?.purpose || "freeform",
-                templateContext,
+                purpose: imagePurpose,
                 aspectRatio,
                 imageSize,
                 imageQuality,
@@ -416,11 +403,7 @@ export default function InfographicGenerator({
             await saveHistoryItem({
                 imageUrl,
                 userScript,
-                stylePrompt: [
-                    analyzedStyle,
-                    stylePreset?.prompt,
-                    paletteStyleTags.join('，'),
-                ].filter(Boolean).join('，'),
+                stylePrompt: [analyzedStyle, paletteStyleTags.join('，')].filter(Boolean).join('，'),
                 fullPrompt: finalPrompt,
                 styleId: appliedStyleId || analysisResultData?.styleId || null,
                 model: model || imageModel,
@@ -881,10 +864,8 @@ export default function InfographicGenerator({
                                             onUserScriptChange={setUserScript}
                                             onOptimizedPromptEnChange={setOptimizedPromptEn}
                                             imageLanguage={imageLanguage}
-                                            templateContext={templateContext}
-                                            onTemplateContextChange={setTemplateContext}
-                                            stylePreset={stylePreset}
-                                            onStylePresetChange={setStylePreset}
+                                            imagePurpose={imagePurpose}
+                                            onImagePurposeChange={setImagePurpose}
                                             onFocus={() => setIsInputFocused(true)}
                                             onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
                                             hideGenerate
@@ -961,14 +942,6 @@ export default function InfographicGenerator({
                                                 onDownload={handleDownload}
                                                 user={user}
                                             />
-                                            {!generatedImage && !isGenerating && (
-                                                <GenerationSummary
-                                                    templateContext={templateContext}
-                                                    stylePreset={stylePreset}
-                                                    paletteStyleTags={paletteStyleTags}
-                                                    aspectRatio={aspectRatio}
-                                                />
-                                            )}
                                         </div>
                                     </div>
                                 </div>

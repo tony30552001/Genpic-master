@@ -12,10 +12,6 @@ const {
 } = require("../_shared/gptImage");
 const { buildImagePrompt } = require("../_shared/imagePrompt");
 const {
-  TemplateContextError,
-  normalizeTemplateContext,
-} = require("../_shared/templateContext");
-const {
   downloadOwnedImage,
   resolveOwnedImageUpload,
 } = require("../_shared/imageUploads");
@@ -52,7 +48,6 @@ module.exports = async function (context, req) {
     imageSize,
     referenceUploadId,
     quality,
-    templateContext,
   } = body;
   if (!userScript || !String(userScript).trim()) {
     context.res = error("缺少 userScript", "bad_request", 400);
@@ -65,17 +60,6 @@ module.exports = async function (context, req) {
   if (quality && !IMAGE_QUALITIES.includes(quality)) {
     context.res = error("不支援的圖片品質", "bad_request", 400);
     return;
-  }
-
-  let normalizedTemplateContext = null;
-  try {
-    normalizedTemplateContext = normalizeTemplateContext(templateContext);
-  } catch (err) {
-    if (err instanceof TemplateContextError) {
-      context.res = error(err.message, err.code, err.status);
-      return;
-    }
-    throw err;
   }
 
   try {
@@ -105,7 +89,6 @@ module.exports = async function (context, req) {
       styleTags,
       purpose,
       imageLanguage,
-      templateContext: normalizedTemplateContext,
     });
 
     if (selectedModel === "gpt-image-2") {

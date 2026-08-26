@@ -11,10 +11,6 @@
  */
 
 const { buildGenerationTextDirective } = require("./imageTextLanguage");
-const {
-  buildTemplateInstruction,
-  normalizeTemplateContext,
-} = require("./templateContext");
 
 /** What the finished image is for, which decides how the frame is composed. */
 const COMPOSITION_DIRECTIVES = Object.freeze({
@@ -63,7 +59,6 @@ const buildImagePrompt = ({
   styleTags,
   purpose,
   imageLanguage,
-  templateContext,
 }) => {
   const content = String(userScript || "").trim();
   if (!content) {
@@ -72,19 +67,14 @@ const buildImagePrompt = ({
 
   const style = String(stylePrompt || "").trim();
   const tags = normalizeTags(styleTags);
-  const normalizedTemplateContext = normalizeTemplateContext(templateContext);
-  const resolvedPurpose = normalizeImagePurpose(
-    normalizedTemplateContext?.purpose || purpose
-  );
+  const resolvedPurpose = normalizeImagePurpose(purpose);
   const isFreeform = resolvedPurpose === "freeform";
-  const templateInstruction = buildTemplateInstruction(normalizedTemplateContext);
 
   return [
     style ? asSentence(`Render the whole image in this style: ${style}`) : "",
     tags.length > 0
       ? asSentence(`Apply these additional style cues: ${tags.join(", ")}`)
       : "",
-    templateInstruction,
     asSentence(content),
     COMPOSITION_DIRECTIVES[resolvedPurpose],
     isFreeform ? "" : buildGenerationTextDirective(imageLanguage),

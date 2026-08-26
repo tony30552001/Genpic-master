@@ -116,45 +116,4 @@ describe("generate-images owner-scoped reference uploads", () => {
     expect(imageUploads.resolveOwnedImageUpload).not.toHaveBeenCalled();
     expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
   });
-
-  it("rejects an invalid template context before generation", async () => {
-    const response = await invoke({
-      userScript: "create an infographic",
-      templateContext: {
-        version: 1,
-        id: "unknown",
-        moduleCount: 4,
-        informationFlow: "橫向流程",
-        guidance: ["rule"],
-        pitfalls: ["pitfall"],
-      },
-    });
-
-    expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe("invalid_template_context");
-    expect(geminiImage.generateGeminiImage).not.toHaveBeenCalled();
-  });
-
-  it("passes normalized template instructions to the image provider", async () => {
-    const response = await invoke({
-      userScript: "create an infographic",
-      purpose: "freeform",
-      templateContext: {
-        version: 1,
-        id: "infographic",
-        outputType: "infographic",
-        moduleCount: 4,
-        informationFlow: "橫向流程",
-        guidance: ["保留清楚的閱讀順序。"],
-        pitfalls: ["避免長段正文。"],
-      },
-    });
-
-    expect(response.status).toBe(200);
-    expect(geminiImage.generateGeminiImage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining("exactly 4 visual modules"),
-      })
-    );
-  });
 });

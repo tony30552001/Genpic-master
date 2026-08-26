@@ -79,26 +79,6 @@ describe("buildImagePrompt", () => {
     ).toContain("Unless the description already specifies the framing");
   });
 
-  it("adds the selected output structure without changing the source topic", () => {
-    const prompt = buildImagePrompt({
-      userScript: "A quarterly revenue chart",
-      purpose: "freeform",
-      templateContext: {
-        version: 1,
-        id: "infographic",
-        outputType: "infographic",
-        moduleCount: 4,
-        informationFlow: "橫向流程",
-        guidance: ["保留清楚的閱讀順序。"],
-        pitfalls: ["避免長段正文。"],
-      },
-    });
-
-    expect(prompt).toContain("exactly 4 visual modules");
-    expect(prompt).toContain("A quarterly revenue chart.");
-    expect(prompt).toContain("infographic or presentation slide");
-  });
-
   it("rejects an empty content description", () => {
     expect(() => buildImagePrompt({ userScript: "   " })).toThrow("缺少 userScript");
   });

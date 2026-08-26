@@ -19,8 +19,27 @@ import { cn } from "@/lib/utils";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
-import { selectionToTags, tagsToSelection } from "./styleSourceData";
+import { STYLE_DIMENSIONS } from "./styleDimensions";
 import StyleSourceTabs from "./StyleSourceTabs";
+
+/** 決定系統是否為畫面補上構圖與文字語系指令。 */
+const IMAGE_PURPOSE_OPTIONS = [
+  {
+    id: "infographic",
+    label: "資訊圖表",
+    description: "補上簡報版面構圖與文字語系指令",
+  },
+  {
+    id: "storyboard",
+    label: "電影分鏡",
+    description: "補上電影分鏡構圖與文字語系指令",
+  },
+  {
+    id: "freeform",
+    label: "自由創作",
+    description: "完全依照你的描述，不附加任何系統指令",
+  },
+];
 
 /**
  * ScriptEditor — 內容描述編輯器
@@ -57,10 +76,8 @@ export default function ScriptEditor({
   onGenerate,
   paletteStyleTags = [],
   imageLanguage = "",
-  templateContext = null,
-  onTemplateContextChange,
-  stylePreset = null,
-  onStylePresetChange,
+  imagePurpose = "infographic",
+  onImagePurposeChange,
 }) {
   const [isDraging, setIsDraging] = useState(false);
   const fileInputRef = useRef(null);
@@ -72,46 +89,36 @@ export default function ScriptEditor({
   const [suggestionData, setSuggestionData] = useState(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showAssistTools, setShowAssistTools] = useState(false);
-  const [hasStyleSourceEdits, setHasStyleSourceEdits] = useState(false);
-  const [styleSourceTab, setStyleSourceTab] = useState("presets");
-  const [paletteSelected, setPaletteSelected] = useState(() =>
-    tagsToSelection(paletteStyleTags)
-  );
+  const [showStyleSource, setShowStyleSource] = useState(false);
+  const [styleSourceTab, setStyleSourceTab] = useState("templates");
+  const [paletteSelected, setPaletteSelected] = useState({});
 
   // 調色盤 tag 選擇變更時，計算風格字串並通知父元件
   const handlePaletteChange = useCallback((newSelected) => {
     setPaletteSelected(newSelected);
-    const allTags = selectionToTags(newSelected);
+    const allTags = STYLE_DIMENSIONS.flatMap((d) => newSelected[d.id] || []);
     onPaletteStyleChange?.(allTags);
-    setHasStyleSourceEdits(true);
-    setStyleSourceTab("presets");
+    setShowStyleSource(true);
+    setStyleSourceTab("palette");
   }, [onPaletteStyleChange]);
 
   const charCount = userScript?.length || 0;
   const contentFieldId = "script-editor-content";
   const contentHelpId = "script-editor-content-help";
   const assistToolsId = "script-editor-assist-tools";
+  const purposeLabelId = "script-editor-purpose";
+  const activePurpose =
+    IMAGE_PURPOSE_OPTIONS.find((option) => option.id === imagePurpose) ||
+    IMAGE_PURPOSE_OPTIONS[0];
   const hasActiveAssistTools = Boolean(
     contentImagePreview ||
     analyzedStyle ||
     analysisResultData ||
     selectedStyleInfo ||
-    hasStyleSourceEdits ||
+    showStyleSource ||
     showSaveTemplate
   );
   const assistToolsOpen = showAssistTools || hasActiveAssistTools;
-
-  const paletteDetailCount = Object.values(paletteSelected || {}).reduce(
-    (total, values) => total + (Array.isArray(values) ? values.length : values ? 1 : 0),
-    0
-  );
-  const activeStyleName =
-    selectedStyleInfo?.name ||
-    stylePreset?.title ||
-    (paletteDetailCount > 0 ? "自訂視覺微調" : "尚未選擇風格");
-  const assistToolsSummary = templateContext?.title
-    ? `${templateContext.title} · ${activeStyleName}`
-    : activeStyleName;
 
   const handleChange = useCallback((e) => {
     const text = e.target.value;
@@ -126,20 +133,14 @@ export default function ScriptEditor({
     setSelectedStyleId(style.id);
     setSelectedStyleInfo({ name: style.name, tags: style.tags, previewUrl: style.previewUrl });
     onApplyStyle?.(style);
-    setHasStyleSourceEdits(true);
+    setShowStyleSource(true);
     setStyleSourceTab("saved");
   };
 
   const handleClearStyle = () => {
     setSelectedStyleId(null);
     setSelectedStyleInfo(null);
-    onStylePresetChange?.(null);
     onClearStyle?.();
-  };
-
-  const handleTemplateChange = (nextContext) => {
-    onTemplateContextChange?.(nextContext);
-    onOptimizedPromptEnChange?.("");
   };
 
   const handleSmartOptimize = async () => {
@@ -150,16 +151,10 @@ export default function ScriptEditor({
     try {
       const result = await optimizePrompt({
         userScript,
-        styleContext: [
-          analyzedStyle,
-          stylePreset?.prompt,
-          paletteStyleTags.join("，"),
-          selectedStyleInfo?.name,
-        ]
+        styleContext: [analyzedStyle, paletteStyleTags.join("，"), selectedStyleInfo?.name]
           .filter(Boolean)
           .join("，") || "",
         imageLanguage,
-        templateContext,
       });
 
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
@@ -280,6 +275,39 @@ export default function ScriptEditor({
             <span className="shrink-0 tabular-nums">{charCount} 字</span>
           </div>
 
+          <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span id={purposeLabelId} className="text-xs font-semibold text-foreground">
+                畫面用途
+              </span>
+              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                {activePurpose.description}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby={purposeLabelId}>
+              {IMAGE_PURPOSE_OPTIONS.map((option) => {
+                const isSelected = activePurpose.id === option.id;
+
+                return (
+                  <button
+                    type="button"
+                    key={option.id}
+                    onClick={() => onImagePurposeChange?.(option.id)}
+                    aria-pressed={isSelected}
+                    className={cn(
+                      "min-h-9 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      isSelected
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/60 text-muted-foreground hover:border-primary/40 hover:bg-muted/60"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
         </CardContent>
       </Card>
 
@@ -294,15 +322,10 @@ export default function ScriptEditor({
           <span className="min-w-0 space-y-0.5">
             <span className="block text-sm font-semibold text-foreground">參考與風格</span>
             <span className="block truncate text-xs text-muted-foreground">
-              {assistToolsSummary}
+              需要時再加入參考圖片、風格分析、風格庫或範本保存。
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-2">
-            {paletteDetailCount > 0 && (
-              <span className="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary sm:text-xs">
-                {paletteDetailCount} 個細節
-              </span>
-            )}
             {hasActiveAssistTools && (
               <Badge variant="outline" className="border-primary/20 bg-primary/5 px-2 py-0 text-primary">
                 已套用
@@ -329,33 +352,11 @@ export default function ScriptEditor({
         >
           <div className="min-h-0 overflow-hidden">
             <CardContent className="space-y-4 border-t border-border bg-background/80 p-4">
-            <StyleSourceTabs
-              activeTab={styleSourceTab}
-              onActiveTabChange={setStyleSourceTab}
-              templateContext={templateContext}
-              onTemplateChange={handleTemplateChange}
-              selectedPalette={paletteSelected}
-              onPaletteChange={handlePaletteChange}
-              selectedPresetId={stylePreset?.id || null}
-              onPresetChange={onStylePresetChange}
-              savedStyles={savedStyles}
-              appliedStyle={selectedStyleInfo ? { id: selectedStyleId, ...selectedStyleInfo } : null}
-              onApplyStyle={handleApplyStyle}
-              onClearAppliedStyle={handleClearStyle}
-              idPrefix="general-style-source"
-            />
-
               <section className="space-y-3 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="reference-style-title">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-primary">
-                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5">
-                        03
-                      </span>
-                      參考圖片
-                    </p>
+                  <div className="space-y-0.5">
                     <h3 id="reference-style-title" className="text-xs font-semibold text-foreground">
-                      用一張圖補強方向（選用）
+                      參考圖片
                     </h3>
                     <p className="text-xs text-muted-foreground">
                       加入一張參考圖，分析並保存可重複使用的風格。
@@ -528,6 +529,27 @@ export default function ScriptEditor({
               )}
 
             </section>
+
+            <StyleSourceTabs
+              open={showStyleSource}
+              onOpenChange={setShowStyleSource}
+              activeTab={styleSourceTab}
+              onActiveTabChange={setStyleSourceTab}
+              selectedPalette={paletteSelected}
+              onPaletteChange={handlePaletteChange}
+              onTemplateFill={(text, palette) => {
+                onUserScriptChange(text);
+                if (onOptimizedPromptEnChange) onOptimizedPromptEnChange("");
+                if (palette) handlePaletteChange(palette);
+                setShowStyleSource(true);
+                setStyleSourceTab("templates");
+              }}
+              savedStyles={savedStyles}
+              appliedStyle={selectedStyleInfo ? { id: selectedStyleId, ...selectedStyleInfo } : null}
+              onApplyStyle={handleApplyStyle}
+              onClearAppliedStyle={handleClearStyle}
+              idPrefix="general-style-source"
+            />
 
             {onSaveTemplate && (
               <section className="space-y-2 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="template-save-title">

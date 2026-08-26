@@ -8,11 +8,6 @@ const {
 const { generateJson } = require("../_shared/llmRuntime");
 const { rateLimit } = require("../_shared/rateLimit");
 const { buildImageTextDirective } = require("../_shared/imageTextLanguage");
-const {
-    TemplateContextError,
-    buildTemplateInstruction,
-    normalizeTemplateContext,
-} = require("../_shared/templateContext");
 
 const OPTIMIZE_PROMPT_SYSTEM_MESSAGE = `
 擔任專業的 AI 圖像生成提示詞工程師 (Prompt Engineer)。
@@ -31,7 +26,6 @@ const OPTIMIZE_PROMPT_SYSTEM_MESSAGE = `
    並說明其位置與排版（例如 the title "營收成長" centered at the top）。
 6. 使用中性、安全的措辭，避免暴力、血腥、露骨或指涉真實人物身分的字眼，以免被模型的安全過濾器攔截。
 7. 長度約 80-160 個英文單字。
-8. 若提供輸出結構規則，必須遵守其模組數、資訊流與避免事項；不得用額外內容取代使用者主題。
 
 繁體中文描述的要求：
 - 通順的一段話（約 50-100 字），讓使用者一眼看懂畫面被擴充了什麼。
@@ -67,29 +61,16 @@ module.exports = async function (context, req) {
         }
 
         // 4. Get Input
-        const { userScript, styleContext, imageLanguage, templateContext } = req.body || {};
+        const { userScript, styleContext, imageLanguage } = req.body || {};
         if (!userScript) {
             context.res = error("請提供需要優化的描述 (userScript)", "bad_request", 400);
             return;
         }
 
-        let normalizedTemplateContext = null;
-        try {
-            normalizedTemplateContext = normalizeTemplateContext(templateContext);
-        } catch (err) {
-            if (err instanceof TemplateContextError) {
-                context.res = error(err.message, err.code, err.status);
-                return;
-            }
-            throw err;
-        }
-
         const imageTextDirective = buildImageTextDirective(imageLanguage);
-        const templateInstruction = buildTemplateInstruction(normalizedTemplateContext);
         const promptText = [
             `User Script: "${userScript}"`,
             `Style Context: "${styleContext || "無特定風格 (General)"}"`,
-            templateInstruction ? `Output Structure Rules: "${templateInstruction}"` : "",
             imageTextDirective ? `圖片文字要求：${imageTextDirective}` : "",
             "",
             "請優化上述描述：",
