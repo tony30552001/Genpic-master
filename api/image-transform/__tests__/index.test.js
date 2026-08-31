@@ -113,4 +113,23 @@ describe("image-transform owner-scoped source uploads", () => {
     expect(imageUploads.resolveOwnedImageUpload).not.toHaveBeenCalled();
     expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
   });
+
+  it("reports exhausted provider 500 responses as temporary overload", async () => {
+    modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: "gpt-image-2" });
+    const providerError = new Error("Backend call failure (500)");
+    providerError.status = 500;
+    gptImage.editGptImage.mockRejectedValue(providerError);
+
+    const response = await invoke({
+      uploadId: IMAGE_ID,
+      mode: "style_transfer",
+      prompt: "watercolor",
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toEqual({
+      code: "server_overloaded",
+      message: "目前 AI 繪圖伺服器處於尖峰時段，過於繁忙，請稍後一分鐘再試。",
+    });
+  });
 });

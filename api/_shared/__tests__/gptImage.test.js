@@ -38,6 +38,7 @@ describe("gpt-image-2 requests carry the quality", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     process.env = { ...originalEnv };
   });
@@ -68,5 +69,36 @@ describe("gpt-image-2 requests carry the quality", () => {
 
     const formData = fetchMock.mock.calls[0][1].body;
     expect(formData.get("quality")).toBe("low");
+  });
+
+  it("retries a transient backend failure when editing", async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () =>
+          JSON.stringify({ error: { message: "Backend call failure" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ b64_json: "abc" }] }),
+      });
+
+    const request = editGptImage({
+      imageBase64: Buffer.from("png").toString("base64"),
+      mimeType: "image/png",
+      prompt: "make it blue",
+      aspectRatio: "1:1",
+      quality: "low",
+    });
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(request).resolves.toEqual({
+      imageUrl: "data:image/png;base64,abc",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

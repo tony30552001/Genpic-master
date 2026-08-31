@@ -11,6 +11,19 @@ const {
   resolveOwnedImageUpload,
 } = require("../_shared/imageUploads");
 
+const isOverloadedError = (candidate) => {
+  const status = Number(candidate?.status);
+  const message = String(candidate?.message || candidate);
+  return (
+    status === 429 ||
+    status >= 500 ||
+    message.includes("503") ||
+    message.includes("429") ||
+    message.includes("UNAVAILABLE") ||
+    message.includes("high demand")
+  );
+};
+
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
     context.res = options();
@@ -116,14 +129,7 @@ module.exports = async function (context, req) {
         result = await model.generateContent(parts, config);
         break;
       } catch (apiErr) {
-        const errStr = String(apiErr.message || apiErr);
-        const isOverloaded =
-          errStr.includes("503") ||
-          errStr.includes("429") ||
-          errStr.includes("UNAVAILABLE") ||
-          errStr.includes("high demand");
-
-        if (attempt < maxRetries && isOverloaded) {
+        if (attempt < maxRetries && isOverloadedError(apiErr)) {
           context.log.warn(`AI API overload (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms...`);
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           delayMs *= 2;
@@ -164,14 +170,8 @@ module.exports = async function (context, req) {
     });
   } catch (err) {
     context.log.error("Image transform failed:", err);
-    const errStr = String(err.message || err);
-    const isOverloaded =
-      errStr.includes("503") ||
-      errStr.includes("429") ||
-      errStr.includes("UNAVAILABLE") ||
-      errStr.includes("high demand");
 
-    if (isOverloaded) {
+    if (isOverloadedError(err)) {
       context.res = error(
         "目前 AI 繪圖伺服器處於尖峰時段，過於繁忙，請稍後一分鐘再試。",
         "server_overloaded",

@@ -142,27 +142,37 @@ const editGptImage = async ({ imageBase64, mimeType, prompt, aspectRatio, qualit
   if (!endpoint) throw new Error("GPT_IMAGE_EDIT_ENDPOINT 尚未設定");
   if (!imageBase64) throw new Error("缺少 GPT Image 2 編輯來源圖片");
 
-  const formData = new FormData();
-  formData.append(
-    isAzureOpenAiEndpoint(endpoint) ? "image[]" : "image",
-    new Blob([Buffer.from(imageBase64, "base64")], {
-      type: mimeType || "image/png",
-    }),
-    "source.png"
-  );
-  formData.append("prompt", prompt || "");
-  formData.append("model", getDeployment());
-  formData.append("size", getSize(aspectRatio));
-  formData.append("quality", normalizeImageQuality(quality));
-  formData.append("n", "1");
+  let delayMs = RETRY_BASE_DELAY_MS;
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: getAuthHeaders(endpoint),
-    body: formData,
-  });
+  for (let attempt = 0; ; attempt += 1) {
+    const formData = new FormData();
+    formData.append(
+      isAzureOpenAiEndpoint(endpoint) ? "image[]" : "image",
+      new Blob([Buffer.from(imageBase64, "base64")], {
+        type: mimeType || "image/png",
+      }),
+      "source.png"
+    );
+    formData.append("prompt", prompt || "");
+    formData.append("model", getDeployment());
+    formData.append("size", getSize(aspectRatio));
+    formData.append("quality", normalizeImageQuality(quality));
+    formData.append("n", "1");
 
-  return parseResponse(response, "GPT Image 2 Edit");
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: getAuthHeaders(endpoint),
+        body: formData,
+      });
+
+      return await parseResponse(response, "GPT Image 2 Edit");
+    } catch (apiError) {
+      if (attempt >= MAX_RETRIES || !isTransientStatus(apiError.status)) throw apiError;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs *= 2;
+    }
+  }
 };
 
 module.exports = {
