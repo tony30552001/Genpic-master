@@ -413,10 +413,11 @@ addOperation("/api/ppt-templates", "get", {
 });
 
 addOperation("/api/image-transform", "post", {
-  summary: "Transform an image",
+  summary: "Transform an image synchronously or queue a GPT image edit",
   tags: ["AI"],
   body: true,
   csrf: true,
+  successStatuses: [200, 202],
 });
 
 for (const method of ["get", "post", "delete"]) {

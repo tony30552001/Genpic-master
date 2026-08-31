@@ -8,7 +8,7 @@ const rateLimit = require("../../_shared/rateLimit");
 const imageUploads = require("../../_shared/imageUploads");
 const modelPolicy = require("../../_shared/modelPolicy");
 const gemini = require("../../_shared/gemini");
-const gptImage = require("../../_shared/gptImage");
+const imageJobs = require("../../_shared/imageJobs");
 
 auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
@@ -17,7 +17,7 @@ imageUploads.resolveOwnedImageUpload = vi.fn();
 imageUploads.downloadOwnedImage = vi.fn();
 modelPolicy.ensureModelPolicy = vi.fn();
 gemini.getModel = vi.fn();
-gptImage.editGptImage = vi.fn();
+imageJobs.createImageJob = vi.fn();
 
 const handler = require("../index");
 
@@ -51,6 +51,12 @@ describe("image-transform owner-scoped source uploads", () => {
     identity.resolveIdentity.mockResolvedValue(OWNER);
     rateLimit.rateLimit.mockReturnValue({ limited: false });
     modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: "gemini-3.1-flash-image-preview" });
+    imageJobs.createImageJob.mockResolvedValue({
+      id: "223e4567-e89b-42d3-a456-426614174000",
+      status: "queued",
+      model: "gpt-image-2",
+      operation: "edit",
+    });
     imageUploads.resolveOwnedImageUpload.mockResolvedValue(upload);
     imageUploads.downloadOwnedImage.mockResolvedValue({
       buffer: Buffer.from("source-bytes"),
@@ -114,22 +120,35 @@ describe("image-transform owner-scoped source uploads", () => {
     expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
   });
 
-  it("reports exhausted provider 500 responses as temporary overload", async () => {
+  it("queues GPT image edits without holding the request open for provider work", async () => {
     modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: "gpt-image-2" });
-    const providerError = new Error("Backend call failure (500)");
-    providerError.status = 500;
-    gptImage.editGptImage.mockRejectedValue(providerError);
 
     const response = await invoke({
       uploadId: IMAGE_ID,
       mode: "style_transfer",
       prompt: "watercolor",
+      aspectRatio: "1:1",
+      quality: "medium",
     });
 
-    expect(response.status).toBe(503);
-    expect(response.body.error).toEqual({
-      code: "server_overloaded",
-      message: "目前 AI 繪圖伺服器處於尖峰時段，過於繁忙，請稍後一分鐘再試。",
+    expect(response.status).toBe(202);
+    expect(response.body).toMatchObject({
+      jobId: "223e4567-e89b-42d3-a456-426614174000",
+      status: "queued",
+      model: "gpt-image-2",
+      prompt: expect.any(String),
     });
+    expect(imageJobs.createImageJob).toHaveBeenCalledWith({
+      tenantId: OWNER.tenantId,
+      userId: OWNER.userId,
+      model: "gpt-image-2",
+      prompt: expect.any(String),
+      aspectRatio: "1:1",
+      imageSize: undefined,
+      quality: "medium",
+      operation: "edit",
+      sourceUploadId: IMAGE_ID,
+    });
+    expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
   });
 });

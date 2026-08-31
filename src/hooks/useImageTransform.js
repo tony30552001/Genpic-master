@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { transformImage } from "../services/aiService";
+import { transformImage, waitForImageJob } from "../services/aiService";
 import { uploadFile } from "../services/storageService";
 import { DEFAULT_IMAGE_MODEL } from "../config";
 import { STYLE_DIMENSIONS } from "../components/create/styleDimensions";
@@ -111,7 +111,7 @@ export default function useImageTransform() {
     const mergedPrompt = parts.join("\n");
 
     try {
-      const res = await transformImage({
+      let res = await transformImage({
         uploadId: sourceUploadId,
         mimeType: sourceMimeType,
         mode,
@@ -122,15 +122,24 @@ export default function useImageTransform() {
         imageLanguage,
         signal: abortController.signal,
       });
+      const appliedPrompt = res.prompt || mergedPrompt;
+      if (res?.jobId) {
+        res = await waitForImageJob({
+          jobId: res.jobId,
+          signal: abortController.signal,
+        });
+      }
       setResult(res.imageUrl);
       return {
         imageUrl: res.imageUrl,
-        mergedPrompt: res.prompt || mergedPrompt,
+        mergedPrompt: appliedPrompt,
         model: res.model || model || DEFAULT_IMAGE_MODEL,
       };
     } catch (err) {
       if (isAbortError(err)) {
-        const abortError = new Error("已取消本次轉換等待。");
+        const abortError = new Error(
+          "已取消本次轉換等待。若服務端已開始處理，可能仍會消耗請求。"
+        );
         abortError.name = "AbortError";
         throw abortError;
       }

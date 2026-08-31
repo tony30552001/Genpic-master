@@ -4,7 +4,8 @@ const { getModel } = require("../_shared/gemini");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
-const { IMAGE_QUALITIES, editGptImage } = require("../_shared/gptImage");
+const { IMAGE_QUALITIES } = require("../_shared/gptImage");
+const { createImageJob } = require("../_shared/imageJobs");
 const { buildTransformPrompt } = require("../_shared/imagePrompt");
 const {
   downloadOwnedImage,
@@ -74,31 +75,40 @@ module.exports = async function (context, req) {
       context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
       return;
     }
-    const source = await downloadOwnedImage(upload);
-    const sourceBase64 = source.buffer.toString("base64");
-    const sourceMimeType = source.contentType;
 
     const modelPolicy = await ensureModelPolicy(identity.tenantId);
     const selectedModel = modelPolicy.defaultModel;
     const textPrompt = buildTransformPrompt({ mode, prompt, imageLanguage });
 
     if (selectedModel === "gpt-image-2") {
-      const result = await editGptImage({
-        imageBase64: sourceBase64,
-        mimeType: sourceMimeType,
+      const job = await createImageJob({
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        model: selectedModel,
         prompt: textPrompt,
         aspectRatio,
+        imageSize,
         quality,
+        operation: "edit",
+        sourceUploadId: upload.id,
       });
-      context.res = ok({
-        ...result,
-        mode,
-        prompt: textPrompt,
-        aspectRatio: aspectRatio || "1:1",
-        model: selectedModel,
-      });
+      context.res = ok(
+        {
+          jobId: job.id,
+          status: job.status,
+          mode,
+          prompt: textPrompt,
+          aspectRatio: aspectRatio || "1:1",
+          model: selectedModel,
+        },
+        202
+      );
       return;
     }
+
+    const source = await downloadOwnedImage(upload);
+    const sourceBase64 = source.buffer.toString("base64");
+    const sourceMimeType = source.contentType;
 
     const modelName = process.env.GEMINI_MODEL_GENERATION || "gemini-3.1-flash-image-preview";
     const model = getModel(modelName, process.env.GOOGLE_API_KEY);

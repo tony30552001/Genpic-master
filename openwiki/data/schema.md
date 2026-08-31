@@ -6,9 +6,9 @@ tags: [database, postgres, migrations, uploads, image-generation, document-analy
 openwiki:
   roles: [domain, operations, testing]
   change_kinds: [schema, migrations, image-generation, session-lifecycle]
-  source_paths: [db/migrations, db/migrations/009_image_generation_jobs.sql, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, db/migrations/013_deck_slide_previews.sql, db/migrations/014_llm_models.sql, db/migrations/016_admin_list_indexes.sql, db/migrations/017_user_auth_provider.sql, db/migrations/018_history_source.sql, db/migrations/019_image_job_quality.sql, db/migrations/022_deck_recipe_brief.sql, db/migrations/023_deck_event_design_step.sql, api/_shared/imageJobs.js, api/_shared/gptImage.js, api/_shared/historySource.js, api/_shared/identity.js, api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/_shared/deckJobs.js, api/_shared/uploads.js, api/_shared/documentAnalysisJobs.js, api/_shared/deckRecipes.js, api/scripts/migrate.cjs]
-  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "An optional migrator argument must exactly name an existing .sql migration; selected files still execute in lexicographic order.", "GPT Image jobs persist only low medium or high quality and default existing/new unspecified jobs to medium.", "Authentication session records store token hashes, never raw browser tokens.", "A user's nullable last authentication provider is constrained to entra or google, backfilled from its newest session, and updated only after a successful active sign-in.", "History source is null or one of general document image-transform, and legacy rows retain null rather than a guessed source.", "Each analysis role assignment uses tenant-local primary and optional distinct fallback models; provider choice is a runtime dispatch concern.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck image density is persisted as none, key, or every and defaults to key.", "Deck jobs persist recipe_id as general by default and retain optional purpose audience and outcome brief fields; recipe acceptance remains application normalization rather than a SQL check.", "Deck job events are append-only, constrained to source, outline, design, images, slides, quality, or export plus known statuses, and cascade with their job.", "Deck slide previews have one row per job and page; a quality rewrite increments revision and deletion of the job cascades."]
-  validation_commands: [node api/scripts/migrate.cjs 023_deck_event_design_step.sql, cd api && npm run migrate]
+  source_paths: [db/migrations, db/migrations/009_image_generation_jobs.sql, db/migrations/010_auth_sessions.sql, db/migrations/011_deck_generation_jobs.sql, db/migrations/012_deck_job_events.sql, db/migrations/013_deck_slide_previews.sql, db/migrations/014_llm_models.sql, db/migrations/016_admin_list_indexes.sql, db/migrations/017_user_auth_provider.sql, db/migrations/018_history_source.sql, db/migrations/019_image_job_quality.sql, db/migrations/024_async_image_transform_jobs.sql, db/migrations/022_deck_recipe_brief.sql, db/migrations/023_deck_event_design_step.sql, api/_shared/imageJobs.js, api/_shared/gptImage.js, api/_shared/historySource.js, api/_shared/identity.js, api/_shared/llmProviders.js, api/_shared/llmModels.js, api/_shared/llmRuntime.js, api/_shared/deckJobs.js, api/_shared/uploads.js, api/_shared/documentAnalysisJobs.js, api/_shared/deckRecipes.js, api/scripts/migrate.cjs]
+  invariants: ["Migrations execute in lexicographic order and must be safely repeatable.", "An optional migrator argument must exactly name an existing .sql migration; selected files still execute in lexicographic order.", "GPT Image jobs persist only low medium or high quality and default existing/new unspecified jobs to medium.", "Image jobs are generate or edit operations; only edits retain a restrict-delete source upload.", "Authentication session records store token hashes, never raw browser tokens.", "A user's nullable last authentication provider is constrained to entra or google, backfilled from its newest session, and updated only after a successful active sign-in.", "History source is null or one of general document image-transform, and legacy rows retain null rather than a guessed source.", "Each analysis role assignment uses tenant-local primary and optional distinct fallback models; provider choice is a runtime dispatch concern.", "Deck jobs are scoped by both tenant and user and have only queued, processing, succeeded, or failed states.", "Deck image density is persisted as none, key, or every and defaults to key.", "Deck jobs persist recipe_id as general by default and retain optional purpose audience and outcome brief fields; recipe acceptance remains application normalization rather than a SQL check.", "Deck job events are append-only, constrained to source, outline, design, images, slides, quality, or export plus known statuses, and cascade with their job.", "Deck slide previews have one row per job and page; a quality rewrite increments revision and deletion of the job cascades."]
+  validation_commands: [node api/scripts/migrate.cjs 024_async_image_transform_jobs.sql, cd api && npm run migrate]
 ---
 
 # PostgreSQL schema and migrations
@@ -27,6 +27,7 @@ erDiagram
   uploads ||--o{ document_analysis_jobs : sources
   users ||--o{ document_analysis_jobs : owns
   users ||--o{ image_generation_jobs : owns
+  uploads ||--o{ image_generation_jobs : edit source
   uploads ||--o{ deck_generation_jobs : sources
   tenants ||--o{ deck_generation_jobs : scopes
   users ||--o{ deck_generation_jobs : owns
@@ -39,6 +40,8 @@ erDiagram
   styles ||--o{ history : referenced
   styles ||--o{ templates : referenced
 ```
+
+This diagram shows durable ownership and source-input relationships, including the optional edit source for image jobs.
 
 This diagram includes the durable session relationship used by [server sessions and BFF sign-in](../backend/sessions.md).
 
@@ -54,6 +57,18 @@ Apply `019_image_job_quality.sql` before deploying code that inserts or selects 
 
 ```sh
 node api/scripts/migrate.cjs 019_image_job_quality.sql
+```
+
+### Asynchronous GPT image edits
+
+`024_async_image_transform_jobs.sql` extends the same queue so an image job has non-null `operation`, defaulting existing and unspecified rows to `generate`, and an optional `source_upload_id` that restricts deletion of its referenced `uploads` row. Its check constraints allow only `generate` and `edit`, require no source for generation, and require one source for an edit. Together, these constraints prevent a queued GPT edit from losing its durable input identity or a generation job from acquiring an irrelevant source.
+
+`api/_shared/imageJobs.js` persists and claims both values. For an edit, `processNextImageJob` re-resolves the source by its stored tenant/user ownership before it downloads bytes, so the worker has the same authorization boundary as the original request rather than trusting a browser payload. The handler/client lifecycle is documented in [AI generation](../backend/ai-generation.md), and the source record contract is in [owner-scoped uploads](../backend/uploads.md).
+
+Deploy `024_async_image_transform_jobs.sql` only after `020_owner_scoped_uploads.sql`, and before code that queues or reads edit operations. Check it against a disposable database:
+
+```sh
+node api/scripts/migrate.cjs 024_async_image_transform_jobs.sql
 ```
 
 `016_admin_list_indexes.sql` aligns PostgreSQL indexes with the management-list and style-delete query shapes owned by [authentication, tenancy, and administration](../backend/auth-tenancy-admin.md). It adds `history (tenant_id, created_at DESC, id DESC)` for unfiltered history pagination and `history (tenant_id, user_id, created_at DESC, id DESC)` for its user-filtered variant, `styles (tenant_id, updated_at DESC, created_at DESC, id DESC)` for style-list ordering, and a partial `history (style_id) WHERE style_id IS NOT NULL` index for clearing references before administrative style deletion. The migration drops the now-covered single-column tenant/user indexes. Apply it before relying on management-list performance; do not reintroduce those prefix indexes without a query plan that demonstrates a different workload.

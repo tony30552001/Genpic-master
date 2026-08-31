@@ -51,6 +51,7 @@ module.exports = async function (context, req) {
     jobId: job.id,
     status: job.status,
     model: job.model,
+    operation: job.operation,
     attempts: job.attempts,
     createdAt: job.created_at,
     startedAt: job.started_at,
@@ -63,9 +64,12 @@ module.exports = async function (context, req) {
     });
     body.imageUrl = `data:${job.result_mime_type || "image/png"};base64,${imageBuffer.toString("base64")}`;
   } else if (job.status === "failed") {
+    const isEdit = job.operation === "edit";
     body.error = {
-      code: job.error_code || "generation_failed",
-      message: job.error_message || "圖片生成失敗，請稍後重試",
+      code: job.error_code || (isEdit ? "transform_failed" : "generation_failed"),
+      message:
+        job.error_message ||
+        (isEdit ? "圖片轉換失敗，請稍後重試" : "圖片生成失敗，請稍後重試"),
     };
   }
 
