@@ -10,6 +10,7 @@ import {
 } from "@/components/icons/lucideControls";
 import {
   Clock3,
+  FileText,
   Palette,
 } from "@/components/icons/lucideContent";
 import ProductGlyph from "@/components/icons/ProductGlyph";
