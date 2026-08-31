@@ -29,7 +29,7 @@ describe("GenerateBar", () => {
     expect(container.querySelector('[data-product-glyph="transform"]')).toBeInTheDocument();
   });
 
-  it("switches to the shared generation signature without hiding progress text", () => {
+  it("uses a restrained loading spinner without hiding progress text", () => {
     const { container } = render(
       <GenerateBar
         {...BASE_PROPS}
@@ -44,7 +44,8 @@ describe("GenerateBar", () => {
       />
     );
 
-    expect(container.querySelector("[data-generation-signature]")).toBeInTheDocument();
+    expect(container.querySelector("[data-generation-spinner]")).toBeInTheDocument();
+    expect(container.querySelector("[data-generation-signature]")).not.toBeInTheDocument();
     expect(screen.getAllByText("正在配置版面").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /配置版面/ })).toBeDisabled();
   });

@@ -17,6 +17,7 @@ import {
 import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
 import { optimizePrompt } from "@/services/aiService";
 import StylePalette from "./StylePalette";
@@ -68,7 +69,15 @@ const ASPECT_RATIO_DIMENSIONS = {
 const getAspectRatioValue = (value) => value?.replace(":", " / ") || "1 / 1";
 
 /** Shared result content (used in both desktop card and mobile section) */
-function ResultContent({ isTransforming, result, aspectRatio, onDownloadResult }) {
+function ResultContent({
+  isTransforming,
+  result,
+  aspectRatio,
+  imageModel,
+  imageSize,
+  promptSummary,
+  onDownloadResult,
+}) {
   const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] || ASPECT_RATIO_DIMENSIONS["1:1"];
 
   if (isTransforming) {
@@ -80,6 +89,12 @@ function ResultContent({ isTransforming, result, aspectRatio, onDownloadResult }
         <ImageGeneratingState
           aspectRatio={aspectRatio}
           generationStatus={{ label: "AI 正在轉換圖片" }}
+          promptSummary={promptSummary}
+          resolutionLabel={getImageOutputLabel({
+            imageModel,
+            aspectRatio,
+            imageSize,
+          })}
           compact
         />
       </div>
@@ -125,6 +140,9 @@ function BeforeAfterPreview({
   isTransforming,
   result,
   aspectRatio,
+  imageModel,
+  imageSize,
+  promptSummary,
   onDownloadResult,
 }) {
   if (!sourcePreview) {
@@ -133,6 +151,9 @@ function BeforeAfterPreview({
         isTransforming={isTransforming}
         result={result}
         aspectRatio={aspectRatio}
+        imageModel={imageModel}
+        imageSize={imageSize}
+        promptSummary={promptSummary}
         onDownloadResult={onDownloadResult}
       />
     );
@@ -169,6 +190,9 @@ function BeforeAfterPreview({
             isTransforming={isTransforming}
             result={result}
             aspectRatio={aspectRatio}
+            imageModel={imageModel}
+            imageSize={imageSize}
+            promptSummary={promptSummary}
             onDownloadResult={onDownloadResult}
           />
         </div>
@@ -191,6 +215,8 @@ export default function ImageTransformPanel({
   prompt,
   onPromptChange,
   aspectRatio,
+  imageModel,
+  imageSize,
 
   // Style palette
   paletteSelected,
@@ -726,6 +752,9 @@ export default function ImageTransformPanel({
             isTransforming={isTransforming}
             result={result}
             aspectRatio={aspectRatio}
+            imageModel={imageModel}
+            imageSize={imageSize}
+            promptSummary={prompt || activeModeInfo.description}
             onDownloadResult={onDownloadResult}
           />
         </div>
@@ -747,6 +776,9 @@ export default function ImageTransformPanel({
               isTransforming={isTransforming}
               result={result}
               aspectRatio={aspectRatio}
+              imageModel={imageModel}
+              imageSize={imageSize}
+              promptSummary={prompt || activeModeInfo.description}
               onDownloadResult={onDownloadResult}
             />
           </div>

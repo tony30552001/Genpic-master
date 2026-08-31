@@ -286,3 +286,82 @@ input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+@keyframes image-generation-drift {
+  0%,
+  100% {
+    transform: translate3d(-16%, -12%, 0) scale(0.82) rotate(-3deg);
+  }
+  25% {
+    transform: translate3d(18%, -15%, 0) scale(0.94) rotate(2deg);
+  }
+  50% {
+    transform: translate3d(20%, 17%, 0) scale(0.86) rotate(4deg);
+  }
+  75% {
+    transform: translate3d(-18%, 14%, 0) scale(0.98) rotate(-1deg);
+  }
+}
+
+@keyframes image-generation-breathe {
+  0%,
+  100% {
+    opacity: 0.36;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+.image-generation-dots,
+.image-generation-glow {
+  background-image: radial-gradient(
+    circle,
+    hsl(var(--muted-foreground) / 0.58) 0.75px,
+    transparent 1.4px
+  );
+  background-size: 11px 11px;
+}
+
+.image-generation-dots {
+  opacity: 0.24;
+}
+
+.image-generation-glow {
+  background-image: radial-gradient(
+    circle,
+    hsl(var(--foreground) / 0.82) 1px,
+    transparent 1.65px
+  );
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 64%);
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 64%);
+  animation:
+    image-generation-drift 5.2s cubic-bezier(0.45, 0, 0.25, 1) infinite,
+    image-generation-breathe 2.4s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.image-generation-glow-secondary {
+  animation-delay: -2.6s, -1.2s;
+  animation-direction: reverse, normal;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 58%);
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 58%);
+}
+
+.image-generation-status-dot {
+  animation: image-generation-breathe 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-generation-glow,
+  .image-generation-glow-secondary,
+  .image-generation-status-dot {
+    animation: none;
+  }
+
+  .image-generation-glow,
+  .image-generation-glow-secondary {
+    opacity: 0.48;
+    transform: none;
+  }
+}

@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
 } from "@/components/icons/lucideContent";
 import ProductGlyph from "@/components/icons/ProductGlyph";
+import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
 import ShareToLineButton from "../share/ShareToLineButton";
 import ImageGeneratingState from "./ImageGeneratingState";
@@ -25,6 +26,9 @@ export default function ImagePreview({
   isGenerating,
   aspectRatio = "16:9",
   generationStatus,
+  imageModel,
+  imageSize,
+  promptSummary,
   onDownload,
   user,
 }) {
@@ -35,6 +39,12 @@ export default function ImagePreview({
     <ImageGeneratingState
       aspectRatio={aspectRatio}
       generationStatus={generationStatus}
+      promptSummary={promptSummary}
+      resolutionLabel={getImageOutputLabel({
+        imageModel,
+        aspectRatio,
+        imageSize,
+      })}
     />
   );
 

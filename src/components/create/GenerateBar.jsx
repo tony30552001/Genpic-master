@@ -5,8 +5,11 @@ import {
   Square,
   Smartphone,
 } from "@/components/icons/lucideContent";
-import GenerationSignature from "@/components/icons/GenerationSignature";
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
 import ProductGlyph from "@/components/icons/ProductGlyph";
+import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -24,14 +27,6 @@ const IMAGE_SIZES = [
     { id: "2K", label: "2K" },
     { id: "4K", label: "4K" },
 ];
-
-// gpt-image-2 的 aspectRatio → 像素尺寸映射（僅顯示用）
-const GPT_IMAGE_SIZE_LABELS = {
-    "16:9": "1536×1024",
-    "4:3": "1360×1024",
-    "1:1": "1024×1024",
-    "9:16": "1024×1536",
-};
 
 /**
  * 固定底部的生成控制列
@@ -56,9 +51,11 @@ export default function GenerateBar({
 }) {
     const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
     const showResolutionPicker = !modelConfig?.supportsSizeMapping;
-    const selectedSizeLabel = showResolutionPicker
-        ? imageSize
-        : GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024";
+    const selectedSizeLabel = getImageOutputLabel({
+        imageModel,
+        aspectRatio,
+        imageSize,
+    });
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
         : isGeneratingText || "AI 生成中…";
@@ -183,7 +180,11 @@ export default function GenerateBar({
                 >
                     {isGenerating ? (
                         <span className="flex items-center gap-2">
-                            <GenerationSignature state="working" className="icon-md" aria-hidden="true" />
+                            <Loader2
+                                className="icon-md animate-spin motion-reduce:animate-none"
+                                data-generation-spinner
+                                aria-hidden="true"
+                            />
                             {generationLabel}
                         </span>
                     ) : (
