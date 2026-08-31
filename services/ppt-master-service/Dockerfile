@@ -17,8 +17,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Pinned upstream release. The skill-only archive avoids the ~780MB main repo.
-ARG PPT_MASTER_VERSION=v5.0.0
-ARG PPT_MASTER_SHA256=9fa038632e91a5740ca63beda1d180b7fcef0f675397bd87569c63a2b39eb173
+ARG PPT_MASTER_VERSION=v5.1.0
+ARG PPT_MASTER_SHA256=b3400c08ad969bdc114e44db0ea44806ab2a1e518b74b72534b1f587c0c1501a
 
 # The skill must stay byte-identical: attribution_guard.py AST-checks 13 gate
 # files, SHA-256 checks LICENSE and regex-checks SKILL.md frontmatter, exiting
@@ -48,6 +48,8 @@ COPY smoke.py ./
 
 # Fail the build if the vendored skill cannot pass its own integrity gate.
 RUN python "${PPT_MASTER_SKILL_DIR}/scripts/attribution_guard.py"
+
+RUN python smoke.py
 
 RUN useradd --system --create-home --uid 10001 pixora \
     && mkdir -p /var/tmp/ppt-master \

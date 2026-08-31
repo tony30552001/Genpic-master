@@ -157,23 +157,31 @@ describe("inspectSlideSvg free-form guardrails", () => {
     );
   });
 
-  it("rejects text stacked on text", () => {
+  it("rejects overlapping ordinary root modules", () => {
     const body = textGroup("first", "120 120 400 200") + textGroup("second", "130 130 400 200");
-    expect(inspectSlideSvg(page(body)).join()).toContain("重疊過多");
+    expect(inspectSlideSvg(page(body)).join()).toContain("一般根層模組");
   });
 
-  /**
-   * The counter-example that keeps the overlap rule usable: text sitting on a
-   * decorative panel is legitimate design and must survive.
-   */
-  it("allows text laid over a decorative panel", () => {
+  it("requires an ordinary panel and its text to share one root module", () => {
     const panel =
       '<g id="panel" data-pptx-bounds="120 120 500 300"><rect x="120" y="120" width="500" height="300" fill="#EEEEEE"/></g>';
-    expect(inspectSlideSvg(page(panel + textGroup("caption", "150 150 400 200")))).toEqual([]);
+    expect(inspectSlideSvg(page(panel + textGroup("caption", "150 150 400 200"))).join()).toContain(
+      "一般根層模組"
+    );
+
+    const combined =
+      '<g id="panel" data-pptx-bounds="120 120 500 300"><rect x="120" y="120" width="500" height="300" fill="#EEEEEE"/><text x="150" y="200" font-size="20" fill="#111111">內容</text></g>';
+    expect(inspectSlideSvg(page(combined))).toEqual([]);
   });
 
-  it("allows text modules that merely touch without meaningful overlap", () => {
-    const body = textGroup("left", "120 120 400 200") + textGroup("right", "500 120 400 200");
+  it("allows a declared structural decoration to overlap content", () => {
+    const decoration =
+      '<g id="decoration" data-pptx-role="decoration" data-pptx-bounds="120 120 500 300"><rect x="120" y="120" width="500" height="300" fill="#EEEEEE"/></g>';
+    expect(inspectSlideSvg(page(decoration + textGroup("caption", "150 150 400 200")))).toEqual([]);
+  });
+
+  it("allows root modules whose overlap is within the one-pixel tolerance", () => {
+    const body = textGroup("left", "120 120 400 200") + textGroup("right", "519 120 400 200");
     expect(inspectSlideSvg(page(body))).toEqual([]);
   });
 });

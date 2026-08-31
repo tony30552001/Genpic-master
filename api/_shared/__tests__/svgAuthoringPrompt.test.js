@@ -265,6 +265,7 @@ describe("buildRepairUserMessage", () => {
     expect(geometry).toBeGreaterThan(-1);
     expect(cut).toBeGreaterThan(geometry);
     expect(message).toContain("刪內容是最後手段");
+    expect(message).toContain("合併到同一個根層群組");
   });
 
   it("repairs in place rather than sending the page back to a frame", () => {
@@ -323,6 +324,14 @@ describe("buildAuthoringSystemPrompt", () => {
 
     expect(prompt).toContain("裝飾線不可穿過文字");
     expect(prompt).toContain("不要用群組的 data-pptx-bounds 判斷");
+  });
+
+  it("keeps ordinary root zones disjoint and nests intentional overlays", () => {
+    const prompt = buildAuthoringSystemPrompt({});
+
+    expect(prompt).toContain("水平與垂直交集都超過 1 時會被拒絕");
+    expect(prompt).toContain("承載物與文字放進同一個直屬根層 <g>");
+    expect(prompt).toContain("一般卡片、內容底板或圖片不可標成結構角色");
   });
 
   /**

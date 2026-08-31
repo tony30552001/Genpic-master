@@ -1,7 +1,7 @@
 # ppt-master sidecar service
 
 FastAPI wrapper around the [ppt-master](https://github.com/hugohe3/ppt-master) skill
-(MIT, Copyright (c) 2025-2026 Hugo He), pinned to release `v5.0.0`.
+(MIT, Copyright (c) 2025-2026 Hugo He), pinned to release `v5.1.0`.
 
 Pixora's Node backend owns the LLM work; this service owns everything that must run
 in Python: project scaffolding, source conversion, SVG quality validation and the

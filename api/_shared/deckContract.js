@@ -377,22 +377,29 @@ const BOUNDS_VALUE = /^-?\d+(\.\d+)?(\s+-?\d+(\.\d+)?){3}$/;
 const MIN_MODULE_WIDTH = 40;
 const MIN_MODULE_HEIGHT = 24;
 
-/**
- * How much two text modules may overlap before it counts as a collision.
- *
- * Only text-bearing modules are compared. Text over text is always a mistake,
- * while text over a decorative panel is legitimate design, so restricting the
- * rule to text pairs is what keeps it from punishing good layouts.
- */
-const MAX_TEXT_OVERLAP_RATIO = 0.15;
+/** v5.1 rejects ordinary root-module intersections wider and taller than this. */
+const ROOT_MODULE_OVERLAP_TOLERANCE = 1;
+
+const STRUCTURAL_ROOT_ROLES = new Set([
+  "background",
+  "chrome",
+  "decoration",
+  "footer",
+  "header",
+  "logo",
+  "page-number",
+  "watermark",
+]);
 
 const NATIVE_REPLACEMENT_KINDS = Object.freeze(["chart", "table"]);
 
-const rectangleOverlap = (first, second) => {
+const rectangleOverlapDimensions = (first, second) => {
   const width = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
   const height = Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
-  if (width <= 0 || height <= 0) return 0;
-  return width * height;
+  return {
+    width: Math.max(0, width),
+    height: Math.max(0, height),
+  };
 };
 
 /**
@@ -454,7 +461,7 @@ const inspectNativeMarker = (kind, inner, id) => {
 const inspectRootGroups = (content) => {
   const problems = [];
   const seenIds = new Set();
-  const textBoxes = [];
+  const moduleBoxes = [];
 
   for (const { attributes, inner } of collectRootGroups(content)) {
     const id = attributes.match(/\sid="([^"]*)"/)?.[1];
@@ -520,21 +527,33 @@ const inspectRootGroups = (content) => {
       );
     }
 
-    if (!bleed && /<text[\s>]/.test(inner)) {
-      textBoxes.push({ id: id || "", x, y, width, height });
-    }
+    const role = attributes.match(/\sdata-pptx-role="([^"]*)"/)?.[1];
+    moduleBoxes.push({
+      id: id || "",
+      role: String(role || "").trim().toLowerCase(),
+      x,
+      y,
+      width,
+      height,
+    });
   }
 
-  for (let first = 0; first < textBoxes.length; first += 1) {
-    for (let second = first + 1; second < textBoxes.length; second += 1) {
-      const a = textBoxes[first];
-      const b = textBoxes[second];
-      const overlap = rectangleOverlap(a, b);
-      if (overlap === 0) continue;
-      const smaller = Math.min(a.width * a.height, b.width * b.height);
-      if (overlap / smaller > MAX_TEXT_OVERLAP_RATIO) {
+  for (let first = 0; first < moduleBoxes.length; first += 1) {
+    for (let second = first + 1; second < moduleBoxes.length; second += 1) {
+      const a = moduleBoxes[first];
+      const b = moduleBoxes[second];
+      if (STRUCTURAL_ROOT_ROLES.has(a.role) || STRUCTURAL_ROOT_ROLES.has(b.role)) {
+        continue;
+      }
+      const overlap = rectangleOverlapDimensions(a, b);
+      if (
+        overlap.width > ROOT_MODULE_OVERLAP_TOLERANCE &&
+        overlap.height > ROOT_MODULE_OVERLAP_TOLERANCE
+      ) {
         problems.push(
-          `文字模組 <g id="${a.id}"> 與 <g id="${b.id}"> 重疊過多，請調整位置或縮小其中一個`
+          `一般根層模組 <g id="${a.id}"> 與 <g id="${b.id}"> 的 data-pptx-bounds ` +
+            `重疊 ${overlap.width.toFixed(1)}px × ${overlap.height.toFixed(1)}px；` +
+            `請讓模組區域彼此分離，單軸容差最多 ${ROOT_MODULE_OVERLAP_TOLERANCE}px`
         );
       }
     }
@@ -612,7 +631,6 @@ module.exports = {
   DECK_MAX_REPAIR_ROUNDS,
   DECK_MAX_SLIDES,
   DECK_MIN_SLIDES,
-  MAX_TEXT_OVERLAP_RATIO,
   MIN_MODULE_HEIGHT,
   MIN_MODULE_WIDTH,
   PAGE_ROLES,

@@ -43,6 +43,15 @@ def main() -> int:
         return 1
     print("[OK] attribution guard passed")
 
+    converted = skill.convert_source(
+        "pixora_smoke.txt",
+        b"Pixora source conversion smoke test",
+    )
+    if converted.strip() != "Pixora source conversion smoke test":
+        print(f"[FAIL] source conversion returned unexpected Markdown: {converted!r}")
+        return 1
+    print("[OK] source conversion passed")
+
     deck = skill.create_deck(name="pixora_smoke")
     deck_id = deck["deckId"]
     print(f"[OK] deck created: {deck_id} ({deck['projectName']})")
@@ -57,7 +66,14 @@ def main() -> int:
             return 1
         print(f"[OK] quality gate passed for {len(report['files'])} slide(s)")
 
-        payload = skill.export_deck(deck_id, file_stem="pixora_smoke")
+        try:
+            payload = skill.export_deck(deck_id, file_stem="pixora_smoke")
+        except skill.SkillError as error:
+            print(
+                f"[FAIL] export failed with exit={error.code}\n"
+                f"stdout:\n{error.stdout}\nstderr:\n{error.stderr}"
+            )
+            return 1
         with zipfile.ZipFile(BytesIO(payload)) as archive:
             names = set(archive.namelist())
             slide_xml = archive.read("ppt/slides/slide1.xml").decode("utf-8")
