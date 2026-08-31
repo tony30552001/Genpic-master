@@ -114,6 +114,74 @@
   stroke-width: 1.75;
 }
 
+.login-light-theme {
+  color-scheme: light;
+  --background: 210 40% 98%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --muted: 210 40% 95%;
+  --muted-foreground: 215.4 16.3% 42%;
+  --accent: 210 40% 95%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --border: 214.3 31.8% 89%;
+  --input: 214.3 31.8% 89%;
+  --ring: 221.2 83.2% 53.3%;
+}
+
+.login-glass-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.38);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.24), transparent 42%),
+    hsl(var(--background) / 0.78);
+  -webkit-backdrop-filter: blur(28px) saturate(155%);
+  backdrop-filter: blur(28px) saturate(155%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.62),
+    inset 0 -1px 0 rgb(255 255 255 / 0.12),
+    0 28px 90px rgb(2 12 20 / 0.34);
+}
+
+.login-glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 16% 0%, rgb(255 255 255 / 0.42), transparent 30%),
+    linear-gradient(90deg, rgb(255 255 255 / 0.1), transparent 36%);
+  pointer-events: none;
+}
+
+.login-glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: calc(var(--radius) * 2 - 1px);
+  pointer-events: none;
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .login-glass-panel {
+    background: hsl(var(--background));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .login-glass-panel {
+    background: hsl(var(--background));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
 /* ════════════════════════════════════════════
    shadcn/ui + Pixora — CSS Variables
    Theme: Blue (Official shadcn/ui)

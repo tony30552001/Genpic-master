@@ -1,19 +1,77 @@
-import React from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import {
-  LogIn,
-} from "@/components/icons/lucideControls";
-import {
-  AlertCircle,
-} from "@/components/icons/lucideStatus";
-import {
-  ShieldCheck,
-} from "@/components/icons/lucideContent";
+import { AlertCircle, Lock } from "@/components/icons/lucideStatus";
+import LoginShaderBackground from "@/components/auth/LoginShaderBackground";
+import MicrosoftMark from "@/components/icons/MicrosoftMark";
+import PixoraMark from "@/components/icons/PixoraMark";
 import { useLocation, Navigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+
+function ResponsiveGoogleLogin({ onSuccess, onError }) {
+    const containerRef = useRef(null);
+    const [buttonWidth, setButtonWidth] = useState(240);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const updateWidth = () => {
+            const width = Math.floor(container.getBoundingClientRect().width);
+            setButtonWidth(Math.min(400, Math.max(200, width)));
+        };
+
+        updateWidth();
+
+        if (typeof ResizeObserver !== "function") return;
+        const observer = new ResizeObserver(updateWidth);
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, []);
+
+    return (
+        <div ref={containerRef} className="flex w-full justify-center overflow-hidden">
+            <GoogleLogin
+                onSuccess={onSuccess}
+                onError={onError}
+                type="standard"
+                theme="outline"
+                size="large"
+                shape="rectangular"
+                text="continue_with"
+                logo_alignment="left"
+                width={String(buttonWidth)}
+                locale="zh-TW"
+            />
+        </div>
+    );
+}
+
+function LoginLoadingState() {
+    return (
+        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#83cbea] px-5 py-12 text-foreground sm:px-8">
+            <LoginShaderBackground />
+            <section className="login-glass-panel relative z-10 w-full max-w-[27rem] rounded-2xl p-7 sm:p-9">
+                <div
+                    className="space-y-7"
+                    role="status"
+                    aria-label="正在確認登入狀態"
+                >
+                    <div className="space-y-3">
+                        <div className="h-12 w-12 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
+                        <div className="h-8 w-44 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
+                        <div className="h-5 w-64 max-w-full animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
+                    </div>
+                    <div className="space-y-3">
+                        <div className="h-10 animate-pulse rounded-[4px] bg-muted motion-reduce:animate-none" />
+                        <div className="h-10 animate-pulse rounded-[4px] bg-muted motion-reduce:animate-none" />
+                    </div>
+                </div>
+            </section>
+        </main>
+    );
+}
 
 export default function LoginPage() {
     const {
@@ -25,96 +83,89 @@ export default function LoginPage() {
         profileError,
     } = useAuth();
     const location = useLocation();
+    const [googleLoginError, setGoogleLoginError] = useState("");
 
     const from = location.state?.from?.pathname || "/";
 
-    // 如果已登入，直接跳轉
     if (isAuthenticated) {
         return <Navigate to={from} replace />;
     }
 
     if (isLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-            </div>
-        );
+        return <LoginLoadingState />;
     }
 
-    return (
-        <div
-            className="min-h-screen flex items-center justify-center bg-muted/30 relative overflow-hidden"
-            style={{ backgroundImage: 'radial-gradient(hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
-        >
+    const authError =
+        profileError ||
+        googleLoginError ||
+        (authExpired ? "您的登入已過期，請重新登入以繼續使用" : "");
 
-            <Card className="w-full max-w-md shadow-xl border-border/60 bg-card relative z-10 transition-shadow duration-300 hover:shadow-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
-                <CardHeader className="space-y-2 text-center pb-8">
-                    <div className="mx-auto w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 mb-4 transition-transform duration-300 hover:scale-105">
-                        <LogIn className="icon-display text-primary-foreground" />
+    const handleGoogleSuccess = (response) => {
+        setGoogleLoginError("");
+        handleGoogleLoginSuccess(response);
+    };
+
+    return (
+        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#83cbea] px-5 py-12 text-foreground sm:px-8">
+            <LoginShaderBackground />
+
+            <section className="login-glass-panel relative z-10 w-full max-w-[27rem] rounded-2xl p-7 animate-in fade-in-0 zoom-in-95 duration-500 motion-reduce:animate-none sm:p-9">
+                <div className="mb-8">
+                    <div className="mb-5 flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                            <PixoraMark className="h-7 w-7" title="Pixora" />
+                        </div>
+                        <div>
+                            <p className="font-semibold tracking-tight text-foreground">Pixora 智繪</p>
+                            <p className="text-xs text-muted-foreground">AI 智能視覺創作平台</p>
+                        </div>
                     </div>
-                    <CardTitle className="text-3xl font-bold tracking-tight text-foreground">歡迎回到 Pixora</CardTitle>
-                    <CardDescription className="text-muted-foreground font-medium">請選擇您的登入方式</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                    {/* 登入過期提示 */}
-                    {(authExpired || profileError) && (
-                        <Alert variant="destructive">
+
+                    <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-[2rem]">
+                        繼續你的創作
+                    </h1>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        登入後即可存取專案、範本與生成紀錄。
+                    </p>
+                </div>
+
+                <div className="space-y-4">
+                    {authError && (
+                        <Alert variant="destructive" className="bg-destructive/5">
                             <AlertCircle className="icon-sm" />
                             <AlertDescription>
-                                {profileError || "您的登入已過期，請重新登入以繼續使用"}
+                                {authError}
                             </AlertDescription>
                         </Alert>
                     )}
 
-                    {/* Microsoft Login */}
                     <Button
+                        type="button"
                         variant="outline"
-                        className="w-full h-12 text-base font-semibold gap-3 transition-all duration-150 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring"
+                        className="h-10 w-full gap-3 rounded-[4px] border-input bg-background text-sm font-semibold shadow-sm transition-[background-color,border-color,transform,box-shadow] hover:border-foreground/20 hover:bg-muted/60 hover:shadow-md active:scale-[0.985] motion-reduce:transform-none"
                         onClick={handleMicrosoftLogin}
                     >
-                        <svg className="w-5 h-5" viewBox="0 0 23 23">
-                            <path fill="#f3f3f3" d="M0 0h23v23H0z" />
-                            <path fill="#f35325" d="M1 1h10v10H1z" />
-                            <path fill="#81bc06" d="M12 1h10v10H12z" />
-                            <path fill="#05a6f0" d="M1 12h10v10H1z" />
-                            <path fill="#ffba08" d="M12 12h10v10H12z" />
-                        </svg>
-                        使用 Microsoft 帳號登入
+                        <MicrosoftMark className="h-5 w-5" />
+                        使用 Microsoft 帳號繼續
                     </Button>
 
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t border-border" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-card px-2 text-muted-foreground font-medium">或</span>
-                        </div>
+                    <div className="flex items-center gap-3" aria-hidden="true">
+                        <span className="h-px flex-1 bg-border" />
+                        <span className="text-xs font-medium text-muted-foreground">或</span>
+                        <span className="h-px flex-1 bg-border" />
                     </div>
 
-                    {/* Google Login Wrapper */}
-                    <div className="flex justify-center flex-col items-center gap-3">
-                        <div className="w-full [&>div]:!w-full [&>div]:!flex [&>div]:!justify-center">
-                            <GoogleLogin
-                                onSuccess={handleGoogleLoginSuccess}
-                                onError={() => console.log('Login Failed')}
-                                theme="filled_blue"
-                                shape="rect"
-                                width="100%"
-                                text="signin_with"
-                            />
-                        </div>
-                    </div>
+                    <ResponsiveGoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={() => setGoogleLoginError("Google 登入失敗，請稍後再試")}
+                    />
+                </div>
 
-                    <div className="pt-6 mt-6 border-t border-border flex items-center justify-center gap-2 text-muted-foreground text-xs font-medium">
-                        <ShieldCheck className="icon-sm" />
-                        <span>您的隱私與安全受 SSO 協定保護</span>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <p className="absolute bottom-8 left-0 right-0 text-center text-muted-foreground text-sm">
-                &copy; 2026 Pixora. All rights reserved.
-            </p>
-        </div>
+                <div className="mt-8 flex items-start gap-2.5 border-t border-border pt-5 text-xs leading-5 text-muted-foreground">
+                    <Lock className="icon-sm mt-0.5" />
+                    <p>登入流程由 Microsoft Entra ID 或 Google 安全驗證。</p>
+                </div>
+            </section>
+        </main>
     );
 }
