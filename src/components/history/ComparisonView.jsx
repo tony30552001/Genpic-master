@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { X, ArrowRightLeft, MoveHorizontal } from 'lucide-react';
+import {
+  X,
+  ArrowRightLeft,
+  MoveHorizontal,
+} from "@/components/icons/lucideControls";
 import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
 
 export default function ComparisonView({ item1, item2, onClose }) {
@@ -21,7 +25,7 @@ export default function ComparisonView({ item1, item2, onClose }) {
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
                     <div>
                         <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                            <ArrowRightLeft className="w-5 h-5 text-primary" aria-hidden="true" />
+                            <ArrowRightLeft className="icon-md text-primary" aria-hidden="true" />
                             歷史紀錄比對
                         </h2>
                         <p className="text-xs text-muted-foreground">比較兩次生成的差異</p>
@@ -59,7 +63,7 @@ export default function ComparisonView({ item1, item2, onClose }) {
                             className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             aria-label="關閉歷史紀錄比對"
                         >
-                            <X className="w-5 h-5" aria-hidden="true" />
+                            <X className="icon-md" aria-hidden="true" />
                         </button>
                     </div>
                 </div>
@@ -128,7 +132,7 @@ export default function ComparisonView({ item1, item2, onClose }) {
                             </div>
 
                             <div className="flex items-center justify-center text-muted-foreground/40">
-                                <MoveHorizontal className="w-5 h-5" aria-hidden="true" />
+                                <MoveHorizontal className="icon-md" aria-hidden="true" />
                             </div>
 
                             {/* Item 2 Info */}

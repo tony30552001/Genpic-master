@@ -1,5 +1,11 @@
 import React, { useEffect, useRef } from "react";
-import { ChevronLeft, ChevronRight, Download, X, ZoomIn } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  X,
+  ZoomIn,
+} from "@/components/icons/lucideControls";
 import { Button } from "@/components/ui/button";
 
 export default function ImageLightbox({
@@ -80,7 +86,7 @@ export default function ImageLightbox({
       >
         <div className="flex items-center justify-between gap-3 border-b border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-5">
           <div className="flex min-w-0 items-center gap-2">
-            <ZoomIn className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <ZoomIn className="icon-sm shrink-0 text-primary" aria-hidden="true" />
             <p className="truncate text-sm font-medium text-foreground">{alt}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -99,7 +105,7 @@ export default function ImageLightbox({
                   disabled={!onPrev}
                   aria-label="上一張圖片"
                 >
-                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  <ChevronLeft className="icon-sm" aria-hidden="true" />
                 </Button>
                 <Button
                   type="button"
@@ -109,7 +115,7 @@ export default function ImageLightbox({
                   disabled={!onNext}
                   aria-label="下一張圖片"
                 >
-                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  <ChevronRight className="icon-sm" aria-hidden="true" />
                 </Button>
               </>
             )}
@@ -122,7 +128,7 @@ export default function ImageLightbox({
                   rel="noopener noreferrer"
                   aria-label="下載原圖"
                 >
-                  <Download className="h-4 w-4" aria-hidden="true" />
+                  <Download className="icon-sm" aria-hidden="true" />
                 </a>
               </Button>
             )}
@@ -134,7 +140,7 @@ export default function ImageLightbox({
               onClick={onClose}
               aria-label="關閉圖片預覽"
             >
-              <X className="h-4 w-4" aria-hidden="true" />
+              <X className="icon-sm" aria-hidden="true" />
             </Button>
           </div>
         </div>

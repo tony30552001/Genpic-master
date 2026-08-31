@@ -1,5 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Check, ChevronsUpDown, Search } from "lucide-react";
+import {
+  ChevronsUpDown,
+  Search,
+} from "@/components/icons/lucideControls";
+import {
+  Check,
+} from "@/components/icons/lucideStatus";
 import { cn } from "@/lib/utils";
 
 const matchesKeyword = (user, keyword) => {
@@ -74,14 +80,14 @@ export default function UserFilterSelect({
         <span className="min-w-0 flex-1 truncate text-left">
           {selected ? selected.displayName : allLabel}
         </span>
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronsUpDown className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
       </button>
 
       {isOpen && (
         <div className="absolute right-0 z-50 mt-1 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-border bg-popover p-2 shadow-lg">
           <div className="relative">
             <Search
-              className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute left-2 top-1/2 icon-sm -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
             />
             <input

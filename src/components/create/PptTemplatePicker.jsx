@@ -1,4 +1,9 @@
-import { Check, Sparkles } from "lucide-react";
+import {
+  Check,
+} from "@/components/icons/lucideStatus";
+import {
+  Sparkles,
+} from "@/components/icons/lucideContent";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -47,9 +52,9 @@ function TemplateGroup({ label, hint, options, value, onChange, describe, previe
           )}
         >
           <span className="flex w-full items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Sparkles className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="min-w-0 truncate text-sm font-medium">由 AI 決定</span>
-            {!value && <Check className="ml-auto h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
+            {!value && <Check className="ml-auto icon-sm shrink-0 text-primary" aria-hidden="true" />}
           </span>
           <span className="text-xs text-muted-foreground">依主題自動挑選合適的設計。</span>
         </button>
@@ -76,7 +81,7 @@ function TemplateGroup({ label, hint, options, value, onChange, describe, previe
               <span className="flex w-full items-center gap-1.5">
                 <span className="min-w-0 truncate text-sm font-medium">{copy.name}</span>
                 {selected && (
-                  <Check className="ml-auto h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <Check className="ml-auto icon-sm shrink-0 text-primary" aria-hidden="true" />
                 )}
               </span>
               {copy.description && (

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { CloudCheck, Loader2 } from "lucide-react";
-
+import {
+  CloudCheck,
+} from "@/components/icons/lucideStatus";
+import GenerationSignature from "@/components/icons/GenerationSignature";
 import DeckTimeline from "./DeckTimeline";
 
 const formatElapsed = (ms) => {
@@ -39,7 +41,7 @@ export default function DeckProgress({ phase, current, total, startedAt, events 
     >
       <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span className="flex min-w-0 items-center gap-2">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
+          <GenerationSignature state="working" className="icon-md text-primary" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
             {events?.length > 0 ? "AI 正在設計你的簡報" : phase || "準備中"}
           </span>
@@ -61,7 +63,7 @@ export default function DeckProgress({ phase, current, total, startedAt, events 
       </div>
       <DeckTimeline events={events} />
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-        <CloudCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <CloudCheck className="mt-0.5 icon-sm shrink-0" aria-hidden="true" />
         <span className="min-w-0">
           每一頁都由 AI 逐頁設計並通過版面品質檢查，整份簡報約需 5–15 分鐘。
           生成在雲端進行，你可以切換頁籤、重新整理或關閉瀏覽器，回到這裡會自動接續進度。

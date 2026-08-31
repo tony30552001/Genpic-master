@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+} from "@/components/icons/lucideControls";
+import {
+  Lightbulb,
+} from "@/components/icons/lucideContent";
 import { cn } from "@/lib/utils";
 
 const TEMPLATES = [
@@ -119,7 +125,7 @@ export default function PromptTemplates({ onFill, collapsible = true }) {
         aria-controls={contentId}
       >
         <Lightbulb
-          className="h-4 w-4 shrink-0 text-amber-500"
+          className="icon-sm shrink-0 text-amber-500"
           aria-hidden="true"
         />
         <span className="flex-1 text-sm font-medium text-foreground">
@@ -130,12 +136,12 @@ export default function PromptTemplates({ onFill, collapsible = true }) {
         </span>
         {isOpen ? (
           <ChevronUp
-            className="h-4 w-4 shrink-0 text-muted-foreground"
+            className="icon-sm shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
         ) : (
           <ChevronDown
-            className="h-4 w-4 shrink-0 text-muted-foreground"
+            className="icon-sm shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
         )}

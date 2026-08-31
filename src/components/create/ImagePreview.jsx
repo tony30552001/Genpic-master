@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { Image as ImageIcon, Save, Wand2 } from "lucide-react";
+import {
+  Save,
+} from "@/components/icons/lucideControls";
+import {
+  Image as ImageIcon,
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { cn } from "@/lib/utils";
 import ShareToLineButton from "../share/ShareToLineButton";
 import ImageGeneratingState from "./ImageGeneratingState";
@@ -50,9 +56,7 @@ export default function ImagePreview({
           }}
         />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 shadow-sm">
-            <Wand2 className="h-6 w-6 text-primary/65" aria-hidden="true" />
-          </div>
+          <ProductGlyph kind="create" className="h-10 w-10 text-primary/65" aria-hidden="true" />
         </div>
       </div>
       <div className="space-y-1.5">
@@ -69,7 +73,7 @@ export default function ImagePreview({
     if (imageError) {
       return (
         <div className="flex flex-col items-center gap-3 text-destructive py-12">
-          <ImageIcon className="w-12 h-12 opacity-50" />
+          <ImageIcon className="icon-display opacity-50" aria-hidden="true" />
           <p className="text-sm font-medium">圖片載入失敗，請嘗試重新下載或重新產生。</p>
         </div>
       );
@@ -102,7 +106,7 @@ export default function ImagePreview({
               aria-label="下載產生的圖片"
               className="flex items-center h-10 gap-1.5 text-xs font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-3 py-2 rounded-lg transition-colors shadow-lg border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <Save className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <Save className="icon-sm" aria-hidden="true" />
               <span className="whitespace-nowrap">下載圖片</span>
             </button>
           </div>
@@ -151,7 +155,7 @@ export default function ImagePreview({
             aria-label="下載產生的圖片"
             className="flex items-center h-10 gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-md border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <Save className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <Save className="icon-sm" aria-hidden="true" />
             <span className="whitespace-nowrap">下載圖片</span>
           </button>
         </div>

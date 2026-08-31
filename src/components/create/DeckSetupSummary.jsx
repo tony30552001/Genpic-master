@@ -1,5 +1,7 @@
-import { ChevronDown, Settings2 } from "lucide-react";
-
+import {
+  ChevronDown,
+} from "@/components/icons/lucideControls";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,7 +18,7 @@ export default function DeckSetupSummary({ title, meta, expanded, onToggle, chil
           aria-expanded={expanded}
           className="flex w-full min-w-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <ProductGlyph kind="deck" active={expanded} className="icon-sm text-muted-foreground" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="line-clamp-2 text-sm font-medium text-foreground">{title}</span>
             {meta && (

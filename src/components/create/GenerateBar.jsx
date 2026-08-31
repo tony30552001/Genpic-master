@@ -1,5 +1,12 @@
 import React from "react";
-import { Monitor, Layout, Square, Smartphone, Wand2, Loader2 } from "lucide-react";
+import {
+  Monitor,
+  Layout,
+  Square,
+  Smartphone,
+} from "@/components/icons/lucideContent";
+import GenerationSignature from "@/components/icons/GenerationSignature";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -44,6 +51,7 @@ export default function GenerateBar({
     generationStatus,
     buttonText,
     isGeneratingText,
+    actionKind = "create",
     disabled = false,
 }) {
     const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
@@ -82,7 +90,7 @@ export default function GenerateBar({
                             )}
                             title={ratio.label}
                         >
-                            <ratio.icon className="w-3.5 h-3.5" />
+                            <ratio.icon className="icon-sm" aria-hidden="true" />
                             <span className="hidden lg:inline">{ratio.id}</span>
                         </button>
                     ))}
@@ -175,11 +183,13 @@ export default function GenerateBar({
                 >
                     {isGenerating ? (
                         <span className="flex items-center gap-2">
-                            <Loader2 className="w-5 h-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {generationLabel}
+                            <GenerationSignature state="working" className="icon-md" aria-hidden="true" />
+                            {generationLabel}
                         </span>
                     ) : (
                         <span className="flex items-center gap-2">
-                            <Wand2 className="w-5 h-5" aria-hidden="true" /> {buttonText || "開始生成圖片"}
+                            <ProductGlyph kind={actionKind} active className="icon-md" aria-hidden="true" />
+                            {buttonText || "開始生成圖片"}
                         </span>
                     )}
                 </Button>

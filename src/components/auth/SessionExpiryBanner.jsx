@@ -1,6 +1,11 @@
 import React from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { AlertTriangle, X } from "lucide-react";
+import {
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  AlertTriangle,
+} from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import useAuth from "@/hooks/useAuth";
 

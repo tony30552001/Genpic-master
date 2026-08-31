@@ -1,5 +1,6 @@
-import { Check } from "lucide-react";
-
+import {
+  Check,
+} from "@/components/icons/lucideStatus";
 import { cn } from "@/lib/utils";
 import { DECK_RECIPE_OPTIONS } from "./pptRecipeCopy";
 
@@ -38,7 +39,7 @@ export default function DeckRecipePicker({ value, onChange, disabled }) {
               <span className="flex w-full items-center gap-1.5">
                 <span className="min-w-0 truncate text-sm font-medium">{option.name}</span>
                 {selected && (
-                  <Check className="ml-auto h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <Check className="ml-auto icon-sm shrink-0 text-primary" aria-hidden="true" />
                 )}
               </span>
               <span className="text-xs leading-relaxed text-muted-foreground">

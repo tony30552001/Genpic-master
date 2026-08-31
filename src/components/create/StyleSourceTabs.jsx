@@ -1,15 +1,18 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Check,
   ChevronDown,
   ChevronUp,
-  Library,
-  Palette,
   Search,
-  Wand2,
   X,
-} from "lucide-react";
+} from "@/components/icons/lucideControls";
+import {
+  Check,
+} from "@/components/icons/lucideStatus";
+import {
+  Palette,
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -108,9 +111,9 @@ export default function StyleSourceTabs({
             </span>
           )}
           {open ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <ChevronUp className="icon-sm text-muted-foreground" aria-hidden="true" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <ChevronDown className="icon-sm text-muted-foreground" aria-hidden="true" />
           )}
         </span>
       </button>
@@ -151,15 +154,6 @@ export default function StyleSourceTabs({
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    {id === "templates" && (
-                      <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                    {id === "palette" && (
-                      <Palette className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                    {id === "saved" && (
-                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
                     {label}
                   </button>
                 );
@@ -213,9 +207,7 @@ export default function StyleSourceTabs({
                         className="h-9 w-9 shrink-0 rounded-lg border border-primary/20 object-cover"
                       />
                     ) : (
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
-                      </span>
+                      <ProductGlyph kind="settings" className="icon-lg text-primary" aria-hidden="true" />
                     )}
                     <div className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold text-primary">
@@ -243,7 +235,7 @@ export default function StyleSourceTabs({
                       title="移除風格"
                       aria-label="移除已套用風格"
                     >
-                      <X className="h-4 w-4" aria-hidden="true" />
+                      <X className="icon-sm" aria-hidden="true" />
                     </button>
                   </div>
                 ) : (
@@ -256,14 +248,14 @@ export default function StyleSourceTabs({
                       aria-controls={`${idPrefix}-saved-list`}
                     >
                       <span className="flex items-center gap-1.5">
-                        <Palette className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Palette className="icon-sm" aria-hidden="true" />
                         從風格庫選擇風格
                         <span className="text-muted-foreground/60">({savedStyles.length})</span>
                       </span>
                       {showStylePicker ? (
-                        <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+                        <ChevronUp className="icon-sm" aria-hidden="true" />
                       ) : (
-                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                        <ChevronDown className="icon-sm" aria-hidden="true" />
                       )}
                     </button>
 
@@ -275,7 +267,7 @@ export default function StyleSourceTabs({
                         <div className="sticky top-0 border-b border-border bg-popover px-3 py-2">
                           <div className="relative">
                             <Search
-                              className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground"
+                              className="absolute left-2.5 top-2 icon-sm text-muted-foreground"
                               aria-hidden="true"
                             />
                             <Input
@@ -317,7 +309,7 @@ export default function StyleSourceTabs({
                                   />
                                 ) : (
                                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                                    <Palette className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
+                                    <Palette className="icon-sm text-muted-foreground/40" aria-hidden="true" />
                                   </span>
                                 )}
 
@@ -335,7 +327,7 @@ export default function StyleSourceTabs({
                                       </Badge>
                                     )}
                                     {appliedStyle?.id === style.id && (
-                                      <Check className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
+                                      <Check className="icon-xs shrink-0 text-primary" aria-hidden="true" />
                                     )}
                                   </span>
                                   {style.description && (
@@ -377,7 +369,7 @@ export default function StyleSourceTabs({
                 }}
                 className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               >
-                <Library className="h-3.5 w-3.5" aria-hidden="true" />
+                <ProductGlyph kind="library" className="icon-sm" aria-hidden="true" />
                 開啟素材中心管理
               </button>
             </div>

@@ -1,6 +1,14 @@
 import React from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { LogIn, ShieldCheck, AlertCircle } from "lucide-react";
+import {
+  LogIn,
+} from "@/components/icons/lucideControls";
+import {
+  AlertCircle,
+} from "@/components/icons/lucideStatus";
+import {
+  ShieldCheck,
+} from "@/components/icons/lucideContent";
 import { useLocation, Navigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -42,7 +50,7 @@ export default function LoginPage() {
             <Card className="w-full max-w-md shadow-xl border-border/60 bg-card relative z-10 transition-shadow duration-300 hover:shadow-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
                 <CardHeader className="space-y-2 text-center pb-8">
                     <div className="mx-auto w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 mb-4 transition-transform duration-300 hover:scale-105">
-                        <LogIn className="w-8 h-8 text-primary-foreground" />
+                        <LogIn className="icon-display text-primary-foreground" />
                     </div>
                     <CardTitle className="text-3xl font-bold tracking-tight text-foreground">歡迎回到 Pixora</CardTitle>
                     <CardDescription className="text-muted-foreground font-medium">請選擇您的登入方式</CardDescription>
@@ -51,7 +59,7 @@ export default function LoginPage() {
                     {/* 登入過期提示 */}
                     {(authExpired || profileError) && (
                         <Alert variant="destructive">
-                            <AlertCircle className="h-4 w-4" />
+                            <AlertCircle className="icon-sm" />
                             <AlertDescription>
                                 {profileError || "您的登入已過期，請重新登入以繼續使用"}
                             </AlertDescription>
@@ -98,7 +106,7 @@ export default function LoginPage() {
                     </div>
 
                     <div className="pt-6 mt-6 border-t border-border flex items-center justify-center gap-2 text-muted-foreground text-xs font-medium">
-                        <ShieldCheck className="w-4 h-4" />
+                        <ShieldCheck className="icon-sm" />
                         <span>您的隱私與安全受 SSO 協定保護</span>
                     </div>
                 </CardContent>

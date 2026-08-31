@@ -1,6 +1,11 @@
 import React, { useState } from "react";
-import { FileText, Image as ImageIcon, Trash2 } from "lucide-react";
-
+import {
+  Trash2,
+} from "@/components/icons/lucideControls";
+import {
+  FileText,
+  Image as ImageIcon,
+} from "@/components/icons/lucideContent";
 export default function HistoryCard({
   item,
   style,
@@ -60,7 +65,7 @@ export default function HistoryCard({
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center">
-              <ImageIcon className="w-8 h-8 text-muted-foreground/30 mx-auto mb-1" aria-hidden="true" />
+              <ImageIcon className="icon-display text-muted-foreground/30 mx-auto mb-1" aria-hidden="true" />
               <span className="text-[10px] text-muted-foreground/50">無預覽</span>
             </div>
           </div>
@@ -94,7 +99,7 @@ export default function HistoryCard({
               }}
               className="flex h-10 items-center gap-1 rounded-lg bg-background/95 px-3 text-xs font-medium text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <FileText className="w-3 h-3" aria-hidden="true" /> 載入設定
+              <FileText className="icon-xs" aria-hidden="true" /> 載入設定
             </button>
             <button
               type="button"
@@ -105,7 +110,7 @@ export default function HistoryCard({
               className="flex h-10 w-10 items-center justify-center rounded-lg bg-background/95 text-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label="刪除此生成紀錄"
             >
-              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+              <Trash2 className="icon-sm" aria-hidden="true" />
             </button>
           </div>
         )}

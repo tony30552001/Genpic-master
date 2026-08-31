@@ -1,44 +1,52 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Upload, X, Wand2, Loader2, Download,
-  Palette, Copy, Scissors, Image as ImageIcon, ChevronDown, ChevronUp, Check, Sparkles,
-} from "lucide-react";
+  Upload,
+  X,
+  Download,
+  ChevronDown,
+  ChevronUp,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+  Check,
+} from "@/components/icons/lucideStatus";
+import {
+  Palette,
+  Sparkles,
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
 import { optimizePrompt } from "@/services/aiService";
 import StylePalette from "./StylePalette";
 import { STYLE_DIMENSIONS } from "./styleDimensions";
 import PromptTemplates from "./PromptTemplates";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
+import ImageGeneratingState from "./ImageGeneratingState";
 
 const TRANSFORM_MODES = [
   {
     id: "style_transfer",
     label: "風格轉換",
-    icon: Palette,
     description: "保留內容，套用新畫風（水彩、動漫、油畫…）",
     placeholder: "描述想要的畫風，例如：日式水彩插畫風格，柔和色調",
   },
   {
     id: "reference_gen",
     label: "以圖生圖",
-    icon: Copy,
     description: "以上傳圖為參考，依描述生成全新圖片",
     placeholder: "描述想生成的新圖片，例如：同樣的場景，但改為冬天雪景",
   },
   {
     id: "element_extract",
     label: "元素提取",
-    icon: Scissors,
     description: "提取主體元素，放入新場景或構圖中",
     placeholder: "描述新場景，例如：將角色放置在宇宙星空的背景中",
   },
   {
     id: "bg_replace",
     label: "背景替換",
-    icon: ImageIcon,
     description: "保留前景主體，替換背景",
     placeholder: "描述新背景，例如：換成日落海邊，橙紅色天空",
   },
@@ -65,12 +73,15 @@ function ResultContent({ isTransforming, result, aspectRatio, onDownloadResult }
 
   if (isTransforming) {
     return (
-      <div className="w-full flex flex-col items-center gap-4">
-        <Skeleton
-          className="w-full max-w-sm rounded-xl bg-muted/80"
-          style={{ aspectRatio: getAspectRatioValue(aspectRatio) }}
+      <div
+        className="relative w-full max-w-sm overflow-hidden rounded-xl"
+        style={{ aspectRatio: getAspectRatioValue(aspectRatio) }}
+      >
+        <ImageGeneratingState
+          aspectRatio={aspectRatio}
+          generationStatus={{ label: "AI 正在轉換圖片" }}
+          compact
         />
-        <p className="text-sm text-muted-foreground animate-pulse">AI 正在轉換圖片，請稍候…</p>
       </div>
     );
   }
@@ -90,7 +101,7 @@ function ResultContent({ isTransforming, result, aspectRatio, onDownloadResult }
           onClick={onDownloadResult}
           className="flex items-center gap-1.5 text-sm font-medium bg-background/90 backdrop-blur-sm hover:bg-background text-foreground px-4 py-2 rounded-lg transition-colors shadow-md border border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Download className="w-4 h-4 shrink-0" />
+          <Download className="icon-sm shrink-0" />
           下載圖片
         </button>
       </div>
@@ -98,9 +109,7 @@ function ResultContent({ isTransforming, result, aspectRatio, onDownloadResult }
   }
   return (
     <div className="flex flex-col items-center gap-4 text-center px-4">
-      <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/15 flex items-center justify-center shadow-sm">
-        <Wand2 className="w-9 h-9 text-primary/60" />
-      </div>
+      <ProductGlyph kind="transform" className="h-14 w-14 text-primary/60" aria-hidden="true" />
       <div className="space-y-1.5">
         <p className="text-base font-semibold text-foreground">轉換結果會在這裡顯示</p>
         <p className="text-xs text-muted-foreground max-w-xs">
@@ -367,7 +376,7 @@ export default function ImageTransformPanel({
                         onClick={() => fileInputRef.current?.click()}
                         className="min-h-11 touch-manipulation rounded-lg border border-primary/30 bg-background px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        <Upload className="mr-1.5 inline-block h-3.5 w-3.5" aria-hidden="true" />
+                        <Upload className="mr-1.5 inline-block icon-sm" aria-hidden="true" />
                         更換圖片
                       </button>
                       <button
@@ -375,7 +384,7 @@ export default function ImageTransformPanel({
                         onClick={onClearSource}
                         className="min-h-11 touch-manipulation rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        <X className="mr-1.5 inline-block h-3.5 w-3.5" aria-hidden="true" />
+                        <X className="mr-1.5 inline-block icon-sm" aria-hidden="true" />
                         移除
                       </button>
                     </div>
@@ -390,7 +399,7 @@ export default function ImageTransformPanel({
                 onDrop={handleDrop}
                 className="flex min-h-44 w-full touch-manipulation flex-col items-center justify-center rounded-xl border-2 border-dashed border-border px-4 py-8 text-center text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <Upload className="mb-2 h-8 w-8" aria-hidden="true" />
+                <Upload className="mb-2 icon-display" aria-hidden="true" />
                 <span className="text-sm font-medium">點擊上傳或拖曳圖片</span>
                 <span className="mt-1 text-xs text-muted-foreground/70">支援 JPG、PNG（最大 10MB）</span>
               </button>
@@ -427,7 +436,6 @@ export default function ImageTransformPanel({
               <p className="text-xs font-medium text-muted-foreground">轉換模式</p>
               <div className="grid grid-cols-2 gap-2">
                 {TRANSFORM_MODES.map((m) => {
-                  const Icon = m.icon;
                   const isActive = mode === m.id;
                   return (
                     <button
@@ -442,9 +450,9 @@ export default function ImageTransformPanel({
                           : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-muted/30"
                       )}
                     >
-                      <span className={cn("flex items-center gap-1.5", isActive && "text-primary")}>
-                        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className={cn("flex w-full items-center gap-1.5", isActive && "text-primary")}>
                         <span className="text-xs font-semibold">{m.label}</span>
+                        {isActive && <Check className="icon-sm ml-auto" aria-hidden="true" />}
                       </span>
                       <span className="hidden text-xs leading-snug text-muted-foreground sm:line-clamp-2 sm:block">
                         {m.description}
@@ -470,9 +478,9 @@ export default function ImageTransformPanel({
                   title="使用 AI 自動豐富描述細節與提示詞"
                 >
                   {isOptimizing ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Sparkles className="icon-sm" aria-hidden="true" />
                   )}
                   {isOptimizing ? "優化中…" : "AI 智能優化"}
                 </Button>
@@ -542,9 +550,9 @@ export default function ImageTransformPanel({
                   </span>
                 )}
                 {showStyleSource ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <ChevronUp className="icon-sm text-muted-foreground" aria-hidden="true" />
                 ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <ChevronDown className="icon-sm text-muted-foreground" aria-hidden="true" />
                 )}
               </span>
             </button>
@@ -589,15 +597,6 @@ export default function ImageTransformPanel({
                               : "text-muted-foreground hover:text-foreground"
                           )}
                         >
-                          {id === "templates" && (
-                            <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          )}
-                          {id === "palette" && (
-                            <Palette className="h-3.5 w-3.5" aria-hidden="true" />
-                          )}
-                          {id === "saved" && (
-                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                          )}
                           {label}
                         </button>
                       );
@@ -640,7 +639,7 @@ export default function ImageTransformPanel({
                     >
                       {appliedStyleName ? (
                         <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5">
-                          <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                          <Check className="icon-sm shrink-0 text-primary" aria-hidden="true" />
                           <span className="min-w-0 flex-1 truncate text-xs font-medium text-primary">
                             {appliedStyleName}
                           </span>
@@ -650,7 +649,7 @@ export default function ImageTransformPanel({
                             className="min-h-11 min-w-11 touch-manipulation rounded-lg text-muted-foreground transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label="取消套用風格"
                           >
-                            <X className="mx-auto h-4 w-4" aria-hidden="true" />
+                            <X className="mx-auto icon-sm" aria-hidden="true" />
                           </button>
                         </div>
                       ) : (
@@ -662,12 +661,12 @@ export default function ImageTransformPanel({
                             aria-expanded={showStylePicker}
                             aria-controls="saved-style-list"
                           >
-                            <Palette className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <Palette className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
                             <span className="flex-1 text-xs font-medium text-foreground">選擇已儲存的風格</span>
                             {showStylePicker ? (
-                              <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                              <ChevronUp className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
                             ) : (
-                              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                              <ChevronDown className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
                             )}
                           </button>
 
@@ -700,7 +699,7 @@ export default function ImageTransformPanel({
                                       )}
                                     </span>
                                     {appliedStyleId === style.id && (
-                                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                                      <Check className="mt-0.5 icon-sm shrink-0 text-primary" aria-hidden="true" />
                                     )}
                                   </button>
                                 ))

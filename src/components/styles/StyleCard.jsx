@@ -3,16 +3,19 @@ import {
   Copy,
   Download,
   Eye,
-  Image as ImageIcon,
-  Lock,
   Pencil,
   Share2,
-  Sparkles,
   Trash2,
-  Users,
   ZoomIn,
-} from "lucide-react";
-
+} from "@/components/icons/lucideControls";
+import {
+  Lock,
+} from "@/components/icons/lucideStatus";
+import {
+  Image as ImageIcon,
+  Sparkles,
+  Users,
+} from "@/components/icons/lucideContent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -114,7 +117,7 @@ export default function StyleCard({
                 onError={() => setImgError(true)}
               />
               <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition-[background-color,opacity] duration-200 group-hover/preview:bg-black/35 group-hover/preview:opacity-100 group-focus-visible/preview:bg-black/35 group-focus-visible/preview:opacity-100 motion-reduce:transition-none">
-                <ZoomIn className="h-6 w-6 drop-shadow" aria-hidden="true" />
+                <ZoomIn className="icon-lg drop-shadow" aria-hidden="true" />
               </span>
             </button>
           ) : (
@@ -132,7 +135,7 @@ export default function StyleCard({
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <div className="text-center">
-              <ImageIcon className="mx-auto mb-2 h-12 w-12 text-muted-foreground/30" aria-hidden="true" />
+              <ImageIcon className="mx-auto mb-2 icon-display text-muted-foreground/30" aria-hidden="true" />
               <span className="text-xs text-muted-foreground/60">無預覽</span>
             </div>
           </div>
@@ -150,15 +153,15 @@ export default function StyleCard({
               }`}
           >
             {isShared ? (
-              <Users className="mr-1 h-3 w-3" aria-hidden="true" />
+              <Users className="mr-1 icon-xs" aria-hidden="true" />
             ) : (
-              <Lock className="mr-1 h-3 w-3" aria-hidden="true" />
+              <Lock className="mr-1 icon-xs" aria-hidden="true" />
             )}
             {isShared ? "已共享" : "私人"}
           </Badge>
           {style.isCurated && (
             <Badge className="bg-primary text-xs text-primary-foreground shadow-sm">
-              <Sparkles className="mr-1 h-3 w-3" aria-hidden="true" />
+              <Sparkles className="mr-1 icon-xs" aria-hidden="true" />
               精選
             </Badge>
           )}
@@ -202,9 +205,9 @@ export default function StyleCard({
           {dateText && <span>{dateText}</span>}
           {(style.usageCount > 0 || style.copyCount > 0) && (
             <span className="inline-flex items-center gap-1">
-              <Eye className="h-3 w-3" aria-hidden="true" />
+              <Eye className="icon-xs" aria-hidden="true" />
               {style.usageCount || 0}
-              <Copy className="ml-1 h-3 w-3" aria-hidden="true" />
+              <Copy className="ml-1 icon-xs" aria-hidden="true" />
               {style.copyCount || 0}
             </span>
           )}
@@ -250,7 +253,7 @@ export default function StyleCard({
             onClick={() => onApply(style)}
             className="min-h-10 w-full gap-2"
           >
-            <Download className="h-4 w-4" aria-hidden="true" />
+            <Download className="icon-sm" aria-hidden="true" />
             套用風格
           </Button>
           {(canCopy || canPublish || canUnpublish || canEdit || onDelete) && (
@@ -264,7 +267,7 @@ export default function StyleCard({
                   className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
                   title={`編輯風格 ${style.name}`}
                 >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Pencil className="icon-sm" aria-hidden="true" />
                   <span className="min-w-0 truncate">編輯</span>
                 </Button>
               )}
@@ -277,7 +280,7 @@ export default function StyleCard({
                   className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
                   title={`複製風格 ${style.name}`}
                 >
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Copy className="icon-sm" aria-hidden="true" />
                   <span className="min-w-0 truncate">複製</span>
                 </Button>
               ) : canPublish ? (
@@ -289,7 +292,7 @@ export default function StyleCard({
                   className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
                   title={`共享風格 ${style.name}`}
                 >
-                  <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Share2 className="icon-sm" aria-hidden="true" />
                   <span className="min-w-0 truncate">共享</span>
                 </Button>
               ) : canUnpublish ? (
@@ -301,7 +304,7 @@ export default function StyleCard({
                   className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
                   title={`取消共享風格 ${style.name}`}
                 >
-                  <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Lock className="icon-sm" aria-hidden="true" />
                   <span className="min-w-0 truncate">取消共享</span>
                 </Button>
               ) : null}
@@ -314,7 +317,7 @@ export default function StyleCard({
                   className="min-w-0 min-h-10 gap-1 px-1.5 text-[11px]"
                   title={`刪除風格 ${style.name}`}
                 >
-                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Trash2 className="icon-sm" aria-hidden="true" />
                   <span className="min-w-0 truncate">刪除</span>
                 </Button>
               )}

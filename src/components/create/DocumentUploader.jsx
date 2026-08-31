@@ -1,8 +1,21 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  FileText, Upload, X, FileType, Clock3,
-  CheckCircle2, FileSearch, Brain, Sparkles, Clapperboard,
-} from "lucide-react";
+  Upload,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  CheckCircle2,
+} from "@/components/icons/lucideStatus";
+import {
+  FileText,
+  FileType,
+  Clock3,
+  FileSearch,
+  Brain,
+  Sparkles,
+  Clapperboard,
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -148,9 +161,7 @@ function AnalysisProgress({ analysisPhase, fileName }) {
         {/* 標題與目前狀態 */}
         <header className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3.5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/10">
-              <FileText className="h-5 w-5" aria-hidden="true" />
-            </div>
+            <ProductGlyph kind="document" active className="h-10 w-10 shrink-0 text-primary" aria-hidden="true" />
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 <span>分鏡分析</span>
@@ -231,7 +242,7 @@ function AnalysisProgress({ analysisPhase, fileName }) {
                       }`}
                     >
                       {isCompleted ? (
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        <CheckCircle2 className="icon-sm" aria-hidden="true" />
                       ) : (
                         <StepIcon className={`h-4 w-4 ${isCurrent ? "animate-pulse" : ""}`} aria-hidden="true" />
                       )}
@@ -276,7 +287,7 @@ function AnalysisProgress({ analysisPhase, fileName }) {
 
         {/* 友善提示 */}
         <div className="mt-6 flex items-start gap-2.5 border-t border-border/60 pt-4 text-xs leading-5 text-muted-foreground">
-          <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden="true" />
+          <Clock3 className="mt-0.5 icon-sm shrink-0 text-primary/70" aria-hidden="true" />
           <p>大多數文件會在 15–45 秒內完成，文件越大所需時間越長。</p>
         </div>
       </div>
@@ -363,9 +374,9 @@ export default function DocumentUploader({
   const getFileIcon = (fileName) => {
     const ext = fileName.split(".").pop().toLowerCase();
     switch (ext) {
-      case "pdf": return <FileText className="h-8 w-8 text-red-500" />;
-      case "png": case "jpg": case "jpeg": return <FileType className="h-8 w-8 text-green-500" />;
-      default: return <FileText className="h-8 w-8 text-gray-500" />;
+      case "pdf": return <FileText className="icon-display text-red-500" />;
+      case "png": case "jpg": case "jpeg": return <FileType className="icon-display text-green-500" />;
+      default: return <FileText className="icon-display text-gray-500" />;
     }
   };
 
@@ -422,12 +433,12 @@ export default function DocumentUploader({
                 onClick={(e) => { e.stopPropagation(); clearFile(); }}
                 disabled={disabled}
               >
-                <X className="h-4 w-4" />
+                <X className="icon-sm" />
               </Button>
             </div>
           ) : (
             <>
-              <Upload className="h-12 w-12 text-muted-foreground/50" />
+              <Upload className="icon-display text-muted-foreground/50" />
               <div className="text-center">
                 <p className="text-sm font-medium text-foreground">點擊或拖曳檔案至此處</p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -480,7 +491,7 @@ export default function DocumentUploader({
             </div>
           </div>
           <Button onClick={handleAnalyze} disabled={disabled} className="w-full">
-            <FileText className="h-4 w-4 mr-2" />
+            <ProductGlyph kind="document" active className="icon-sm mr-2" aria-hidden="true" />
             分析文件並提取場景
           </Button>
         </div>

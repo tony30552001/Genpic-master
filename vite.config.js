@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
@@ -18,5 +18,11 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/setupTests.js",
     css: true,
+    // 這兩個目錄含有整個 repo 的複本，會被誤判為待測檔案。
+    exclude: [
+      ...configDefaults.exclude,
+      "**/.superpowers/**",
+      "**/.pnpm-store/**",
+    ],
   },
 })

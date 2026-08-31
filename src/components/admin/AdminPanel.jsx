@@ -2,24 +2,28 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Brain,
-  Check,
   ChevronLeft,
   ChevronRight,
-  Database,
-  Image,
-  Loader2,
-  Palette,
   Save,
   Search,
-  Settings,
-  ShieldCheck,
   Trash2,
-  Users,
+  ZoomIn,
+} from "@/components/icons/lucideControls";
+import {
+  Check,
+  Loader2,
   UserCheck,
   UserX,
-  ZoomIn,
-} from "lucide-react";
+} from "@/components/icons/lucideStatus";
+import {
+  Brain,
+  Database,
+  Image,
+  Palette,
+  Settings,
+  ShieldCheck,
+  Users,
+} from "@/components/icons/lucideContent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -213,7 +217,7 @@ const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChang
           aria-label={`上一頁${itemLabel}`}
           className="h-9 w-9"
         >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          <ChevronLeft className="icon-sm" aria-hidden="true" />
         </Button>
         <span className="min-w-20 text-center tabular-nums">
           第 {pagination.page} / {pagination.totalPages} 頁
@@ -227,7 +231,7 @@ const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChang
           aria-label={`下一頁${itemLabel}`}
           className="h-9 w-9"
         >
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <ChevronRight className="icon-sm" aria-hidden="true" />
         </Button>
       </div>
     </div>
@@ -661,10 +665,10 @@ export default function AdminPanel() {
               className="h-10 w-10 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
               aria-label="返回創作平台"
             >
-              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+              <ArrowLeft className="icon-md" aria-hidden="true" />
             </Button>
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15">
-              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+              <ShieldCheck className="icon-md" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <p className="truncate text-base font-semibold">Administrator 管理中心</p>
@@ -758,7 +762,7 @@ export default function AdminPanel() {
                     />
                   ))}
                 {(isRefreshing || loadingSection) && (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
+                  <Loader2 className="icon-sm animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
                 )}
               </div>
             </div>
@@ -770,7 +774,7 @@ export default function AdminPanel() {
             )}
             {successMessage && (
               <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300" role="status">
-                <Check className="h-4 w-4" aria-hidden="true" />
+                <Check className="icon-sm" aria-hidden="true" />
                 {successMessage}
               </div>
             )}
@@ -778,7 +782,7 @@ export default function AdminPanel() {
             {loadingSection === activeSection ? (
               <Card>
                 <CardContent className="flex min-h-56 items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary motion-reduce:animate-none" aria-label="載入管理資料" />
+                  <Loader2 className="icon-lg animate-spin text-primary motion-reduce:animate-none" aria-label="載入管理資料" />
                 </CardContent>
               </Card>
             ) : (
@@ -787,14 +791,14 @@ export default function AdminPanel() {
                   <Card>
                     <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
                       <CardTitle className="flex items-center gap-2 text-base">
-                        <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+                        <Users className="icon-sm text-primary" aria-hidden="true" />
                         使用者清單
                         <Badge variant="secondary" className="ml-auto">{userPagination.total}</Badge>
                       </CardTitle>
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="relative">
                           <Search
-                            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                            className="pointer-events-none absolute left-2.5 top-1/2 icon-sm -translate-y-1/2 text-muted-foreground"
                             aria-hidden="true"
                           />
                           <input
@@ -878,9 +882,9 @@ export default function AdminPanel() {
                                   )}
                                 >
                                   {item.isActive ? (
-                                    <UserX className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <UserX className="icon-sm" aria-hidden="true" />
                                   ) : (
-                                    <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <UserCheck className="icon-sm" aria-hidden="true" />
                                   )}
                                   {item.isActive ? "停用" : "啟用"}
                                 </Button>
@@ -910,7 +914,7 @@ export default function AdminPanel() {
                   <Card>
                     <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
                       <CardTitle className="flex items-center gap-2 text-base">
-                        <Database className="h-4 w-4 text-primary" aria-hidden="true" />
+                        <Database className="icon-sm text-primary" aria-hidden="true" />
                         使用者生成圖片紀錄
                         <Badge variant="secondary" className="ml-auto">{historyPagination.total}</Badge>
                       </CardTitle>
@@ -954,7 +958,7 @@ export default function AdminPanel() {
                                       placeholderClassName="h-full w-full"
                                     />
                                     <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                                      <ZoomIn className="h-4 w-4 text-white" aria-hidden="true" />
+                                      <ZoomIn className="icon-sm text-white" aria-hidden="true" />
                                     </span>
                                   </button>
                                 ) : (
@@ -998,7 +1002,7 @@ export default function AdminPanel() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
-                        <Settings className="h-4 w-4 text-primary" aria-hidden="true" />
+                        <Settings className="icon-sm text-primary" aria-hidden="true" />
                         圖片生成模型政策
                       </CardTitle>
                     </CardHeader>
@@ -1037,7 +1041,7 @@ export default function AdminPanel() {
                                     "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
                                     isAllowed ? "border-primary bg-primary text-primary-foreground" : "border-border"
                                   )}>
-                                    {isAllowed && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+                                    {isAllowed && <Check className="icon-sm" aria-hidden="true" />}
                                   </span>
                                 </div>
                               </button>
@@ -1059,7 +1063,7 @@ export default function AdminPanel() {
                         </select>
                       </div>
                       <Button type="button" onClick={handleSavePolicy} disabled={isSavingPolicy} className="gap-2">
-                        {isSavingPolicy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                        {isSavingPolicy ? <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="icon-sm" aria-hidden="true" />}
                         儲存模型政策
                       </Button>
                     </CardContent>
@@ -1072,7 +1076,7 @@ export default function AdminPanel() {
                   <Card>
                     <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
                       <CardTitle className="flex items-center gap-2 text-base">
-                        <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
+                        <Palette className="icon-sm text-primary" aria-hidden="true" />
                         使用者儲存風格庫
                         <Badge variant="secondary" className="ml-auto">{stylesPagination.total}</Badge>
                       </CardTitle>
@@ -1110,7 +1114,7 @@ export default function AdminPanel() {
                                       placeholderClassName="h-12 w-12 rounded-lg border border-border"
                                     />
                                   ) : (
-                                    <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted"><Palette className="h-4 w-4 text-muted-foreground" aria-hidden="true" /></span>
+                                    <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted"><Palette className="icon-sm text-muted-foreground" aria-hidden="true" /></span>
                                   )}
                                   <div className="min-w-0">
                                     <p className="font-medium">{style.name}</p>
@@ -1141,7 +1145,7 @@ export default function AdminPanel() {
                                   onClick={() => handleDeleteStyle(style.id)}
                                   className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive"
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  <Trash2 className="icon-sm" aria-hidden="true" />
                                   刪除
                                 </Button>
                               </td>

@@ -1,15 +1,19 @@
 import React, { useCallback, useRef, useState } from "react";
 import {
-  PenLine,
   X,
   ChevronDown,
   ChevronUp,
-  Image,
-  Loader2,
-  Wand2,
   Save,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
+import {
+  PenLine,
+  Image,
+  Wand2,
   LayoutTemplate,
-} from "lucide-react";
+} from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -196,7 +200,7 @@ export default function ScriptEditor({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <label htmlFor={contentFieldId} className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <PenLine className="h-4 w-4 text-primary" aria-hidden="true" />
+                <PenLine className="icon-sm text-primary" aria-hidden="true" />
                 內容描述
               </label>
               <p id={contentHelpId} className="text-xs leading-relaxed text-muted-foreground">
@@ -214,9 +218,9 @@ export default function ScriptEditor({
               title="使用 AI 自動豐富畫面細節與提示詞"
             >
               {isOptimizing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
               ) : (
-                <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <Wand2 className="icon-sm" aria-hidden="true" />
               )}
               {isOptimizing ? "優化中…" : "AI 智能優化"}
             </Button>
@@ -332,9 +336,9 @@ export default function ScriptEditor({
               </Badge>
             )}
             {assistToolsOpen ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <ChevronUp className="icon-sm text-muted-foreground" aria-hidden="true" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <ChevronDown className="icon-sm text-muted-foreground" aria-hidden="true" />
             )}
           </span>
         </button>
@@ -381,7 +385,7 @@ export default function ScriptEditor({
                       title="移除參考圖片"
                       aria-label="移除參考圖片"
                     >
-                      <X className="h-4 w-4" aria-hidden="true" />
+                      <X className="icon-sm" aria-hidden="true" />
                     </button>
                   </div>
                   <span className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
@@ -427,7 +431,7 @@ export default function ScriptEditor({
                       {isUploadingContent ? (
                         <span className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary motion-reduce:animate-none" aria-hidden="true" />
                       ) : (
-                        <Image className="h-5 w-5" aria-hidden="true" />
+                        <Image className="icon-md" aria-hidden="true" />
                       )}
                     </span>
                     <span className="flex-1 text-left">
@@ -455,12 +459,12 @@ export default function ScriptEditor({
                     >
                       {isAnalyzing ? (
                         <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                          <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                           {analysisPhase || "正在分析風格…"}
                         </>
                       ) : (
                         <>
-                          <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          <Wand2 className="icon-sm" aria-hidden="true" />
                           分析此圖片風格
                         </>
                       )}
@@ -471,7 +475,7 @@ export default function ScriptEditor({
                     <div className="space-y-3 rounded-xl border border-border bg-background p-3 shadow-sm animate-in fade-in slide-in-from-top-2">
                       <div className="space-y-1">
                         <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                          <Wand2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                          <Wand2 className="icon-sm text-primary" aria-hidden="true" />
                           {String(analysisResultData?.style_name || "風格分析結果")}
                         </h3>
                         <p className="rounded-lg border border-border/80 bg-muted/40 p-2 text-xs leading-relaxed text-muted-foreground">
@@ -507,9 +511,9 @@ export default function ScriptEditor({
                             className="h-9 shrink-0 gap-1.5 px-3 text-xs"
                           >
                             {isSavingStyle ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                              <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                             ) : (
-                              <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                              <Save className="icon-sm" aria-hidden="true" />
                             )}
                             收藏
                           </Button>
@@ -572,7 +576,7 @@ export default function ScriptEditor({
                     title="將當前內容與風格存為可重複使用的範本"
                     aria-expanded={showSaveTemplate}
                   >
-                    <LayoutTemplate className="h-3.5 w-3.5" aria-hidden="true" />
+                    <LayoutTemplate className="icon-sm" aria-hidden="true" />
                     存為範本
                   </Button>
                 </div>

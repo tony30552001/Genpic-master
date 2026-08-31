@@ -1,17 +1,18 @@
 import React, { useMemo, useState } from "react";
 import {
-    CheckSquare,
-    Clock3,
-    Copy,
-    FileText,
-    Filter,
-    Palette,
-    Pencil,
-    Search,
-    Trash2,
-    X,
-} from "lucide-react";
-
+  CheckSquare,
+  Copy,
+  Filter,
+  Pencil,
+  Search,
+  Trash2,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  Clock3,
+  Palette,
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 function TemplateCard({
     template,
     onApply,
@@ -80,9 +81,7 @@ function TemplateCard({
             <div className="flex-1 p-3 flex flex-col gap-2">
                 {/* Icon + 標題 */}
                 <div className="flex items-start gap-2.5">
-                    <div className="shrink-0 w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
-                        <FileText className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
-                    </div>
+                    <ProductGlyph kind="library" className="icon-md mt-0.5 text-primary" aria-hidden="true" />
                     <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors">
                             {template.name}
@@ -108,7 +107,7 @@ function TemplateCard({
                 {template.stylePrompt && (
                     <div className="flex items-center gap-1.5">
                         <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
-                            <Palette className="h-3 w-3" aria-hidden="true" />
+                            <Palette className="icon-xs" aria-hidden="true" />
                             含風格設定
                         </span>
                     </div>
@@ -161,7 +160,7 @@ function TemplateCard({
                         }}
                         className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                     >
-                        <Copy className="h-3.5 w-3.5" aria-hidden="true" /> 套用
+                        <Copy className="icon-sm" aria-hidden="true" /> 套用
                     </button>
                     {onEdit && (
                         <button
@@ -172,7 +171,7 @@ function TemplateCard({
                             }}
                             className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> 編輯
+                            <Pencil className="icon-sm" aria-hidden="true" /> 編輯
                         </button>
                     )}
                     <button
@@ -184,7 +183,7 @@ function TemplateCard({
                         className="flex min-h-9 min-w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label={`刪除範本 ${template.name}`}
                     >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Trash2 className="icon-sm" aria-hidden="true" />
                     </button>
                 </div>
             )}
@@ -286,7 +285,7 @@ function TemplateListRow({
                         <h3 className="truncate text-sm font-semibold text-foreground">{template.name}</h3>
                         {template.stylePrompt && (
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
-                                <Palette className="h-3 w-3" aria-hidden="true" />
+                                <Palette className="icon-xs" aria-hidden="true" />
                                 含風格
                             </span>
                         )}
@@ -302,7 +301,7 @@ function TemplateListRow({
                             isSelectionMode={isSelectionMode}
                         />
                         <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <Clock3 className="h-3 w-3" aria-hidden="true" />
+                            <Clock3 className="icon-xs" aria-hidden="true" />
                             {formatTemplateDate(template)}
                         </span>
                     </div>
@@ -316,7 +315,7 @@ function TemplateListRow({
                         className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label={`套用範本 ${template.name}`}
                     >
-                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Copy className="icon-sm" aria-hidden="true" />
                         <span className="hidden md:inline">套用</span>
                     </button>
                     {onEdit && (
@@ -326,7 +325,7 @@ function TemplateListRow({
                             className="flex min-h-10 min-w-10 items-center justify-center rounded-md px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                             aria-label={`編輯範本 ${template.name}`}
                         >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                            <Pencil className="icon-sm" aria-hidden="true" />
                             <span className="sr-only">編輯</span>
                         </button>
                     )}
@@ -336,7 +335,7 @@ function TemplateListRow({
                         className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label={`刪除範本 ${template.name}`}
                     >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Trash2 className="icon-sm" aria-hidden="true" />
                     </button>
                 </div>
             )}
@@ -396,7 +395,7 @@ function TemplateTable({
                                         <p className="truncate font-medium text-foreground">{template.name}</p>
                                         {template.stylePrompt && (
                                             <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary">
-                                                <Palette className="h-3 w-3" aria-hidden="true" />
+                                                <Palette className="icon-xs" aria-hidden="true" />
                                                 含風格設定
                                             </span>
                                         )}
@@ -428,7 +427,7 @@ function TemplateTable({
                                             className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                                             aria-label={`套用範本 ${template.name}`}
                                         >
-                                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <Copy className="icon-sm" aria-hidden="true" />
                                             套用
                                         </button>
                                         {onEdit && (
@@ -438,7 +437,7 @@ function TemplateTable({
                                                 className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                                                 aria-label={`編輯範本 ${template.name}`}
                                             >
-                                                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                                                <Pencil className="icon-sm" aria-hidden="true" />
                                             </button>
                                         )}
                                         <button
@@ -447,7 +446,7 @@ function TemplateTable({
                                             className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                                             aria-label={`刪除範本 ${template.name}`}
                                         >
-                                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <Trash2 className="icon-sm" aria-hidden="true" />
                                         </button>
                                     </div>
                                 )}
@@ -577,7 +576,7 @@ export default function TemplateLibrary({
             <div className="space-y-3">
                 {!hideSearch && (
                     <div className="relative">
-                        <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-3 pointer-events-none" aria-hidden="true" />
+                        <Search className="icon-sm text-muted-foreground absolute left-3.5 top-3 pointer-events-none" aria-hidden="true" />
                         <input
                             type="text"
                             placeholder="搜尋範本名稱、描述或內容…"
@@ -593,7 +592,7 @@ export default function TemplateLibrary({
                                 className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 aria-label="清除搜尋"
                             >
-                                <X className="w-4 h-4" aria-hidden="true" />
+                                <X className="icon-sm" aria-hidden="true" />
                             </button>
                         )}
                     </div>
@@ -602,7 +601,7 @@ export default function TemplateLibrary({
                 {allTags.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center gap-2 px-1">
-                            <Filter className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                            <Filter className="icon-sm text-muted-foreground" aria-hidden="true" />
                             <span className="text-xs font-medium text-muted-foreground">
                                 標籤篩選
                             </span>
@@ -690,7 +689,7 @@ export default function TemplateLibrary({
                             disabled={selectedIds.size === 0}
                             className="flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-xs text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            <Trash2 className="icon-sm" aria-hidden="true" />
                             刪除選取項目
                         </button>
                     </div>
@@ -739,7 +738,7 @@ export default function TemplateLibrary({
                         onClick={toggleSelectionMode}
                         className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                        <CheckSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                        <CheckSquare className="icon-sm" aria-hidden="true" />
                         批次管理
                     </button>
                 )}

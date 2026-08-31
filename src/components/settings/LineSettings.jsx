@@ -10,20 +10,24 @@
 
 import React, { useState } from "react";
 import {
-    CheckCircle,
-    ChevronDown,
-    ChevronRight,
-    ChevronUp,
-    Eye,
-    EyeOff,
-    HelpCircle,
-    Info,
-    Loader2,
-    MessageSquare,
-    ShieldCheck,
-    Trash2,
-    XCircle,
-} from "lucide-react";
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Eye,
+  EyeOff,
+  Trash2,
+} from "@/components/icons/lucideControls";
+import {
+  CheckCircle,
+  HelpCircle,
+  Info,
+  Loader2,
+  XCircle,
+} from "@/components/icons/lucideStatus";
+import {
+  MessageSquare,
+  ShieldCheck,
+} from "@/components/icons/lucideContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -121,7 +125,7 @@ export default function LineSettings({ useLineConfigHook }) {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${LINE_BRAND_COLOR}1A` }}>
-                            <MessageSquare className="w-4 h-4" style={{ color: LINE_BRAND_COLOR }} aria-hidden="true" />
+                            <MessageSquare className="icon-sm" style={{ color: LINE_BRAND_COLOR }} aria-hidden="true" />
                         </div>
                         <div>
                             <h3 className="font-semibold text-sm text-foreground">LINE 官方帳號</h3>
@@ -140,14 +144,14 @@ export default function LineSettings({ useLineConfigHook }) {
                 {/* ── Bound: current config summary ──────────────────────── */}
                 {isLoading && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" /> 載入中…
+                        <Loader2 className="icon-sm animate-spin" /> 載入中…
                     </div>
                 )}
 
                 {!isLoading && isBound && !showForm && (
                     <div className="space-y-3">
                         <div className="flex items-start gap-3 p-3 rounded-lg" style={{ backgroundColor: `${LINE_BRAND_COLOR}0D`, border: `1px solid ${LINE_BRAND_COLOR}33` }}>
-                            <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: LINE_BRAND_COLOR }} aria-hidden="true" />
+                            <CheckCircle className="icon-sm shrink-0 mt-0.5" style={{ color: LINE_BRAND_COLOR }} aria-hidden="true" />
                             <div className="text-sm space-y-0.5 min-w-0">
                                 <p className="font-medium text-foreground">
                                     {config.channelName || "LINE 官方帳號"}
@@ -187,7 +191,7 @@ export default function LineSettings({ useLineConfigHook }) {
                                  onClick={handleDelete}
                                  aria-label="解除 LINE 官方帳號綁定"
                              >
-                                <Trash2 className="w-4 h-4" aria-hidden="true" />
+                                <Trash2 className="icon-sm" aria-hidden="true" />
                              </Button>
                         </div>
                     </div>
@@ -223,13 +227,13 @@ export default function LineSettings({ useLineConfigHook }) {
                                     onClick={() => setShowToken((p) => !p)}
                                     aria-label={showToken ? "隱藏 Channel Access Token" : "顯示 Channel Access Token"}
                                 >
-                                    {showToken ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                                    {showToken ? <EyeOff className="icon-sm" aria-hidden="true" /> : <Eye className="icon-sm" aria-hidden="true" />}
                                 </button>
                             </div>
                             {/* Verify feedback */}
                             {verifyState === "verifying" && (
                                 <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                                    <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" aria-hidden="true" /> 驗證中…
+                                    <Loader2 className="icon-xs animate-spin motion-reduce:animate-none" aria-hidden="true" /> 驗證中…
                                 </span>
                             )}
                             {verifyState && verifyState !== "verifying" && (
@@ -238,9 +242,9 @@ export default function LineSettings({ useLineConfigHook }) {
                                         }`}
                                 >
                                     {verifyState.valid ? (
-                                        <CheckCircle className="w-3 h-3" aria-hidden="true" />
+                                        <CheckCircle className="icon-xs" aria-hidden="true" />
                                     ) : (
-                                        <XCircle className="w-3 h-3" aria-hidden="true" />
+                                        <XCircle className="icon-xs" aria-hidden="true" />
                                     )}
                                     {verifyState.valid
                                         ? `驗證成功：${verifyState.channelName}`
@@ -254,7 +258,7 @@ export default function LineSettings({ useLineConfigHook }) {
                                 disabled={!form.channelAccessToken.trim() || form.channelAccessToken === "********" || verifyState === "verifying"}
                                 onClick={handleVerify}
                             >
-                                <ShieldCheck className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
+                                <ShieldCheck className="icon-sm mr-1.5" aria-hidden="true" />
                                 驗證 Token
                             </Button>
                         </Field>
@@ -314,9 +318,9 @@ export default function LineSettings({ useLineConfigHook }) {
                                 className="flex items-center gap-1 rounded-md text-xs text-primary hover:underline mt-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 aria-expanded={showIdHelp}
                             >
-                                <HelpCircle className="w-3 h-3" aria-hidden="true" />
+                                <HelpCircle className="icon-xs" aria-hidden="true" />
                                 {showIdHelp ? "收起說明" : "如何取得 ID？"}
-                                {showIdHelp ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                {showIdHelp ? <ChevronDown className="icon-xs" /> : <ChevronRight className="icon-xs" />}
                             </button>
                             {showIdHelp && (
                                 <div className="mt-2 p-3 bg-muted/50 border border-border/30 rounded-lg text-xs text-muted-foreground space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -350,7 +354,7 @@ export default function LineSettings({ useLineConfigHook }) {
 
                         {/* Info box */}
                         <div className="flex items-start gap-2 px-3 py-2.5 bg-muted/50 rounded-lg border border-border/30">
-                            <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
+                            <Info className="icon-sm text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
                             <p className="text-xs text-muted-foreground">
                                 Token 將以 AES-256-GCM 加密後存入資料庫，系統不會以明文保存。
                             </p>
@@ -365,9 +369,9 @@ export default function LineSettings({ useLineConfigHook }) {
                                 style={{ backgroundColor: LINE_BRAND_COLOR, borderColor: LINE_BRAND_COLOR, color: "#fff" }}
                             >
                                 {isSaving ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                                    <Loader2 className="icon-sm mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                                 ) : (
-                                    <CheckCircle className="w-4 h-4 mr-2" aria-hidden="true" />
+                                    <CheckCircle className="icon-sm mr-2" aria-hidden="true" />
                                 )}
                                 {isSaving ? "儲存中…" : "儲存設定"}
                             </Button>
@@ -394,9 +398,9 @@ export default function LineSettings({ useLineConfigHook }) {
                             }`}
                     >
                         {toast.type === "error" ? (
-                            <XCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                            <XCircle className="icon-sm shrink-0" aria-hidden="true" />
                         ) : (
-                            <CheckCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                            <CheckCircle className="icon-sm shrink-0" aria-hidden="true" />
                         )}
                         {toast.message}
                     </div>

@@ -1,5 +1,17 @@
 import React from "react";
-import { Upload, Palette, Wand2, Tag, Save, Loader2, X } from "lucide-react";
+import {
+  Upload,
+  Save,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
+import {
+  Palette,
+  Wand2,
+  Tag,
+} from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -66,12 +78,12 @@ export default function StyleAnalyzer({
                 title="移除圖片與風格"
                 aria-label="移除圖片與風格"
               >
-                <X className="w-4 h-4" aria-hidden="true" />
+                <X className="icon-sm" aria-hidden="true" />
               </button>
             </div>
           ) : (
             <div className="py-8 flex flex-col items-center text-muted-foreground">
-              <Upload className="w-8 h-8 mb-2" />
+              <Upload className="icon-display mb-2" />
               <span className="text-sm">點擊上傳或拖曳圖片</span>
               <span className="text-xs mt-1">支援 JPG, PNG</span>
             </div>
@@ -99,9 +111,9 @@ export default function StyleAnalyzer({
         className="w-full"
       >
         {isAnalyzing ? (
-          <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
         ) : (
-          <Palette className="w-4 h-4" aria-hidden="true" />
+          <Palette className="icon-sm" aria-hidden="true" />
         )}
         {isUploading
           ? "上傳中，請稍候…"
@@ -132,7 +144,7 @@ export default function StyleAnalyzer({
         <div className="bg-card border border-primary/10 rounded-xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 relative">
           <div className="flex items-start justify-between">
             <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-              <Wand2 className="w-4 h-4" />
+              <Wand2 className="icon-sm" />
               {analysisResultData?.style_name || "風格分析結果"}
             </h3>
             <button
@@ -140,7 +152,7 @@ export default function StyleAnalyzer({
               className="text-muted-foreground hover:text-foreground transition-colors"
               title="清除風格"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="icon-sm" />
             </button>
           </div>
 
@@ -177,9 +189,9 @@ export default function StyleAnalyzer({
                 className="h-8 px-3"
               >
                 {isSavingStyle ? (
-                  <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" />
+                  <Loader2 className="icon-xs animate-spin motion-reduce:animate-none" />
                 ) : (
-                  <Save className="w-3 h-3" />
+                  <Save className="icon-xs" />
                 )}
                 收藏
               </Button>

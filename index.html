@@ -6,6 +6,17 @@
   <link rel="icon" type="image/svg+xml" href="/pixora-favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixora 智繪</title>
+  <script>
+    /* 在首次繪製前套用主題，避免重新整理時閃現錯誤色系。 */
+    (function () {
+      var stored = localStorage.getItem("pixora.theme");
+      var theme = stored === "light" || stored === "dark"
+        ? stored
+        : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.classList.toggle("dark", theme === "dark");
+      document.documentElement.style.colorScheme = theme;
+    })();
+  </script>
 </head>
 
 <body>

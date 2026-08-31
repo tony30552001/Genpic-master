@@ -1,18 +1,21 @@
 import { useState } from "react";
 import {
-  AlertCircle,
-  Compass,
   Download,
+  RotateCcw,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  AlertCircle,
+} from "@/components/icons/lucideStatus";
+import {
+  Compass,
   FileText,
   Image as ImageIcon,
   Layers,
   LayoutTemplate,
   Palette,
-  RotateCcw,
-  Sparkles,
-  X,
-} from "lucide-react";
-
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import usePptMasterDeck from "@/hooks/usePptMasterDeck";
@@ -250,7 +253,7 @@ export default function PptMasterStudio() {
             role="alert"
             className="flex items-start gap-2 rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5"
           >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+            <AlertCircle className="mt-0.5 icon-sm shrink-0 text-destructive" aria-hidden="true" />
             <span className="min-w-0 text-sm text-foreground">{error || downloadError}</span>
           </div>
         )}
@@ -265,23 +268,23 @@ export default function PptMasterStudio() {
                 onClick={stopWatching}
                 aria-label="停止追蹤這份簡報；雲端上的生成不會因此中止"
               >
-                <X className="mr-2 h-4 w-4" aria-hidden="true" />
+                <X className="mr-2 icon-sm" aria-hidden="true" />
                 停止追蹤
               </Button>
             ) : deck ? (
               <>
                 <Button type="button" variant="outline" onClick={handleStartOver}>
-                  <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                  <RotateCcw className="mr-2 icon-sm" aria-hidden="true" />
                   重新產生
                 </Button>
                 <Button type="button" onClick={handleDownload}>
-                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                  <Download className="mr-2 icon-sm" aria-hidden="true" />
                   下載 PPTX
                 </Button>
               </>
             ) : (
               <Button type="button" onClick={handleGenerate} disabled={!canGenerate}>
-                <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
+                <ProductGlyph kind="deck" active className="icon-sm mr-2" aria-hidden="true" />
                 產生簡報
               </Button>
             )}

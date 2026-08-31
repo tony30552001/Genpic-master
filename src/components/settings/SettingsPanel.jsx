@@ -1,9 +1,12 @@
 import React from "react";
 import {
-    Languages,
-    Check,
-    Cpu,
-} from "lucide-react";
+  Check,
+} from "@/components/icons/lucideStatus";
+import {
+  Languages,
+  Cpu,
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -111,9 +114,7 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                         <section className="space-y-4" aria-labelledby="image-model-heading">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="flex items-start gap-3">
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                        <Cpu className="h-4 w-4" aria-hidden="true" />
-                                    </span>
+                                    <ProductGlyph kind="settings" className="icon-lg mt-0.5 text-primary" aria-hidden="true" />
                                     <div>
                                         <h3 id="image-model-heading" className="text-base font-semibold text-foreground">
                                                 系統生成政策
@@ -132,7 +133,7 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                 <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
                                     <div className="flex items-center gap-2">
                                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <Check className="icon-sm" aria-hidden="true" />
                                         </span>
                                         <div>
                                             <p className="text-sm font-semibold text-primary">{currentModel.label}</p>
@@ -153,9 +154,7 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                         <section className="space-y-4 border-t border-border/60 pt-5" aria-labelledby="image-language-heading">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="flex items-start gap-3">
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                        <Languages className="h-4 w-4" aria-hidden="true" />
-                                    </span>
+                                    <Languages className="icon-md mt-0.5 text-primary" aria-hidden="true" />
                                     <div>
                                         <h3 id="image-language-heading" className="text-base font-semibold text-foreground">
                                             圖片文字語系
@@ -198,7 +197,7 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                                     {lang.label}
                                                 </span>
                                                 {isSelected && (
-                                                    <Check className="ml-auto h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                                                    <Check className="ml-auto icon-sm text-primary" aria-hidden="true" />
                                                 )}
                                             </div>
                                             <p className="mt-1.5 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">

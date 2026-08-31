@@ -1,6 +1,16 @@
 import { useRef, useState } from "react";
-import { AlertCircle, FileText, Minus, Plus, Upload, X } from "lucide-react";
-
+import {
+  Minus,
+  Plus,
+  Upload,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  AlertCircle,
+} from "@/components/icons/lucideStatus";
+import {
+  FileText,
+} from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,7 +124,7 @@ export default function DeckSetupForm({
           />
           {value.file ? (
             <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <FileText className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate text-sm">{value.file.name}</span>
               <Button
                 type="button"
@@ -125,7 +135,7 @@ export default function DeckSetupForm({
                 disabled={disabled}
                 aria-label="移除參考文件"
               >
-                <X className="h-4 w-4" aria-hidden="true" />
+                <X className="icon-sm" aria-hidden="true" />
               </Button>
             </div>
           ) : (
@@ -136,7 +146,7 @@ export default function DeckSetupForm({
               disabled={disabled}
               className="w-full justify-start"
             >
-              <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
+              <Upload className="mr-2 icon-sm" aria-hidden="true" />
               選擇 PDF、Word、PowerPoint 或文字檔
             </Button>
           )}
@@ -173,7 +183,7 @@ export default function DeckSetupForm({
                 disabled={disabled || value.slideCount <= MIN_SLIDES}
                 aria-label="減少一頁"
               >
-                <Minus className="h-4 w-4" aria-hidden="true" />
+                <Minus className="icon-sm" aria-hidden="true" />
               </Button>
               <Input
                 id="deck-slide-count"
@@ -198,7 +208,7 @@ export default function DeckSetupForm({
                 disabled={disabled || value.slideCount >= MAX_SLIDES}
                 aria-label="增加一頁"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
+                <Plus className="icon-sm" aria-hidden="true" />
               </Button>
             </div>
             <p className="min-w-0 text-xs text-muted-foreground">
@@ -281,7 +291,7 @@ export default function DeckSetupForm({
       >
         {templatesError ? (
           <div className="flex items-center gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2.5">
-            <AlertCircle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+            <AlertCircle className="icon-sm shrink-0 text-warning" aria-hidden="true" />
             <span className="min-w-0 text-sm">{templatesError}</span>
           </div>
         ) : templatesReady ? (

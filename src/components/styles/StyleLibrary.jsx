@@ -1,26 +1,30 @@
 import React, { useMemo, useState } from "react";
 import {
-  AlertCircle,
   Bookmark,
   CheckSquare,
-  Clock3,
   Copy,
   Download,
   Eye,
   Filter,
-  Image as ImageIcon,
-  Loader2,
-  Lock,
   Pencil,
   Search,
   Share2,
-  Sparkles,
   Trash2,
-  Users,
   X,
   ZoomIn,
-} from "lucide-react";
-
+} from "@/components/icons/lucideControls";
+import {
+  AlertCircle,
+  Loader2,
+  Lock,
+} from "@/components/icons/lucideStatus";
+import {
+  Clock3,
+  Image as ImageIcon,
+  Sparkles,
+  Users,
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,7 +97,7 @@ function StylePreview({ style, className, onPreview }) {
         >
           {image}
           <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition-opacity duration-200 group-hover/preview:bg-black/35 group-hover/preview:opacity-100 group-focus-visible/preview:bg-black/35 group-focus-visible/preview:opacity-100 motion-reduce:transition-none">
-            <ZoomIn className="h-5 w-5 drop-shadow" aria-hidden="true" />
+            <ZoomIn className="icon-md drop-shadow" aria-hidden="true" />
           </span>
         </button>
       );
@@ -108,7 +112,7 @@ function StylePreview({ style, className, onPreview }) {
 
   return (
     <span className={`flex shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/50 ${className}`}>
-      <ImageIcon className="h-5 w-5" aria-hidden="true" />
+      <ImageIcon className="icon-md" aria-hidden="true" />
     </span>
   );
 }
@@ -119,12 +123,12 @@ function StyleStatusBadges({ style }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <Badge variant="outline" className={`gap-1 text-[10px] ${isShared ? "text-primary" : "text-muted-foreground"}`}>
-        {isShared ? <Users className="h-3 w-3" aria-hidden="true" /> : <Lock className="h-3 w-3" aria-hidden="true" />}
+        {isShared ? <Users className="icon-xs" aria-hidden="true" /> : <Lock className="icon-xs" aria-hidden="true" />}
         {isShared ? "已共享" : "私人"}
       </Badge>
       {style.isCurated && (
         <Badge className="gap-1 bg-primary text-[10px] text-primary-foreground">
-          <Sparkles className="h-3 w-3" aria-hidden="true" />
+          <Sparkles className="icon-xs" aria-hidden="true" />
           精選
         </Badge>
       )}
@@ -191,7 +195,7 @@ function StyleActionButtons({
         className="min-h-10 gap-1.5"
         aria-label={`套用風格 ${style.name}`}
       >
-        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        <Download className="icon-sm" aria-hidden="true" />
         <span className={compact ? "hidden xl:inline" : ""}>套用</span>
       </Button>
       {canEdit && (
@@ -203,7 +207,7 @@ function StyleActionButtons({
           className="min-h-10 gap-1.5"
           aria-label={`編輯風格 ${style.name}`}
         >
-          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          <Pencil className="icon-sm" aria-hidden="true" />
           <span className={compact ? "hidden xl:inline" : ""}>編輯</span>
         </Button>
       )}
@@ -216,7 +220,7 @@ function StyleActionButtons({
           className="min-h-10 gap-1.5"
           aria-label={`複製風格 ${style.name}`}
         >
-          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          <Copy className="icon-sm" aria-hidden="true" />
           <span className={compact ? "hidden xl:inline" : ""}>複製</span>
         </Button>
       ) : canPublish ? (
@@ -228,7 +232,7 @@ function StyleActionButtons({
           className="min-h-10 gap-1.5"
           aria-label={`共享風格 ${style.name}`}
         >
-          <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+          <Share2 className="icon-sm" aria-hidden="true" />
           <span className={compact ? "hidden xl:inline" : ""}>共享</span>
         </Button>
       ) : canUnpublish ? (
@@ -240,7 +244,7 @@ function StyleActionButtons({
           className="min-h-10 gap-1.5"
           aria-label={`取消共享風格 ${style.name}`}
         >
-          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+          <Lock className="icon-sm" aria-hidden="true" />
           <span className={compact ? "hidden xl:inline" : ""}>取消共享</span>
         </Button>
       ) : null}
@@ -253,7 +257,7 @@ function StyleActionButtons({
           className="min-h-10 gap-1.5"
           aria-label={`刪除風格 ${style.name}`}
         >
-          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          <Trash2 className="icon-sm" aria-hidden="true" />
           <span className={compact ? "hidden xl:inline" : ""}>刪除</span>
         </Button>
       )}
@@ -319,14 +323,14 @@ function StyleListRow({
           />
           {isShared && <span className="text-[11px] text-muted-foreground">共享人：{authorText}</span>}
           <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Clock3 className="h-3 w-3" aria-hidden="true" />
+            <Clock3 className="icon-xs" aria-hidden="true" />
             {formatStyleDate(style)}
           </span>
           {(style.usageCount > 0 || style.copyCount > 0) && (
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Eye className="h-3 w-3" aria-hidden="true" />
+              <Eye className="icon-xs" aria-hidden="true" />
               {style.usageCount || 0}
-              <Copy className="ml-1 h-3 w-3" aria-hidden="true" />
+              <Copy className="ml-1 icon-xs" aria-hidden="true" />
               {style.copyCount || 0}
             </span>
           )}
@@ -424,9 +428,9 @@ function StyleTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
-                    <Eye className="h-3 w-3" aria-hidden="true" />
+                    <Eye className="icon-xs" aria-hidden="true" />
                     {style.usageCount || 0}
-                    <Copy className="ml-1 h-3 w-3" aria-hidden="true" />
+                    <Copy className="ml-1 icon-xs" aria-hidden="true" />
                     {style.copyCount || 0}
                   </span>
                 </td>
@@ -612,7 +616,7 @@ export default function StyleLibrary({
           <div className={hideSearch ? "flex justify-end" : "grid gap-3 sm:grid-cols-[1fr_auto]"}>
             {!hideSearch && (
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 icon-sm text-muted-foreground" aria-hidden="true" />
                 <Input
                   type="text"
                   placeholder="搜尋風格名稱、描述、作者或標籤…"
@@ -622,7 +626,7 @@ export default function StyleLibrary({
                   className="pl-10 pr-10"
                 />
                 {isSearching && (
-                  <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+                  <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 icon-sm animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
                 )}
                 {searchQuery && !isSearching && (
                   <Button
@@ -633,7 +637,7 @@ export default function StyleLibrary({
                     aria-label="清除搜尋"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
                   >
-                    <X className="h-4 w-4" aria-hidden="true" />
+                    <X className="icon-sm" aria-hidden="true" />
                   </Button>
                 )}
               </div>
@@ -661,7 +665,7 @@ export default function StyleLibrary({
           {/* Tag filter */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              <Filter className="icon-sm text-muted-foreground" aria-hidden="true" />
               <span className="text-xs font-medium text-muted-foreground">標籤分類</span>
               {hasActiveFilters && (
                 <Button
@@ -730,7 +734,7 @@ export default function StyleLibrary({
       {/* ── Error Alert ── */}
       {error && (
         <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertCircle className="icon-sm" aria-hidden="true" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -738,7 +742,7 @@ export default function StyleLibrary({
       {/* ── Batch Selection Banner ── */}
       {isSelectionMode && (
         <Alert className="border-primary/20 bg-primary/5 text-foreground animate-in fade-in slide-in-from-top-2">
-          <CheckSquare className="h-4 w-4 text-primary" aria-hidden="true" />
+          <CheckSquare className="icon-sm text-primary" aria-hidden="true" />
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label className="flex items-center gap-2 text-sm font-medium">
               <input
@@ -762,7 +766,7 @@ export default function StyleLibrary({
                 disabled={selectedIds.size === 0}
                 className="gap-1.5"
               >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <Trash2 className="icon-sm" aria-hidden="true" />
                 刪除選取項目
               </Button>
             </div>
@@ -787,7 +791,7 @@ export default function StyleLibrary({
             onClick={toggleSelectionMode}
             className="gap-1.5 text-muted-foreground hover:text-primary"
           >
-            <CheckSquare className="h-3.5 w-3.5" aria-hidden="true" />
+            <CheckSquare className="icon-sm" aria-hidden="true" />
             批次管理
           </Button>
         )}
@@ -796,14 +800,12 @@ export default function StyleLibrary({
       {/* ── Card Grid ── */}
       {isLoading ? (
         <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-20 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <Loader2 className="mr-2 icon-md animate-spin motion-reduce:animate-none" aria-hidden="true" />
           載入風格中…
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center text-muted-foreground">
-          <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
-            <Bookmark className="h-7 w-7 text-muted-foreground/40" aria-hidden="true" />
-          </div>
+          <ProductGlyph kind="settings" className="h-12 w-12 text-muted-foreground/40" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-muted-foreground">{emptyTitle}</p>
             <p className="mt-1 text-xs text-muted-foreground/80">{emptyDescription}</p>

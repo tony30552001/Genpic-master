@@ -3,14 +3,16 @@ import {
   ArrowRightLeft,
   Bookmark,
   CheckSquare,
+  Search,
+  Trash2,
+  X,
+} from "@/components/icons/lucideControls";
+import {
   Clock3,
   FileText,
   Image as ImageIcon,
-  Search,
-  Trash2,
-  Wand2,
-  X,
-} from "lucide-react";
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import HistoryCard from "./HistoryCard";
 import ComparisonView from "./ComparisonView";
 import {
@@ -62,7 +64,7 @@ function HistoryPreview({ item, className }) {
 
   return (
     <span className={`flex shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/50 ${className}`}>
-      <ImageIcon className="h-5 w-5" aria-hidden="true" />
+      <ImageIcon className="icon-md" aria-hidden="true" />
     </span>
   );
 }
@@ -100,7 +102,7 @@ function HistoryListRow({
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
-            <Clock3 className="h-3 w-3" aria-hidden="true" />
+            <Clock3 className="icon-xs" aria-hidden="true" />
             {formatHistoryDate(item)}
           </span>
           {style ? (
@@ -120,7 +122,7 @@ function HistoryListRow({
             className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             aria-label="載入此生成紀錄設定"
           >
-            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            <FileText className="icon-sm" aria-hidden="true" />
             <span className="hidden md:inline">載入設定</span>
           </button>
           <button
@@ -129,7 +131,7 @@ function HistoryListRow({
             className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             aria-label="刪除此生成紀錄"
           >
-            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            <Trash2 className="icon-sm" aria-hidden="true" />
           </button>
         </div>
       )}
@@ -209,7 +211,7 @@ function HistoryTable({
                         className="flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label="載入此生成紀錄設定"
                       >
-                        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                        <FileText className="icon-sm" aria-hidden="true" />
                         載入
                       </button>
                       <button
@@ -218,7 +220,7 @@ function HistoryTable({
                         className="flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label="刪除此生成紀錄"
                       >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Trash2 className="icon-sm" aria-hidden="true" />
                       </button>
                     </div>
                   )}
@@ -344,7 +346,7 @@ export default function HistoryPanel({
       {!hideSearch && (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-2.5 pointer-events-none" aria-hidden="true" />
+            <Search className="icon-sm text-muted-foreground absolute left-3.5 top-2.5 pointer-events-none" aria-hidden="true" />
             <input
               type="text"
               placeholder="搜尋文字、日期或風格…"
@@ -360,7 +362,7 @@ export default function HistoryPanel({
                 className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label="清除搜尋"
               >
-                <X className="w-4 h-4" aria-hidden="true" />
+                <X className="icon-sm" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -398,7 +400,7 @@ export default function HistoryPanel({
               disabled={selectedIds.size === 0}
               className="flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-xs text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+              <Trash2 className="icon-sm" aria-hidden="true" />
               刪除選取項目
             </button>
             <button
@@ -408,7 +410,7 @@ export default function HistoryPanel({
               className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               title="請選擇 2 筆紀錄進行比對"
             >
-              <ArrowRightLeft className="w-3.5 h-3.5" aria-hidden="true" />
+              <ArrowRightLeft className="icon-sm" aria-hidden="true" />
               比對 (2)
             </button>
           </div>
@@ -440,7 +442,7 @@ export default function HistoryPanel({
             onClick={toggleSelectionMode}
             className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <CheckSquare className="w-3.5 h-3.5" aria-hidden="true" />
+            <CheckSquare className="icon-sm" aria-hidden="true" />
             批次管理
           </button>
         )}
@@ -448,9 +450,7 @@ export default function HistoryPanel({
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-3">
-          <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
-            <Bookmark className="w-7 h-7 text-muted-foreground/40" aria-hidden="true" />
-          </div>
+          <ProductGlyph kind="create" className="h-12 w-12 text-muted-foreground/40" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-muted-foreground">
               {searchQuery ? "找不到符合的紀錄" : "尚無生成紀錄"}
@@ -463,7 +463,8 @@ export default function HistoryPanel({
                 onClick={onGoCreate}
                 className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <Wand2 className="w-3 h-3" aria-hidden="true" /> 前往製作區
+                <ProductGlyph kind="create" active className="icon-xs" aria-hidden="true" />
+                前往製作區
               </button>
             </div>
           )}

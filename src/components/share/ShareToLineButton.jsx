@@ -1,6 +1,13 @@
 import React, { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Share2, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  Share2,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+} from "@/components/icons/lucideStatus";
 import useLineConfig from "../../hooks/useLineConfig";
 import { sendImageToLine } from "../../services/lineService";
 import { uploadFile } from "../../services/storageService";
@@ -88,13 +95,13 @@ export default function ShareToLineButton({ imageUrl, user, message, className =
                 variant={isSuccess ? "secondary" : "default"}
             >
                 {isLoading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="icon-sm mr-2 animate-spin" />
                 ) : isSuccess ? (
-                    <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                    <CheckCircle className="icon-sm mr-2 text-green-600" />
                 ) : isError ? (
-                    <AlertCircle className="w-4 h-4 mr-2" />
+                    <AlertCircle className="icon-sm mr-2" />
                 ) : (
-                    <Share2 className="w-4 h-4 mr-2" />
+                    <Share2 className="icon-sm mr-2" />
                 )}
 
                 {isLoading

@@ -24,6 +24,18 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-restricted-imports': ['error', {
+        paths: [{
+          name: 'lucide-react',
+          message: 'Import Lucide icons from src/components/icons/lucide*.js so product code depends on semantic icon roles.',
+        }],
+      }],
+    },
+  },
+  {
+    files: ['src/components/icons/lucide*.js'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
   {

@@ -1,10 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    AlertCircle, Wand2,
-    FileText, LogIn, LogOut, User, Settings, X, ImagePlay, ShieldCheck, MoreHorizontal, ChevronDown, Library
-} from 'lucide-react';
-
+  LogIn,
+  LogOut,
+  X,
+  MoreHorizontal,
+  ChevronDown,
+} from "@/components/icons/lucideControls";
+import {
+  AlertCircle,
+} from "@/components/icons/lucideStatus";
+import {
+  User,
+  ShieldCheck,
+} from "@/components/icons/lucideContent";
+import PixoraMark from "@/components/icons/PixoraMark";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import useAuth from './hooks/useAuth';
 import useStyles from './hooks/useStyles';
 import useHistory from './hooks/useHistory';
@@ -29,6 +40,7 @@ import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
 import ImageTransformPanel from './components/create/ImageTransformPanel';
 import AssetCenter from './components/library/AssetCenter';
+import ThemeToggle from './components/common/ThemeToggle';
 
 export default function InfographicGenerator({
     initialTab = 'general',
@@ -573,11 +585,11 @@ export default function InfographicGenerator({
 
     // --- Tab 定義 ---
     const tabs = [
-        { id: 'general', label: '一般創作', shortLabel: '創作', icon: Wand2 },
-        { id: 'document', label: '文件創作', shortLabel: '文件', icon: FileText },
-        { id: 'image-transform', label: '圖片轉換', shortLabel: '轉換', icon: ImagePlay },
-        { id: 'library', label: '素材中心', shortLabel: '素材', icon: Library },
-        { id: 'settings', label: '設定', shortLabel: '設定', icon: Settings },
+        { id: 'general', label: '一般創作', shortLabel: '創作', glyph: 'create' },
+        { id: 'document', label: '文件創作', shortLabel: '文件', glyph: 'document' },
+        { id: 'image-transform', label: '圖片轉換', shortLabel: '轉換', glyph: 'transform' },
+        { id: 'library', label: '素材中心', shortLabel: '素材', glyph: 'library' },
+        { id: 'settings', label: '設定', shortLabel: '設定', glyph: 'settings' },
     ];
     const activeTabInfo = tabs.find(t => t.id === activeTab);
     const mobilePrimaryTabs = tabs.filter((tab) =>
@@ -588,9 +600,9 @@ export default function InfographicGenerator({
     );
     const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
     const compactNavGroups = [
-        { id: 'create', label: '創作', icon: Wand2, tabIds: ['general', 'document', 'image-transform'] },
-        { id: 'library', label: '素材中心', icon: Library, tabIds: ['library'] },
-        { id: 'more', label: '更多', icon: MoreHorizontal, tabIds: ['settings'] },
+        { id: 'create', label: '創作', glyph: 'create', tabIds: ['general', 'document', 'image-transform'] },
+        { id: 'library', label: '素材中心', glyph: 'library', tabIds: ['library'] },
+        { id: 'more', label: '更多', glyph: 'settings', tabIds: ['settings'] },
     ];
     const compactActiveGroup = compactNavGroups.find((group) => group.tabIds.includes(activeTab))?.id;
     const compactOpenGroup = compactNavGroups.find((group) => group.id === compactNavSection);
@@ -609,17 +621,15 @@ export default function InfographicGenerator({
                 <div className="flex min-w-0 items-center justify-between gap-2 px-3 h-14 sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
                     {/* Logo */}
                     <div className="flex min-w-0 flex-1 items-center gap-2 justify-self-start sm:gap-3">
-                        <div className="w-8 h-8 shrink-0 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
-                            <Wand2 className="w-5 h-5" />
-                        </div>
+                        <PixoraMark className="h-8 w-8 text-white" title="Pixora" />
                         <div className="min-w-0">
                             <h1 className="truncate text-sm font-bold leading-tight sm:text-base">Pixora 智繪</h1>
                             <p className="text-[10px] text-white/70 leading-none hidden sm:block">AI 智能視覺創作平台</p>
                         </div>
-                        {/* 手機版：顯示當前頁面名稱 badge */}
+                        {/* 手機版：顯示當前頁面名稱 */}
                         {activeTabInfo && (
-                            <span className="sm:hidden flex min-w-0 shrink items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-medium backdrop-blur-sm">
-                                <activeTabInfo.icon className="w-3 h-3 shrink-0" />
+                            <span className="sm:hidden flex min-w-0 shrink items-center gap-1.5 text-[10px] font-medium text-white/75">
+                                <span aria-hidden="true">/</span>
                                 <span className="truncate">{activeTabInfo.label}</span>
                             </span>
                         )}
@@ -628,7 +638,6 @@ export default function InfographicGenerator({
                     {/* 平板版：Compact Main Navigation */}
                     <nav className="hidden w-fit items-center justify-center gap-1 px-3 md:flex xl:hidden" aria-label="主要功能">
                         {compactNavGroups.map((group) => {
-                            const GroupIcon = group.icon;
                             const isOpen = compactNavSection === group.id;
                             const isActive = compactActiveGroup === group.id;
                             return (
@@ -646,7 +655,12 @@ export default function InfographicGenerator({
                                             : 'text-white/80 hover:bg-white/10 hover:text-white'
                                     )}
                                 >
-                                    <GroupIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    <ProductGlyph
+                                        kind={group.glyph}
+                                        active={isActive || isOpen}
+                                        className="icon-sm"
+                                        aria-hidden="true"
+                                    />
                                     <span className="truncate">{group.label}</span>
                                     <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
                                 </button>
@@ -667,7 +681,6 @@ export default function InfographicGenerator({
                                     : 'text-white/80 hover:text-white hover:bg-white/10'
                                     }`}
                             >
-                                <tab.icon className="w-4 h-4" />
                                 {tab.label}
                             </button>
                         ))}
@@ -675,6 +688,7 @@ export default function InfographicGenerator({
 
                     {/* User Controls */}
                     <div className="flex min-w-0 shrink-0 items-center gap-2 justify-self-end sm:gap-3">
+                        <ThemeToggle className="text-white/80 hover:bg-white/10 hover:text-white" />
                         {isAdmin && (
                             <Button
                                 variant="ghost"
@@ -683,7 +697,7 @@ export default function InfographicGenerator({
                                 className="hidden gap-1.5 text-white/90 hover:bg-white/10 hover:text-white xl:flex"
                                 title="開啟管理中心"
                             >
-                                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                                <ShieldCheck className="icon-sm" aria-hidden="true" />
                                 管理中心
                             </Button>
                         )}
@@ -697,7 +711,7 @@ export default function InfographicGenerator({
                                     {user.photoURL ? (
                                         <img src={user.photoURL} alt="使用者頭像" width={32} height={32} className="w-full h-full object-cover" />
                                     ) : (
-                                        <User className="w-4 h-4" />
+                                        <User className="icon-sm" />
                                     )}
                                 </div>
                                 <Button
@@ -708,7 +722,7 @@ export default function InfographicGenerator({
                                      title="登出系統"
                                      aria-label="登出系統"
                                  >
-                                    <LogOut className="w-4 h-4" />
+                                    <LogOut className="icon-sm" />
                                 </Button>
                             </div>
                         )}
@@ -719,7 +733,7 @@ export default function InfographicGenerator({
                                 onClick={() => navigate("/login")}
                                 className="gap-1.5 bg-white/20 hover:bg-white/30 text-white border-0"
                             >
-                                <LogIn className="w-4 h-4" />
+                                <LogIn className="icon-sm" />
                                 登入
                             </Button>
                         )}
@@ -740,14 +754,13 @@ export default function InfographicGenerator({
                                 className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 aria-label="關閉功能選單"
                             >
-                                <X className="h-4 w-4" aria-hidden="true" />
+                                <X className="icon-sm" aria-hidden="true" />
                             </button>
                         </div>
                         <div className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-3">
                             {compactOpenGroup.tabIds.map((tabId) => {
                                 const tab = tabs.find((item) => item.id === tabId);
                                 if (!tab) return null;
-                                const TabIcon = tab.icon;
                                 const isActive = activeTab === tab.id;
                                 return (
                                     <button
@@ -763,7 +776,12 @@ export default function InfographicGenerator({
                                                 : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
                                         )}
                                     >
-                                        <TabIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                        <ProductGlyph
+                                            kind={tab.glyph}
+                                            active={isActive}
+                                            className="icon-sm"
+                                            aria-hidden="true"
+                                        />
                                         <span className="truncate">{tab.label}</span>
                                     </button>
                                 );
@@ -778,7 +796,7 @@ export default function InfographicGenerator({
                                     }}
                                     className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
-                                    <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    <ShieldCheck className="icon-sm shrink-0" aria-hidden="true" />
                                     <span className="truncate">管理中心</span>
                                 </button>
                             )}
@@ -799,13 +817,13 @@ export default function InfographicGenerator({
                             <div className="shrink-0 px-4 lg:px-8 pt-3 space-y-2">
                                 {errorMsg && (
                                     <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/50 bg-destructive/5 text-destructive">
-                                        <AlertCircle className="h-4 w-4 shrink-0" />
+                                        <AlertCircle className="icon-sm shrink-0" />
                                         <span className="text-sm">{errorMsg}</span>
                                     </div>
                                 )}
                                 {warningMsg && (
                                     <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-warning/50 bg-warning/10">
-                                        <AlertCircle className="h-4 w-4 text-warning shrink-0" />
+                                        <AlertCircle className="icon-sm text-warning shrink-0" />
                                         <span className="text-sm text-foreground">{warningMsg}</span>
                                     </div>
                                 )}
@@ -823,11 +841,11 @@ export default function InfographicGenerator({
                                     <div className="shrink-0">
                                         <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
                                             <TabsTrigger value="storyboard" className="gap-2 text-xs sm:text-sm">
-                                                <FileText className="h-4 w-4" aria-hidden="true" />
+                                                <ProductGlyph kind="document" active={documentAnalysisMode === "storyboard"} className="icon-sm" aria-hidden="true" />
                                                 文件分鏡
                                             </TabsTrigger>
                                             <TabsTrigger value="pptmaster" className="gap-2 text-xs sm:text-sm">
-                                                <Wand2 className="h-4 w-4" aria-hidden="true" />
+                                                <ProductGlyph kind="deck" active={documentAnalysisMode === "pptmaster"} className="icon-sm" aria-hidden="true" />
                                                 設計簡報
                                             </TabsTrigger>
                                         </TabsList>
@@ -977,6 +995,7 @@ export default function InfographicGenerator({
                                         ? "批次生成中…"
                                         : "AI 生成中…"
                                 }
+                                actionKind={hasActiveDocumentResult ? "document" : "create"}
                                 disabled={
                                     hasActiveDocumentResult
                                         ? !scenes || scenes.length === 0
@@ -1029,6 +1048,7 @@ export default function InfographicGenerator({
                             onCancelGeneration={cancelTransform}
                             buttonText="開始 AI 轉換"
                             isGeneratingText="AI 轉換中…"
+                            actionKind="transform"
                             disabled={!transformSourcePreview || isUploadingTransformSource}
                         />
                     </div>
@@ -1119,7 +1139,7 @@ export default function InfographicGenerator({
                                 className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 aria-label="關閉預覽"
                             >
-                                <X className="w-4 h-4" aria-hidden="true" />
+                                <X className="icon-sm" aria-hidden="true" />
                             </button>
                         </div>
                         {/* 圖片內容（可捲動） */}
@@ -1177,7 +1197,12 @@ export default function InfographicGenerator({
                                             : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
                                             }`}
                                     >
-                                        <tab.icon className="h-4 w-4" aria-hidden="true" />
+                                        <ProductGlyph
+                                            kind={tab.glyph}
+                                            active={isActive}
+                                            className="icon-sm"
+                                            aria-hidden="true"
+                                        />
                                         {tab.shortLabel}
                                     </button>
                                 );
@@ -1206,11 +1231,12 @@ export default function InfographicGenerator({
                                 {isActive && (
                                     <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-primary" />
                                 )}
-                                <span className={`flex items-center justify-center w-6 h-6 rounded-lg transition-colors duration-200 ${isActive ? 'bg-primary/10' : ''
-                                    }`}>
-                                    <tab.icon className={`transition-colors duration-200 ${isActive ? 'w-4 h-4' : 'w-4 h-4'
-                                        }`} />
-                                </span>
+                                <ProductGlyph
+                                    kind={tab.glyph}
+                                    active={isActive}
+                                    className="icon-md"
+                                    aria-hidden="true"
+                                />
                                 <span className={`text-[10px] font-medium leading-none transition-colors ${isActive ? 'font-semibold' : ''
                                     }`}>
                                     {tab.shortLabel}
@@ -1233,10 +1259,7 @@ export default function InfographicGenerator({
                         {(isMobileMoreActive || mobileMoreOpen) && (
                             <span className="absolute top-0 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-primary" />
                         )}
-                        <span className={`flex h-6 w-6 items-center justify-center rounded-lg transition-colors duration-200 ${isMobileMoreActive || mobileMoreOpen ? 'bg-primary/10' : ''
-                            }`}>
-                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                        </span>
+                        <MoreHorizontal className="icon-md" aria-hidden="true" />
                         <span className={`text-[10px] font-medium leading-none transition-colors ${isMobileMoreActive ? 'font-semibold' : ''
                             }`}>
                             更多

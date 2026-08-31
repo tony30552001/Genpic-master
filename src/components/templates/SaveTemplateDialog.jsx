@@ -1,6 +1,16 @@
 import React, { useState } from "react";
-import { FileText, Loader2, Palette, Save, Tag, X } from "lucide-react";
-
+import {
+  Save,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
+import {
+  FileText,
+  Palette,
+  Tag,
+} from "@/components/icons/lucideContent";
 /**
  * SaveTemplateDialog — 儲存範本的內嵌表單
  * 讓使用者輸入名稱、描述和標籤以將當前設定存為範本
@@ -50,7 +60,7 @@ export default function SaveTemplateDialog({
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-primary text-white">
                 <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" aria-hidden="true" />
+                    <FileText className="icon-sm" aria-hidden="true" />
                     <span className="text-sm font-bold">儲存為範本</span>
                 </div>
                 <button
@@ -59,7 +69,7 @@ export default function SaveTemplateDialog({
                     className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     aria-label="關閉範本儲存表單"
                 >
-                    <X className="w-4 h-4" aria-hidden="true" />
+                    <X className="icon-sm" aria-hidden="true" />
                 </button>
             </div>
 
@@ -75,7 +85,7 @@ export default function SaveTemplateDialog({
                     </p>
                     {stylePrompt && (
                         <p className="mt-1 flex items-center gap-1 text-[11px] text-primary">
-                            <Palette className="h-3 w-3" aria-hidden="true" />
+                            <Palette className="icon-xs" aria-hidden="true" />
                             含風格設定
                         </p>
                     )}
@@ -118,7 +128,7 @@ export default function SaveTemplateDialog({
                 {/* 標籤 */}
                 <div className="space-y-1">
                     <label htmlFor="template-tags" className="text-xs font-medium text-foreground flex items-center gap-1">
-                        <Tag className="w-3 h-3" aria-hidden="true" />
+                        <Tag className="icon-xs" aria-hidden="true" />
                         標籤（選填，以逗號分隔）
                     </label>
                     <input
@@ -151,12 +161,12 @@ export default function SaveTemplateDialog({
                 >
                     {isSaving ? (
                         <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                            <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                             儲存中…
                         </>
                     ) : (
                         <>
-                            <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                            <Save className="icon-sm" aria-hidden="true" />
                             儲存範本
                         </>
                     )}
@@ -166,7 +176,7 @@ export default function SaveTemplateDialog({
                     onClick={onClose}
                     className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium text-muted-foreground bg-muted hover:bg-muted/80 border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                    <X className="w-3.5 h-3.5" aria-hidden="true" />
+                    <X className="icon-sm" aria-hidden="true" />
                     取消
                 </button>
             </div>

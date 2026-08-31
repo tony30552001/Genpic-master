@@ -1,6 +1,14 @@
 import React from "react";
-import { Sparkles, Check, X, ArrowRight } from "lucide-react";
-
+import {
+  X,
+  ArrowRight,
+} from "@/components/icons/lucideControls";
+import {
+  Check,
+} from "@/components/icons/lucideStatus";
+import {
+  Sparkles,
+} from "@/components/icons/lucideContent";
 /**
  * PromptSuggestionPanel — AI 優化建議預覽面板
  * 顯示原始/優化後的文字比較與 AI 說明，讓使用者選擇套用或取消
@@ -16,7 +24,7 @@ export default function PromptSuggestionPanel({
         <div className="rounded-xl border border-primary/20 bg-primary/5 shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
             {/* Header */}
             <div className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground">
-                <Sparkles className="w-4 h-4" aria-hidden="true" />
+                <Sparkles className="icon-sm" aria-hidden="true" />
                 <span className="text-sm font-bold">AI 優化建議</span>
             </div>
 
@@ -45,7 +53,7 @@ export default function PromptSuggestionPanel({
 
                 {/* Arrow */}
                 <div className="flex justify-center py-0.5 sm:px-1">
-                    <ArrowRight className="h-4 w-4 rotate-90 text-primary/40 sm:rotate-0" aria-hidden="true" />
+                    <ArrowRight className="icon-sm rotate-90 text-primary/40 sm:rotate-0" aria-hidden="true" />
                 </div>
 
                 {/* Optimized */}
@@ -54,7 +62,7 @@ export default function PromptSuggestionPanel({
                         <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">
                             優化後
                         </span>
-                        <Sparkles className="w-3 h-3 text-primary/60" aria-hidden="true" />
+                        <Sparkles className="icon-xs text-primary/60" aria-hidden="true" />
                     </div>
                     <div className="max-h-48 overflow-y-auto break-words rounded-lg border border-primary/20 bg-card px-3 py-2.5 text-xs leading-relaxed text-foreground shadow-sm whitespace-pre-wrap custom-scrollbar">
                         {optimizedText}
@@ -69,7 +77,7 @@ export default function PromptSuggestionPanel({
                     onClick={onAccept}
                     className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-shadow duration-150 hover:bg-primary/90 hover:shadow-md active:scale-[0.98] motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                    <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                    <Check className="icon-sm" aria-hidden="true" />
                     套用優化
                 </button>
                 <button
@@ -77,7 +85,7 @@ export default function PromptSuggestionPanel({
                     onClick={onReject}
                     className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-muted px-4 py-2 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-auto"
                 >
-                    <X className="w-3.5 h-3.5" aria-hidden="true" />
+                    <X className="icon-sm" aria-hidden="true" />
                     取消
                 </button>
             </div>

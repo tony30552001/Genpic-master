@@ -6,16 +6,16 @@ tags: [frontend, authentication, sessions, csrf, google, entra]
 openwiki:
   roles: [architecture, integration, workflow, testing]
   change_kinds: [authentication, session-lifecycle, csrf, routing]
-  source_paths: [src/main.jsx, src/App.jsx, src/pages/LibraryPage.jsx, src/components/library/AssetCenter.jsx, src/components/library/viewMode.js, src/context/AuthContext.jsx, src/services/authService.js, src/services/apiClient.js, src/components/auth/SessionExpiryBanner.jsx]
-  symbols: [App, ProtectedRoute, LibraryPage, AssetCenter, normalizeViewMode, AuthProvider, getAuthSession, loginWithMicrosoft, loginWithGoogle, requestWithRetry, setCsrfToken]
-  test_paths: [src/services/__tests__/authService.test.js, src/services/__tests__/apiClient.test.js]
-  invariants: ["The browser holds the CSRF token only in memory and sends it on unsafe requests.", "Authenticated requests include the server-issued session cookie rather than a provider token."]
-  validation_commands: [pnpm test --run src/context/__tests__/AuthContext.test.jsx src/services/__tests__/authService.test.js src/services/__tests__/apiClient.test.js]
+  source_paths: [src/main.jsx, index.html, src/App.jsx, src/pages/LibraryPage.jsx, src/components/library/AssetCenter.jsx, src/components/library/viewMode.js, src/context/AuthContext.jsx, src/services/authService.js, src/services/apiClient.js, src/components/auth/SessionExpiryBanner.jsx, src/components/motion/MotionProvider.jsx, src/components/common/ThemeToggle.jsx, src/lib/theme.js]
+  symbols: [App, ProtectedRoute, LibraryPage, AssetCenter, normalizeViewMode, AuthProvider, MotionProvider, ThemeToggle, getTheme, setTheme, getAuthSession, loginWithMicrosoft, loginWithGoogle, requestWithRetry, setCsrfToken]
+  test_paths: [src/services/__tests__/authService.test.js, src/services/__tests__/apiClient.test.js, src/components/common/__tests__/ThemeToggle.test.jsx]
+  invariants: ["The browser holds the CSRF token only in memory and sends it on unsafe requests.", "Authenticated requests include the server-issued session cookie rather than a provider token.", "The root theme is applied before first paint and an explicit stored choice overrides system preference."]
+  validation_commands: [pnpm test --run src/context/__tests__/AuthContext.test.jsx src/services/__tests__/authService.test.js src/services/__tests__/apiClient.test.js, pnpm test --run src/components/common/__tests__/ThemeToggle.test.jsx]
 ---
 
 # Browser application and authentication
 
-`src/main.jsx` is the browser composition root: it mounts `GoogleOAuthProvider`, `AuthProvider`, and `App`. It no longer initializes MSAL or handles a browser-side provider redirect. Microsoft sign-in is a full-page navigation to the BFF; Google supplies a credential to the BFF once. The server-side flow, cookies, and authorization-code exchange are canonical in [server sessions and BFF sign-in](../backend/sessions.md).
+`src/main.jsx` is the browser composition root: it mounts `GoogleOAuthProvider`, `AuthProvider`, `MotionProvider`, and `App`. `MotionProvider` supplies the lazy animation runtime and user reduced-motion preference; the header inside `InfographicGenerator` exposes `ThemeToggle`. Their styling/runtime boundary is canonical in [shared UI motion, theme, and semantic icon styling](design-system.md). It no longer initializes MSAL or handles a browser-side provider redirect. Microsoft sign-in is a full-page navigation to the BFF; Google supplies a credential to the BFF once. The server-side flow, cookies, and authorization-code exchange are canonical in [server sessions and BFF sign-in](../backend/sessions.md).
 
 ## Routing
 
@@ -37,7 +37,7 @@ A protected 401 notifies the handler registered by `AuthProvider`, which clears 
 
 ## Change and validation guide
 
-Consult this page for sign-in buttons, bootstrapping, protected-route state, client request credentials, CSRF headers, or expiry UX. Follow the complete seam: `src/context/AuthContext.jsx` owns session/profile state, `src/services/authService.js` owns auth endpoint calls and BFF navigation, `src/services/apiClient.js` owns credential and CSRF request behavior, and `src/components/auth/SessionExpiryBanner.jsx` / `src/pages/LoginPage.jsx` render recovery UI. Server behavior belongs in [server sessions](../backend/sessions.md), not a new browser token implementation.
+Consult this page for sign-in buttons, browser-root provider order, protected-route state, client request credentials, CSRF headers, or expiry UX. Consult [shared UI motion, theme, and semantic icon styling](design-system.md) instead for the `MotionProvider` implementation, theme pre-paint/runtime synchronization, animation package, or icon policy. Follow the complete seam: `src/context/AuthContext.jsx` owns session/profile state, `src/services/authService.js` owns auth endpoint calls and BFF navigation, `src/services/apiClient.js` owns credential and CSRF request behavior, and `src/components/auth/SessionExpiryBanner.jsx` / `src/pages/LoginPage.jsx` render recovery UI. Server behavior belongs in [server sessions](../backend/sessions.md), not a new browser token implementation.
 
 Keep the client’s in-memory CSRF rule aligned with the API’s unsafe-method enforcement. Do not restore `X-Auth-Token`, browser MSAL initialization, provider-token storage, or a direct-GPT credential path: those modules were removed in favor of server-owned sessions and generation.
 

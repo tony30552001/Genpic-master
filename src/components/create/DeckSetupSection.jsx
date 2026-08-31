@@ -1,5 +1,9 @@
-import { Check, ChevronDown } from "lucide-react";
-
+import {
+  ChevronDown,
+} from "@/components/icons/lucideControls";
+import {
+  Check,
+} from "@/components/icons/lucideStatus";
 import { cn } from "@/lib/utils";
 
 /**
@@ -34,7 +38,7 @@ export default function DeckSetupSection({
             )}
             aria-hidden="true"
           >
-            {complete ? <Check className="h-3.5 w-3.5" /> : step}
+            {complete ? <Check className="icon-sm" /> : step}
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">

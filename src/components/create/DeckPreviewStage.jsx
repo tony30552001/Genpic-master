@@ -1,5 +1,13 @@
-import { ChevronLeft, ChevronRight, Loader2, Presentation } from "lucide-react";
-
+import {
+  ChevronLeft,
+  ChevronRight,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
+import {
+  Presentation,
+} from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import DeckSlideRail from "./DeckSlideRail";
 
@@ -43,14 +51,14 @@ export default function DeckPreviewStage({
               <div className="flex max-w-xs flex-col items-center gap-2 px-6 text-center">
                 {activeSlideNumber ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+                    <Loader2 className="icon-md animate-spin text-primary" aria-hidden="true" />
                     <p className="text-sm text-muted-foreground">
                       正在設計第 {activeSlideNumber} 頁…
                     </p>
                   </>
                 ) : (
                   <>
-                    <Presentation className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                    <Presentation className="icon-md text-muted-foreground" aria-hidden="true" />
                     <p className="text-sm text-muted-foreground">
                       第一頁完成後就會出現在這裡。
                     </p>
@@ -70,7 +78,7 @@ export default function DeckPreviewStage({
                   disabled={!previousSlide}
                   aria-label="檢視上一頁"
                 >
-                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  <ChevronLeft className="icon-sm" aria-hidden="true" />
                 </Button>
                 <Button
                   type="button"
@@ -81,7 +89,7 @@ export default function DeckPreviewStage({
                   disabled={!nextSlide}
                   aria-label="檢視下一頁"
                 >
-                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  <ChevronRight className="icon-sm" aria-hidden="true" />
                 </Button>
               </>
             )}

@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+} from "@/components/icons/lucideControls";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -109,9 +112,9 @@ export default function StylePalette({
             </Badge>
           )}
           {collapsed ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <ChevronDown className="icon-sm text-muted-foreground" aria-hidden="true" />
           ) : (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <ChevronUp className="icon-sm text-muted-foreground" aria-hidden="true" />
           )}
         </span>
       </button>

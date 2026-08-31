@@ -1,5 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Save, Sparkles, Tag, X } from "lucide-react";
+import {
+  Save,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
+import {
+  Sparkles,
+  Tag,
+} from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -177,7 +187,7 @@ export default function AssetMetadataSheet({
             aria-label="關閉編輯視窗"
             className="sm:h-11 sm:w-11"
           >
-            <X className="h-4 w-4" aria-hidden="true" />
+            <X className="icon-sm" aria-hidden="true" />
           </Button>
         </div>
 
@@ -214,9 +224,9 @@ export default function AssetMetadataSheet({
                   aria-label="使用 AI 優化風格描述"
                 >
                   {isOptimizing ? (
-                    <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   ) : (
-                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                    <Sparkles className="icon-sm" aria-hidden="true" />
                   )}
                   {isOptimizing ? "優化中…" : "AI 優化"}
                 </Button>
@@ -236,7 +246,7 @@ export default function AssetMetadataSheet({
             />
             {optimizationNote && (
               <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm text-foreground" aria-live="polite">
-                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <Sparkles className="mt-0.5 icon-sm shrink-0 text-primary" aria-hidden="true" />
                 <p>{optimizationNote}</p>
               </div>
             )}
@@ -249,7 +259,7 @@ export default function AssetMetadataSheet({
 
           <div className="space-y-1.5">
             <label htmlFor="asset-tags" className="flex items-center gap-1.5 text-sm font-medium">
-              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+              <Tag className="icon-sm" aria-hidden="true" />
               標籤
             </label>
             <Input
@@ -280,9 +290,9 @@ export default function AssetMetadataSheet({
             className="gap-2 sm:min-h-11 sm:min-w-32 sm:px-5"
           >
             {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
             ) : (
-              <Save className="h-4 w-4" aria-hidden="true" />
+              <Save className="icon-sm" aria-hidden="true" />
             )}
             {isSaving ? "儲存中…" : "儲存變更"}
           </Button>

@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Brain, Loader2, PlugZap, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
+import {
+  Brain,
+  PlugZap,
+} from "@/components/icons/lucideContent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -209,7 +221,7 @@ export default function LlmModelSettings() {
     return (
       <Card>
         <CardContent className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
           載入分析模型設定…
         </CardContent>
       </Card>
@@ -232,12 +244,12 @@ export default function LlmModelSettings() {
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Brain className="h-4 w-4 text-primary" aria-hidden="true" />
+            <Brain className="icon-sm text-primary" aria-hidden="true" />
             分析模型
             <Badge variant="secondary">{settings.models.length}</Badge>
           </CardTitle>
           <Button type="button" onClick={openCreateForm} className="gap-2">
-            <Plus className="h-4 w-4" aria-hidden="true" />
+            <Plus className="icon-sm" aria-hidden="true" />
             新增模型
           </Button>
         </CardHeader>
@@ -313,9 +325,9 @@ export default function LlmModelSettings() {
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={isSaving} className="gap-2">
                   {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   ) : (
-                    <Save className="h-4 w-4" aria-hidden="true" />
+                    <Save className="icon-sm" aria-hidden="true" />
                   )}
                   {editingId ? "更新模型" : "新增模型"}
                 </Button>
@@ -334,14 +346,14 @@ export default function LlmModelSettings() {
                   }
                 >
                   {testingKey === "draft" ? (
-                    <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   ) : (
-                    <PlugZap className="h-4 w-4" aria-hidden="true" />
+                    <PlugZap className="icon-sm" aria-hidden="true" />
                   )}
                   測試連線
                 </Button>
                 <Button type="button" variant="ghost" className="gap-2" onClick={closeForm}>
-                  <X className="h-4 w-4" aria-hidden="true" />
+                  <X className="icon-sm" aria-hidden="true" />
                   取消
                 </Button>
               </div>
@@ -377,9 +389,9 @@ export default function LlmModelSettings() {
                       onClick={() => runTest(model.id, { modelId: model.id })}
                     >
                       {testingKey === model.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                        <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                       ) : (
-                        <PlugZap className="h-4 w-4" aria-hidden="true" />
+                        <PlugZap className="icon-sm" aria-hidden="true" />
                       )}
                       測試
                     </Button>
@@ -395,9 +407,9 @@ export default function LlmModelSettings() {
                       onClick={() => handleDelete(model)}
                     >
                       {deletingId === model.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                        <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
                       ) : (
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        <Trash2 className="icon-sm" aria-hidden="true" />
                       )}
                       刪除
                     </Button>

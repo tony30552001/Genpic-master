@@ -2,14 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
+  Search,
+} from "@/components/icons/lucideControls";
+import {
   Clock3,
   FileText,
   History,
-  Library,
   Palette,
-  Search,
-  Wand2,
-} from "lucide-react";
+} from "@/components/icons/lucideContent";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,10 +23,10 @@ import AssetViewModeToggle from "./AssetViewModeToggle";
 import { normalizeViewMode } from "./viewMode";
 
 const SECTIONS = [
-  { id: "overview", label: "全部資產", icon: Library },
-  { id: "templates", label: "範本", icon: FileText },
-  { id: "styles", label: "風格庫", icon: Palette },
-  { id: "history", label: "紀錄", icon: History },
+  { id: "overview", label: "全部資產" },
+  { id: "templates", label: "範本" },
+  { id: "styles", label: "風格庫" },
+  { id: "history", label: "紀錄" },
 ];
 
 const getSeconds = (value) => {
@@ -131,11 +132,11 @@ function OverviewAssetCard({ asset, onOpen, onPrimaryAction, index = 0 }) {
             <div className="h-1.5 bg-primary" />
             <div className="flex h-16 items-center justify-center bg-muted/40">
               {asset.type === "style" ? (
-                <Palette className="h-6 w-6 text-primary/50" aria-hidden="true" />
+                <Palette className="icon-lg text-primary/50" aria-hidden="true" />
               ) : asset.type === "history" ? (
-                <History className="h-6 w-6 text-primary/50" aria-hidden="true" />
+                <History className="icon-lg text-primary/50" aria-hidden="true" />
               ) : (
-                <FileText className="h-6 w-6 text-primary/50" aria-hidden="true" />
+                <FileText className="icon-lg text-primary/50" aria-hidden="true" />
               )}
             </div>
           </div>
@@ -158,7 +159,7 @@ function OverviewAssetCard({ asset, onOpen, onPrimaryAction, index = 0 }) {
 
       <div className="mt-auto flex items-center justify-between gap-2 px-4 pb-3 pt-3">
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock3 className="h-3 w-3" aria-hidden="true" />
+          <Clock3 className="icon-xs" aria-hidden="true" />
           {formatAssetDate(asset.date)}
         </span>
         <Button
@@ -170,7 +171,7 @@ function OverviewAssetCard({ asset, onOpen, onPrimaryAction, index = 0 }) {
           aria-label={`${meta.actionLabel} ${asset.title}`}
         >
           {meta.actionLabel}
-          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          <ArrowRight className="icon-sm" aria-hidden="true" />
         </Button>
       </div>
     </article>
@@ -222,7 +223,7 @@ function OverviewAssetListRow({ asset, onOpen, onPrimaryAction }) {
             {asset.description || "尚無描述"}
           </span>
           <span className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Clock3 className="h-3 w-3" aria-hidden="true" />
+            <Clock3 className="icon-xs" aria-hidden="true" />
             {formatAssetDate(asset.date)}
           </span>
         </span>
@@ -236,7 +237,7 @@ function OverviewAssetListRow({ asset, onOpen, onPrimaryAction }) {
         aria-label={`${meta.actionLabel} ${asset.title}`}
       >
         <span className="hidden sm:inline">{meta.actionLabel}</span>
-        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        <ArrowRight className="icon-sm" aria-hidden="true" />
       </Button>
     </article>
   );
@@ -292,7 +293,7 @@ function OverviewAssetTable({ assets, onOpen, onPrimaryAction }) {
                     aria-label={`${meta.actionLabel} ${asset.title}`}
                   >
                     {meta.actionLabel}
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    <ArrowRight className="icon-sm" aria-hidden="true" />
                   </Button>
                 </td>
               </tr>
@@ -308,7 +309,7 @@ function OverviewSection({
   type,
   title,
   description,
-  icon: Icon,
+  glyph,
   assets,
   viewMode,
   onOpenSection,
@@ -320,9 +321,7 @@ function OverviewSection({
     <section className="space-y-3" aria-labelledby={`overview-${type}-title`}>
       <div className="flex items-end justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            {React.createElement(Icon, { className: "h-4 w-4", "aria-hidden": true })}
-          </span>
+          <ProductGlyph kind={glyph} className="icon-md mt-0.5 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <h2 id={`overview-${type}-title`} className="text-sm font-semibold text-foreground">{title}</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
@@ -330,7 +329,7 @@ function OverviewSection({
         </div>
         <Button type="button" variant="ghost" size="sm" onClick={onOpenSection} className="shrink-0 gap-1.5 text-xs">
           查看全部
-          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          <ArrowRight className="icon-sm" aria-hidden="true" />
         </Button>
       </div>
 
@@ -367,16 +366,14 @@ function OverviewSection({
         )
       ) : (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground/50">
-            {React.createElement(Icon, { className: "h-6 w-6", "aria-hidden": true })}
-          </span>
+          <ProductGlyph kind={glyph} className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-muted-foreground">目前還沒有{title}</p>
             <p className="mt-1 text-xs text-muted-foreground/80">{TYPE_META[type].emptyHint}</p>
           </div>
           {onGoCreate && (
             <Button type="button" size="sm" onClick={onGoCreate} className="gap-1.5">
-              <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <ProductGlyph kind="create" active className="icon-sm" aria-hidden="true" />
               開始創作
             </Button>
           )}
@@ -559,9 +556,8 @@ export default function AssetCenter({
       <div className="sticky top-0 z-20 -mx-1 space-y-2 bg-background/80 px-1 py-2 backdrop-blur-md">
         <Tabs value={section} onValueChange={setSection}>
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4" aria-label="素材中心分類">
-            {SECTIONS.map(({ id, label, icon: Icon }) => (
+            {SECTIONS.map(({ id, label }) => (
               <TabsTrigger key={id} value={id} className="min-h-11 gap-1.5">
-                {React.createElement(Icon, { className: "h-4 w-4", "aria-hidden": true })}
                 <span>{label}</span>
                 {id !== "overview" && (
                   <span className="ml-0.5 text-[11px] tabular-nums text-muted-foreground">{counts[id]}</span>
@@ -573,7 +569,7 @@ export default function AssetCenter({
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 icon-sm -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               ref={searchInputRef}
               value={activeSearchQuery}
@@ -595,10 +591,10 @@ export default function AssetCenter({
         <div className="space-y-8 animate-in fade-in duration-200 motion-reduce:animate-none" key="overview">
           <section className="grid gap-3 sm:grid-cols-3" aria-label="素材摘要">
             {[
-              { id: "templates", label: "可重複使用範本", value: counts.templates, icon: FileText },
-              { id: "styles", label: "已儲存風格", value: counts.styles, icon: Palette },
-              { id: "history", label: "生成紀錄", value: counts.history, icon: History },
-            ].map(({ id, label, value, icon: Icon }) => (
+              { id: "templates", label: "可重複使用範本", value: counts.templates, glyph: "library" },
+              { id: "styles", label: "已儲存風格", value: counts.styles, glyph: "settings" },
+              { id: "history", label: "生成紀錄", value: counts.history, glyph: "create" },
+            ].map(({ id, label, value, glyph }) => (
               <button
                 key={id}
                 type="button"
@@ -606,14 +602,12 @@ export default function AssetCenter({
                 className="group flex items-center gap-3 rounded-xl border border-border/70 bg-muted/20 p-4 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:bg-muted/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label={`查看${label}`}
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-background text-primary shadow-sm">
-                  {React.createElement(Icon, { className: "h-5 w-5", "aria-hidden": true })}
-                </span>
+                <ProductGlyph kind={glyph} className="icon-lg text-primary" aria-hidden="true" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs text-muted-foreground">{label}</span>
                   <span className="mt-1 block text-2xl font-semibold tabular-nums text-foreground">{value}</span>
                 </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-[transform,color] group-hover:translate-x-0.5 group-hover:text-primary motion-reduce:transform-none" aria-hidden="true" />
+                <ArrowRight className="icon-sm shrink-0 text-muted-foreground/40 transition-[transform,color] group-hover:translate-x-0.5 group-hover:text-primary motion-reduce:transform-none" aria-hidden="true" />
               </button>
             ))}
           </section>
@@ -622,7 +616,7 @@ export default function AssetCenter({
             type="template"
             title="範本"
             description="快速套用常用的內容與風格組合"
-            icon={FileText}
+            glyph="library"
             assets={overviewByType.templates}
             viewMode={viewMode}
             onOpenSection={() => setSection("templates")}
@@ -633,7 +627,7 @@ export default function AssetCenter({
           <OverviewSection
             title="風格庫"
             description="集中管理個人收藏與共享視覺風格"
-            icon={Palette}
+            glyph="settings"
             type="style"
             assets={overviewByType.styles}
             viewMode={viewMode}
@@ -645,7 +639,7 @@ export default function AssetCenter({
           <OverviewSection
             title="紀錄"
             description="回看最近生成結果，載入設定繼續編輯"
-            icon={History}
+            glyph="create"
             type="history"
             assets={overviewByType.history}
             viewMode={viewMode}

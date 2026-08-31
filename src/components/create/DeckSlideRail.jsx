@@ -1,5 +1,6 @@
-import { Loader2 } from "lucide-react";
-
+import {
+  Loader2,
+} from "@/components/icons/lucideStatus";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -72,7 +73,7 @@ export default function DeckSlideRail({
                     )}
                     {isAuthoring && !preview && (
                       <Loader2
-                        className="absolute inset-0 m-auto h-4 w-4 animate-spin text-primary"
+                        className="absolute inset-0 m-auto icon-sm animate-spin text-primary"
                         aria-hidden="true"
                       />
                     )}

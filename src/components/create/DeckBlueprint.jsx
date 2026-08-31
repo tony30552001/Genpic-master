@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { CloudCheck, Sparkles } from "lucide-react";
-
+import {
+  CloudCheck,
+} from "@/components/icons/lucideStatus";
+import ProductGlyph from "@/components/icons/ProductGlyph";
 import { describeTemplatePreview } from "./templatePreviewManifest";
 
 /**
@@ -27,7 +29,7 @@ export default function DeckBlueprint({ title, items = [], styleId, styleName })
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-        <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+        <ProductGlyph kind="deck" className="icon-sm text-primary" aria-hidden="true" />
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">簡報藍圖</h3>
         <span className="shrink-0 text-xs text-muted-foreground">產生前的設定總覽</span>
       </div>
@@ -73,7 +75,7 @@ export default function DeckBlueprint({ title, items = [], styleId, styleName })
         </div>
 
         <p className="flex items-start gap-1.5 border-t border-border pt-4 text-xs text-muted-foreground">
-          <CloudCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <CloudCheck className="mt-0.5 icon-sm shrink-0" aria-hidden="true" />
           <span className="min-w-0">
             生成在雲端逐頁進行，約需 5–15 分鐘。開始之後這裡會即時長出每一頁的縮圖，
             你也可以切換頁籤或關閉瀏覽器，回來會自動接續。

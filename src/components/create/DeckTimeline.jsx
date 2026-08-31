@@ -1,14 +1,15 @@
 import { useState } from "react";
 import {
+  ChevronDown,
+  X,
+} from "@/components/icons/lucideControls";
+import {
   AlertTriangle,
   Check,
-  ChevronDown,
   Circle,
   Loader2,
   MinusCircle,
-  X,
-} from "lucide-react";
-
+} from "@/components/icons/lucideStatus";
 import { cn } from "@/lib/utils";
 import { buildTimeline } from "./deckSteps";
 
@@ -31,7 +32,7 @@ function StepItems({ items }) {
       {items.map((item) => (
         <li key={item.slideNumber} className="flex min-w-0 items-center gap-1.5">
           {item.status === "failed" ? (
-            <AlertTriangle className="h-3 w-3 shrink-0 text-warning" aria-hidden="true" />
+            <AlertTriangle className="icon-xs shrink-0 text-warning" aria-hidden="true" />
           ) : (
             <StatusIcon status={item.status} className="h-3 w-3" />
           )}

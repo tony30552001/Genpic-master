@@ -1,31 +1,35 @@
 import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
 import {
-  Image as ImageIcon,
   Edit2,
   Trash2,
-  Users,
-  FileText,
-  Clock,
-  Layers,
-  Loader2,
   Download,
-  Wand2,
-  Check,
   X,
-  Palette,
   ChevronDown,
-  Sparkles,
   FileDown,
   ZoomIn,
   ZoomOut,
   Maximize2,
+  List,
+} from "@/components/icons/lucideControls";
+import {
+  Loader2,
+  Check,
+} from "@/components/icons/lucideStatus";
+import {
+  Image as ImageIcon,
+  Users,
+  FileText,
+  Clock,
+  Layers,
+  Wand2,
+  Palette,
+  Sparkles,
   SlidersHorizontal,
   BookOpen,
   Presentation,
-  List,
   Mic,
-} from "lucide-react";
+} from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -211,7 +215,7 @@ function ImageLightbox({ src, alt, onClose }) {
           className="h-8 text-xs shadow-lg bg-black/60 text-white hover:bg-black/80 border-white/20"
           onClick={() => setScale((s) => Math.min(5, s + 0.5))}
         >
-          <ZoomIn className="h-3.5 w-3.5 mr-1" /> 放大
+          <ZoomIn className="icon-sm mr-1" /> 放大
         </Button>
         <Button
           variant="secondary"
@@ -219,7 +223,7 @@ function ImageLightbox({ src, alt, onClose }) {
           className="h-8 text-xs shadow-lg bg-black/60 text-white hover:bg-black/80 border-white/20"
           onClick={() => setScale((s) => Math.max(0.5, s - 0.5))}
         >
-          <ZoomOut className="h-3.5 w-3.5 mr-1" /> 縮小
+          <ZoomOut className="icon-sm mr-1" /> 縮小
         </Button>
         <span className="text-white/70 text-xs px-2">{Math.round(scale * 100)}%</span>
         {scale !== 1 && (
@@ -238,7 +242,7 @@ function ImageLightbox({ src, alt, onClose }) {
           className="h-8 w-8 shadow-lg bg-black/60 text-white hover:bg-black/80 border-white/20"
           onClick={onClose}
         >
-          <X className="h-4 w-4" />
+          <X className="icon-sm" />
         </Button>
       </div>
 
@@ -369,9 +373,9 @@ function SceneModal({
                   className="inline-flex min-h-7 max-w-full items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title="調整文件圖片風格"
                 >
-                  <Palette className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <Palette className="icon-xs shrink-0" aria-hidden="true" />
                   <span className="truncate">{styleName}</span>
-                  <SlidersHorizontal className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <SlidersHorizontal className="icon-xs shrink-0" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -386,9 +390,9 @@ function SceneModal({
               disabled={isOptimizing || isEditing}
             >
               {isOptimizing ? (
-                <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 優化中…</>
+                <><Loader2 className="icon-xs animate-spin motion-reduce:animate-none" /> 優化中…</>
               ) : (
-                <><Sparkles className="h-3 w-3" /> AI 優化</>
+                <><Sparkles className="icon-xs" /> AI 優化</>
               )}
             </Button>
             <Button
@@ -402,10 +406,10 @@ function SceneModal({
                 }
               }}
             >
-              {isEditing ? <><Check className="h-3 w-3" /> 儲存</> : <><Edit2 className="h-3 w-3" /> 編輯</>}
+              {isEditing ? <><Check className="icon-xs" /> 儲存</> : <><Edit2 className="icon-xs" /> 編輯</>}
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
-              <X className="h-4 w-4" />
+              <X className="icon-sm" />
             </Button>
           </div>
         </div>
@@ -415,7 +419,7 @@ function SceneModal({
           <div className="shrink-0 px-5 py-2 border-b border-border/30 bg-primary/5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                <Sparkles className="icon-sm text-primary shrink-0" />
                 <p className="text-xs text-foreground">{optimizationNotes}</p>
               </div>
               <Button
@@ -424,7 +428,7 @@ function SceneModal({
                 className="h-6 px-1.5 text-xs shrink-0"
                 onClick={() => setOptimizationNotes(null)}
               >
-                <X className="h-3 w-3" />
+                <X className="icon-xs" />
               </Button>
             </div>
           </div>
@@ -455,7 +459,7 @@ function SceneModal({
                       size="sm" variant="secondary" className="shadow-lg h-7 text-xs"
                       onClick={() => setLightboxSrc(sceneImage)}
                     >
-                      <ZoomIn className="h-3 w-3 mr-1" /> 放大
+                      <ZoomIn className="icon-xs mr-1" /> 放大
                     </Button>
                     <Button
                       size="sm" variant="secondary" className="shadow-lg h-7 text-xs"
@@ -469,13 +473,13 @@ function SceneModal({
                         document.body.removeChild(link);
                       }}
                     >
-                      <Download className="h-3 w-3 mr-1" /> 下載
+                      <Download className="icon-xs mr-1" /> 下載
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 text-muted-foreground/30 p-8">
-                  <ImageIcon className="w-12 h-12" />
+                  <ImageIcon className="icon-display" />
                   <p className="text-xs">尚未生成圖片</p>
                 </div>
               )}
@@ -527,10 +531,10 @@ function SceneModal({
                   </div>
                   <div className="flex items-center gap-2 pt-1">
                     <Button size="sm" className="h-8 text-xs" onClick={saveEditing}>
-                      <Check className="h-3 w-3 mr-1" /> 儲存變更
+                      <Check className="icon-xs mr-1" /> 儲存變更
                     </Button>
                     <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setIsEditing(false)}>
-                      <X className="h-3 w-3 mr-1" /> 取消
+                      <X className="icon-xs mr-1" /> 取消
                     </Button>
                   </div>
                 </>
@@ -555,7 +559,7 @@ function SceneModal({
                           setIsEditing(true);
                         }}
                       >
-                        <Edit2 className="mr-1 h-3 w-3" /> 編輯提示詞
+                        <Edit2 className="mr-1 icon-xs" /> 編輯提示詞
                       </Button>
                     </div>
                     <p className="rounded-lg bg-muted/60 p-3 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
@@ -588,7 +592,7 @@ function SceneModal({
                         onClick={() => setShowSourceText((v) => !v)}
                         className="flex items-center gap-1.5 text-[11px] font-medium text-primary/80 hover:text-primary transition-colors"
                       >
-                        <BookOpen className="h-3 w-3" />
+                        <BookOpen className="icon-xs" />
                         <span>對照原文</span>
                         <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${showSourceText ? "rotate-180" : ""}`} />
                       </button>
@@ -606,7 +610,7 @@ function SceneModal({
                   {scene.speaker_notes && (
                     <div>
                       <p className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                        <Mic className="h-3 w-3" /> 講者備注
+                        <Mic className="icon-xs" /> 講者備注
                       </p>
                       <div className="p-3 rounded-lg bg-info/10 border border-info/20">
                         <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
@@ -631,11 +635,11 @@ function SceneModal({
             disabled={isGenerating}
           >
             {isThisGenerating ? (
-              <><Loader2 className="h-3 w-3 mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
+              <><Loader2 className="icon-xs mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
             ) : sceneImage ? (
-              <><Wand2 className="h-3 w-3 mr-1" /> 重新生成</>
+              <><Wand2 className="icon-xs mr-1" /> 重新生成</>
             ) : (
-              <><Wand2 className="h-3 w-3 mr-1" /> 生成此場景</>
+              <><Wand2 className="icon-xs mr-1" /> 生成此場景</>
             )}
           </Button>
         </div>
@@ -1024,26 +1028,26 @@ export default function DocumentScenes({
             <div className="flex items-start gap-4 flex-wrap lg:flex-nowrap">
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-base text-foreground flex items-center gap-2 truncate">
-                  <FileText className="h-4 w-4 text-primary shrink-0" />
+                  <FileText className="icon-sm text-primary shrink-0" />
                   {title}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">{summary}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <Badge variant="secondary" className="gap-1 text-xs">
-                  <Layers className="h-3 w-3" /> {total_scenes} 場景
+                  <Layers className="icon-xs" /> {total_scenes} 場景
                 </Badge>
                 <Badge variant="secondary" className="gap-1 text-xs">
-                  <Clock className="h-3 w-3" /> ~{Math.ceil(estimated_generation_time / 60)} 分鐘
+                  <Clock className="icon-xs" /> ~{Math.ceil(estimated_generation_time / 60)} 分鐘
                 </Badge>
                 {generatedCount > 0 && (
                   <Badge variant="default" className="gap-1 text-xs bg-green-600">
-                    <Check className="h-3 w-3" /> {generatedCount}/{scenes.length} 已生成
+                    <Check className="icon-xs" /> {generatedCount}/{scenes.length} 已生成
                   </Badge>
                 )}
                 {characters?.length > 0 && (
                   <Badge variant="outline" className="gap-1 text-xs">
-                    <Users className="h-3 w-3" /> {characters.length} 角色
+                    <Users className="icon-xs" /> {characters.length} 角色
                   </Badge>
                 )}
               </div>
@@ -1057,9 +1061,9 @@ export default function DocumentScenes({
                     className="text-xs h-8 gap-1"
                   >
                     {isExportingPdf ? (
-                      <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
+                      <><Loader2 className="icon-xs animate-spin motion-reduce:animate-none" /> 匯出中…</>
                     ) : (
-                      <><FileDown className="h-3 w-3" /> 匯出 PDF</>
+                      <><FileDown className="icon-xs" /> 匯出 PDF</>
                     )}
                   </Button>
                 )}
@@ -1072,9 +1076,9 @@ export default function DocumentScenes({
                     className="text-xs h-8 gap-1"
                   >
                     {isExportingPptx ? (
-                      <><Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> 匯出中…</>
+                      <><Loader2 className="icon-xs animate-spin motion-reduce:animate-none" /> 匯出中…</>
                     ) : (
-                      <><Presentation className="h-3 w-3" /> 匯出 PPTX</>
+                      <><Presentation className="icon-xs" /> 匯出 PPTX</>
                     )}
                   </Button>
                 )}
@@ -1107,7 +1111,7 @@ export default function DocumentScenes({
             className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Palette className="h-4 w-4" aria-hidden="true" />
+              <Palette className="icon-sm" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
@@ -1123,7 +1127,7 @@ export default function DocumentScenes({
               </span>
             </span>
             <span className="hidden items-center gap-1.5 text-xs font-medium text-primary sm:flex">
-              <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+              <SlidersHorizontal className="icon-sm" aria-hidden="true" />
               {showStylePicker ? "收起調整" : "調整風格"}
             </span>
             <ChevronDown
@@ -1135,7 +1139,7 @@ export default function DocumentScenes({
 
           {!showStylePicker && hasDocumentStyle && (
             <div className="mt-2 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <Sparkles className="icon-sm shrink-0 text-primary" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-medium text-foreground">
                   {isDocumentStyleOverride ? `風格庫：${styleName}` : `AI 建議：${styleName}`}
@@ -1164,7 +1168,7 @@ export default function DocumentScenes({
                 <div className="border-b border-border/50 bg-primary/5 px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-2">
-                      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                      <Sparkles className="mt-0.5 icon-sm shrink-0 text-primary" aria-hidden="true" />
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-foreground">
                           {isDocumentStyleOverride ? "目前套用的風格庫樣式" : "AI 根據文件內容推薦"}
@@ -1192,7 +1196,7 @@ export default function DocumentScenes({
                         className="h-7 shrink-0 px-2.5 text-xs text-primary"
                         onClick={onClearStyle}
                       >
-                        <X className="mr-1 h-3 w-3" aria-hidden="true" />
+                        <X className="mr-1 icon-xs" aria-hidden="true" />
                         恢復 AI 建議
                       </Button>
                     )}
@@ -1206,7 +1210,7 @@ export default function DocumentScenes({
                 </p>
                 {savedStyles.length === 0 ? (
                   <div className="py-6 text-center text-muted-foreground">
-                    <Palette className="mx-auto mb-2 h-8 w-8 opacity-30" aria-hidden="true" />
+                    <Palette className="mx-auto mb-2 icon-display opacity-30" aria-hidden="true" />
                     <p className="text-xs">尚無收藏的風格</p>
                     <p className="mt-1 text-[10px] text-muted-foreground/70">
                       請在「一般創作」或「風格庫」中分析並收藏風格
@@ -1245,12 +1249,12 @@ export default function DocumentScenes({
                               />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center">
-                                <Palette className="h-6 w-6 text-muted-foreground/20" aria-hidden="true" />
+                                <Palette className="icon-lg text-muted-foreground/20" aria-hidden="true" />
                               </div>
                             )}
                             {isActive && (
                               <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                                <Check className="h-3 w-3 text-white" aria-hidden="true" />
+                                <Check className="icon-xs text-white" aria-hidden="true" />
                               </div>
                             )}
                           </div>
@@ -1288,7 +1292,7 @@ export default function DocumentScenes({
             </p>
           </div>
           <Badge variant="outline" className="shrink-0 gap-1 text-xs">
-            <Layers className="h-3 w-3" /> {scenes.length} 個分鏡
+            <Layers className="icon-xs" /> {scenes.length} 個分鏡
           </Badge>
         </div>
 
@@ -1324,7 +1328,7 @@ export default function DocumentScenes({
                         title="刪除場景"
                         aria-label={`刪除場景 ${scene.scene_number}`}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="icon-xs" />
                       </Button>
                     </div>
                   </div>
@@ -1351,12 +1355,12 @@ export default function DocumentScenes({
                           className="w-full h-full object-cover"
                         />
                         <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2.5 pt-8 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover/preview:opacity-100 group-focus-visible/preview:opacity-100">
-                          <Maximize2 className="h-3 w-3" aria-hidden="true" /> 查看大圖與內容
+                          <Maximize2 className="icon-xs" aria-hidden="true" /> 查看大圖與內容
                         </span>
                       </div>
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40">
-                        <ImageIcon className="w-8 h-8" />
+                        <ImageIcon className="icon-display" />
                         <p className="text-[11px]">尚未生成圖片，點擊查看設定</p>
                       </div>
                     )}
@@ -1370,7 +1374,7 @@ export default function DocumentScenes({
                     </div>
 
                     <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-primary/80">
-                      <Palette className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <Palette className="icon-xs shrink-0" aria-hidden="true" />
                       <span className="truncate">
                         {isDocumentStyleOverride ? "風格庫" : "AI 風格"} · {styleName}
                       </span>
@@ -1380,7 +1384,7 @@ export default function DocumentScenes({
                     {Array.isArray(scene.bullet_points) && scene.bullet_points.length > 0 && (
                       <div>
                         <p className="mb-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-                          <List className="h-3 w-3" /> 重點項目
+                          <List className="icon-xs" /> 重點項目
                         </p>
                         <ul className="space-y-0.5">
                           {scene.bullet_points.slice(0, 2).map((point, i) => (
@@ -1418,7 +1422,7 @@ export default function DocumentScenes({
                           className="h-7 shrink-0 px-2 text-[11px] text-primary hover:text-primary"
                           onClick={() => openModal(index)}
                         >
-                          <Edit2 className="mr-1 h-3 w-3" /> 編輯
+                          <Edit2 className="mr-1 icon-xs" /> 編輯
                         </Button>
                       </div>
                       <p className="line-clamp-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
@@ -1429,7 +1433,7 @@ export default function DocumentScenes({
                     {/* 有原始文字時的指示 */}
                     {scene.source_text && (
                       <div className="mt-2 flex items-center gap-1">
-                        <BookOpen className="h-3 w-3 text-amber-600/60" />
+                        <BookOpen className="icon-xs text-amber-600/60" />
                         <span className="text-[10px] text-amber-600/60">附有原始文字對照</span>
                       </div>
                     )}
@@ -1444,7 +1448,7 @@ export default function DocumentScenes({
                       className="h-9 gap-1.5 px-3 text-xs"
                       onClick={() => openModal(index)}
                     >
-                      <Edit2 className="h-3 w-3" /> 編輯分鏡
+                      <Edit2 className="icon-xs" /> 編輯分鏡
                     </Button>
                     <Button
                       variant={sceneImage ? "outline" : "default"}
@@ -1454,11 +1458,11 @@ export default function DocumentScenes({
                       disabled={isGenerating}
                     >
                       {isThisGenerating ? (
-                        <><Loader2 className="h-3 w-3 mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
+                        <><Loader2 className="icon-xs mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
                       ) : sceneImage ? (
-                        <><Wand2 className="h-3 w-3 mr-1" /> 重新生成</>
+                        <><Wand2 className="icon-xs mr-1" /> 重新生成</>
                       ) : (
-                        <><Wand2 className="h-3 w-3 mr-1" /> 生成此場景</>
+                        <><Wand2 className="icon-xs mr-1" /> 生成此場景</>
                       )}
                     </Button>
                   </div>
