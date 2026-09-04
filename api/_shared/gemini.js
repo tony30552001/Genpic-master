@@ -21,23 +21,6 @@ const getModel = (modelName, apiKey) => {
   };
 };
 
-const getEmbeddingModel = (modelName) => {
-  const client = getClient(process.env.GOOGLE_API_KEY);
-  return {
-    embedContent: (content) =>
-      client.models.embedContent({
-        model: modelName,
-        content,
-      }),
-  };
-};
-
-const embedText = async (modelName, text) => {
-  const model = getEmbeddingModel(modelName);
-  const result = await model.embedContent(text);
-  return result?.embedding?.values || null;
-};
-
 const parseGeminiResponse = (result) => {
   // 嘗試多種路徑找到文字內容
   let responseText = "";
@@ -140,8 +123,6 @@ const postGeminiJson = async ({
 
 module.exports = {
   getModel,
-  getEmbeddingModel,
-  embedText,
   postGeminiJson,
   parseGeminiResponse,
 };

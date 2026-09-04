@@ -1,8 +1,7 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
-const { embedText } = require("../_shared/gemini");
-const { defaultDim } = require("../_shared/vector");
+const { INPUT_TYPES, embedText } = require("../_shared/azureEmbeddings");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -26,15 +25,10 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const modelName = process.env.EMBEDDING_MODEL || "text-embedding-004";
-    const values = await embedText(modelName, text);
-    if (!Array.isArray(values) || values.length !== defaultDim) {
-      context.res = error("Embedding 回傳異常", "embedding_failed", 502);
-      return;
-    }
-
+    const values = await embedText({ text, inputType: INPUT_TYPES.QUERY });
     context.res = ok({ embedding: values });
-  } catch {
+  } catch (err) {
+    context.log.error("Embedding failed:", err);
     context.res = error("Embedding 產生失敗", "embedding_failed", 502);
   }
 };

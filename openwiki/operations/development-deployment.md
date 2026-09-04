@@ -1,13 +1,13 @@
 ---
 type: operations guide
 title: Development, migrations, and deployment
-description: Local commands, API entrypoints, BFF session, encrypted analysis-model, and PPT Master sidecar configuration, migration procedure, and deployment validation boundaries.
-tags: [operations, development, deployment, sessions, entra, llm, ppt-master]
+description: Local commands, API entrypoints, BFF session, Azure embedding and encrypted analysis-model configuration, migration procedure, and deployment validation boundaries.
+tags: [operations, development, deployment, sessions, entra, llm, embeddings, ppt-master]
 openwiki:
   roles: [operations, workflow]
-  change_kinds: [deployment, configuration, session-lifecycle, migrations]
-  source_paths: [package.json, src/index.css, api/package.json, api/scripts/migrate.cjs, api/scripts/cleanup-legacy-upload-blobs.cjs, api/scripts/legacyUploadBlobs.js, api/_shared/http.js, api/_shared/session.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, api/_shared/imageJobs.js, db/migrations/024_async_image_transform_jobs.sql, api/_shared/deckFrames.js, api/_shared/deckContract.js, api/_shared/svgAuthoringPrompt.js, api/scripts/generate-style-previews.cjs, api/scripts/previewAssets.js, api/scripts/deck-repair-stats.cjs, api/scripts/deckRepairStats.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
-  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 023_deck_event_design_step.sql, pnpm test --run api/_shared/__tests__/deckFrames.test.js api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckEventSteps.test.js api/_shared/__tests__/svgAuthoringPrompt.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
+  change_kinds: [deployment, configuration, session-lifecycle, migrations, provider-adapter]
+  source_paths: [package.json, src/index.css, api/package.json, api/scripts/migrate.cjs, api/scripts/cleanup-legacy-upload-blobs.cjs, api/scripts/legacyUploadBlobs.js, api/_shared/http.js, api/_shared/session.js, api/_shared/azureEmbeddings.js, api/_shared/vector.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, api/_shared/imageJobs.js, db/migrations/024_async_image_transform_jobs.sql, api/_shared/deckFrames.js, api/_shared/deckContract.js, api/_shared/svgAuthoringPrompt.js, api/scripts/generate-style-previews.cjs, api/scripts/previewAssets.js, api/scripts/deck-repair-stats.cjs, api/scripts/deckRepairStats.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 023_deck_event_design_step.sql, pnpm test --run api/_shared/__tests__/azureEmbeddings.test.js, pnpm test --run api/_shared/__tests__/deckFrames.test.js api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckEventSteps.test.js api/_shared/__tests__/svgAuthoringPrompt.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
 ---
 
 # Development, migrations, and deployment
@@ -68,6 +68,20 @@ pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/ll
 ```
 
 Use an administrator-only connection test only when deliberately validating live provider credentials; it is not a default CI check.
+
+## Azure style-embedding configuration
+
+Style retrieval does not use the tenant-managed analysis-model assignments above. It calls the Azure AI Foundry adapter described in [resource APIs, Blob assets, and LINE sharing](../backend/resources.md), which requires API-only `AZURE_EMBEDDING_ENDPOINT` and `AZURE_EMBEDDING_API_KEY`. Set `EMBEDDING_MODEL` to select the deployment; the source default is `embed-v-4-0`. The endpoint may be the Foundry resource root or the copied embeddings target URI. The adapter appends `/embeddings` only when missing and preserves an explicit `api-version`; otherwise it supplies `2024-05-01-preview`.
+
+`EMBEDDING_DIM` defaults to 1536. It must agree with the existing `styles.embedding vector(1536)` schema: changing that width is a schema and pgvector-index migration, not an App Service setting-only change. The adapter sends Azure `api-key` credentials and does not expose them to the browser or management responses. Store the key through the deployment secret mechanism and do not put it in Vite configuration. Query requests use input type `query`; style-catalog backfill uses `document`, so changing either call site requires preserving that asymmetric retrieval contract.
+
+For a configuration, endpoint, retry, model, or dimensions change, first run the provider-free adapter test:
+
+```sh
+pnpm test --run api/_shared/__tests__/azureEmbeddings.test.js
+```
+
+The test verifies endpoint construction, request width/type, result validation, retry behavior, and missing-credential failure with mocked network I/O. A live Foundry call is conditional: run it only with approved non-production credentials after deployment configuration changes. It does not replace the adapter test, and neither check proves HTTP-handler authorization or a database backfill.
 
 ## PPT Master sidecar
 

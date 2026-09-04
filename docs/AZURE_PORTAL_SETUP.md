@@ -141,6 +141,9 @@
      - Key Vault Secret 頁面複製 **Secret Identifier**
      - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
    - `GEMINI_MODEL_GENERATION` = `gemini-3-pro-image-preview`
+   - `AZURE_EMBEDDING_ENDPOINT` = Azure AI Foundry embeddings target URI（例如 `https://<resource>.services.ai.azure.com/models`）
+   - `AZURE_EMBEDDING_API_KEY` = Key Vault Secret Reference
+   - `EMBEDDING_MODEL` = `embed-v-4-0`
    - `GPT_IMAGE_ENDPOINT` = Azure AI Foundry image endpoint
    - `GPT_IMAGE_EDIT_ENDPOINT` = Optional image edit endpoint
    - `GPT_IMAGE_API_KEY` = Key Vault Secret Reference

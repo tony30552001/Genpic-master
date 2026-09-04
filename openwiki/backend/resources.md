@@ -1,16 +1,16 @@
 ---
 type: backend domain reference
 title: Resource APIs, Blob assets, and LINE sharing
-description: Tenant-scoped styles, history, templates, uploads, generated assets, and LINE integration behavior.
-tags: [backend, resources, storage, line, history]
+description: Tenant-scoped style embeddings and catalog operations, history, templates, uploads, generated assets, and LINE integration behavior.
+tags: [backend, resources, embeddings, storage, line, history]
 openwiki:
   roles: [domain, integration, workflow]
-  change_kinds: [resource-api, storage, history-attribution]
-  source_paths: [api/history/index.js, api/_shared/historySource.js, api/blob-sas/index.js, api/styles/index.js, api/templates/index.js, api/uploads/index.js]
-  symbols: [normalizeHistorySource, HISTORY_SOURCES, saveHistoryItem, uploadFile]
-  test_paths: [api/admin/__tests__/adminResources.test.js, src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx, src/services/__tests__/storageService.test.js, api/uploads/__tests__/index.test.js, api/send-line-image/__tests__/index.test.js, src/services/__tests__/lineService.test.js]
-  invariants: [History records remain tenant and user scoped., A history source is general document image-transform or null for legacy or unrecognized values., User-upload authorization is established by a ready owner-scoped upload record, not a Blob URL.]
-  validation_commands: [pnpm test --run api/admin/__tests__/adminResources.test.js src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx]
+  change_kinds: [resource-api, embeddings, provider-adapter, storage, history-attribution]
+  source_paths: [api/history/index.js, api/_shared/historySource.js, api/blob-sas/index.js, api/styles/index.js, api/templates/index.js, api/uploads/index.js, api/embeddings/index.js, api/styles-backfill/index.js, api/_shared/azureEmbeddings.js, api/_shared/vector.js, src/services/aiService.js]
+  symbols: [normalizeHistorySource, HISTORY_SOURCES, saveHistoryItem, uploadFile, embedText, INPUT_TYPES, resolveEmbeddingsEndpoint, toVectorString]
+  test_paths: [api/_shared/__tests__/azureEmbeddings.test.js, api/admin/__tests__/adminResources.test.js, src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx, src/services/__tests__/storageService.test.js, api/uploads/__tests__/index.test.js, api/send-line-image/__tests__/index.test.js, src/services/__tests__/lineService.test.js]
+  invariants: [History records remain tenant and user scoped., A history source is general document image-transform or null for legacy or unrecognized values., User-upload authorization is established by a ready owner-scoped upload record, not a Blob URL., Style search queries use Azure embedding input type query while catalog backfill uses document., Embeddings must have the same finite numeric dimension as the styles vector column.]
+  validation_commands: [pnpm test --run api/_shared/__tests__/azureEmbeddings.test.js, pnpm test --run api/admin/__tests__/adminResources.test.js src/components/admin/__tests__/AdminPanelSectionLoading.test.jsx]
 ---
 
 # Resource APIs, Blob assets, and LINE sharing
@@ -19,7 +19,21 @@ openwiki:
 
 `/styles` normalizes tags to trimmed arrays, categories to `social`, `presentation`, `poster`, `ecommerce`, `education`, `document`, `brand`, or `general`, and visibility to `private|shared`. Creation requires nonempty name/prompt and sets `published_at` immediately for shared styles. `mine` means tenant + owner, `shared` means tenant + shared visibility, and `all` means either; all support category/tag/text filters and updated/newest/popular/curated ordering. Read/use allows own or shared; update, delete, publish, and unpublish require creator ownership. A shared source can be copied to a new private owner record and increments source `copy_count`; `use` increments `usage_count`. Deletion first clears matching tenant `history.style_id` then deletes the owner record.
 
-`/styles/search` searches only the caller's own embedded styles by pgvector distance. `/styles/backfill-embeddings` processes at most 100 missing embeddings per request; it supports dry run and reports per-record failures. History lists/creates/deletes tenant+user records; templates list/create/update/delete tenant+creator records. Their frontend adapters live in `storageService.js` and hooks.
+### Style embeddings
+
+`/styles/search` searches only the caller's own embedded styles by pgvector cosine distance. `POST /embeddings` is the browser-facing query helper: `src/services/aiService.js::embedText` submits `{ text }`; the handler authenticates and rate-limits before asking `azureEmbeddings.js::embedText` for a `query` embedding, returning `{ embedding }`. Invalid/missing input is `400 bad_request`; adapter failures are logged server-side and returned as `502 embedding_failed`, without exposing upstream details.
+
+`POST /styles/backfill-embeddings` is the catalog-maintenance counterpart. It resolves the caller's tenant, selects at most 100 styles with null embeddings (the request limit is capped at 100), constructs each embedding input from prompt, description, and tags, and sends it as `INPUT_TYPES.DOCUMENT`. It records a valid vector unless `dryRun` is true; empty source text and per-style adapter errors stay in its `failed` report, while the response retains processed, updated, remaining, and dry-run counts. Query and document input types must not be interchanged: the provider treats retrieval queries and indexed catalog text asymmetrically.
+
+`api/_shared/azureEmbeddings.js` is the sole embedding-provider adapter. `resolveEmbeddingsEndpoint` accepts either an Azure AI Foundry resource root or copied target URI, appends `/embeddings` when needed, and supplies `api-version=2024-05-01-preview` only if absent. `embedText` requires the API-only `AZURE_EMBEDDING_ENDPOINT` and `AZURE_EMBEDDING_API_KEY`, uses `EMBEDDING_MODEL` or `embed-v-4-0`, requests `dimensions: defaultDim`, and rejects missing, nonnumeric, or wrong-width results. `defaultDim` comes from `EMBEDDING_DIM` (default 1536) and must remain compatible with the `styles.embedding vector(1536)` column documented in [schema](../data/schema.md). It retries only upstream `429` and `5xx` results: two retries after one and then two seconds, for three total attempts. It does not retry malformed responses, missing configuration, or other client failures.
+
+For an embedding-provider, payload, or dimension change, update `azureEmbeddings.js`, its query and backfill consumers, the `styles` vector schema if the dimension changes, and the API-only deployment configuration described in [development, migrations, and deployment](../operations/development-deployment.md). Do not restore the removed Gemini embedding helper or treat tenant-managed analysis-model roles as embedding configuration; [AI generation](ai-generation.md) owns that separate model-routing boundary. `azureEmbeddings.test.js` proves root/target-URI normalization, width/input-type payload construction, malformed width rejection, upstream-error behavior, retry, and missing credentials. It does not exercise either HTTP handler, authorization/rate limiting, or database updates. Run the adapter test first:
+
+```sh
+pnpm test --run api/_shared/__tests__/azureEmbeddings.test.js
+```
+
+History lists/creates/deletes tenant+user records; templates list/create/update/delete tenant+creator records. Their frontend adapters live in `storageService.js` and hooks.
 
 ### History creation-source attribution
 

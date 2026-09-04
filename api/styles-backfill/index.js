@@ -3,7 +3,7 @@ const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
-const { embedText } = require("../_shared/gemini");
+const { INPUT_TYPES, embedText } = require("../_shared/azureEmbeddings");
 const { toVectorString } = require("../_shared/vector");
 
 const buildEmbeddingText = (row) => {
@@ -44,7 +44,6 @@ module.exports = async function (context, req) {
       [identity.tenantId, limit]
     );
 
-    const modelName = process.env.EMBEDDING_MODEL || "text-embedding-004";
     let updated = 0;
     const failed = [];
 
@@ -56,12 +55,10 @@ module.exports = async function (context, req) {
       }
 
       try {
-        const values = await embedText(modelName, text);
-        if (!Array.isArray(values)) {
-          failed.push({ id: row.id, reason: "embedding_failed" });
-          continue;
-        }
-
+        const values = await embedText({
+          text,
+          inputType: INPUT_TYPES.DOCUMENT,
+        });
         const vectorString = toVectorString(values);
         if (!dryRun) {
           await query(
@@ -70,7 +67,8 @@ module.exports = async function (context, req) {
           );
         }
         updated += 1;
-      } catch {
+      } catch (err) {
+        context.log.error(`Embedding failed for style ${row.id}:`, err);
         failed.push({ id: row.id, reason: "embedding_failed" });
       }
     }

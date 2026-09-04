@@ -6,8 +6,8 @@ tags: [backend, api, openapi, scalar, sessions]
 openwiki:
   roles: [integration, operations, workflow]
   change_kinds: [api-routing, api-reference, public-api, authentication]
-  source_paths: [api/server.js, api/openapi.js, api/image-transform/index.js, api/image-jobs/index.js, api/_shared/imageJobs.js, api/deck-jobs/index.js, api/ppt-templates/index.js, api/_shared/http.js, api/auth/index.js]
-  symbols: [invokeFunction, registerRoute, registerRoutes, operation, addOperation, response, startDeckJobWorker, handleSlidePreview]
+  source_paths: [api/server.js, api/openapi.js, api/embeddings/index.js, api/styles-backfill/index.js, api/_shared/azureEmbeddings.js, api/image-transform/index.js, api/image-jobs/index.js, api/_shared/imageJobs.js, api/deck-jobs/index.js, api/ppt-templates/index.js, api/_shared/http.js, api/auth/index.js]
+  symbols: [invokeFunction, registerRoute, registerRoutes, operation, addOperation, response, embedText, startDeckJobWorker, handleSlidePreview]
   invariants: ["The OpenAPI catalog and Express route registry are separate declarations that must describe the same public adapter surface.", "Protected unsafe operations require the session cookie plus X-CSRF-Token.", "Binary success responses must preserve their declared content type through the Express function adapter.", "The standalone API starts deck work only when the PPT Master service is configured.", "Deck SVG previews are authorized through the job before their page lookup and are returned as image/svg+xml with no-store."]
   validation_commands: [cd api && node --check server.js && node --check openapi.js]
 ---
@@ -36,10 +36,10 @@ The catalog and `registerRoutes` are separate declarations. When adding, removin
 | `GET /health` | health |
 | `GET /auth/entra/start`, `GET /auth/entra/callback`, `POST /auth/google`, `GET /auth/session`, `POST /auth/logout` | [server sessions](sessions.md) |
 | `GET /me` | [authentication and administration](auth-tenancy-admin.md) |
-| `POST /analyze-document`, `/analyze-style`, `/optimize-prompt`, `/optimize-scene`, `/generate-filename`, `/embeddings` | [AI generation](ai-generation.md) |
+| `POST /analyze-document`, `/analyze-style`, `/optimize-prompt`, `/optimize-scene`, `/generate-filename` | [AI generation](ai-generation.md) |
+| `POST /embeddings`, `/styles`, `/styles/search`, `/styles/backfill-embeddings`, `/history`, `/templates`, `/blob-sas` | [resources](resources.md) |
 | `POST /generate-images`, `/image-transform`; `GET /image-jobs/:id` | [AI generation](ai-generation.md) |
 | `POST /deck-jobs`; `GET /deck-jobs/:id`, `/deck-jobs/:id/slides/:slideNumber`, `/deck-jobs/:id/download`, `/ppt-templates` | [PPT Master deck jobs](ppt-master-decks.md) |
-| `/styles`, `/styles/search`, `/styles/backfill-embeddings`, `/history`, `/templates`, `/blob-sas` | [resources](resources.md) |
 | `/line-config`, `/send-line-image` | [resources](resources.md) |
 | `/management/*` | [authentication and administration](auth-tenancy-admin.md) |
 
