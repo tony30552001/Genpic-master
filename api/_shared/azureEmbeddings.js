@@ -26,8 +26,9 @@ const isTransientStatus = (status) => status === 429 || status >= 500;
 const getModelName = () => process.env.EMBEDDING_MODEL || DEFAULT_MODEL_NAME;
 
 /**
- * Accepts either the resource root or the full target URI copied from the
- * deployment page, and always ends on the versioned embeddings route.
+ * Accepts the Foundry model-inference route (`.../models`) or the full target
+ * URI copied from the deployment page, and always ends on the versioned
+ * embeddings route. The bare resource domain is not a valid inference root.
  */
 const resolveEmbeddingsEndpoint = (rawEndpoint) => {
   const configured = String(rawEndpoint || "").trim();

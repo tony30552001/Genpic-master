@@ -137,7 +137,7 @@
    - `AZURE_STORAGE_ACCOUNT` = Storage account name
    - `AZURE_STORAGE_KEY` = Key Vault Secret Reference
    - `BLOB_CONTAINER_DEFAULT` = `uploads`
-   - `AZURE_EMBEDDING_ENDPOINT` = Azure AI Foundry embeddings target URI（例如 `https://<resource>.services.ai.azure.com/models`）
+   - `AZURE_EMBEDDING_ENDPOINT` = Azure AI Foundry 模型推論路徑（`https://<resource>.services.ai.azure.com/models`），或部署頁複製的完整 Target URI；只填資源根網域會回 404
    - `AZURE_EMBEDDING_API_KEY` = Key Vault Secret Reference
      - Key Vault Secret 頁面複製 **Secret Identifier**
      - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
