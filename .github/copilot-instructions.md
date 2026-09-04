@@ -71,8 +71,7 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 ## Image generation
 
 - Tenant policy in `api/_shared/modelPolicy.js` controls the model; do not add a client-side model selector.
-- `gemini-imagen` is the default model handled through `/api/generate-images`.
-- `gpt-image-2` uses `api/_shared/gptImage.js` and the App Service image-job worker.
+- `gpt-image-2` is the only supported image model. It uses `api/_shared/gptImage.js` and the App Service image-job worker.
 - Generation may return HTTP `202` with a `jobId`; the frontend polls through `aiService.waitForImageJob()`.
 - If the image-job contract changes, update the worker, endpoint, polling client, tests, and UI together. Current states are `pending`, `running`, `succeeded`, and `failed`.
 

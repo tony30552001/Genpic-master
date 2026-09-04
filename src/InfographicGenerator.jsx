@@ -932,8 +932,6 @@ export default function InfographicGenerator({
                                                     isGenerating={isGenerating}
                                                     aspectRatio={aspectRatio}
                                                     generationStatus={generationStatus}
-                                                    imageModel={imageModel}
-                                                    imageSize={imageSize}
                                                     promptSummary={userScript}
                                                     analyzedStyle={analyzedStyle}
                                                     onDownload={handleDownload}
@@ -959,8 +957,6 @@ export default function InfographicGenerator({
                                                 isGenerating={isGenerating}
                                                 aspectRatio={aspectRatio}
                                                 generationStatus={generationStatus}
-                                                imageModel={imageModel}
-                                                imageSize={imageSize}
                                                 promptSummary={userScript}
                                                 analyzedStyle={analyzedStyle}
                                                 onDownload={handleDownload}
@@ -1027,8 +1023,6 @@ export default function InfographicGenerator({
                                 prompt={transformPrompt}
                                 onPromptChange={setTransformPrompt}
                                 aspectRatio={transformAspectRatio}
-                                imageModel={imageModel}
-                                imageSize={imageSize}
                                 paletteSelected={transformPaletteSelected}
                                 onPaletteSelectedChange={setTransformPaletteSelected}
                                 savedStyles={savedStyles}
@@ -1157,8 +1151,6 @@ export default function InfographicGenerator({
                                 isGenerating={isGenerating}
                                 aspectRatio={aspectRatio}
                                 generationStatus={generationStatus}
-                                imageModel={imageModel}
-                                imageSize={imageSize}
                                 promptSummary={userScript}
                                 analyzedStyle={analyzedStyle}
                                 onDownload={handleDownload}

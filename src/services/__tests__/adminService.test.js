@@ -31,7 +31,7 @@ describe("adminService", () => {
     await listAdminUsers({ page: 2, pageSize: 25 });
     await listAdminUserOptions();
     await updateAdminModelSettings({
-      allowedModels: ["gemini-imagen", "gpt-image-2"],
+      allowedModels: ["gpt-image-2"],
       defaultModel: "gpt-image-2",
     });
     await updateAdminUserStatus("user-id", false);
@@ -40,7 +40,7 @@ describe("adminService", () => {
     expect(apiGet).toHaveBeenNthCalledWith(2, "/api/management/users?page=2&pageSize=25");
     expect(apiGet).toHaveBeenNthCalledWith(3, "/api/management/user-options");
     expect(apiPut).toHaveBeenCalledWith("/api/management/settings", {
-      allowedModels: ["gemini-imagen", "gpt-image-2"],
+      allowedModels: ["gpt-image-2"],
       defaultModel: "gpt-image-2",
     });
     expect(apiPut).toHaveBeenCalledWith("/api/management/users/user-id", { isActive: false });

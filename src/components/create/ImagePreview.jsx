@@ -26,8 +26,6 @@ export default function ImagePreview({
   isGenerating,
   aspectRatio = "16:9",
   generationStatus,
-  imageModel,
-  imageSize,
   promptSummary,
   onDownload,
   user,
@@ -40,11 +38,7 @@ export default function ImagePreview({
       aspectRatio={aspectRatio}
       generationStatus={generationStatus}
       promptSummary={promptSummary}
-      resolutionLabel={getImageOutputLabel({
-        imageModel,
-        aspectRatio,
-        imageSize,
-      })}
+      resolutionLabel={getImageOutputLabel({ aspectRatio })}
     />
   );
 

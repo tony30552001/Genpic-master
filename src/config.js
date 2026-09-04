@@ -12,14 +12,6 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 // 4. Image generation model options
 export const IMAGE_MODEL_OPTIONS = [
   {
-    id: "gemini-imagen",
-    label: "Nano Banana 2",
-    description: "Google Gemini & Imagen 圖片生成模型，透過後端 API Gateway 呼叫。",
-    sizes: ["512", "1K", "2K", "4K"],
-    supportsSizeMapping: false,
-    supportsQuality: false,
-  },
-  {
     id: "gpt-image-2",
     label: "GPT Image 2",
     description: "OpenAI 最新圖片生成模型，支援高品質影像與精確文字渲染。",
@@ -29,7 +21,7 @@ export const IMAGE_MODEL_OPTIONS = [
   },
 ];
 
-export const DEFAULT_IMAGE_MODEL = "gemini-imagen";
+export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 export const DEFAULT_IMAGE_LANGUAGE = "zh-TW";
 
 // 5. GPT Image 2 rendering quality（僅 gpt-image-2 支援，對應 Azure 的 low/medium/high）

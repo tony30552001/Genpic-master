@@ -7,7 +7,7 @@ const identity = require("../../_shared/identity");
 const rateLimit = require("../../_shared/rateLimit");
 const imageUploads = require("../../_shared/imageUploads");
 const modelPolicy = require("../../_shared/modelPolicy");
-const geminiImage = require("../../_shared/geminiImage");
+const gptImage = require("../../_shared/gptImage");
 const imageJobs = require("../../_shared/imageJobs");
 
 auth.requireAuth = vi.fn();
@@ -16,7 +16,8 @@ rateLimit.rateLimit = vi.fn();
 imageUploads.resolveOwnedImageUpload = vi.fn();
 imageUploads.downloadOwnedImage = vi.fn();
 modelPolicy.ensureModelPolicy = vi.fn();
-geminiImage.generateGeminiImage = vi.fn();
+gptImage.editGptImage = vi.fn();
+gptImage.generateGptImage = vi.fn();
 imageJobs.createImageJob = vi.fn();
 
 const handler = require("../index");
@@ -50,16 +51,19 @@ describe("generate-images owner-scoped reference uploads", () => {
     auth.requireAuth.mockResolvedValue({ user: { sub: "provider-user-1" } });
     identity.resolveIdentity.mockResolvedValue(OWNER);
     rateLimit.rateLimit.mockReturnValue({ limited: false });
-    modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: "gemini-3.1-flash-image-preview" });
+    modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: "gpt-image-2" });
     imageUploads.resolveOwnedImageUpload.mockResolvedValue(upload);
     imageUploads.downloadOwnedImage.mockResolvedValue({
       buffer: Buffer.from("reference-bytes"),
       contentType: "image/jpeg",
     });
-    geminiImage.generateGeminiImage.mockResolvedValue({
-      mimeType: "image/png",
-      base64: "generated",
-      prompt: "final prompt",
+    gptImage.editGptImage.mockResolvedValue({
+      imageUrl: "data:image/png;base64,generated",
+    });
+    imageJobs.createImageJob.mockResolvedValue({
+      id: "223e4567-e89b-42d3-a456-426614174000",
+      status: "queued",
+      model: "gpt-image-2",
     });
   });
 
@@ -76,14 +80,25 @@ describe("generate-images owner-scoped reference uploads", () => {
       userId: OWNER.userId,
     });
     expect(imageUploads.downloadOwnedImage).toHaveBeenCalledWith(upload);
-    expect(geminiImage.generateGeminiImage).toHaveBeenCalledWith(
+    expect(gptImage.editGptImage).toHaveBeenCalledWith(
       expect.objectContaining({
-        referenceImage: {
-          base64: Buffer.from("reference-bytes").toString("base64"),
-          mimeType: "image/jpeg",
-        },
+        imageBase64: Buffer.from("reference-bytes").toString("base64"),
+        mimeType: "image/jpeg",
       })
     );
+  });
+
+  it("queues a job when there is no reference image", async () => {
+    const response = await invoke({ userScript: "create an infographic" });
+
+    expect(response.status).toBe(202);
+    expect(response.body).toMatchObject({
+      jobId: "223e4567-e89b-42d3-a456-426614174000",
+      status: "queued",
+      model: "gpt-image-2",
+    });
+    expect(gptImage.editGptImage).not.toHaveBeenCalled();
+    expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
   });
 
   it.each(["missing", "foreign", "document-purpose", "pending"]) (
@@ -102,7 +117,8 @@ describe("generate-images owner-scoped reference uploads", () => {
         message: "找不到可用的上傳圖片",
       });
       expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
-      expect(geminiImage.generateGeminiImage).not.toHaveBeenCalled();
+      expect(gptImage.editGptImage).not.toHaveBeenCalled();
+      expect(imageJobs.createImageJob).not.toHaveBeenCalled();
     }
   );
 

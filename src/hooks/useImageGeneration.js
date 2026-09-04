@@ -33,7 +33,6 @@ export default function useImageGeneration() {
   const [analysisPhase, setAnalysisPhase] = useState(""); // 新增：分析階段狀態
   const [generationStartedAt, setGenerationStartedAt] = useState(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
-  const [generationModel, setGenerationModel] = useState(DEFAULT_IMAGE_MODEL);
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
@@ -50,8 +49,8 @@ export default function useImageGeneration() {
   }, [generationStartedAt, isGenerating]);
 
   const generationStatus = useMemo(
-    () => getGenerationStatus({ elapsedSeconds: generationElapsedSeconds, model: generationModel }),
-    [generationElapsedSeconds, generationModel]
+    () => getGenerationStatus({ elapsedSeconds: generationElapsedSeconds }),
+    [generationElapsedSeconds]
   );
 
   const runStyleAnalysis = useCallback(async ({ referenceUploadId }) => {
@@ -100,7 +99,6 @@ export default function useImageGeneration() {
       setIsGenerating(true);
       setGenerationStartedAt(startedAt);
       setGenerationElapsedSeconds(0);
-      setGenerationModel(model || DEFAULT_IMAGE_MODEL);
       setGeneratedFilename("");
       if (updatePreview) setGeneratedImage(null);
 

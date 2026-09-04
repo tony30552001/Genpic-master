@@ -73,8 +73,6 @@ function ResultContent({
   isTransforming,
   result,
   aspectRatio,
-  imageModel,
-  imageSize,
   promptSummary,
   onDownloadResult,
 }) {
@@ -90,11 +88,7 @@ function ResultContent({
           aspectRatio={aspectRatio}
           generationStatus={{ label: "AI 正在轉換圖片" }}
           promptSummary={promptSummary}
-          resolutionLabel={getImageOutputLabel({
-            imageModel,
-            aspectRatio,
-            imageSize,
-          })}
+          resolutionLabel={getImageOutputLabel({ aspectRatio })}
           compact
         />
       </div>
@@ -140,8 +134,6 @@ function BeforeAfterPreview({
   isTransforming,
   result,
   aspectRatio,
-  imageModel,
-  imageSize,
   promptSummary,
   onDownloadResult,
 }) {
@@ -151,8 +143,6 @@ function BeforeAfterPreview({
         isTransforming={isTransforming}
         result={result}
         aspectRatio={aspectRatio}
-        imageModel={imageModel}
-        imageSize={imageSize}
         promptSummary={promptSummary}
         onDownloadResult={onDownloadResult}
       />
@@ -190,8 +180,6 @@ function BeforeAfterPreview({
             isTransforming={isTransforming}
             result={result}
             aspectRatio={aspectRatio}
-            imageModel={imageModel}
-            imageSize={imageSize}
             promptSummary={promptSummary}
             onDownloadResult={onDownloadResult}
           />
@@ -215,8 +203,6 @@ export default function ImageTransformPanel({
   prompt,
   onPromptChange,
   aspectRatio,
-  imageModel,
-  imageSize,
 
   // Style palette
   paletteSelected,
@@ -752,8 +738,6 @@ export default function ImageTransformPanel({
             isTransforming={isTransforming}
             result={result}
             aspectRatio={aspectRatio}
-            imageModel={imageModel}
-            imageSize={imageSize}
             promptSummary={prompt || activeModeInfo.description}
             onDownloadResult={onDownloadResult}
           />
@@ -776,8 +760,6 @@ export default function ImageTransformPanel({
               isTransforming={isTransforming}
               result={result}
               aspectRatio={aspectRatio}
-              imageModel={imageModel}
-              imageSize={imageSize}
               promptSummary={prompt || activeModeInfo.description}
               onDownloadResult={onDownloadResult}
             />

@@ -1,6 +1,5 @@
 const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
-const { generateGeminiImage } = require("../_shared/geminiImage");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
@@ -91,71 +90,53 @@ module.exports = async function (context, req) {
       imageLanguage,
     });
 
-    if (selectedModel === "gpt-image-2") {
-      if (referenceImage) {
-        const result = await editGptImage({
-          imageBase64: referenceImage.base64,
-          mimeType: referenceImage.mimeType,
-          prompt,
-          aspectRatio,
-          quality,
-        });
-        context.res = ok({
-          ...result,
-          aspectRatio: aspectRatio || "1:1",
-          prompt,
-          model: selectedModel,
-        });
-        return;
-      }
-
-      if (process.env.FUNCTIONS_WORKER_RUNTIME) {
-        const result = await generateGptImage({ prompt, aspectRatio, quality });
-        context.res = ok({
-          ...result,
-          aspectRatio: aspectRatio || "1:1",
-          prompt,
-          model: selectedModel,
-        });
-        return;
-      }
-
-      const job = await createImageJob({
-        tenantId: identity.tenantId,
-        userId: identity.userId,
+    if (referenceImage) {
+      const result = await editGptImage({
+        imageBase64: referenceImage.base64,
+        mimeType: referenceImage.mimeType,
         prompt,
         aspectRatio,
-        imageSize,
         quality,
+      });
+      context.res = ok({
+        ...result,
+        aspectRatio: aspectRatio || "1:1",
+        prompt,
         model: selectedModel,
       });
-      context.res = ok(
-        {
-          jobId: job.id,
-          status: job.status,
-          aspectRatio: aspectRatio || "1:1",
-          prompt,
-          model: selectedModel,
-        },
-        202
-      );
       return;
     }
 
-    const image = await generateGeminiImage({
+    if (process.env.FUNCTIONS_WORKER_RUNTIME) {
+      const result = await generateGptImage({ prompt, aspectRatio, quality });
+      context.res = ok({
+        ...result,
+        aspectRatio: aspectRatio || "1:1",
+        prompt,
+        model: selectedModel,
+      });
+      return;
+    }
+
+    const job = await createImageJob({
+      tenantId: identity.tenantId,
+      userId: identity.userId,
       prompt,
       aspectRatio,
       imageSize,
-      referenceImage,
-      logger: context.log,
-    });
-
-    context.res = ok({
-      imageUrl: `data:${image.mimeType};base64,${image.base64}`,
-      aspectRatio: aspectRatio || "16:9",
-      prompt: image.prompt,
+      quality,
       model: selectedModel,
     });
+    context.res = ok(
+      {
+        jobId: job.id,
+        status: job.status,
+        aspectRatio: aspectRatio || "1:1",
+        prompt,
+        model: selectedModel,
+      },
+      202
+    );
   } catch (err) {
     context.log.error("Image generation failed:", err);
 

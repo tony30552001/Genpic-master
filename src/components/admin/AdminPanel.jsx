@@ -90,11 +90,13 @@ const formatDate = (value) => {
 };
 
 const modelLabel = (modelId) =>
-  IMAGE_MODEL_OPTIONS.find((model) => model.id === modelId)?.label || modelId;
+  IMAGE_MODEL_OPTIONS.find((model) => model.id === modelId)?.label
+  || modelId
+  || "未紀錄";
 
 const emptyPolicy = {
-  allowedModels: ["gemini-imagen"],
-  defaultModel: "gemini-imagen",
+  allowedModels: ["gpt-image-2"],
+  defaultModel: "gpt-image-2",
 };
 
 const DEFAULT_USER_PAGE_SIZE = 10;
@@ -642,7 +644,7 @@ export default function AdminPanel() {
             .join("\n"),
         },
         { label: "功能", value: historySourceLabel(previewItem.source) },
-        { label: "模型", value: modelLabel(previewItem.model || "gemini-imagen") },
+        { label: "模型", value: modelLabel(previewItem.model) },
         { label: "風格", value: previewItem.styleName },
         { label: "時間", value: formatDate(previewItem.createdAt) },
         { label: "完整 Prompt", value: previewItem.fullPrompt },
@@ -973,7 +975,7 @@ export default function AdminPanel() {
                                 <Badge variant="secondary">{historySourceLabel(item.source)}</Badge>
                               </td>
                               <td className="px-5 py-3">
-                                <Badge variant="outline">{modelLabel(item.model || "gemini-imagen")}</Badge>
+                                <Badge variant="outline">{modelLabel(item.model)}</Badge>
                               </td>
                               <td className="max-w-[360px] px-5 py-3">
                                 <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground" title={item.fullPrompt || item.userScript || ""}>

@@ -107,7 +107,7 @@ describe("generateDeckImages", () => {
         slide({ needs_image: false, image_prompt: "" }),
         slide({ slide_number: 2, needs_image: false, image_prompt: "" }),
       ]),
-      model: "gemini-imagen",
+      model: "gpt-image-2",
       onProgress: async (event) => events.push(event),
     });
 

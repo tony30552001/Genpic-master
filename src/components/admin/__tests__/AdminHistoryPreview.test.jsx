@@ -104,8 +104,8 @@ describe("AdminPanel history preview", () => {
     listAdminStyles.mockResolvedValue(emptyPage);
     listAdminUserOptions.mockResolvedValue([]);
     getAdminModelSettings.mockResolvedValue({
-      modelPolicy: { allowedModels: ["gemini-imagen"], defaultModel: "gemini-imagen" },
-      supportedModels: ["gemini-imagen"],
+      modelPolicy: { allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2" },
+      supportedModels: ["gpt-image-2"],
     });
     listAdminHistory.mockResolvedValue({
       items: historyItems,

@@ -22,9 +22,10 @@ describe("useImageTransform", () => {
     vi.clearAllMocks();
     uploadFile.mockResolvedValue({ uploadId: UPLOAD_ID, status: "ready" });
     transformImage.mockResolvedValue({
-      imageUrl: "data:image/png;base64,result",
+      jobId: "image-job-default",
+      status: "queued",
       prompt: "watercolor",
-      model: "gemini-imagen",
+      model: "gpt-image-2",
     });
     waitForImageJob.mockResolvedValue({
       imageUrl: "data:image/png;base64,queued-result",

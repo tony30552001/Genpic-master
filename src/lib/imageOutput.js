@@ -5,14 +5,5 @@ const GPT_IMAGE_SIZE_LABELS = {
   "9:16": "1024×1536",
 };
 
-export const getImageOutputLabel = ({
-  imageModel,
-  aspectRatio,
-  imageSize,
-}) => {
-  if (imageModel === "gpt-image-2") {
-    return GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024";
-  }
-
-  return imageSize || "";
-};
+export const getImageOutputLabel = ({ aspectRatio }) =>
+  GPT_IMAGE_SIZE_LABELS[aspectRatio] || "1024×1024";

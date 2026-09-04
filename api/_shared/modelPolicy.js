@@ -1,11 +1,8 @@
 const { query } = require("./db");
 
-const SUPPORTED_IMAGE_MODELS = Object.freeze([
-  "gemini-imagen",
-  "gpt-image-2",
-]);
+const SUPPORTED_IMAGE_MODELS = Object.freeze(["gpt-image-2"]);
 
-const DEFAULT_MODEL = "gemini-imagen";
+const DEFAULT_MODEL = "gpt-image-2";
 const DEFAULT_ALLOWED_MODELS = Object.freeze([DEFAULT_MODEL]);
 
 const normalizeModels = (models) => {

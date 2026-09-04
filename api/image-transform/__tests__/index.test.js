@@ -7,7 +7,6 @@ const identity = require("../../_shared/identity");
 const rateLimit = require("../../_shared/rateLimit");
 const imageUploads = require("../../_shared/imageUploads");
 const modelPolicy = require("../../_shared/modelPolicy");
-const gemini = require("../../_shared/gemini");
 const imageJobs = require("../../_shared/imageJobs");
 
 auth.requireAuth = vi.fn();
@@ -16,7 +15,6 @@ rateLimit.rateLimit = vi.fn();
 imageUploads.resolveOwnedImageUpload = vi.fn();
 imageUploads.downloadOwnedImage = vi.fn();
 modelPolicy.ensureModelPolicy = vi.fn();
-gemini.getModel = vi.fn();
 imageJobs.createImageJob = vi.fn();
 
 const handler = require("../index");
@@ -50,7 +48,7 @@ describe("image-transform owner-scoped source uploads", () => {
     auth.requireAuth.mockResolvedValue({ user: { sub: "provider-user-1" } });
     identity.resolveIdentity.mockResolvedValue(OWNER);
     rateLimit.rateLimit.mockReturnValue({ limited: false });
-    modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: "gemini-3.1-flash-image-preview" });
+    modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: "gpt-image-2" });
     imageJobs.createImageJob.mockResolvedValue({
       id: "223e4567-e89b-42d3-a456-426614174000",
       status: "queued",
@@ -62,13 +60,9 @@ describe("image-transform owner-scoped source uploads", () => {
       buffer: Buffer.from("source-bytes"),
       contentType: "image/png",
     });
-    const generateContent = vi.fn().mockResolvedValue({
-      candidates: [{ content: { parts: [{ inlineData: { mimeType: "image/png", data: "result" } }] } }],
-    });
-    gemini.getModel.mockReturnValue({ generateContent });
   });
 
-  it("resolves and downloads a ready image upload before transformation", async () => {
+  it("queues the transform against the owned upload without downloading it", async () => {
     const response = await invoke({
       uploadId: IMAGE_ID,
       mimeType: "image/png",
@@ -76,19 +70,19 @@ describe("image-transform owner-scoped source uploads", () => {
       prompt: "watercolor",
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(imageUploads.resolveOwnedImageUpload).toHaveBeenCalledWith({
       uploadId: IMAGE_ID,
       tenantId: OWNER.tenantId,
       userId: OWNER.userId,
     });
-    expect(imageUploads.downloadOwnedImage).toHaveBeenCalledWith(upload);
-    const model = gemini.getModel.mock.results[0].value;
-    expect(model.generateContent).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ inlineData: expect.objectContaining({ data: Buffer.from("source-bytes").toString("base64") }) }),
-      ]),
-      expect.any(Object)
+    expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
+    expect(imageJobs.createImageJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUploadId: IMAGE_ID,
+        operation: "edit",
+        model: "gpt-image-2",
+      })
     );
   });
 
@@ -105,7 +99,7 @@ describe("image-transform owner-scoped source uploads", () => {
         message: "找不到可用的上傳圖片",
       });
       expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
-      expect(gemini.getModel).not.toHaveBeenCalled();
+      expect(imageJobs.createImageJob).not.toHaveBeenCalled();
     }
   );
 

@@ -51,11 +51,7 @@ export default function GenerateBar({
 }) {
     const modelConfig = IMAGE_MODEL_OPTIONS.find((m) => m.id === imageModel);
     const showResolutionPicker = !modelConfig?.supportsSizeMapping;
-    const selectedSizeLabel = getImageOutputLabel({
-        imageModel,
-        aspectRatio,
-        imageSize,
-    });
+    const selectedSizeLabel = getImageOutputLabel({ aspectRatio });
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
         : isGeneratingText || "AI 生成中…";

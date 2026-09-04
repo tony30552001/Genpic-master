@@ -137,12 +137,10 @@
    - `AZURE_STORAGE_ACCOUNT` = Storage account name
    - `AZURE_STORAGE_KEY` = Key Vault Secret Reference
    - `BLOB_CONTAINER_DEFAULT` = `uploads`
-   - `GOOGLE_API_KEY` = Key Vault Secret Reference
-     - Key Vault Secret 頁面複製 **Secret Identifier**
-     - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
-   - `GEMINI_MODEL_GENERATION` = `gemini-3-pro-image-preview`
    - `AZURE_EMBEDDING_ENDPOINT` = Azure AI Foundry embeddings target URI（例如 `https://<resource>.services.ai.azure.com/models`）
    - `AZURE_EMBEDDING_API_KEY` = Key Vault Secret Reference
+     - Key Vault Secret 頁面複製 **Secret Identifier**
+     - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
    - `EMBEDDING_MODEL` = `embed-v-4-0`
    - `GPT_IMAGE_ENDPOINT` = Azure AI Foundry image endpoint
    - `GPT_IMAGE_EDIT_ENDPOINT` = Optional image edit endpoint

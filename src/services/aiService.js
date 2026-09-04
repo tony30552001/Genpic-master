@@ -301,7 +301,7 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
   apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage });
 
 /**
- * AI 圖片轉換 — 支援 Gemini（後端）和 GPT-Image-2（前端 edit API）
+ * AI 圖片轉換 — 透過後端影像工作佇列使用 GPT-Image-2 edit API
  * @param {Object} params
  * @param {string} params.uploadId - 來源圖片的 owner-scoped upload ID
  * @param {string} params.mimeType - 圖片 MIME 類型

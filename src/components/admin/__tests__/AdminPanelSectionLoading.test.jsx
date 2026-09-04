@@ -74,8 +74,8 @@ describe("AdminPanel section loading", () => {
     listAdminUserOptions.mockResolvedValue([]);
     getAdminHistoryImage.mockResolvedValue({ imageUrl: "" });
     getAdminModelSettings.mockResolvedValue({
-      modelPolicy: { allowedModels: ["gemini-imagen"], defaultModel: "gemini-imagen" },
-      supportedModels: ["gemini-imagen"],
+      modelPolicy: { allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2" },
+      supportedModels: ["gpt-image-2"],
     });
   });
 

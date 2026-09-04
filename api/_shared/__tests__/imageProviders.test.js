@@ -18,18 +18,10 @@ describe("isImageModelConfigured", () => {
     expect(isImageModelConfigured("gpt-image-2")).toBe(true);
   });
 
-  it("requires the Google key for Gemini", () => {
-    delete process.env.GOOGLE_API_KEY;
-    expect(isImageModelConfigured("gemini-imagen")).toBe(false);
-
-    process.env.GOOGLE_API_KEY = "secret";
-    expect(isImageModelConfigured("gemini-imagen")).toBe(true);
-  });
-
-  it("treats an unknown model as unusable", () => {
-    process.env.GOOGLE_API_KEY = "secret";
+  it("treats a removed or unknown model as unusable", () => {
     process.env.GPT_IMAGE_ENDPOINT = "https://example.com";
     process.env.GPT_IMAGE_API_KEY = "secret";
+    expect(isImageModelConfigured("gemini-imagen")).toBe(false);
     expect(isImageModelConfigured("dall-e-2")).toBe(false);
     expect(isImageModelConfigured(undefined)).toBe(false);
   });

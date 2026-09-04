@@ -10,7 +10,7 @@ const BASE_PROPS = {
   onImageSizeChange: vi.fn(),
   imageQuality: "medium",
   onImageQualityChange: vi.fn(),
-  imageModel: "gemini-imagen",
+  imageModel: "gpt-image-2",
   isGenerating: false,
   onGenerate: vi.fn(),
 };

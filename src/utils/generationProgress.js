@@ -1,6 +1,4 @@
-import { DEFAULT_IMAGE_MODEL } from "../config";
-
-const GPT_IMAGE_2_PHASES = [
+const GENERATION_PHASES = [
   {
     maxSeconds: 3,
     phase: "preparing",
@@ -48,45 +46,6 @@ const GPT_IMAGE_2_PHASES = [
   },
 ];
 
-const DEFAULT_PHASES = [
-  {
-    maxSeconds: 2,
-    phase: "preparing",
-    label: "正在準備生成請求",
-    shortLabel: "準備生成中",
-    helperText: "正在整理提示詞與輸出設定。",
-    progressStart: 10,
-    progressEnd: 24,
-  },
-  {
-    maxSeconds: 8,
-    phase: "submitted",
-    label: "已送出生成請求",
-    shortLabel: "已送出請求",
-    helperText: "正在等待模型回傳結果。",
-    progressStart: 24,
-    progressEnd: 52,
-  },
-  {
-    maxSeconds: 20,
-    phase: "composing",
-    label: "AI 正在生成圖片",
-    shortLabel: "生成圖片中",
-    helperText: "正在建立構圖與視覺細節。",
-    progressStart: 52,
-    progressEnd: 84,
-  },
-  {
-    maxSeconds: Infinity,
-    phase: "waiting",
-    label: "仍在等待模型回傳",
-    shortLabel: "仍在生成中",
-    helperText: "你可以繼續等待，或取消後調整提示詞再試一次。",
-    progressStart: 84,
-    progressEnd: 95,
-  },
-];
-
 export const formatElapsedSeconds = (seconds = 0) => {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(safeSeconds / 60);
@@ -96,13 +55,12 @@ export const formatElapsedSeconds = (seconds = 0) => {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 };
 
-export const getGenerationStatus = ({ elapsedSeconds = 0, model = DEFAULT_IMAGE_MODEL } = {}) => {
+export const getGenerationStatus = ({ elapsedSeconds = 0 } = {}) => {
   const safeElapsed = Math.max(0, Math.floor(elapsedSeconds));
-  const phases = model === "gpt-image-2" ? GPT_IMAGE_2_PHASES : DEFAULT_PHASES;
   let elapsedBeforePhase = 0;
-  let currentPhase = phases[phases.length - 1];
+  let currentPhase = GENERATION_PHASES[GENERATION_PHASES.length - 1];
 
-  for (const phase of phases) {
+  for (const phase of GENERATION_PHASES) {
     if (safeElapsed < phase.maxSeconds) {
       currentPhase = phase;
       break;

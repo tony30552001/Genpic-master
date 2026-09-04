@@ -9,8 +9,6 @@ describe("ImagePreview generation state", () => {
       <ImagePreview
         isGenerating
         aspectRatio="9:16"
-        imageModel="gpt-image-2"
-        imageSize="4K"
         promptSummary="直式產品發表視覺"
         generationStatus={{
           label: "AI 正在建立構圖",
