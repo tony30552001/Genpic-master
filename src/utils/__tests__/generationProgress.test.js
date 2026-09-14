@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_IMAGE_MODEL } from "../../config";
 import { formatElapsedSeconds, getGenerationStatus } from "../generationProgress";
 
 describe("generationProgress", () => {
@@ -10,8 +9,7 @@ describe("generationProgress", () => {
     expect(formatElapsedSeconds(65)).toBe("1:05");
   });
 
-  it("paces phases for the only supported image model and caps progress", () => {
-    expect(DEFAULT_IMAGE_MODEL).toBe("gpt-image-2");
+  it("paces generation phases and caps progress without assuming a model", () => {
     expect(getGenerationStatus({ elapsedSeconds: 2 }).phase).toBe("preparing");
     expect(getGenerationStatus({ elapsedSeconds: 12 }).phase).toBe("composing");
 

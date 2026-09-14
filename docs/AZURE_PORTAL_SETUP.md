@@ -142,13 +142,9 @@
      - Key Vault Secret 頁面複製 **Secret Identifier**
      - 格式：`@Microsoft.KeyVault(SecretUri=<SecretIdentifier>)`
    - `EMBEDDING_MODEL` = `embed-v-4-0`
-   - `GPT_IMAGE_ENDPOINT` = Azure AI Foundry image endpoint
-   - `GPT_IMAGE_EDIT_ENDPOINT` = Optional image edit endpoint
-   - `GPT_IMAGE_API_KEY` = Key Vault Secret Reference
-   - `GPT_IMAGE_DEPLOYMENT` = `gpt-image-2`
    - `BLOB_CONTAINER_GENERATED` = `generated`
    - `IMAGE_JOB_POLL_MS` = `2000`（可選）
-   - `SECRET_ENCRYPTION_KEY` = Key Vault Secret Reference（加密分析模型 API 金鑰與 LINE token）
+   - `SECRET_ENCRYPTION_KEY` = Key Vault Secret Reference（64 字元 hex，代表 32 bytes；加密圖片／分析模型 API 金鑰與 LINE token）
    - `ADMIN_EMAILS` = Comma-separated admin email list
    - `AUTH_DISABLED` = `false`
    - `CORS_ALLOW_ORIGIN` = `https://<your-swa-domain>`
@@ -159,9 +155,32 @@
 
 在同一個 App Service 的 **Authentication** 頁面停用 **App Service Authentication / Easy Auth**（平台 Authentication 必須允許匿名進入）。Pixora BFF 會自行處理 Entra authorization code、Google credential、HttpOnly session cookie 與 CSRF；若平台設定為 `RedirectToLoginPage`，會在 BFF route 前先攔截請求。
 
-部署後，先使用相同的 `DATABASE_URL` 執行 `node api/scripts/migrate.cjs`，
-建立 `image_generation_jobs` 與 `auth_sessions` tables。GPT Image 2 會由 App Service 背景 worker
-處理，避免 SWA linked API 約 45 秒 gateway timeout。
+全新資料庫才依序執行全部 migration；既有環境只執行尚未套用的指定檔案。
+升級至圖片模型目錄時，使用安全注入的 `DATABASE_URL` 執行：
+
+```powershell
+node api\scripts\migrate.cjs 026_image_model_catalog.sql
+```
+
+不要在已設定多模型政策的資料庫重跑全部 migration：
+`025_gpt_image_only.sql` 會把政策改回單一 GPT Image 2。migration runner 不記錄套用歷史，
+所以本次 migration 也只應執行一次。
+
+在 Azure Foundry 部署圖片模型後，將資源的 HTTPS 端點、部署名稱與 API 金鑰
+登錄至管理中心的圖片模型目錄，不再設定 `GPT_IMAGE_*`。端點可以使用資源根網址、
+`/openai/v1` base 或 `/openai/v1/images/generations` 完整路徑，不接受舊版
+`/openai/deployments/...` 路徑或 query 形式的金鑰。
+
+先登錄既有 `gpt-image-2` 連線以維持原政策可用，再登錄 `gpt-image-2.5-flare`。
+Flare 支援品質選擇為 `low`、`medium`、`high`、`xhigh`、`max`、`auto`，
+原 GPT Image 2 選擇 `low`、`medium`、`high`；預設品質使用 `medium`。
+Azure 的實際部署名稱不一定等於模型識別碼，應填入 Foundry 顯示的 deployment name。
+新登錄項目不自動加入政策或取代預設，需由管理員明確啟用、切換。
+
+圖片生成、參考圖生成及圖片轉換全部由 App Service 背景 worker 處理。
+付費連線測試須由管理員明確觸發；此測試只確認低品質生成，編輯與其他品質需另作
+受控確認。資料庫登錄、完整切換順序與金鑰注意事項見
+[部署指南](DEPLOYMENT_GUIDE_AZURE.md#圖片模型目錄的受控升級)。
 
 ---
 

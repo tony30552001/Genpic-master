@@ -1,3 +1,10 @@
+const {
+  ImageModelError,
+  isTransientImageError,
+  normalizeImageEndpoint,
+  validateImageQuality,
+} = require("./imageModelConfig");
+
 const ASPECT_RATIO_TO_SIZE = Object.freeze({
   "1:1": "1024x1024",
   "16:9": "1536x1024",
@@ -13,173 +20,129 @@ const ASPECT_RATIO_TO_SIZE = Object.freeze({
 
 const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 2000;
+// Includes response streaming and retry delays, below the worker's 15-minute lease.
+const REQUEST_TIMEOUT_MS = 12 * 60 * 1000;
 
-/** Azure `images/generations` rendering effort; higher costs more and is slower. */
-const IMAGE_QUALITIES = Object.freeze(["low", "medium", "high"]);
-const DEFAULT_IMAGE_QUALITY = "medium";
+class ImageProviderError extends Error {
+  constructor(message, code, status, retryable) {
+    super(message);
+    this.code = code;
+    this.status = status;
+    this.retryable = retryable;
+  }
+}
 
-const normalizeImageQuality = (value) => {
-  const quality = String(value || "").trim().toLowerCase();
-  return IMAGE_QUALITIES.includes(quality) ? quality : DEFAULT_IMAGE_QUALITY;
-};
-
-/** Upstream is busy or briefly broken; the same request is worth repeating. */
-const isTransientStatus = (status) => status === 429 || status >= 500;
-
-const getEndpoint = () => process.env.GPT_IMAGE_ENDPOINT || "";
-const getApiKey = () => process.env.GPT_IMAGE_API_KEY || "";
-const getDeployment = () => process.env.GPT_IMAGE_DEPLOYMENT || "gpt-image-2";
-
-const isAzureOpenAiEndpoint = (endpoint) => {
-  try {
-    const { hostname } = new URL(endpoint);
-    return (
-      hostname.endsWith(".openai.azure.com") ||
-      hostname.endsWith(".cognitiveservices.azure.com") ||
-      hostname.endsWith(".services.ai.azure.com")
+const validateConfig = (config) => {
+  if (
+    !config || config.apiType !== "azure-openai-images-v1" ||
+    typeof config.apiKey !== "string" || !config.apiKey.trim() ||
+    typeof config.deploymentName !== "string" || !config.deploymentName.trim() ||
+    normalizeImageEndpoint(config.endpoint) !== config.endpoint
+  ) {
+    throw new ImageModelError(
+      "圖片模型設定無效，請聯絡管理員", "image_model_not_configured", 503
     );
-  } catch {
-    return false;
   }
 };
 
-const deriveEditEndpoint = (endpoint) => {
-  if (!endpoint) return "";
-
-  try {
-    const url = new URL(endpoint);
-    if (url.pathname.includes("/images/generations")) {
-      url.pathname = url.pathname.replace("/images/generations", "/images/edits");
-      return url.toString();
-    }
-    return endpoint;
-  } catch {
-    return endpoint.replace(/\/images\/generations([^/]*)$/, "/images/edits$1");
-  }
-};
-
-const getAuthHeaders = (endpoint) => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("GPT_IMAGE_API_KEY 尚未設定");
-  }
-
-  return isAzureOpenAiEndpoint(endpoint)
-    ? { "api-key": apiKey }
-    : { Authorization: `Bearer ${apiKey}` };
-};
-
-const parseResponse = async (response, label) => {
-  const text = await response.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null;
-  }
-
+const parseResponse = async (response) => {
   if (!response.ok) {
-    const message = data?.error?.message || data?.message || `${label} 請求失敗`;
-    const failure = new Error(`${message} (${response.status})`);
-    failure.status = response.status;
-    throw failure;
+    await response.body?.cancel();
+    throw new ImageProviderError(
+      `圖片服務請求失敗 (${response.status})`,
+      "image_provider_error", response.status, isTransientImageError({ status: response.status })
+    );
   }
-
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new ImageProviderError("圖片服務回傳格式異常", "image_provider_response", 502, false);
+  }
   const item = data?.data?.[0];
-  if (!item?.b64_json && !item?.url) {
-    throw new Error(`${label} 回傳格式異常：缺少圖片資料`);
+  if (typeof item?.b64_json !== "string" || !item.b64_json) {
+    throw new ImageProviderError("圖片服務回傳格式異常：缺少圖片資料", "image_provider_response", 502, false);
   }
-
-  return {
-    imageUrl: item.b64_json ? `data:image/png;base64,${item.b64_json}` : item.url,
-  };
+  return { imageUrl: `data:image/png;base64,${item.b64_json}` };
 };
 
 const getSize = (aspectRatio) =>
   ASPECT_RATIO_TO_SIZE[aspectRatio] || ASPECT_RATIO_TO_SIZE["1:1"];
 
-/**
- * Generate one image, retrying with exponential backoff while the endpoint
- * reports throttling or a server-side failure. A retry-exhausted call still
- * throws: the caller decides what a missing image means.
- */
-const generateGptImage = async ({ prompt, aspectRatio, quality }) => {
-  const endpoint = getEndpoint();
-  if (!endpoint) throw new Error("GPT_IMAGE_ENDPOINT 尚未設定");
-
-  let delayMs = RETRY_BASE_DELAY_MS;
-
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(endpoint),
-        },
-        body: JSON.stringify({
-          prompt,
-          model: getDeployment(),
-          size: getSize(aspectRatio),
-          quality: normalizeImageQuality(quality),
-          n: 1,
-        }),
-      });
-
-      return await parseResponse(response, "GPT Image 2");
-    } catch (apiError) {
-      if (attempt >= MAX_RETRIES || !isTransientStatus(apiError.status)) throw apiError;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      delayMs *= 2;
+const requestImage = async (config, route, makeRequest) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        controller.signal.throwIfAborted();
+        const response = await fetch(`${config.endpoint}/images/${route}`, {
+          ...makeRequest(),
+          method: "POST",
+          redirect: "error",
+          signal: controller.signal,
+        });
+        return await parseResponse(response);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw new ImageProviderError("圖片服務請求逾時", "image_provider_timeout", 504, true);
+        }
+        // Never propagate fetch errors or provider response bodies containing credentials.
+        const failure = error instanceof ImageProviderError ? error :
+          new ImageProviderError("圖片服務連線失敗", "image_provider_connection", 502,
+            isTransientImageError(error));
+        if (attempt >= MAX_RETRIES || !failure.retryable) throw failure;
+        await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * 2 ** attempt));
+      }
     }
+  } finally {
+    clearTimeout(timer);
   }
 };
 
-const editGptImage = async ({ imageBase64, mimeType, prompt, aspectRatio, quality }) => {
-  const endpoint = deriveEditEndpoint(
-    process.env.GPT_IMAGE_EDIT_ENDPOINT || getEndpoint()
-  );
-  if (!endpoint) throw new Error("GPT_IMAGE_EDIT_ENDPOINT 尚未設定");
-  if (!imageBase64) throw new Error("缺少 GPT Image 2 編輯來源圖片");
+const generateGptImage = async ({ config, prompt, aspectRatio, quality }) => {
+  validateConfig(config);
+  const selectedQuality = validateImageQuality(config, quality);
+  return requestImage(config, "generations", () => ({
+    headers: { "Content-Type": "application/json", "api-key": config.apiKey },
+    body: JSON.stringify({
+      prompt,
+      model: config.deploymentName,
+      size: getSize(aspectRatio),
+      quality: selectedQuality,
+      output_format: "png",
+      n: 1,
+    }),
+  }));
+};
 
-  let delayMs = RETRY_BASE_DELAY_MS;
-
-  for (let attempt = 0; ; attempt += 1) {
+const editGptImage = async ({ config, imageBase64, mimeType, prompt, aspectRatio, quality }) => {
+  validateConfig(config);
+  const selectedQuality = validateImageQuality(config, quality);
+  if (typeof imageBase64 !== "string" || !imageBase64) {
+    throw new ImageModelError("缺少圖片編輯來源");
+  }
+  return requestImage(config, "edits", () => {
     const formData = new FormData();
     formData.append(
-      isAzureOpenAiEndpoint(endpoint) ? "image[]" : "image",
+      "image",
       new Blob([Buffer.from(imageBase64, "base64")], {
         type: mimeType || "image/png",
       }),
       "source.png"
     );
     formData.append("prompt", prompt || "");
-    formData.append("model", getDeployment());
+    formData.append("model", config.deploymentName);
     formData.append("size", getSize(aspectRatio));
-    formData.append("quality", normalizeImageQuality(quality));
+    formData.append("quality", selectedQuality);
+    formData.append("output_format", "png");
     formData.append("n", "1");
-
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: getAuthHeaders(endpoint),
-        body: formData,
-      });
-
-      return await parseResponse(response, "GPT Image 2 Edit");
-    } catch (apiError) {
-      if (attempt >= MAX_RETRIES || !isTransientStatus(apiError.status)) throw apiError;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      delayMs *= 2;
-    }
-  }
+    return { headers: { "api-key": config.apiKey }, body: formData };
+  });
 };
 
 module.exports = {
-  DEFAULT_IMAGE_QUALITY,
-  IMAGE_QUALITIES,
-  deriveEditEndpoint,
   editGptImage,
   generateGptImage,
-  normalizeImageQuality,
 };

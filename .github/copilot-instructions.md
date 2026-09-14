@@ -71,16 +71,19 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 ## Image generation
 
 - Tenant policy in `api/_shared/modelPolicy.js` controls the model; do not add a client-side model selector.
-- `gpt-image-2` is the only supported image model. It uses `api/_shared/gptImage.js` and the App Service image-job worker.
-- Generation may return HTTP `202` with a `jobId`; the frontend polls through `aiService.waitForImageJob()`.
-- If the image-job contract changes, update the worker, endpoint, polling client, tests, and UI together. Current states are `pending`, `running`, `succeeded`, and `failed`.
+- Image deployments are tenant-managed in `api/_shared/imageModels.js`. Azure OpenAI Images v1 is the supported protocol; do not hardcode an image-model name whitelist or restore global `GPT_IMAGE_*` runtime configuration.
+- API keys use `secretCrypto.js`; management responses expose `hasApiKey` only, and `/api/me` exposes only public image-model metadata.
+- Image quality is validated against the selected model's capabilities. Only an omitted quality may use its configured default; explicit invalid values must fail.
+- Generation, reference-image generation, and transforms return HTTP `202` with a `jobId`; the frontend polls through `aiService.waitForImageJob()`.
+- Image history requires an owned succeeded job; persist that job's model, not the current policy or a browser-provided model.
+- If the image-job contract changes, update the worker, endpoint, polling client, tests, and UI together. Current states are `queued`, `processing`, `succeeded`, and `failed`.
 
 ## Environment variables
 
 - `VITE_*` variables are injected at build time. Changing one requires a new CI/CD deployment.
 - Frontend variables MUST be declared in `src/config.js` and added to the workflow `env` block.
 - Backend-only variables belong in App Service settings, not `VITE_*`.
-- Keep `GPT_IMAGE_*` server-side. Do not hardcode provider endpoints or credentials in components.
+- Image model endpoints and encrypted keys belong in the tenant catalog; keep `SECRET_ENCRYPTION_KEY` in App Service settings. Do not hardcode provider endpoints or credentials in components.
 
 ## UI conventions
 

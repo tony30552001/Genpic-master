@@ -9,10 +9,6 @@ vi.mock("../../hooks/useAuth", () => ({
   default: vi.fn(),
 }));
 
-vi.mock("../../components/auth/LoginShaderBackground", () => ({
-  default: () => <div data-testid="login-shader" />,
-}));
-
 vi.mock("@react-oauth/google", () => ({
   GoogleLogin: ({ onSuccess, onError, theme }) => (
     <div data-testid="google-login" data-theme={theme}>
@@ -58,10 +54,12 @@ describe("LoginPage", () => {
   });
 
   it("renders the Pixora login experience and keeps both providers available", () => {
-    renderLogin();
+    const { container } = renderLogin();
 
     expect(screen.getByRole("heading", { name: "繼續你的創作" })).toBeInTheDocument();
-    expect(screen.getByTestId("login-shader")).toBeInTheDocument();
+    expect(container.querySelector("[data-login-backdrop='static']")).toBeInTheDocument();
+    expect(container.querySelector(".login-surface")).toBeInTheDocument();
+    expect(container.querySelector(".login-glass-panel")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "使用 Microsoft 帳號繼續" }));
     fireEvent.click(screen.getByRole("button", { name: "Google 成功" }));

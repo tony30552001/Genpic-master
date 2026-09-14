@@ -1,9 +1,6 @@
 const { query } = require("./db");
-
-const SUPPORTED_IMAGE_MODELS = Object.freeze(["gpt-image-2"]);
-
-const DEFAULT_MODEL = "gpt-image-2";
-const DEFAULT_ALLOWED_MODELS = Object.freeze([DEFAULT_MODEL]);
+const { ImageModelError } = require("./imageModelConfig");
+const { listPublicImageModels, withImageModelTransaction } = require("./imageModels");
 
 const normalizeModels = (models) => {
   if (!Array.isArray(models)) return [];
@@ -20,15 +17,16 @@ const mapPolicy = (row) => ({
     : null,
 });
 
-const ensureModelPolicy = async (tenantId) => {
-  await query(
+const ensureModelPolicy = async (tenantId, client) => {
+  const runQuery = client ? client.query.bind(client) : query;
+  await runQuery(
     `INSERT INTO tenant_model_settings (tenant_id)
      VALUES ($1)
      ON CONFLICT (tenant_id) DO NOTHING`,
     [tenantId]
   );
 
-  const result = await query(
+  const result = await runQuery(
     `SELECT allowed_models, default_model, updated_at
      FROM tenant_model_settings
      WHERE tenant_id = $1
@@ -43,27 +41,35 @@ const ensureModelPolicy = async (tenantId) => {
   return mapPolicy(result.rows[0]);
 };
 
-const validateModelPolicy = ({ allowedModels, defaultModel }) => {
+const validateModelPolicy = ({ allowedModels, defaultModel, models }) => {
+  if (
+    !Array.isArray(allowedModels) ||
+    allowedModels.some((model) => typeof model !== "string") ||
+    typeof defaultModel !== "string"
+  ) {
+    throw new ImageModelError("請提供有效的開放模型清單與預設模型");
+  }
   const normalizedAllowedModels = normalizeModels(allowedModels);
-  const normalizedDefaultModel = String(defaultModel || "").trim();
+  const normalizedDefaultModel = defaultModel.trim();
+  const available = new Set(models.map((model) => model.modelKey));
 
   if (normalizedAllowedModels.length === 0) {
-    throw new Error("至少需要開放一個圖片生成模型");
+    throw new ImageModelError("至少需要開放一個圖片生成模型");
   }
 
   const unsupported = normalizedAllowedModels.filter(
-    (model) => !SUPPORTED_IMAGE_MODELS.includes(model)
+    (model) => !available.has(model)
   );
   if (unsupported.length > 0) {
-    throw new Error(`不支援的圖片生成模型：${unsupported.join(", ")}`);
+    throw new ImageModelError("開放清單包含未登錄的圖片模型");
   }
 
-  if (!SUPPORTED_IMAGE_MODELS.includes(normalizedDefaultModel)) {
-    throw new Error("預設圖片生成模型不支援");
+  if (!available.has(normalizedDefaultModel)) {
+    throw new ImageModelError("預設圖片模型尚未登錄");
   }
 
   if (!normalizedAllowedModels.includes(normalizedDefaultModel)) {
-    throw new Error("預設模型必須包含在開放模型清單中");
+    throw new ImageModelError("預設模型必須包含在開放模型清單中");
   }
 
   return {
@@ -77,9 +83,11 @@ const updateModelPolicy = async ({
   allowedModels,
   defaultModel,
   updatedBy,
-}) => {
-  const normalized = validateModelPolicy({ allowedModels, defaultModel });
-  const result = await query(
+}) => withImageModelTransaction(tenantId, async (client) => {
+  await ensureModelPolicy(tenantId, client);
+  const models = await listPublicImageModels(tenantId, client);
+  const normalized = validateModelPolicy({ allowedModels, defaultModel, models });
+  const result = await client.query(
     `UPDATE tenant_model_settings
      SET allowed_models = $1,
          default_model = $2,
@@ -100,12 +108,9 @@ const updateModelPolicy = async ({
   }
 
   return mapPolicy(result.rows[0]);
-};
+});
 
 module.exports = {
-  DEFAULT_ALLOWED_MODELS,
-  DEFAULT_MODEL,
-  SUPPORTED_IMAGE_MODELS,
   ensureModelPolicy,
   mapPolicy,
   normalizeModels,

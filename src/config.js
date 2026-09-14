@@ -9,26 +9,14 @@ export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 // 3. API configuration (SWA proxy / App Service gateway)
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
-// 4. Image generation model options
-export const IMAGE_MODEL_OPTIONS = [
-  {
-    id: "gpt-image-2",
-    label: "GPT Image 2",
-    description: "OpenAI 最新圖片生成模型，支援高品質影像與精確文字渲染。",
-    sizes: ["1024x1024", "1024x1536", "1536x1024"],
-    supportsSizeMapping: true,
-    supportsQuality: true,
-  },
-];
-
-export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 export const DEFAULT_IMAGE_LANGUAGE = "zh-TW";
 
-// 5. GPT Image 2 rendering quality（僅 gpt-image-2 支援，對應 Azure 的 low/medium/high）
-export const IMAGE_QUALITY_OPTIONS = [
-  { id: "low", label: "低", description: "最快、成本最低，細節較粗糙。" },
-  { id: "medium", label: "中", description: "速度與細節的平衡選擇。" },
-  { id: "high", label: "高", description: "最銳利、文字最清晰，但較慢且成本最高。" },
-];
-
-export const DEFAULT_IMAGE_QUALITY = "medium";
+// Display labels only; supported qualities and defaults come from the model catalog.
+export const IMAGE_QUALITY_LABELS = {
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "超高",
+  max: "最高",
+  auto: "自動",
+};

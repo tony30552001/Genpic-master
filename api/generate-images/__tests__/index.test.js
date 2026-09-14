@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -9,6 +9,7 @@ const imageUploads = require("../../_shared/imageUploads");
 const modelPolicy = require("../../_shared/modelPolicy");
 const gptImage = require("../../_shared/gptImage");
 const imageJobs = require("../../_shared/imageJobs");
+const { ImageModelError } = require("../../_shared/imageModelConfig");
 
 auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
@@ -60,32 +61,36 @@ describe("generate-images owner-scoped reference uploads", () => {
     gptImage.editGptImage.mockResolvedValue({
       imageUrl: "data:image/png;base64,generated",
     });
-    imageJobs.createImageJob.mockResolvedValue({
+    imageJobs.createImageJob.mockImplementation(async ({ operation }) => ({
       id: "223e4567-e89b-42d3-a456-426614174000",
       status: "queued",
-      model: "gpt-image-2",
-    });
+      model: "gpt-image-2.5-flare",
+      operation,
+    }));
   });
+  afterEach(() => vi.unstubAllEnvs());
 
-  it("resolves and downloads a ready image upload before generation", async () => {
+  it("queues reference generation as an owned edit without downloading or calling a provider", async () => {
     const response = await invoke({
       userScript: "create an infographic",
       referenceUploadId: IMAGE_ID,
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(imageUploads.resolveOwnedImageUpload).toHaveBeenCalledWith({
       uploadId: IMAGE_ID,
       tenantId: OWNER.tenantId,
       userId: OWNER.userId,
     });
-    expect(imageUploads.downloadOwnedImage).toHaveBeenCalledWith(upload);
-    expect(gptImage.editGptImage).toHaveBeenCalledWith(
+    expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
+    expect(gptImage.editGptImage).not.toHaveBeenCalled();
+    expect(imageJobs.createImageJob).toHaveBeenCalledWith(
       expect.objectContaining({
-        imageBase64: Buffer.from("reference-bytes").toString("base64"),
-        mimeType: "image/jpeg",
+        sourceUploadId: IMAGE_ID,
+        operation: "edit",
       })
     );
+    expect(response.body).toMatchObject({ operation: "edit", model: "gpt-image-2.5-flare", prompt: expect.any(String) });
   });
 
   it("queues a job when there is no reference image", async () => {
@@ -95,10 +100,51 @@ describe("generate-images owner-scoped reference uploads", () => {
     expect(response.body).toMatchObject({
       jobId: "223e4567-e89b-42d3-a456-426614174000",
       status: "queued",
-      model: "gpt-image-2",
+      model: "gpt-image-2.5-flare",
+      operation: "generate",
     });
     expect(gptImage.editGptImage).not.toHaveBeenCalled();
     expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
+    expect(modelPolicy.ensureModelPolicy).not.toHaveBeenCalled();
+    expect(imageJobs.createImageJob.mock.calls[0][0]).not.toHaveProperty("model");
+  });
+
+  it("always queues even when FUNCTIONS_WORKER_RUNTIME is present", async () => {
+    vi.stubEnv("FUNCTIONS_WORKER_RUNTIME", "node");
+    const response = await invoke({ userScript: "create an infographic" });
+    expect(response.status).toBe(202);
+    expect(gptImage.generateGptImage).not.toHaveBeenCalled();
+    expect(imageJobs.createImageJob).toHaveBeenCalledOnce();
+  });
+
+  it("rejects browser-selected models", async () => {
+    const response = await invoke({ userScript: "cat", model: "gpt-image-2" });
+    expect(response.status).toBe(400);
+    expect(imageJobs.createImageJob).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "max", "auto", null, "", 0, false])(
+    "passes quality %j unchanged to authoritative admission", async (quality) => {
+      await invoke({ userScript: "cat", quality });
+      expect(imageJobs.createImageJob.mock.calls[0][0].quality).toBe(quality);
+    }
+  );
+
+  it.each([
+    new ImageModelError("Invalid quality", "bad_request", 400),
+    new ImageModelError("Not configured", "image_model_not_configured", 503),
+  ])("returns typed admission status and code", async (failure) => {
+    imageJobs.createImageJob.mockRejectedValue(failure);
+    const response = await invoke({ userScript: "cat" });
+    expect(response.status).toBe(failure.status);
+    expect(response.body.error).toEqual({ code: failure.code, message: failure.message });
+  });
+
+  it("does not expose unexpected admission errors", async () => {
+    imageJobs.createImageJob.mockRejectedValue(new Error("private key"));
+    const response = await invoke({ userScript: "cat" });
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(response)).not.toContain("private key");
   });
 
   it.each(["missing", "foreign", "document-purpose", "pending"]) (

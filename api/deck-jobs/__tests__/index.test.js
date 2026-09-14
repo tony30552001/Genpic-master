@@ -14,6 +14,9 @@ auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
 rateLimit.rateLimit = vi.fn();
 deckJobs.createDeckJob = vi.fn();
+deckJobs.getDeckJobForUser = vi.fn();
+deckJobs.listDeckJobEvents = vi.fn();
+deckJobs.listDeckSlidePreviews = vi.fn();
 uploads.getOwnedUpload = vi.fn();
 pptMasterClient.isConfigured = vi.fn();
 
@@ -138,5 +141,41 @@ describe("deck job source upload ownership", () => {
         sourceDocumentUrl: null,
       })
     );
+  });
+
+  it("returns the admitted image model rather than accepting a client-selected one", async () => {
+    deckJobs.createDeckJob.mockResolvedValueOnce({
+      id: UPLOAD_ID, status: "queued", image_model_key: "gpt-image-2.5-flare",
+    });
+    const response = await invoke({ topic: "AI strategy", model: "client-selected" });
+    expect(response.status).toBe(202);
+    expect(response.body.model).toBe("gpt-image-2.5-flare");
+    expect(deckJobs.createDeckJob.mock.calls[0][0]).not.toHaveProperty("model");
+    expect(deckJobs.createDeckJob.mock.calls[0][0]).not.toHaveProperty("imageModelKey");
+  });
+
+  it.each(["gpt-image-2.5-flare", null])(
+    "projects the saved model %s in status without configuration details",
+    async (modelKey) => {
+      deckJobs.getDeckJobForUser.mockResolvedValueOnce({
+        id: UPLOAD_ID, status: "queued", image_model_key: modelKey,
+        apiKey: "test-only-secret", endpoint: "private-config",
+      });
+      deckJobs.listDeckJobEvents.mockResolvedValueOnce([]);
+      deckJobs.listDeckSlidePreviews.mockResolvedValueOnce([]);
+      const context = {};
+      await handler(context, { method: "GET", headers: {}, params: { id: UPLOAD_ID } });
+      expect(context.res.status).toBe(200);
+      if (modelKey) expect(context.res.body.model).toBe(modelKey);
+      else expect(context.res.body).not.toHaveProperty("model");
+      expect(context.res.body).not.toHaveProperty("apiKey");
+      expect(context.res.body).not.toHaveProperty("endpoint");
+    }
+  );
+
+  it("omits the model for an admitted image-free deck", async () => {
+    const response = await invoke({ topic: "AI strategy", imageDensity: "none" });
+    expect(response.status).toBe(202);
+    expect(response.body).not.toHaveProperty("model");
   });
 });

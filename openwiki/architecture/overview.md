@@ -58,6 +58,6 @@ This shows the normal browser-to-API ownership boundary. Detailed sign-in and ex
 
 A browser request cannot establish identity with a custom token header: the API derives it from the opaque session cookie, and unsafe requests additionally need the session CSRF value. Browser-only direct GPT generation and browser MSAL token handling are not runtime surfaces.
 
-The browser's generation `model` argument is also not authoritative: `generate-images`, `image-transform`, and history recording use the tenant default from `tenant_model_settings`. Do not add a UI model choice without changing policy and its admin path. Likewise, API records are tenant/user scoped; follow the resource owner predicate rather than trusting client-side filtering.
+The browser's generation `model` argument is also not authoritative: `generate-images` and `image-transform` use the tenant policy default at admission. History recording instead derives its model from the same tenant/user's succeeded image job; it does not read `tenant_model_settings`. Do not add a UI model choice without changing policy and its admin path. Likewise, API records are tenant/user scoped; follow the resource owner predicate rather than trusting client-side filtering.
 
 Use [operations](../operations/development-deployment.md) for commands, BFF settings, CORS, and deployment configuration.

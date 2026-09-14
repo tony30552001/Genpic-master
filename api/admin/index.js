@@ -4,9 +4,11 @@ const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const {
   ensureModelPolicy,
-  SUPPORTED_IMAGE_MODELS,
   updateModelPolicy,
 } = require("../_shared/modelPolicy");
+const { listPublicImageModels } = require("../_shared/imageModels");
+const { ImageModelError } = require("../_shared/imageModelConfig");
+const { handleImageModels, handleImageModelTest } = require("./imageModels");
 const {
   LLM_PROVIDERS,
   LLM_ROLES,
@@ -62,6 +64,7 @@ const mapHistory = (row) => ({
   userScript: row.user_script,
   stylePrompt: row.style_prompt,
   model: row.model,
+  jobId: row.image_job_id || null,
   styleId: row.style_id,
   styleName: row.style_name,
   source: row.source || null,
@@ -226,6 +229,7 @@ const listHistory = async (context, identity, req) => {
        h.user_script,
        h.style_prompt,
        h.model,
+       h.image_job_id,
        h.style_id,
        h.source,
        h.created_at,
@@ -626,11 +630,14 @@ module.exports = async function (context, req) {
   }
 
   if (method === "GET" && resource === "settings") {
-    const modelPolicy = await ensureModelPolicy(identity.tenantId);
+    const [modelPolicy, models] = await Promise.all([
+      ensureModelPolicy(identity.tenantId),
+      listPublicImageModels(identity.tenantId),
+    ]);
     context.res = ok(
       {
         modelPolicy,
-        supportedModels: SUPPORTED_IMAGE_MODELS,
+        models,
       },
       200,
       req
@@ -640,7 +647,6 @@ module.exports = async function (context, req) {
 
   if (method === "PUT" && resource === "settings") {
     try {
-      await ensureModelPolicy(identity.tenantId);
       const modelPolicy = await updateModelPolicy({
         tenantId: identity.tenantId,
         allowedModels: req.body?.allowedModels,
@@ -650,14 +656,25 @@ module.exports = async function (context, req) {
       context.res = ok(
         {
           modelPolicy,
-          supportedModels: SUPPORTED_IMAGE_MODELS,
+          models: await listPublicImageModels(identity.tenantId),
         },
         200,
         req
       );
     } catch (err) {
-      context.res = error(err.message, "bad_request", 400, req);
+      if (!(err instanceof ImageModelError)) throw err;
+      context.res = error(err.message, err.code, err.status, req);
     }
+    return;
+  }
+
+  if (resource === "image-models" && ["GET", "POST", "PUT", "DELETE"].includes(method)) {
+    await handleImageModels(context, req, identity, method, targetId);
+    return;
+  }
+
+  if (resource === "image-model-tests" && method === "POST") {
+    await handleImageModelTest(context, req, identity);
     return;
   }
 

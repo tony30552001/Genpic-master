@@ -1,0 +1,116 @@
+/* Hallmark · macrostructure: Workbench · genre: modern-minimal · design-system: design.md · designed-as-app
+ * theme: custom · vibe: "calm studio, precise, controlled, cool" · paper: oklch(98% 0.008 255) · accent: oklch(57% 0.18 258)
+ * display: Noto Sans TC 700 · body: Noto Sans TC 400 · axes: light / geometric-sans / cool
+ * enrichment: none · context: approved-plan · v1.1.0
+ */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
+
+:root {
+  --color-paper: oklch(98% 0.008 255);
+  --color-paper-2: oklch(95.5% 0.011 255);
+  --color-paper-3: oklch(92.5% 0.014 255);
+  --color-ink: oklch(20% 0.018 258);
+  --color-ink-2: oklch(38% 0.016 258);
+  --color-muted: oklch(47% 0.014 258);
+  --color-neutral: oklch(56% 0.012 258);
+  --color-rule: oklch(81% 0.015 255);
+  --color-rule-2: oklch(88% 0.013 255);
+  --color-accent: oklch(57% 0.18 258);
+  --color-accent-hover: oklch(50% 0.17 258);
+  --color-accent-ink: oklch(98% 0.008 255);
+  --color-focus: oklch(64% 0.2 255);
+  --color-error: oklch(56% 0.2 25);
+  --color-error-soft: oklch(95% 0.025 25);
+  --color-success: oklch(55% 0.14 150);
+  --color-success-soft: oklch(95% 0.025 150);
+
+  --font-display: "Noto Sans TC", "Geist", "Avenir Next", sans-serif;
+  --font-body: "Noto Sans TC", "Geist", "Avenir Next", sans-serif;
+  --font-outlier: "JetBrains Mono", "Fira Code", monospace;
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+  --space-4xl: 9rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+  --text-xl: 1.9531rem;
+  --text-2xl: 2.4414rem;
+  --text-display: clamp(2rem, 3vw + 1rem, 3.5rem);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 180ms;
+  --dur-long: 300ms;
+
+  --radius-input: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-pill: 999px;
+  --rule-hair: 1px;
+  --rule-fine: 2px;
+
+  --shadow-card: 0 1px 2px oklch(20% 0.018 258 / 0.05);
+
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+}
+
+.dark {
+  --color-paper: oklch(15% 0.018 258);
+  --color-paper-2: oklch(18.5% 0.019 258);
+  --color-paper-3: oklch(22.5% 0.02 258);
+  --color-ink: oklch(94% 0.008 255);
+  --color-ink-2: oklch(76% 0.011 255);
+  --color-muted: oklch(68% 0.012 255);
+  --color-neutral: oklch(60% 0.013 255);
+  --color-rule: oklch(34% 0.018 258);
+  --color-rule-2: oklch(28% 0.018 258);
+  --color-accent: oklch(70% 0.15 255);
+  --color-accent-hover: oklch(76% 0.13 255);
+  --color-accent-ink: oklch(16% 0.018 258);
+  --color-focus: oklch(76% 0.18 252);
+  --color-error: oklch(70% 0.16 25);
+  --color-error-soft: oklch(22% 0.04 25);
+  --color-success: oklch(72% 0.12 150);
+  --color-success-soft: oklch(22% 0.035 150);
+  --shadow-card: 0 1px 2px oklch(8% 0.012 258 / 0.2);
+}
+
+.login-light-theme {
+  --color-paper: oklch(98% 0.008 255);
+  --color-paper-2: oklch(95.5% 0.011 255);
+  --color-paper-3: oklch(92.5% 0.014 255);
+  --color-ink: oklch(20% 0.018 258);
+  --color-ink-2: oklch(38% 0.016 258);
+  --color-muted: oklch(47% 0.014 258);
+  --color-neutral: oklch(56% 0.012 258);
+  --color-rule: oklch(81% 0.015 255);
+  --color-rule-2: oklch(88% 0.013 255);
+  --color-accent: oklch(57% 0.18 258);
+  --color-accent-hover: oklch(50% 0.17 258);
+  --color-accent-ink: oklch(98% 0.008 255);
+  --color-focus: oklch(64% 0.2 255);
+  --shadow-card: 0 1px 2px oklch(20% 0.018 258 / 0.05);
+}
+
+html,
+body {
+  overflow-x: clip;
+}

@@ -14,6 +14,7 @@ const pptMaster = require("./pptMasterClient");
 const { authorDeck, generateDesignSystem, generateOutline } = require("./deckAuthor");
 const { LlmConfigurationError, resolveRoleModel } = require("./llmModels");
 const { ensureModelPolicy } = require("./modelPolicy");
+const { withImageModelTransaction } = require("./imageModels");
 const { generateDeckImages } = require("./deckImages");
 const { buildAuthoringSystemPrompt } = require("./svgAuthoringPrompt");
 const {
@@ -50,15 +51,20 @@ const createDeckJob = async ({
   briefPurpose,
   briefAudience,
   briefOutcome,
-}) => {
-  const result = await query(
+}) => withImageModelTransaction(tenantId, async (client) => {
+  const density = normalizeImageDensity(imageDensity);
+  // Pin before outlining: the outline can request illustrations much later.
+  const imageModelKey = density === "none"
+    ? null
+    : (await ensureModelPolicy(tenantId, client)).defaultModel;
+  const result = await client.query(
     `INSERT INTO deck_generation_jobs
        (tenant_id, user_id, input_kind, topic, source_upload_id, source_document_url,
         source_file_name, slide_count, style_id, layout_id, brand_id, image_density,
         recipe_id, brief_purpose, brief_audience, brief_outcome,
-        progress_total)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $8)
-     RETURNING id, status, created_at`,
+        image_model_key, progress_total)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $8)
+     RETURNING id, status, image_model_key, created_at`,
     [
       tenantId,
       userId,
@@ -71,15 +77,16 @@ const createDeckJob = async ({
       styleId || null,
       layoutId || null,
       brandId || null,
-      normalizeImageDensity(imageDensity),
+      density,
       normalizeRecipeId(recipeId),
       briefPurpose || null,
       briefAudience || null,
       briefOutcome || null,
+      imageModelKey,
     ]
   );
   return result.rows[0];
-};
+});
 
 const hasUsableUploadExpiry = (upload) => {
   const expiresAt = new Date(upload?.expires_at).getTime();
@@ -116,7 +123,7 @@ const resolveDeckSourceUpload = async ({ sourceUploadId, tenantId, userId }) => 
 
 const getDeckJobForUser = async ({ jobId, tenantId, userId }) => {
   const result = await query(
-    `SELECT id, input_kind, topic, source_file_name, slide_count, image_density,
+    `SELECT id, input_kind, topic, source_file_name, slide_count, image_density, image_model_key,
             style_id, layout_id, brand_id, recipe_id,
             brief_purpose, brief_audience, brief_outcome, deck_title, status, phase,
             progress_current, progress_total, attempts, result_blob_name,
@@ -253,7 +260,7 @@ const claimNextDeckJob = async () => {
        WHERE jobs.id = candidate.id
        RETURNING jobs.id, jobs.input_kind, jobs.topic, jobs.source_upload_id,
                  jobs.source_document_url, jobs.source_file_name, jobs.slide_count,
-                 jobs.image_density,
+                 jobs.image_density, jobs.image_model_key,
                   jobs.style_id, jobs.layout_id, jobs.brand_id, jobs.recipe_id,
                   jobs.brief_purpose, jobs.brief_audience, jobs.brief_outcome,
                   jobs.attempts, jobs.tenant_id, jobs.user_id`,
@@ -497,7 +504,7 @@ const processDeckJob = async (job) => {
     }
 
     await report({ step: "outline", detail: "規劃簡報大綱", current: 0, total: job.slide_count });
-    const [llm, fonts, templateSpecs, modelPolicy] = await Promise.all([
+    const [llm, fonts, templateSpecs] = await Promise.all([
       resolveRoleModel(job.tenant_id, "deck_authoring"),
       pptMaster.getFonts(),
       resolveTemplateSpecs({
@@ -505,7 +512,6 @@ const processDeckJob = async (job) => {
         layoutId: job.layout_id,
         brandId: job.brand_id,
       }),
-      ensureModelPolicy(job.tenant_id),
     ]);
 
     /**
@@ -570,7 +576,8 @@ const processDeckJob = async (job) => {
         jobId: job.id,
         outline,
         artDirection: designSystem.artDirection,
-        model: modelPolicy.defaultModel,
+        tenantId: job.tenant_id,
+        modelKey: job.image_model_key,
         onProgress: report,
       });
 
@@ -688,6 +695,7 @@ module.exports = {
   getDeckSlidePreview,
   listDeckJobEvents,
   listDeckSlidePreviews,
+  processNextDeckJob,
   resolveDeckSourceUpload,
   startDeckJobWorker,
 };

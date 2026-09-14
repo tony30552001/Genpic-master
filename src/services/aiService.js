@@ -1,5 +1,11 @@
 import { API_BASE_URL } from "../config";
 import { apiGet, apiGetBlob, apiPost } from "./apiClient";
+import {
+  requireImageJobId,
+  requireImageJobAdmission,
+  requireImageJob,
+  requireCompletedImageJob,
+} from "../lib/imageJob";
 
 export const analyzeStyle = async ({ referenceUploadId }) =>
   apiPost(`${API_BASE_URL}/analyze-style`, { referenceUploadId });
@@ -11,12 +17,11 @@ export const generateImage = async ({
   purpose,
   imageLanguage,
   aspectRatio,
-  imageSize,
   imageQuality,
   referenceUploadId,
   signal,
 }) => {
-  return apiPost(
+  return requireImageJobAdmission(await apiPost(
     `${API_BASE_URL}/generate-images`,
     {
       userScript,
@@ -25,12 +30,11 @@ export const generateImage = async ({
       purpose,
       imageLanguage,
       aspectRatio,
-      imageSize,
       quality: imageQuality,
       referenceUploadId,
     },
     { signal }
-  );
+  ));
 };
 
 export const getImageJob = async ({ jobId, signal }) =>
@@ -67,11 +71,12 @@ export const waitForImageJob = async ({
   pollIntervalMs = 2000,
   timeoutMs = 20 * 60 * 1000,
 }) => {
+  requireImageJobId(jobId);
   const startedAt = Date.now();
 
   while (Date.now() - startedAt <= timeoutMs) {
-    const job = await getImageJob({ jobId, signal });
-    if (job?.status === "succeeded" && job.imageUrl) return job;
+    const job = requireImageJob(await getImageJob({ jobId, signal }), { jobId });
+    if (job.status === "succeeded") return requireCompletedImageJob(job, { jobId });
     if (job?.status === "failed") {
       throw new Error(job.error?.message || "圖片生成失敗，請稍後重試");
     }
@@ -301,17 +306,17 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
   apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage });
 
 /**
- * AI 圖片轉換 — 透過後端影像工作佇列使用 GPT-Image-2 edit API
+ * AI 圖片轉換 — 透過後端影像工作佇列使用目前模型
  * @param {Object} params
  * @param {string} params.uploadId - 來源圖片的 owner-scoped upload ID
  * @param {string} params.mimeType - 圖片 MIME 類型
  * @param {'style_transfer'|'reference_gen'|'element_extract'|'bg_replace'} params.mode - 轉換模式
  * @param {string} params.prompt - 使用者自訂描述
  * @param {string} [params.aspectRatio] - 圖片比例
- * @param {string} [params.imageSize] - 圖片尺寸（Gemini）
+ * @param {string} [params.imageQuality] - 模型目錄支援的圖片品質
  * @param {string} [params.imageLanguage] - 圖片內文字語系
  * @param {AbortSignal} [params.signal]
- * @returns {Promise<{imageUrl: string, prompt: string}>}
+ * @returns {Promise<{jobId: string, status: 'queued', model: string, prompt: string}>}
  */
 export const transformImage = async ({
   uploadId,
@@ -319,12 +324,11 @@ export const transformImage = async ({
   mode,
   prompt,
   aspectRatio,
-  imageSize,
   imageQuality,
   imageLanguage,
   signal,
 }) => {
-  return apiPost(
+  return requireImageJobAdmission(await apiPost(
     `${API_BASE_URL}/image-transform`,
     {
       uploadId,
@@ -332,10 +336,9 @@ export const transformImage = async ({
       mode,
       prompt,
       aspectRatio,
-      imageSize,
       quality: imageQuality,
       imageLanguage,
     },
     { signal }
-  );
+  ));
 };

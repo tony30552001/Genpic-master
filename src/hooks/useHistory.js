@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { requireImageJobId } from "../lib/imageJob";
 
 import {
   addHistoryItem,
@@ -9,7 +10,6 @@ import {
 const compressImage = (dataUrl) =>
   new Promise((resolve, reject) => {
     const img = new Image();
-    img.src = dataUrl;
     img.onload = () => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -30,6 +30,7 @@ const compressImage = (dataUrl) =>
       resolve(compressedDataUrl);
     };
     img.onerror = (err) => reject(err);
+    img.src = dataUrl;
   });
 
 export default function useHistory({ user }) {
@@ -51,17 +52,18 @@ export default function useHistory({ user }) {
   }, [user]);
 
   const saveHistoryItem = useCallback(
-    async ({ imageUrl, userScript, stylePrompt, fullPrompt, styleId, model, source }) => {
+    async ({ jobId, imageUrl, userScript, stylePrompt, fullPrompt, styleId, source }) => {
+      requireImageJobId(jobId);
       if (!user) return;
       const compressedUrl = await compressImage(imageUrl);
 
       await addHistoryItem({
+        jobId,
         imageUrl: compressedUrl,
         userScript,
         stylePrompt,
         fullPrompt,
         styleId,
-        model,
         source,
       });
 

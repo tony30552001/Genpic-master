@@ -3,6 +3,7 @@ const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
+const { listPublicImageModels } = require("../_shared/imageModels");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -25,7 +26,10 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const modelPolicy = await ensureModelPolicy(identity.tenantId);
+  const [modelPolicy, imageModels] = await Promise.all([
+    ensureModelPolicy(identity.tenantId),
+    listPublicImageModels(identity.tenantId),
+  ]);
   context.res = ok(
     {
       user: {
@@ -35,6 +39,7 @@ module.exports = async function (context, req) {
         role: identity.role,
       },
       modelPolicy,
+      imageModels,
     },
     200,
     req

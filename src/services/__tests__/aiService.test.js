@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 
 vi.mock("../apiClient", () => ({
   apiGet: vi.fn(),
@@ -18,6 +18,11 @@ import {
 } from "../aiService";
 
 describe("aiService", () => {
+  const admission = { jobId: "job-1", status: "queued", model: "catalog-model", prompt: "assembled" };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiPost.mockResolvedValue(admission);
+  });
   it("analyzeStyle posts an owner-scoped reference upload ID without a URL", async () => {
     await analyzeStyle({ referenceUploadId: "123e4567-e89b-42d3-a456-426614174000" });
     expect(apiPost).toHaveBeenCalledWith(
@@ -50,13 +55,12 @@ describe("aiService", () => {
         purpose: "storyboard",
         imageLanguage: "zh-TW",
         aspectRatio: "1:1",
-        imageSize: undefined,
         quality: undefined,
         referenceUploadId: undefined,
       },
       { signal: undefined }
     );
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual(admission);
   });
 
   it("sends an upload ID and no caller-selected document URL to document analysis", async () => {
@@ -175,10 +179,12 @@ describe("aiService", () => {
 
   it("waits for queued image jobs until the result is ready", async () => {
     apiGet
-      .mockResolvedValueOnce({ status: "queued", jobId: "job-1" })
+      .mockResolvedValueOnce({ status: "queued", jobId: "job-1", model: "catalog-model", operation: "generate" })
       .mockResolvedValueOnce({
         status: "succeeded",
         jobId: "job-1",
+        model: "catalog-model",
+        operation: "generate",
         imageUrl: "data:image/png;base64,AAA",
       });
 
@@ -191,6 +197,68 @@ describe("aiService", () => {
     expect(apiGet).toHaveBeenCalledWith("/api/image-jobs/job-1", {
       signal: undefined,
     });
+  });
+
+  it.each(["low", "medium", "high", "xhigh", "max", "auto"])("forwards %s unchanged for generation and transforms without selecting a model", async (quality) => {
+    await generateImage({ userScript: "scene", imageQuality: quality, model: "untrusted" });
+    await transformImage({ uploadId: "upload-1", imageQuality: quality, model: "untrusted" });
+    for (const [, body] of apiPost.mock.calls) {
+      expect(body.quality).toBe(quality);
+      expect(body).not.toHaveProperty("model");
+    }
+  });
+
+  it.each([generateImage, transformImage])("rejects direct image responses instead of treating them as successful jobs", async (request) => {
+    apiPost.mockResolvedValueOnce({ imageUrl: "data:image/png;base64,direct", model: "catalog-model" });
+    await expect(request({})).rejects.toThrow("工作識別");
+  });
+
+  it.each([
+    { jobId: "other" },
+    { model: undefined },
+    { operation: undefined },
+    { status: "pending" },
+    { imageUrl: undefined },
+  ])("rejects malformed image job status %j", async (override) => {
+    apiGet.mockResolvedValueOnce({
+      jobId: "job-1", model: "catalog-model", operation: "generate",
+      status: "succeeded", imageUrl: "data:image/png;base64,result", ...override,
+    });
+    await expect(waitForImageJob({ jobId: "job-1", pollIntervalMs: 0 })).rejects.toThrow("圖片工作");
+  });
+
+  it("surfaces a failed job without waiting for a success-shaped fallback", async () => {
+    apiGet.mockResolvedValueOnce({
+      jobId: "job-1", model: "catalog-model", operation: "edit", status: "failed",
+      error: { message: "provider rejected quality" },
+    });
+    await expect(waitForImageJob({ jobId: "job-1" })).rejects.toThrow("provider rejected quality");
+  });
+
+  it("rejects missing identity before polling", async () => {
+    await expect(waitForImageJob({})).rejects.toThrow("工作識別");
+    expect(apiGet).not.toHaveBeenCalled();
+  });
+
+  it("surfaces cancellation while waiting for a queued image job", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    apiGet.mockResolvedValueOnce({
+      jobId: "job-1", model: "catalog-model", operation: "edit", status: "queued",
+    });
+    await expect(waitForImageJob({ jobId: "job-1", signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("times out a processing image job without inventing a result", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(200);
+    apiGet.mockResolvedValueOnce({
+      jobId: "job-1", model: "catalog-model", operation: "generate", status: "processing",
+    });
+    try {
+      await expect(waitForImageJob({ jobId: "job-1", pollIntervalMs: 0, timeoutMs: 100 })).rejects.toThrow("逾時");
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("keeps watching a deck job through transient poll failures", async () => {

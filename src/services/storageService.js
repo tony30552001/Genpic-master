@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "../config";
 import { inferDocumentMimeType } from "../lib/documentFormats";
+import { requireImageJobId } from "../lib/imageJob";
 import { apiDelete, apiGet, apiPost, apiPut } from "./apiClient";
 
 export const listHistory = async () =>
@@ -43,8 +44,14 @@ export const copyStyle = async (styleId) =>
 export const markStyleUsed = async (styleId) =>
   apiPost(`${API_BASE_URL}/styles/${styleId}/use`);
 
-export const addHistoryItem = async (itemData) =>
-  apiPost(`${API_BASE_URL}/history`, itemData);
+export const addHistoryItem = async ({
+  jobId, imageUrl, userScript, stylePrompt, fullPrompt, styleId, source,
+}) => {
+  requireImageJobId(jobId);
+  return apiPost(`${API_BASE_URL}/history`, {
+    jobId, imageUrl, userScript, stylePrompt, fullPrompt, styleId, source,
+  });
+};
 
 export const deleteHistoryItem = async (itemId) =>
   apiDelete(`${API_BASE_URL}/history/${itemId}`);

@@ -1,3 +1,5 @@
+const { IMAGE_API_TYPES, IMAGE_QUALITIES } = require("./_shared/imageModelConfig");
+
 const jsonObjectSchema = {
   type: "object",
   additionalProperties: true,
@@ -150,6 +152,7 @@ const operation = ({
   deprecated = false,
   auth = true,
   body = false,
+  bodySchema = jsonObjectSchema,
   csrf = false,
   successStatuses = [200],
   successContentType = "application/json",
@@ -167,7 +170,9 @@ const operation = ({
         ],
       }
     : {}),
-  ...(body ? { requestBody } : {}),
+  ...(body
+    ? { requestBody: { ...requestBody, content: { "application/json": { schema: bodySchema } } } }
+    : {}),
   ...((parameters.length > 0 || csrf)
     ? {
         parameters: [...parameters, ...(csrf ? [csrfHeaderParameter] : [])],
@@ -358,11 +363,30 @@ for (const method of ["get", "post"]) {
 }
 
 addOperation("/api/generate-images", "post", {
-  summary: "Start an image generation request",
+  summary: "Queue an image generation or reference-image edit",
+  description: "The tenant default chooses the model. Reference uploads must belong to the caller. All requests return an image job; no synchronous provider response is supported.",
   tags: ["AI"],
   body: true,
   csrf: true,
-  successStatuses: [200, 202],
+  successStatuses: [202],
+  bodySchema: {
+    type: "object",
+    required: ["userScript"],
+    properties: {
+      userScript: { type: "string", minLength: 1 },
+      stylePrompt: { type: "string" },
+      styleTags: { type: "array", items: { type: "string" } },
+      purpose: { type: "string" },
+      imageLanguage: { type: "string" },
+      aspectRatio: { type: "string" },
+      imageSize: { type: "string" },
+      referenceUploadId: { type: "string", format: "uuid" },
+      quality: {
+        type: "string", enum: IMAGE_QUALITIES,
+        description: "Must be supported by the tenant default model. Only omission uses its default quality; invalid explicit values are rejected.",
+      },
+    },
+  },
 });
 
 addOperation("/api/image-jobs/{id}", "get", {
@@ -373,6 +397,7 @@ addOperation("/api/image-jobs/{id}", "get", {
 
 addOperation("/api/deck-jobs", "post", {
   summary: "Queue a PPT Master deck generation job",
+  description: "Pins the tenant image model at admission. Image-free decks do not require an image model; later policy changes do not change this job's illustrations.",
   tags: ["AI"],
   body: true,
   csrf: true,
@@ -413,11 +438,27 @@ addOperation("/api/ppt-templates", "get", {
 });
 
 addOperation("/api/image-transform", "post", {
-  summary: "Transform an image synchronously or queue a GPT image edit",
+  summary: "Queue an owned-image transform",
   tags: ["AI"],
   body: true,
   csrf: true,
-  successStatuses: [200, 202],
+  successStatuses: [202],
+  bodySchema: {
+    type: "object",
+    required: ["uploadId"],
+    properties: {
+      uploadId: { type: "string", format: "uuid" },
+      mode: { type: "string", enum: ["style_transfer", "element_extract", "bg_replace", "reference_gen"] },
+      prompt: { type: "string" },
+      aspectRatio: { type: "string" },
+      imageSize: { type: "string" },
+      imageLanguage: { type: "string" },
+      quality: {
+        type: "string", enum: IMAGE_QUALITIES,
+        description: "Must be supported by the tenant default model. Omit to use its default quality.",
+      },
+    },
+  },
 });
 
 for (const method of ["get", "post", "delete"]) {
@@ -515,6 +556,202 @@ for (const path of ["/api/management", "/api/management/{resource}", "/api/manag
         ...(path.includes("{id}") ? ["id"] : [])
       ),
     });
+  }
+}
+
+const publicImageModelSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["modelKey", "label", "apiType", "supportedQualities", "defaultQuality"],
+  properties: {
+    modelKey: { type: "string" },
+    label: { type: "string" },
+    apiType: { type: "string", enum: IMAGE_API_TYPES.map(({ id }) => id) },
+    supportedQualities: { type: "array", minItems: 1, items: { type: "string", enum: IMAGE_QUALITIES } },
+    defaultQuality: { type: "string", enum: IMAGE_QUALITIES },
+  },
+};
+const adminImageModelSchema = {
+  ...publicImageModelSchema,
+  properties: {
+    ...publicImageModelSchema.properties,
+    deploymentName: { type: "string" },
+    endpoint: { type: "string", format: "uri" },
+    hasApiKey: { type: "boolean" },
+    createdAt: jsonObjectSchema,
+    updatedAt: jsonObjectSchema,
+  },
+};
+const imageModelWriteSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["modelKey", "label", "apiType", "deploymentName", "endpoint", "supportedQualities", "defaultQuality"],
+  properties: {
+    ...publicImageModelSchema.properties,
+    deploymentName: { type: "string", description: "Azure deployment name; immutable after creation." },
+    endpoint: { type: "string", format: "uri", description: "Azure HTTPS resource, v1 base, or v1 images/generations URL. No credentials/query/fragment." },
+    apiKey: { type: "string", writeOnly: true, description: "Required for create. Omit or send empty on update to retain the encrypted key." },
+  },
+};
+const imageCatalogSchema = {
+  type: "object",
+  properties: {
+    models: { type: "array", items: adminImageModelSchema },
+    apiTypes: { type: "array", items: jsonObjectSchema },
+    qualities: { type: "array", items: { type: "string", enum: IMAGE_QUALITIES } },
+  },
+};
+const modelPolicySchema = {
+  type: "object",
+  properties: {
+    allowedModels: { type: "array", items: { type: "string" } },
+    defaultModel: { type: "string", nullable: true },
+    updatedAt: { ...jsonObjectSchema, nullable: true },
+  },
+};
+const queuedImageSchema = {
+  type: "object",
+  required: ["jobId", "status", "model"],
+  properties: {
+    jobId: { type: "string", format: "uuid" },
+    status: { type: "string", enum: ["queued"] },
+    model: { type: "string", description: "The immutable catalog key selected by the backend." },
+    prompt: { type: "string" },
+    aspectRatio: { type: "string" },
+    mode: { type: "string" },
+  },
+};
+
+for (const method of ["get", "post"]) {
+  addOperation("/api/management/image-models", method, {
+    summary: method === "get" ? "List tenant image models without secrets" : "Register an image model without changing tenant policy",
+    tags: ["Administration"],
+    body: method === "post",
+    bodySchema: { ...imageModelWriteSchema, required: [...imageModelWriteSchema.required, "apiKey"] },
+    csrf: method !== "get",
+    successStatuses: method === "post" ? [201] : [200],
+    successSchema: imageCatalogSchema,
+  });
+}
+for (const method of ["put", "delete"]) {
+  addOperation("/api/management/image-models/{id}", method, {
+    summary: method === "put" ? "Update image model settings" : "Delete an unused tenant image model",
+    description: "The path id is modelKey. Models referenced by policy cannot be deleted; runtime changes and deletion are blocked by active image or deck jobs.",
+    tags: ["Administration"],
+    body: method === "put",
+    bodySchema: imageModelWriteSchema,
+    csrf: true,
+    parameters: pathParameters("id"),
+    successSchema: imageCatalogSchema,
+  });
+}
+addOperation("/api/management/image-model-tests", "post", {
+  summary: "Explicitly queue a billed, low-quality generation test of a saved model",
+  description: "Requires administrator privileges. Does not change policy or verify editing/all qualities. Poll the returned image job.",
+  tags: ["Administration"],
+  body: true,
+  bodySchema: { type: "object", required: ["modelKey"], properties: { modelKey: { type: "string" } } },
+  csrf: true,
+  successStatuses: [202],
+  successSchema: queuedImageSchema,
+});
+for (const method of ["get", "put"]) {
+  addOperation("/api/management/settings", method, {
+    summary: method === "get" ? "Read image model policy and public catalog" : "Set allowed and default tenant image models",
+    tags: ["Administration"],
+    body: method === "put",
+    bodySchema: {
+      type: "object", required: ["allowedModels", "defaultModel"],
+      properties: {
+        allowedModels: { type: "array", minItems: 1, items: { type: "string" } },
+        defaultModel: { type: "string" },
+      },
+    },
+    csrf: method === "put",
+    successSchema: {
+      type: "object",
+      properties: { modelPolicy: modelPolicySchema, models: { type: "array", items: publicImageModelSchema } },
+    },
+  });
+}
+paths["/api/me"].get.responses[200] = response("Profile and public image model metadata", {
+  schema: {
+    type: "object",
+    properties: {
+      user: jsonObjectSchema,
+      modelPolicy: modelPolicySchema,
+      imageModels: { type: "array", items: publicImageModelSchema },
+    },
+  },
+});
+for (const path of ["/api/generate-images", "/api/image-transform"]) {
+  paths[path].post.responses[202] = response("Queued image job", { schema: queuedImageSchema });
+}
+paths["/api/image-jobs/{id}"].get.responses[200] = response("Owner-scoped image job status", {
+  schema: {
+    type: "object",
+    required: ["jobId", "status", "model", "operation"],
+    properties: {
+      jobId: { type: "string", format: "uuid" },
+      status: { type: "string", enum: ["queued", "processing", "succeeded", "failed"] },
+      model: { type: "string" },
+      operation: { type: "string", enum: ["generate", "edit"] },
+      imageUrl: { type: "string", description: "Present only for succeeded jobs." },
+      error: jsonObjectSchema,
+    },
+  },
+});
+paths["/api/history"].post.requestBody = {
+  required: true,
+  content: {
+    "application/json": {
+      schema: {
+        type: "object",
+        required: ["jobId", "imageUrl"],
+        properties: {
+          jobId: { type: "string", format: "uuid", description: "Owned succeeded image job; the server derives the history model from this job, never current policy." },
+          imageUrl: { type: "string", description: "Compressed history preview." },
+          fullPrompt: { type: "string" },
+          userScript: { type: "string" },
+          stylePrompt: { type: "string" },
+          styleId: { type: "string", nullable: true },
+          source: { type: "string" },
+        },
+      },
+    },
+  },
+};
+paths["/api/history"].post.responses[201] = response("Saved job-backed image history");
+delete paths["/api/history"].post.responses[200];
+paths["/api/history"].post.responses[409] = response("The image job has not succeeded");
+paths["/api/deck-jobs"].post.responses[202] = response("Queued deck job", {
+  schema: {
+    type: "object",
+    required: ["jobId", "status"],
+    properties: {
+      jobId: { type: "string", format: "uuid" },
+      status: { type: "string", enum: ["queued"] },
+      model: { type: "string", description: "Image model catalog key pinned at admission; omitted when no model is assigned." },
+      createdAt: { type: "string", format: "date-time" },
+    },
+  },
+});
+paths["/api/deck-jobs/{id}"].get.responses[200] = response("Deck status including the pinned image model", {
+  schema: {
+    ...jsonObjectSchema,
+    properties: {
+      model: { type: "string", description: "The saved image model key, not the current tenant policy; omitted when unassigned." },
+    },
+  },
+});
+for (const path of [
+  "/api/management/image-models", "/api/management/image-models/{id}",
+  "/api/management/image-model-tests", "/api/management/settings",
+  "/api/generate-images", "/api/image-transform",
+]) {
+  for (const entry of Object.values(paths[path])) {
+    entry.responses[409] = response("Model configuration or usage conflict");
+    entry.responses[503] = response("Image model is not configured");
   }
 }
 

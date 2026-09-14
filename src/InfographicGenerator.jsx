@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LogIn,
@@ -24,7 +24,8 @@ import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import useImageTransform from './hooks/useImageTransform';
 import { uploadFile } from './services/storageService';
-import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, DEFAULT_IMAGE_QUALITY, IMAGE_MODEL_OPTIONS } from './config';
+import { DEFAULT_IMAGE_LANGUAGE } from './config';
+import { getImageModelSetupError, getImageQualityError } from './lib/imageModel';
 import { cn } from './lib/utils';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -72,8 +73,7 @@ export default function InfographicGenerator({
 
     // 風格設定相關
     const [aspectRatio, setAspectRatio] = useState('16:9');
-    const [imageSize, setImageSize] = useState('1K');
-    const [imageQuality, setImageQuality] = useState(DEFAULT_IMAGE_QUALITY);
+    const [selectedImageQuality, setImageQuality] = useState();
     const [errorMsg, setErrorMsg] = useState('');
     const [warningMsg, setWarningMsg] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -109,9 +109,28 @@ export default function InfographicGenerator({
     };
 
     const navigate = useNavigate();
-    const { user, profile, isAdmin, handleLogout, isLoading } = useAuth();
+    const { user, profile, isAdmin, handleLogout, isLoading, isProfileLoading, profileError, refreshProfile } = useAuth();
     const modelPolicy = profile?.modelPolicy || null;
-    const imageModel = modelPolicy?.defaultModel || DEFAULT_IMAGE_MODEL;
+    const imageModelConfig = modelPolicy?.defaultModel
+        ? profile?.imageModels?.find((model) => model.modelKey === modelPolicy.defaultModel)
+        : undefined;
+    const imageQuality = selectedImageQuality === undefined
+        ? imageModelConfig?.defaultQuality
+        : selectedImageQuality;
+    const modelSetupError = isProfileLoading
+        ? '正在載入圖片模型設定，請稍候。'
+        : profileError || getImageModelSetupError(imageModelConfig);
+    const generationConfigError = modelSetupError || getImageQualityError(imageModelConfig, imageQuality);
+    // A storyboard batch rechecks current settings between independently admitted jobs.
+    const generationSettingsRef = useRef({ imageQuality, generationConfigError });
+    useEffect(() => {
+        generationSettingsRef.current = { imageQuality, generationConfigError };
+    }, [imageQuality, generationConfigError]);
+    const requireGenerationQuality = () => {
+        const current = generationSettingsRef.current;
+        if (current.generationConfigError) throw new Error(current.generationConfigError);
+        return current.imageQuality;
+    };
     const {
         savedStyles,
         newStyleName,
@@ -201,14 +220,15 @@ export default function InfographicGenerator({
     const handleTransform = async () => {
         try {
             setTransformError('');
-            const result = await runTransform({ model: imageModel, imageSize, imageQuality, imageLanguage });
+            const quality = requireGenerationQuality();
+            const result = await runTransform({ imageQuality: quality, imageLanguage });
             if (result?.imageUrl) {
                 await saveHistoryItem({
+                    jobId: result.jobId,
                     imageUrl: result.imageUrl,
                     userScript: transformPrompt || `圖片轉換 (${transformMode})`,
                     stylePrompt: transformAppliedStyleName || '',
                     fullPrompt: result.mergedPrompt || transformPrompt,
-                    model: result.model || imageModel,
                     source: 'image-transform',
                 });
                 if (transformAppliedStyleId) {
@@ -400,25 +420,24 @@ export default function InfographicGenerator({
             // 如果存在 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的中文 userScript
             const finalScriptToUse = optimizedPromptEn || userScript;
 
-            const { imageUrl, finalPrompt, model } = await generateImage({
+            const quality = requireGenerationQuality();
+            const { jobId, imageUrl, finalPrompt } = await generateImage({
                 userScript: finalScriptToUse,
                 analyzedStyle,
                 styleTags: paletteStyleTags,
                 purpose: imagePurpose,
                 aspectRatio,
-                imageSize,
-                imageQuality,
+                imageQuality: quality,
                 imageLanguage,
                 referenceUploadId: contentUploadId,
-                model: imageModel
             });
             await saveHistoryItem({
+                jobId,
                 imageUrl,
                 userScript,
                 stylePrompt: [analyzedStyle, paletteStyleTags.join('，')].filter(Boolean).join('，'),
                 fullPrompt: finalPrompt,
                 styleId: appliedStyleId || analysisResultData?.styleId || null,
-                model: model || imageModel,
                 source: 'general',
             });
             if (appliedStyleId) {
@@ -490,6 +509,7 @@ export default function InfographicGenerator({
         if (!scene) return;
         try {
             setErrorMsg('');
+            const quality = requireGenerationQuality();
             const styleForDocument = documentStyle;
             const stylePrompt = styleForDocument?.prompt || '';
             // 呼叫圖片生成（帶入語系設定）
@@ -501,10 +521,8 @@ export default function InfographicGenerator({
                 analyzedStyle: stylePrompt,
                 purpose: 'storyboard',
                 aspectRatio,
-                imageSize,
-                imageQuality,
+                imageQuality: quality,
                 imageLanguage,
-                model: imageModel,
                 updatePreview: false
             });
 
@@ -524,12 +542,12 @@ export default function InfographicGenerator({
 
             // 2. 寫入歷史紀錄
             await saveHistoryItem({
+                jobId: result.jobId,
                 imageUrl: result.imageUrl,
                 userScript: scene.scene_description,
                 stylePrompt,
                 fullPrompt: result.finalPrompt,
                 styleId: styleForDocument?.id || null,
-                model: result.model || imageModel,
                 sceneNumber: scene.scene_number,
                 documentTitle: documentResult?.title,
                 source: 'document',
@@ -551,6 +569,7 @@ export default function InfographicGenerator({
         if (!scenes || scenes.length === 0) return;
         try {
             setErrorMsg('');
+            requireGenerationQuality();
             for (let i = 0; i < scenes.length; i++) await handleGenerateScene(i);
         } catch (err) {
             console.error("Batch Generation Failed:", err);
@@ -567,6 +586,7 @@ export default function InfographicGenerator({
             onGenerateAll={handleGenerateAllScenes}
             onClear={handleClearDocument}
             isGenerating={isGenerating}
+            generationDisabled={Boolean(generationConfigError)}
             savedStyles={savedStyles}
             documentStyle={documentStyle}
             isDocumentStyleOverride={Boolean(documentStyleOverride)}
@@ -807,6 +827,16 @@ export default function InfographicGenerator({
 
             {/* ═══════════ Main Content Area ═══════════ */}
             <main className="flex-1 min-h-0 flex flex-col">
+                {profileError && (
+                    <div role="alert" className="flex items-center gap-3 border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+                        <span>{profileError}</span>
+                        <Button variant="outline" disabled={isProfileLoading} onClick={() => {
+                            void refreshProfile().catch((error) => {
+                                console.error('Profile refresh failed:', error);
+                            });
+                        }}>重新載入設定</Button>
+                    </div>
+                )}
 
                 {/* ─── Create & Document Tabs Share Similar Container ─── */}
                 {(activeTab === 'general' || activeTab === 'document') && (
@@ -974,11 +1004,10 @@ export default function InfographicGenerator({
                             <GenerateBar
                                 aspectRatio={aspectRatio}
                                 onAspectRatioChange={setAspectRatio}
-                                imageSize={imageSize}
-                                onImageSizeChange={setImageSize}
                                 imageQuality={imageQuality}
                                 onImageQualityChange={setImageQuality}
-                                imageModel={imageModel}
+                                imageModelConfig={imageModelConfig}
+                                configurationError={modelSetupError}
                                 isGenerating={isGenerating}
                                 generationStatus={generationStatus}
                                 onCancelGeneration={activeTab === 'general' ? cancelGeneration : undefined}
@@ -1040,11 +1069,10 @@ export default function InfographicGenerator({
                         <GenerateBar
                             aspectRatio={transformAspectRatio}
                             onAspectRatioChange={setTransformAspectRatio}
-                            imageSize={imageSize}
-                            onImageSizeChange={setImageSize}
                             imageQuality={imageQuality}
                             onImageQualityChange={setImageQuality}
-                            imageModel={imageModel}
+                            imageModelConfig={imageModelConfig}
+                            configurationError={modelSetupError}
                             isGenerating={isTransforming}
                             onGenerate={handleTransform}
                             onCancelGeneration={cancelTransform}
@@ -1104,8 +1132,8 @@ export default function InfographicGenerator({
                         <SettingsPanel
                             imageLanguage={imageLanguage}
                             onImageLanguageChange={handleLanguageChange}
-                            imageModel={imageModel}
-                            modelPolicy={modelPolicy}
+                            imageModelConfig={imageModelConfig}
+                            configurationError={modelSetupError}
                             user={user}
                         />
                     </div>

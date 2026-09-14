@@ -99,6 +99,8 @@ const buildJobBody = (job, events = [], slides = []) => {
     completedAt: job.completed_at,
   };
 
+  if (job.image_model_key) body.model = job.image_model_key;
+
   if (job.status === "succeeded") {
     body.fileName = job.result_file_name;
     body.downloadPath = `/api/deck-jobs/${job.id}/download`;
@@ -343,6 +345,7 @@ module.exports = async function (context, req) {
     {
       jobId: job.id,
       status: job.status,
+      ...(job.image_model_key ? { model: job.image_model_key } : {}),
       createdAt: job.created_at,
     },
     202,

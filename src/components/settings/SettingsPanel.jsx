@@ -4,7 +4,6 @@ import {
 } from "@/components/icons/lucideStatus";
 import {
   Languages,
-  Cpu,
 } from "@/components/icons/lucideContent";
 import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import LineSettings from "./LineSettings";
 import useLineConfig from "../../hooks/useLineConfig";
-import { DEFAULT_IMAGE_LANGUAGE, DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS } from "../../config";
+import { DEFAULT_IMAGE_LANGUAGE, IMAGE_QUALITY_LABELS } from "../../config";
+import { getImageModelSetupError } from "../../lib/imageModel";
 
 const LANGUAGE_OPTIONS = [
     {
@@ -80,18 +80,14 @@ const LANGUAGE_OPTIONS = [
     },
 ];
 
-const findImageModel = (modelId) =>
-    IMAGE_MODEL_OPTIONS.find((model) => model.id === modelId)
-    || IMAGE_MODEL_OPTIONS.find((model) => model.id === DEFAULT_IMAGE_MODEL)
-    || IMAGE_MODEL_OPTIONS[0];
-
 /**
  * 設定面板 — 全域生成偏好與整合設定
  */
-export default function SettingsPanel({ imageLanguage, onImageLanguageChange, imageModel, modelPolicy, user }) {
+export default function SettingsPanel({ imageLanguage, onImageLanguageChange, imageModelConfig, configurationError, user }) {
     const currentLang = LANGUAGE_OPTIONS.find((l) => l.id === imageLanguage)
         || LANGUAGE_OPTIONS.find((l) => l.id === DEFAULT_IMAGE_LANGUAGE);
-    const currentModel = findImageModel(modelPolicy?.defaultModel || imageModel);
+    const currentModel = imageModelConfig;
+    const setupError = configurationError || getImageModelSetupError(currentModel);
     const lineConfigHook = useLineConfig({ user });
 
     return (
@@ -125,11 +121,15 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                     </div>
                                 </div>
                                 <Badge variant="secondary" className="w-fit text-[11px]">
-                                    目前模型：{currentModel.label}
+                                    目前模型：{setupError ? "尚未設定" : currentModel.label}
                                 </Badge>
                             </div>
 
-                            <div className="max-w-md">
+                            {setupError ? (
+                                <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                                    {setupError}
+                                </p>
+                            ) : <div className="max-w-md">
                                 <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
                                     <div className="flex items-center gap-2">
                                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -141,10 +141,14 @@ export default function SettingsPanel({ imageLanguage, onImageLanguageChange, im
                                         </div>
                                     </div>
                                     <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                                        {currentModel.description}
+                                        模型識別：{currentModel.modelKey}
+                                        <br />
+                                        支援品質：{currentModel.supportedQualities.map((quality) => IMAGE_QUALITY_LABELS[quality] || quality).join('、')}
+                                        <br />
+                                        預設品質：{IMAGE_QUALITY_LABELS[currentModel.defaultQuality] || currentModel.defaultQuality}
                                     </p>
                                 </div>
-                            </div>
+                            </div>}
 
                             <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                                 若管理員更新模型政策，新的設定會套用到下一次生成；本頁不提供個人模型切換。

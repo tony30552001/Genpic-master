@@ -276,6 +276,7 @@ function SceneModal({
   index,
   isGenerating,
   generatingIndex,
+  generationDisabled,
   onClose,
   onUpdate,
   onGenerate,
@@ -632,7 +633,7 @@ function SceneModal({
             size="sm"
             className="h-8 text-xs"
             onClick={() => onGenerate(index)}
-            disabled={isGenerating}
+            disabled={isGenerating || generationDisabled}
           >
             {isThisGenerating ? (
               <><Loader2 className="icon-xs mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
@@ -668,6 +669,7 @@ export default function DocumentScenes({
   onGenerateScene,
   onClear,
   isGenerating = false,
+  generationDisabled = false,
   // 風格相關 props
   savedStyles = [],
   documentStyle = null,
@@ -1455,7 +1457,7 @@ export default function DocumentScenes({
                       size="sm"
                       className="h-9 text-xs"
                       onClick={(e) => { e.stopPropagation(); handleGenerateScene(index); }}
-                      disabled={isGenerating}
+                      disabled={isGenerating || generationDisabled}
                     >
                       {isThisGenerating ? (
                         <><Loader2 className="icon-xs mr-1 animate-spin motion-reduce:animate-none" /> 生成中…</>
@@ -1480,6 +1482,7 @@ export default function DocumentScenes({
           index={modalScene.index}
           isGenerating={isGenerating}
           generatingIndex={generatingIndex}
+          generationDisabled={generationDisabled}
           onClose={() => setModalScene(null)}
           onUpdate={handleModalUpdate}
           onGenerate={handleGenerateScene}

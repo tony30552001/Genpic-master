@@ -1,5 +1,6 @@
 const { uploadGeneratedBlob } = require("./blobStorage");
-const { isImageModelConfigured, renderImage } = require("./imageProviders");
+const { renderImage } = require("./imageProviders");
+const { resolveImageModel } = require("./imageModels");
 const pptMaster = require("./pptMasterClient");
 
 const MIME_SUFFIXES = {
@@ -8,7 +9,7 @@ const MIME_SUFFIXES = {
   "image/webp": "webp",
 };
 
-/** gpt-image-2 is the slower, more rate-limited provider; keep the fan-out small. */
+/** Keep image-provider fan-out small to limit rate pressure. */
 const CONCURRENCY = 2;
 
 /** Blob copy of a deck illustration, used to inline images into slide previews. */
@@ -72,7 +73,8 @@ const generateDeckImages = async ({
   jobId,
   outline,
   artDirection,
-  model,
+  tenantId,
+  modelKey,
   onProgress,
 }) => {
   const wanted = outline.slides.filter(
@@ -87,18 +89,29 @@ const generateDeckImages = async ({
     return {};
   }
 
-  if (!isImageModelConfigured(model)) {
+  let config;
+  try {
+    config = await resolveImageModel({ tenantId, modelKey });
+  } catch (error) {
+    console.warn("[deck-jobs] Illustration configuration failed:", {
+      jobId,
+      modelKey,
+      code: error.code,
+    });
+    const reason = error.code === "image_model_not_configured"
+      ? "尚未設定"
+      : "設定讀取失敗";
     await onProgress?.({
       step: "images",
       status: "failed",
-      detail: `圖片生成模型 ${model} 尚未設定，${wanted.length} 頁改以純版面呈現`,
+      detail: `圖片生成模型 ${modelKey || "未指定"} ${reason}，${wanted.length} 頁改以純版面呈現`,
     });
     return {};
   }
 
   await onProgress?.({
     step: "images",
-    detail: `以 ${model} 產生 ${wanted.length} 張配圖`,
+    detail: `以 ${modelKey} 產生 ${wanted.length} 張配圖`,
     current: 0,
     total: outline.slides.length,
   });
@@ -116,7 +129,7 @@ const generateDeckImages = async ({
 
     try {
       const { buffer, contentType } = await renderImage({
-        model,
+        config,
         prompt: buildIllustrationPrompt({
           slide,
           artDirection,
@@ -158,8 +171,8 @@ const generateDeckImages = async ({
       completed += 1;
       console.warn("[deck-jobs] Illustration failed, authoring slide without it:", {
         slide: slide.slide_number,
-        model,
-        message: imageError.message,
+        modelKey,
+        code: imageError.code,
       });
       await onProgress?.({
         step: "images",

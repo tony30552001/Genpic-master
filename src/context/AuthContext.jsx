@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -47,6 +48,7 @@ export const AuthProvider = ({ children }) => {
   const [profileError, setProfileError] = useState("");
   const [authExpired, setAuthExpired] = useState(false);
   const [authExpiredWarning, setAuthExpiredWarning] = useState(false);
+  const profileRequestRef = useRef(0);
 
   const loadSession = useCallback(async () => {
     if (AUTH_BYPASS) {
@@ -60,6 +62,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const session = await getAuthSession();
       if (session?.authenticated && session.user) {
+        setProfile(null);
         setUser(session.user);
         setAuthExpired(false);
         setAuthExpiredWarning(false);
@@ -132,42 +135,49 @@ export const AuthProvider = ({ children }) => {
     setAuthExpiredWarning(false);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadProfile = async () => {
-      if (isLoading || !user) {
-        setProfile(null);
-        setProfileError("");
-        setIsProfileLoading(false);
-        return;
-      }
-
-      setIsProfileLoading(true);
+  const refreshProfile = useCallback(async () => {
+    const requestId = ++profileRequestRef.current;
+    if (isLoading || !user) {
+      setProfile(null);
       setProfileError("");
-      try {
-        const data = await getCurrentUserProfile();
-        if (cancelled) return;
-        setProfile(
-          data?.user
-            ? { ...data.user, modelPolicy: data.modelPolicy || null }
-            : null
-        );
-      } catch (error) {
-        if (cancelled) return;
-        setProfile(null);
-        setProfileError(error.message || "無法載入使用者設定");
-      } finally {
-        if (!cancelled) setIsProfileLoading(false);
-      }
-    };
+      setIsProfileLoading(false);
+      return;
+    }
 
-    void loadProfile();
+    setIsProfileLoading(true);
+    setProfileError("");
+    try {
+      const data = await getCurrentUserProfile();
+      if (requestId !== profileRequestRef.current) return;
+      if (!data?.user) throw new Error("無法載入使用者設定");
+      const nextProfile = {
+        ...data.user,
+        modelPolicy: data.modelPolicy || null,
+        imageModels: Array.isArray(data.imageModels) ? data.imageModels : [],
+      };
+      setProfile(nextProfile);
+      return nextProfile;
+    } catch (error) {
+      if (requestId !== profileRequestRef.current) return;
+      setProfileError(error.message || "無法載入使用者設定");
+      throw error;
+    } finally {
+      if (requestId === profileRequestRef.current) setIsProfileLoading(false);
+    }
+  }, [isLoading, user]);
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      void refreshProfile().catch((error) => {
+        console.error("Profile loading failed:", error);
+      });
+    }, 0);
 
     return () => {
-      cancelled = true;
+      window.clearTimeout(timerId);
+      profileRequestRef.current += 1;
     };
-  }, [isLoading, user]);
+  }, [refreshProfile]);
 
   const value = {
     user,
@@ -175,6 +185,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin: profile?.role === "admin",
     isProfileLoading,
     profileError,
+    refreshProfile,
     isLoading,
     authExpired,
     authExpiredWarning,

@@ -35,7 +35,7 @@ vi.mock("../../../services/adminService", () => ({
 vi.mock("../../../hooks/useAuth", () => ({
   default: () => ({
     user: { email: "admin@example.com" },
-    profile: { displayName: "管理員", role: "admin" },
+    profile: { displayName: "管理員", role: "admin", imageModels: [{ modelKey: "compatible-custom", label: "Compatible Custom" }] },
     handleLogout: vi.fn(),
   }),
 }));
@@ -46,7 +46,7 @@ const historyItems = [
     hasImage: true,
     fullPrompt: "第一張完整 Prompt",
     userScript: "第一張腳本",
-    model: "gemini-imagen",
+    model: "compatible-custom",
     styleName: "水彩",
     userId: "user-1",
     userEmail: "alice@example.com",
@@ -105,7 +105,7 @@ describe("AdminPanel history preview", () => {
     listAdminUserOptions.mockResolvedValue([]);
     getAdminModelSettings.mockResolvedValue({
       modelPolicy: { allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2" },
-      supportedModels: ["gpt-image-2"],
+      models: [],
     });
     listAdminHistory.mockResolvedValue({
       items: historyItems,
@@ -125,6 +125,8 @@ describe("AdminPanel history preview", () => {
     expect(within(dialog).getByText("第一張完整 Prompt")).toBeInTheDocument();
     expect(within(dialog).getByText(/alice@example.com/)).toBeInTheDocument();
     expect(within(dialog).getByText("水彩")).toBeInTheDocument();
+    expect(within(dialog).getByText("Compatible Custom")).toBeInTheDocument();
+    expect(getAdminModelSettings).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("link", { name: "下載原圖" })).toHaveAttribute(
       "href",
       "https://example.com/first.png"
@@ -146,6 +148,7 @@ describe("AdminPanel history preview", () => {
       expect(within(dialog).getByText("第 2 / 2 張")).toBeInTheDocument();
     });
     expect(within(dialog).getByText("第二張完整 Prompt")).toBeInTheDocument();
+    expect(within(dialog).getByText("gemini-imagen")).toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: "下載原圖" })).toHaveAttribute(
       "href",
       "https://example.com/second.png"

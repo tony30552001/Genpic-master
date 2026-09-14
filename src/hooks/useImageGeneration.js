@@ -7,7 +7,7 @@ import {
   waitForImageJob,
 } from "../services/aiService";
 import { getGenerationStatus } from "../utils/generationProgress";
-import { DEFAULT_IMAGE_MODEL } from "../config";
+import { requireImageJobAdmission, requireCompletedImageJob } from "../lib/imageJob";
 
 const normalizeTags = (raw) => {
   if (Array.isArray(raw)) return raw.map((t) => String(t).trim()).filter(Boolean);
@@ -86,7 +86,7 @@ export default function useImageGeneration() {
   }, []);
 
   const runGeneration = useCallback(
-    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageSize, imageQuality, imageLanguage, referenceUploadId, model, updatePreview = true }) => {
+    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageQuality, imageLanguage, referenceUploadId, updatePreview = true }) => {
       if (!userScript) {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
@@ -123,35 +123,40 @@ export default function useImageGeneration() {
 
 
         // 最終 prompt 由後端的 api/_shared/imagePrompt.js 組裝，前端只送出創作輸入
-        let result = await generateImage({
+        const admission = requireImageJobAdmission(await generateImage({
           userScript,
           stylePrompt,
           styleTags,
           purpose,
           imageLanguage,
           aspectRatio,
-          imageSize,
           imageQuality,
           referenceUploadId,
           signal: abortController.signal,
-        });
-        const finalPrompt = result?.prompt || "";
-
-        if (result?.jobId) {
-          result = await waitForImageJob({
-            jobId: result.jobId,
+        }));
+        const finalPrompt = admission.prompt || "";
+        const expected = {
+          jobId: admission.jobId,
+          model: admission.model,
+          operation: referenceUploadId ? "edit" : "generate",
+        };
+        const result = requireCompletedImageJob(
+          await waitForImageJob({
+            jobId: admission.jobId,
             signal: abortController.signal,
-          });
-        }
+          }),
+          expected
+        );
 
         if (updatePreview) {
           setGeneratedImage(result.imageUrl);
         }
         return {
+          jobId: result.jobId,
           imageUrl: result.imageUrl,
           finalPrompt,
           filenamePromise,
-          model: result.model || model || DEFAULT_IMAGE_MODEL,
+          model: result.model,
         };
       } catch (err) {
         if (isAbortError(err)) {

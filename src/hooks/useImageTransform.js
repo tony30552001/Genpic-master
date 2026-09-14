@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { transformImage, waitForImageJob } from "../services/aiService";
 import { uploadFile } from "../services/storageService";
-import { DEFAULT_IMAGE_MODEL } from "../config";
+import { requireImageJobAdmission, requireCompletedImageJob } from "../lib/imageJob";
 import { STYLE_DIMENSIONS } from "../components/create/styleDimensions";
 
 const INITIAL_MODE = "style_transfer";
@@ -85,7 +85,7 @@ export default function useImageTransform() {
     setTransformError("");
   }, []);
 
-  const runTransform = useCallback(async ({ model = DEFAULT_IMAGE_MODEL, imageSize, imageQuality, imageLanguage } = {}) => {
+  const runTransform = useCallback(async ({ imageQuality, imageLanguage } = {}) => {
     if (!sourcePreview || !sourceUploadId) {
       setTransformError("請先上傳來源圖片。");
       return null;
@@ -111,29 +111,30 @@ export default function useImageTransform() {
     const mergedPrompt = parts.join("\n");
 
     try {
-      let res = await transformImage({
+      const admission = requireImageJobAdmission(await transformImage({
         uploadId: sourceUploadId,
         mimeType: sourceMimeType,
         mode,
         prompt: mergedPrompt,
         aspectRatio,
-        imageSize,
         imageQuality,
         imageLanguage,
         signal: abortController.signal,
-      });
-      const appliedPrompt = res.prompt || mergedPrompt;
-      if (res?.jobId) {
-        res = await waitForImageJob({
-          jobId: res.jobId,
+      }));
+      const appliedPrompt = admission.prompt || mergedPrompt;
+      const res = requireCompletedImageJob(
+        await waitForImageJob({
+          jobId: admission.jobId,
           signal: abortController.signal,
-        });
-      }
+        }),
+        { jobId: admission.jobId, model: admission.model, operation: "edit" }
+      );
       setResult(res.imageUrl);
       return {
+        jobId: res.jobId,
         imageUrl: res.imageUrl,
         mergedPrompt: appliedPrompt,
-        model: res.model || model || DEFAULT_IMAGE_MODEL,
+        model: res.model,
       };
     } catch (err) {
       if (isAbortError(err)) {

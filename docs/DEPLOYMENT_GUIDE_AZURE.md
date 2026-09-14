@@ -33,8 +33,7 @@
 - `AZURE_STORAGE_ACCOUNT`、`AZURE_STORAGE_KEY`、`BLOB_CONTAINER_DEFAULT`
 - `AZURE_EMBEDDING_ENDPOINT`、`AZURE_EMBEDDING_API_KEY`、`EMBEDDING_MODEL=embed-v-4-0`（風格向量；`AZURE_EMBEDDING_ENDPOINT` 必須指到 Foundry 模型推論路徑，例如 `https://<resource>.services.ai.azure.com/models`，或部署頁複製的完整 Target URI；只填資源根網域會回 404）
 - `DOCUMENT_ANALYSIS_MAX_CHARS=500000`（AnyDoc 解析後可交給同步 GPT 分析的最大字元數；超過時回傳 413，不會靜默截斷）
-- `SECRET_ENCRYPTION_KEY`（32 bytes 的 base64 或 hex 金鑰；加密分析模型 API 金鑰與 LINE token）
-- `GPT_IMAGE_ENDPOINT`、`GPT_IMAGE_API_KEY`、`GPT_IMAGE_DEPLOYMENT`
+- `SECRET_ENCRYPTION_KEY`（64 字元 hex，代表 32 bytes；加密圖片／分析模型 API 金鑰與 LINE token）
 - `BLOB_CONTAINER_GENERATED=generated`
 - `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`
 - `ENTRA_REDIRECT_URI=https://<your-swa-domain>/api/auth/entra/callback`
@@ -50,9 +49,43 @@
 
 App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 production port。
 
-GPT Image 2 會由 `POST /api/generate-images` 建立 queued job，App Service
+圖片模型的連線與金鑰由管理中心登錄，後端不再讀取 `GPT_IMAGE_*`。
+一般／參考圖生成與圖片轉換會建立 queued job，App Service
 背景 worker 在不佔用 SWA gateway request 的情況下執行生成。生成結果會放在
 `BLOB_CONTAINER_GENERATED`，前端再透過 `/api/image-jobs/{id}` polling 取得結果。
+
+### 圖片模型目錄的受控升級
+
+先在 Azure Foundry 確認原 GPT Image 2 與 Flare 部署存在、所在區域支援，
+且各自的金鑰與配額可用。公開模型文件不保證特定 Azure 資源已啟用該部署。
+
+1. 安全備份資料庫及現有加密主金鑰；主金鑰必須維持可解密既有資料的值。
+2. 暫停一般生成流量並等待既有圖片／PPT 工作結束，避免新版本接手沒有完整模型來源的新舊混合工作。
+3. 對既有資料庫只套用尚未執行的 `026_image_model_catalog.sql`：
+   `node api\scripts\migrate.cjs 026_image_model_catalog.sql`。
+   不可重跑全部 migration；既有 `025_gpt_image_only.sql` 會重設租戶政策。
+4. 部署相同版本的前後端。在受控流量下，以管理員登入圖片模型目錄登錄原 `gpt-image-2`：
+   填寫其實際 Azure v1 端點與 deployment name、金鑰、三種品質 `low/medium/high`，
+   預設品質 `medium`。既有政策的識別碼不變，但必須完成連線登錄才能恢復生成。
+5. 再登錄 `gpt-image-2.5-flare`，填寫它的實際 deployment name 與連線。
+   支援品質為 `low/medium/high/xhigh/max/auto`，預設 `medium`。
+   目錄新增不會自動變更原有開放清單或預設模型。
+6. 管理員可明確觸發「生成測試」；這會產生 Azure 費用且建立工作。
+   另以受控方式確認參考圖編輯及要使用的品質。錯誤金鑰、缺少配額或不支援的參數
+   不可透過自動改用另一模型掩蓋。
+7. 原模型連線可用後再開放創作流量；需要切至 Flare 時，在模型政策中明確選擇。
+   新請求依新政策執行，已提交工作不會重新選模型。
+8. 移除 App Service 中已不用的 `GPT_IMAGE_*` 設定。後續新增相容 Azure Images v1
+   部署只需管理中心登錄，不需重新建置或部署。
+
+不要把 API 金鑰放進 `VITE_*`、workflow env、原始碼或匯出到日誌。
+管理中心的空白更新金鑰表示保留既有值；金鑰只在後端以 `SECRET_ENCRYPTION_KEY`
+加密儲存，畫面與 API 不回傳原金鑰或密文。本機根目錄 `.env.local` 不會由
+`api\server.js` 自動載入，註解形式的連線筆記也不是可用的後端設定。
+
+若初始登錄未完成，管理員仍可登入設定，但一般創作必須顯示設定缺失，
+不能靠舊環境變數 fallback。此升級涉及 schema 與 async-only API 合約，
+不可只回滾單一前端或 API 執行個體；需要復原時使用事先準備的協調版本與資料庫備份。
 
 分析用的 LLM 不由環境變數設定。套用 `db/migrations/014_llm_models.sql` 後，
 管理員在管理中心「分析模型」新增模型（模型代號、端點與 API 金鑰）並指派給六個用途：

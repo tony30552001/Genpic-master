@@ -8,6 +8,7 @@ const rateLimit = require("../../_shared/rateLimit");
 const imageUploads = require("../../_shared/imageUploads");
 const modelPolicy = require("../../_shared/modelPolicy");
 const imageJobs = require("../../_shared/imageJobs");
+const { ImageModelError } = require("../../_shared/imageModelConfig");
 
 auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
@@ -81,7 +82,6 @@ describe("image-transform owner-scoped source uploads", () => {
       expect.objectContaining({
         sourceUploadId: IMAGE_ID,
         operation: "edit",
-        model: "gpt-image-2",
       })
     );
   });
@@ -130,12 +130,12 @@ describe("image-transform owner-scoped source uploads", () => {
       jobId: "223e4567-e89b-42d3-a456-426614174000",
       status: "queued",
       model: "gpt-image-2",
+      operation: "edit",
       prompt: expect.any(String),
     });
     expect(imageJobs.createImageJob).toHaveBeenCalledWith({
       tenantId: OWNER.tenantId,
       userId: OWNER.userId,
-      model: "gpt-image-2",
       prompt: expect.any(String),
       aspectRatio: "1:1",
       imageSize: undefined,
@@ -144,5 +144,29 @@ describe("image-transform owner-scoped source uploads", () => {
       sourceUploadId: IMAGE_ID,
     });
     expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
+    expect(modelPolicy.ensureModelPolicy).not.toHaveBeenCalled();
+  });
+
+  it("rejects caller-selected models before creating a job", async () => {
+    const response = await invoke({ uploadId: IMAGE_ID, model: "gpt-image-2" });
+    expect(response.status).toBe(400);
+    expect(imageJobs.createImageJob).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "max", "auto", null, "", 0, false])(
+    "passes quality %j unchanged to authoritative admission", async (quality) => {
+      await invoke({ uploadId: IMAGE_ID, mode: "style_transfer", prompt: "blue", quality });
+      expect(imageJobs.createImageJob.mock.calls[0][0].quality).toBe(quality);
+    }
+  );
+
+  it.each([
+    new ImageModelError("Invalid quality", "bad_request", 400),
+    new ImageModelError("Not configured", "image_model_not_configured", 503),
+  ])("returns typed admission errors", async (failure) => {
+    imageJobs.createImageJob.mockRejectedValue(failure);
+    const response = await invoke({ uploadId: IMAGE_ID, mode: "style_transfer", prompt: "blue" });
+    expect(response.status).toBe(failure.status);
+    expect(response.body.error).toEqual({ code: failure.code, message: failure.message });
   });
 });

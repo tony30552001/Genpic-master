@@ -2,16 +2,10 @@ const { ok, error, options } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
-const { ensureModelPolicy } = require("../_shared/modelPolicy");
+const { ImageModelError } = require("../_shared/imageModelConfig");
 const { createImageJob } = require("../_shared/imageJobs");
-const {
-  IMAGE_QUALITIES,
-  editGptImage,
-  generateGptImage,
-} = require("../_shared/gptImage");
 const { buildImagePrompt } = require("../_shared/imagePrompt");
 const {
-  downloadOwnedImage,
   resolveOwnedImageUpload,
 } = require("../_shared/imageUploads");
 
@@ -56,13 +50,13 @@ module.exports = async function (context, req) {
     context.res = error("不接受由呼叫端指定的圖片 URL", "bad_request", 400);
     return;
   }
-  if (quality && !IMAGE_QUALITIES.includes(quality)) {
-    context.res = error("不支援的圖片品質", "bad_request", 400);
+  if (Object.prototype.hasOwnProperty.call(body, "model")) {
+    context.res = error("圖片模型由租戶政策決定", "bad_request", 400);
     return;
   }
 
   try {
-    let referenceImage = null;
+    let sourceUploadId = null;
     if (referenceUploadId !== undefined && referenceUploadId !== null) {
       const upload = await resolveOwnedImageUpload({
         uploadId: referenceUploadId,
@@ -73,15 +67,9 @@ module.exports = async function (context, req) {
         context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
         return;
       }
-      const source = await downloadOwnedImage(upload);
-      referenceImage = {
-        base64: source.buffer.toString("base64"),
-        mimeType: source.contentType,
-      };
+      sourceUploadId = upload.id;
     }
 
-    const modelPolicy = await ensureModelPolicy(identity.tenantId);
-    const selectedModel = modelPolicy.defaultModel;
     const prompt = buildImagePrompt({
       userScript,
       stylePrompt,
@@ -90,34 +78,6 @@ module.exports = async function (context, req) {
       imageLanguage,
     });
 
-    if (referenceImage) {
-      const result = await editGptImage({
-        imageBase64: referenceImage.base64,
-        mimeType: referenceImage.mimeType,
-        prompt,
-        aspectRatio,
-        quality,
-      });
-      context.res = ok({
-        ...result,
-        aspectRatio: aspectRatio || "1:1",
-        prompt,
-        model: selectedModel,
-      });
-      return;
-    }
-
-    if (process.env.FUNCTIONS_WORKER_RUNTIME) {
-      const result = await generateGptImage({ prompt, aspectRatio, quality });
-      context.res = ok({
-        ...result,
-        aspectRatio: aspectRatio || "1:1",
-        prompt,
-        model: selectedModel,
-      });
-      return;
-    }
-
     const job = await createImageJob({
       tenantId: identity.tenantId,
       userId: identity.userId,
@@ -125,7 +85,8 @@ module.exports = async function (context, req) {
       aspectRatio,
       imageSize,
       quality,
-      model: selectedModel,
+      operation: sourceUploadId ? "edit" : "generate",
+      sourceUploadId,
     });
     context.res = ok(
       {
@@ -133,27 +94,17 @@ module.exports = async function (context, req) {
         status: job.status,
         aspectRatio: aspectRatio || "1:1",
         prompt,
-        model: selectedModel,
+        model: job.model,
+        operation: job.operation,
       },
       202
     );
   } catch (err) {
-    context.log.error("Image generation failed:", err);
-
-    // 檢查是否為伺服器尖峰過載錯誤
-    const errStr = String(err.message || err);
-    const isOverloaded = errStr.includes("503") || errStr.includes("429") || errStr.includes("UNAVAILABLE") || errStr.includes("high demand");
-
-    if (isOverloaded) {
-      context.res = error(
-        "目前 AI 繪圖伺服器處於尖峰時段，過於繁忙，請稍後一分鐘再試。",
-        "server_overloaded",
-        503
-      );
-    } else {
-      // 非過載錯誤：回傳通用訊息，避免洩漏內部錯誤細節
-      context.log.error("Image generation failed (non-overload):", err.message);
-      context.res = error("圖片生成失敗，請稍後重試", "generation_failed", 502);
-    }
+    context.log.error("Image generation admission failed:", {
+      status: Number.isInteger(err?.status) ? err.status : undefined,
+    });
+    context.res = err instanceof ImageModelError
+      ? error(err.message, err.code, err.status)
+      : error("圖片生成失敗，請稍後重試", "generation_failed", 502);
   }
 };

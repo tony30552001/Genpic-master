@@ -50,9 +50,9 @@ function ResponsiveGoogleLogin({ onSuccess, onError }) {
 
 function LoginLoadingState() {
     return (
-        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#83cbea] px-5 py-12 text-foreground sm:px-8">
+        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[var(--color-paper-2)] px-5 py-12 text-foreground sm:px-8">
             <LoginShaderBackground />
-            <section className="login-glass-panel relative z-10 w-full max-w-[27rem] rounded-2xl p-7 sm:p-9">
+            <section className="login-surface relative z-10 w-full max-w-[27rem] p-7 sm:p-9">
                 <div
                     className="space-y-7"
                     role="status"
@@ -106,13 +106,13 @@ export default function LoginPage() {
     };
 
     return (
-        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#83cbea] px-5 py-12 text-foreground sm:px-8">
+        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[var(--color-paper-2)] px-5 py-12 text-foreground sm:px-8">
             <LoginShaderBackground />
 
-            <section className="login-glass-panel relative z-10 w-full max-w-[27rem] rounded-2xl p-7 animate-in fade-in-0 zoom-in-95 duration-500 motion-reduce:animate-none sm:p-9">
+            <section className="login-surface relative z-10 w-full max-w-[27rem] p-7 sm:p-9" aria-labelledby="login-title">
                 <div className="mb-8">
                     <div className="mb-5 flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                        <div className="login-brand-mark">
                             <PixoraMark className="h-7 w-7" title="Pixora" />
                         </div>
                         <div>
@@ -121,7 +121,7 @@ export default function LoginPage() {
                         </div>
                     </div>
 
-                    <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-[2rem]">
+                    <h1 id="login-title" className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-[-0.035em] text-foreground sm:text-[2rem]">
                         繼續你的創作
                     </h1>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -142,7 +142,7 @@ export default function LoginPage() {
                     <Button
                         type="button"
                         variant="outline"
-                        className="h-10 w-full gap-3 rounded-[4px] border-input bg-background text-sm font-semibold shadow-sm transition-[background-color,border-color,transform,box-shadow] hover:border-foreground/20 hover:bg-muted/60 hover:shadow-md active:scale-[0.985] motion-reduce:transform-none"
+                        className="login-provider-button w-full gap-3 whitespace-nowrap text-sm font-semibold"
                         onClick={handleMicrosoftLogin}
                     >
                         <MicrosoftMark className="h-5 w-5" />

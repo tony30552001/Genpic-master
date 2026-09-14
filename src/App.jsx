@@ -38,10 +38,10 @@ function ProtectedRoute({ children }) {
 }
 
 function ProtectedAdminRoute({ children }) {
-  const { isAuthenticated, isLoading, isAdmin, isProfileLoading } = useAuth();
+  const { isAuthenticated, isLoading, isAdmin, profile, profileError } = useAuth();
   const location = useLocation();
 
-  if (isLoading || (isAuthenticated && isProfileLoading)) {
+  if (isLoading || (isAuthenticated && !profile && !profileError)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div

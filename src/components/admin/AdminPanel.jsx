@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import ImageLightbox from "../common/ImageLightbox";
 import LlmModelSettings from "./LlmModelSettings";
+import ImageModelSettings from "./ImageModelSettings";
 import UserFilterSelect from "./UserFilterSelect";
 import useAuth from "../../hooks/useAuth";
 import {
@@ -45,7 +46,6 @@ import {
   updateAdminUserRole,
   updateAdminUserStatus,
 } from "../../services/adminService";
-import { IMAGE_MODEL_OPTIONS } from "../../config";
 
 const SECTIONS = [
   { id: "users", label: "使用者", icon: Users },
@@ -89,14 +89,9 @@ const formatDate = (value) => {
   return new Date(value.seconds * 1000).toLocaleString("zh-TW");
 };
 
-const modelLabel = (modelId) =>
-  IMAGE_MODEL_OPTIONS.find((model) => model.id === modelId)?.label
-  || modelId
-  || "未紀錄";
-
 const emptyPolicy = {
-  allowedModels: ["gpt-image-2"],
-  defaultModel: "gpt-image-2",
+  allowedModels: [],
+  defaultModel: null,
 };
 
 const DEFAULT_USER_PAGE_SIZE = 10;
@@ -242,7 +237,7 @@ const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChang
 
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const { user, profile, handleLogout } = useAuth();
+  const { user, profile, handleLogout, refreshProfile } = useAuth();
   const [activeSection, setActiveSection] = useState("users");
   const [users, setUsers] = useState([]);
   const [historyItems, setHistoryItems] = useState([]);
@@ -256,7 +251,7 @@ export default function AdminPanel() {
   const [userPagination, setUserPagination] = useState(EMPTY_PAGINATION);
   const [userPageSize, setUserPageSize] = useState(DEFAULT_USER_PAGE_SIZE);
   const [modelPolicy, setModelPolicy] = useState(emptyPolicy);
-  const [supportedModels, setSupportedModels] = useState([]);
+  const [policyModels, setPolicyModels] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [historySource, setHistorySource] = useState("");
   const [userSearch, setUserSearch] = useState("");
@@ -270,6 +265,15 @@ export default function AdminPanel() {
   const [successMessage, setSuccessMessage] = useState("");
   const requestedSectionsRef = useRef(new Set());
   const appliedUserSearchRef = useRef("");
+  const models = policyModels ?? profile?.imageModels ?? [];
+  const modelLabel = (modelKey) =>
+    models.find((model) => model.modelKey === modelKey)?.label || modelKey || "未紀錄";
+  const allowedRegisteredModels = models.filter((model) => modelPolicy.allowedModels.includes(model.modelKey));
+  const missingPolicyKeys = modelPolicy.allowedModels.filter((key) => !models.some((model) => model.modelKey === key));
+  const isPolicyValid = policyModels !== null
+    && modelPolicy.allowedModels.length > 0
+    && missingPolicyKeys.length === 0
+    && allowedRegisteredModels.some((model) => model.modelKey === modelPolicy.defaultModel);
 
   const loadUsersSection = useCallback(
     async ({ page = 1, pageSize = DEFAULT_USER_PAGE_SIZE, search = "" } = {}) => {
@@ -312,10 +316,15 @@ export default function AdminPanel() {
   );
 
   const loadSettingsSection = useCallback(async () => {
+    setPolicyModels(null);
     const data = await getAdminModelSettings();
-    setModelPolicy(data?.modelPolicy || emptyPolicy);
-    setSupportedModels(data?.supportedModels || []);
+    setModelPolicy(data.modelPolicy);
+    setPolicyModels(data.models);
   }, []);
+
+  const handleCatalogChange = useCallback(async () => {
+    await Promise.all([loadSettingsSection(), refreshProfile()]);
+  }, [loadSettingsSection, refreshProfile]);
 
   useEffect(() => {
     const sectionId = activeSection;
@@ -546,14 +555,13 @@ export default function AdminPanel() {
     setModelPolicy((previous) => {
       const allowedModels = previous.allowedModels || [];
       if (allowedModels.includes(modelId)) {
-        if (allowedModels.length === 1) return previous;
         const nextAllowedModels = allowedModels.filter((id) => id !== modelId);
         return {
           ...previous,
           allowedModels: nextAllowedModels,
           defaultModel: nextAllowedModels.includes(previous.defaultModel)
             ? previous.defaultModel
-            : nextAllowedModels[0],
+            : null,
         };
       }
       return {
@@ -564,6 +572,10 @@ export default function AdminPanel() {
   };
 
   const handleSavePolicy = async () => {
+    if (!isPolicyValid) {
+      setErrorMessage("請先登錄模型，並從開放清單選擇預設模型。");
+      return;
+    }
     setIsSavingPolicy(true);
     setErrorMessage("");
     setSuccessMessage("");
@@ -572,8 +584,14 @@ export default function AdminPanel() {
         allowedModels: modelPolicy.allowedModels,
         defaultModel: modelPolicy.defaultModel,
       });
-      setModelPolicy(result?.modelPolicy || modelPolicy);
+      setModelPolicy(result.modelPolicy);
+      setPolicyModels(result.models);
       setSuccessMessage("模型政策已更新，下一次生成將套用新設定。");
+      try {
+        await refreshProfile();
+      } catch (error) {
+        setErrorMessage(`政策已儲存，但使用者設定重新載入失敗：${error.message}。請重新整理頁面。`);
+      }
     } catch (error) {
       setErrorMessage(error.message || "模型政策更新失敗");
     } finally {
@@ -1001,6 +1019,8 @@ export default function AdminPanel() {
                 )}
 
                 {activeSection === "models" && (
+                  <div className="space-y-6">
+                  <ImageModelSettings onCatalogChange={handleCatalogChange} />
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
@@ -1012,14 +1032,22 @@ export default function AdminPanel() {
                       <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
                         使用者不會看到模型選擇器，所有一般創作、文件批次生成與圖片轉換都會使用下方的預設模型。
                       </div>
+                      {policyModels === null ? (
+                        <div className="space-y-2">
+                          <p role="alert" className="text-sm text-destructive">政策資料尚未載入，請重試。</p>
+                          <Button type="button" variant="outline" disabled={isRefreshing} onClick={() => runRefresh(loadSettingsSection, "政策資料載入失敗")}>重新載入政策</Button>
+                        </div>
+                      ) : models.length === 0 || missingPolicyKeys.length > 0 ? (
+                        <p role="status" className="text-sm text-muted-foreground [overflow-wrap:anywhere]">需要設定圖片模型。請先登錄模型；未登錄的政策識別碼：{missingPolicyKeys.join("、") || "無"}。新增目錄不會自動切換預設模型。</p>
+                      ) : null}
                       <div className="space-y-3">
                         <div>
                           <h3 className="text-sm font-semibold">開放模型</h3>
-                          <p className="text-xs text-muted-foreground">至少保留一個模型；開放清單供未來政策擴充使用。</p>
+                          <p className="text-xs text-muted-foreground">至少開放一個已登錄模型，並明確選擇預設模型後儲存。</p>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
-                          {supportedModels.map((modelId) => {
-                            const model = IMAGE_MODEL_OPTIONS.find((item) => item.id === modelId);
+                          {(policyModels || []).map((model) => {
+                            const modelId = model.modelKey;
                             const isAllowed = modelPolicy.allowedModels?.includes(modelId);
                             return (
                               <button
@@ -1027,17 +1055,18 @@ export default function AdminPanel() {
                                 key={modelId}
                                 onClick={() => handleAllowedModelToggle(modelId)}
                                 aria-pressed={isAllowed}
+                                disabled={isSavingPolicy || isRefreshing}
                                 className={cn(
-                                  "rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                  "min-w-0 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                   isAllowed
                                     ? "border-primary bg-primary/5"
                                     : "border-border hover:border-primary/40 hover:bg-muted/40"
                                 )}
                               >
                                 <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm font-semibold">{model?.label || modelId}</p>
-                                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{model?.description || modelId}</p>
+                                  <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                                    <p className="text-sm font-semibold">{model.label}</p>
+                                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{modelId}</p>
                                   </div>
                                   <span className={cn(
                                     "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
@@ -1049,27 +1078,33 @@ export default function AdminPanel() {
                               </button>
                             );
                           })}
+                          {policyModels !== null && missingPolicyKeys.map((key) => (
+                            <Button key={key} type="button" variant="outline" className="h-auto min-w-0 whitespace-normal [overflow-wrap:anywhere]" disabled={isSavingPolicy} onClick={() => handleAllowedModelToggle(key)}>移除未登錄模型 {key}</Button>
+                          ))}
                         </div>
                       </div>
                       <div className="max-w-md space-y-2">
                         <label htmlFor="admin-default-model" className="text-sm font-semibold">預設生成模型</label>
                         <select
                           id="admin-default-model"
-                          value={modelPolicy.defaultModel}
+                          value={allowedRegisteredModels.some((model) => model.modelKey === modelPolicy.defaultModel) ? modelPolicy.defaultModel : ""}
+                          disabled={isSavingPolicy || isRefreshing || policyModels === null}
                           onChange={(event) => setModelPolicy((previous) => ({ ...previous, defaultModel: event.target.value }))}
                           className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          {(modelPolicy.allowedModels || []).map((modelId) => (
-                            <option key={modelId} value={modelId}>{modelLabel(modelId)}</option>
+                          <option value="">請選擇已開放的模型</option>
+                          {allowedRegisteredModels.map((model) => (
+                            <option key={model.modelKey} value={model.modelKey}>{model.label}</option>
                           ))}
                         </select>
                       </div>
-                      <Button type="button" onClick={handleSavePolicy} disabled={isSavingPolicy} className="gap-2">
+                      <Button type="button" onClick={handleSavePolicy} disabled={isSavingPolicy || !isPolicyValid || isRefreshing} className="gap-2">
                         {isSavingPolicy ? <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="icon-sm" aria-hidden="true" />}
                         儲存模型政策
                       </Button>
                     </CardContent>
                   </Card>
+                  </div>
                 )}
 
                 {activeSection === "llm" && <LlmModelSettings />}

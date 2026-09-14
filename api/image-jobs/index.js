@@ -26,7 +26,7 @@ module.exports = async function (context, req) {
   }
 
   const identity = await resolveIdentity(auth.user);
-  if (!identity.userId) {
+  if (!identity.userId || !identity.tenantId) {
     context.res = error("無法辨識使用者", "unauthorized", 401, req);
     return;
   }

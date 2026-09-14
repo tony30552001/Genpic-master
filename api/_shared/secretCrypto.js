@@ -1,7 +1,7 @@
 /**
  * secretCrypto.js
  * AES-256-GCM encryption helpers for secrets stored in the database
- * (LINE channel access tokens and analysis model API keys).
+ * (LINE channel access tokens and analysis/image model API keys).
  *
  * Environment variable required:
  *   SECRET_ENCRYPTION_KEY — 64-character hex string (32 bytes)

@@ -1,33 +1,10 @@
 const { generateGptImage } = require("./gptImage");
 const { fetchImageSource } = require("./blobStorage");
 
-/**
- * One place that turns a tenant's image model into image bytes.
- *
- * GPT Image 2 hands back a data URL or a short-lived remote URL. Callers that
- * need to store or forward the picture only care about bytes.
- */
-const RENDERERS = {
-  "gpt-image-2": async ({ prompt, aspectRatio }) => {
-    const { imageUrl } = await generateGptImage({ prompt, aspectRatio });
-    return fetchImageSource(imageUrl);
-  },
+/** Convert the configured Images v1 response into bytes for deck storage. */
+const renderImage = async ({ config, prompt, aspectRatio, quality }) => {
+  const { imageUrl } = await generateGptImage({ config, prompt, aspectRatio, quality });
+  return fetchImageSource(imageUrl);
 };
 
-/** Whether this deployment can actually call the model right now. */
-const isImageModelConfigured = (model) => {
-  if (model === "gpt-image-2") {
-    return Boolean(process.env.GPT_IMAGE_ENDPOINT && process.env.GPT_IMAGE_API_KEY);
-  }
-  return false;
-};
-
-const renderImage = async ({ model, prompt, aspectRatio }) => {
-  const render = RENDERERS[model];
-  if (!render) {
-    throw new Error(`不支援的圖片生成模型：${model}`);
-  }
-  return render({ prompt, aspectRatio });
-};
-
-module.exports = { isImageModelConfigured, renderImage };
+module.exports = { renderImage };

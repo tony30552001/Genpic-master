@@ -86,9 +86,18 @@ describe("storageService", () => {
     expect(apiPost).toHaveBeenCalledWith(`${API_BASE_URL}/styles/style-id/use`);
   });
 
-  it("addHistoryItem posts data", async () => {
-    await addHistoryItem({ imageUrl: "url" });
-    expect(apiPost).toHaveBeenCalled();
+  it("addHistoryItem posts job identity and never trusts a browser model", async () => {
+    const payload = {
+      jobId: "job-1", imageUrl: "compressed-url", userScript: "scene", stylePrompt: "ink",
+      fullPrompt: "assembled", styleId: "style-1", source: "general",
+    };
+    await addHistoryItem({ ...payload, model: "untrusted" });
+    expect(apiPost).toHaveBeenCalledWith(`${API_BASE_URL}/history`, payload);
+  });
+
+  it("rejects a missing history job identity before posting", async () => {
+    await expect(addHistoryItem({ imageUrl: "url" })).rejects.toThrow("工作識別");
+    expect(apiPost).not.toHaveBeenCalled();
   });
 
   it("deleteHistoryItem calls delete", async () => {

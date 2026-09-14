@@ -57,6 +57,21 @@ export const updateAdminUserStatus = async (userId, isActive) =>
 export const updateAdminModelSettings = async (settings) =>
   apiPut(`${ADMIN_API_BASE}/settings`, settings);
 
+export const listAdminImageModels = async () =>
+  apiGet(`${ADMIN_API_BASE}/image-models`);
+
+export const createAdminImageModel = async (model) =>
+  apiPost(`${ADMIN_API_BASE}/image-models`, model);
+
+export const updateAdminImageModel = async (modelKey, model) =>
+  apiPut(`${ADMIN_API_BASE}/image-models/${encodeURIComponent(modelKey)}`, model);
+
+export const deleteAdminImageModel = async (modelKey) =>
+  apiDelete(`${ADMIN_API_BASE}/image-models/${encodeURIComponent(modelKey)}`);
+
+export const testAdminImageModel = async (payload, { signal } = {}) =>
+  apiPost(`${ADMIN_API_BASE}/image-model-tests`, payload, { signal });
+
 export const deleteAdminStyle = async (styleId) =>
   apiDelete(`${ADMIN_API_BASE}/styles/${styleId}`);
 

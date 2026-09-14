@@ -28,6 +28,8 @@ describe("useImageTransform", () => {
       model: "gpt-image-2",
     });
     waitForImageJob.mockResolvedValue({
+      jobId: "image-job-default",
+      operation: "edit",
       imageUrl: "data:image/png;base64,queued-result",
       model: "gpt-image-2",
       status: "succeeded",
@@ -86,6 +88,10 @@ describe("useImageTransform", () => {
       prompt: "watercolor",
       model: "gpt-image-2",
     });
+    waitForImageJob.mockResolvedValueOnce({
+      jobId: "image-job-1", operation: "edit", status: "succeeded",
+      imageUrl: "data:image/png;base64,queued-result", model: "gpt-image-2",
+    });
     const file = {
       name: "source.png",
       type: "image/png",
@@ -110,9 +116,55 @@ describe("useImageTransform", () => {
     });
     expect(result.current.result).toBe("data:image/png;base64,queued-result");
     expect(transformed).toMatchObject({
+      jobId: "image-job-1",
       imageUrl: "data:image/png;base64,queued-result",
       mergedPrompt: "watercolor",
       model: "gpt-image-2",
     });
+  });
+
+  it.each(["low", "medium", "high", "xhigh", "max", "auto"])("preserves %s quality and actual job model", async (quality) => {
+    const { result } = renderHook(() => useImageTransform());
+    await act(async () => {
+      await result.current.handleSourceImageUpload({ name: "source.png", type: "image/png", size: 3 });
+    });
+    act(() => vi.runOnlyPendingTimers());
+    let transformed;
+    await act(async () => { transformed = await result.current.runTransform({ imageQuality: quality, model: "ignored" }); });
+    expect(transformImage.mock.calls.at(-1)[0]).toMatchObject({ imageQuality: quality });
+    expect(transformImage.mock.calls.at(-1)[0]).not.toHaveProperty("model");
+    expect(transformed).toMatchObject({ jobId: "image-job-default", model: "gpt-image-2" });
+  });
+
+  it.each([
+    { jobId: undefined }, { jobId: "wrong-job" }, { model: undefined }, { model: "other" },
+    { imageUrl: undefined }, { status: "processing" }, { operation: "generate" },
+  ])("rejects incomplete or mismatched results %j", async (override) => {
+    const { result } = renderHook(() => useImageTransform());
+    await act(async () => {
+      await result.current.handleSourceImageUpload({ name: "source.png", type: "image/png", size: 3 });
+    });
+    act(() => vi.runOnlyPendingTimers());
+    waitForImageJob.mockResolvedValueOnce({
+      jobId: "image-job-default", model: "gpt-image-2", imageUrl: "image",
+      status: "succeeded", operation: "edit", ...override,
+    });
+    await act(async () => {
+      await expect(result.current.runTransform()).rejects.toThrow("圖片工作");
+    });
+    expect(result.current.result).toBeNull();
+  });
+
+  it("rejects synchronous results without a job", async () => {
+    const { result } = renderHook(() => useImageTransform());
+    await act(async () => {
+      await result.current.handleSourceImageUpload({ name: "source.png", type: "image/png", size: 3 });
+    });
+    act(() => vi.runOnlyPendingTimers());
+    transformImage.mockResolvedValueOnce({ imageUrl: "direct", model: "gpt-image-2" });
+    await act(async () => {
+      await expect(result.current.runTransform()).rejects.toThrow("工作識別");
+    });
+    expect(waitForImageJob).not.toHaveBeenCalled();
   });
 });
