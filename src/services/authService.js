@@ -6,8 +6,10 @@ import {
   setCsrfToken,
 } from "./apiClient";
 
-const getCurrentReturnTo = () =>
-  `${window.location.pathname}${window.location.search}${window.location.hash}`;
+const getCurrentReturnTo = () => {
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return window.location.pathname === "/login" ? "/" : currentPath;
+};
 
 export const getAuthSession = async () => {
   const session = await apiGet(`${API_BASE_URL}/auth/session`, {

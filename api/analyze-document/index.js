@@ -64,13 +64,13 @@ const DOCUMENT_ANALYSIS_PROMPT_BASE = `請擔任專業的文件分析師與視�
 3. "recommended_style": (object) 根據文件主題、語氣、受眾與內容性質，為所有場景推薦一套最適合的文字與圖片視覺風格。這是文件分析的預設風格，請務必回傳：
    - "name": (string, 繁體中文) 簡潔的風格名稱
    - "description": (string, 繁體中文) 說明此風格為何適合這份文件，以及預期的視覺感受（50字內）
-   - "prompt": (string, 英文) 可直接用於 AI 生圖的共用風格 Prompt，描述藝術媒材、色彩、構圖、光影、材質與文字圖片搭配時的視覺方向（40-70字）
+   - "prompt": (string, 英文) 可重複套用到不同場景的共用風格指示。只描述媒材、線條、色彩、光影、材質與視覺氣質，不得包含特定主體、人物、物件、文字或固定鏡位（通常 30-70 個英文單字）
    - "tags": (Array of Strings) 3-5 個繁體中文風格標籤
 4. "scenes": (array of objects) 分鏡腳本，依邏輯切分（3-10個）。每個場景包含：
    - "scene_number": (number) 編號
    - "scene_title": (string, 繁體中文) 簡短標題
-   - "scene_description": (string, 繁體中文) 場景畫面描述與情緒氛圍（30-50字內）
-   - "visual_prompt": (string, 英文) AI 生圖專用 Prompt。請直接列出構圖、主體、光影、風格等英文關鍵字，並以逗號分隔（50-80字內，極為重要）
+   - "scene_description": (string, 繁體中文) 忠於文件內容的具體場景畫面描述與情緒氛圍（通常 30-80 字）
+   - "visual_prompt": (string, 英文) 這個場景專用的 Content brief。用完整句子描述主體、數量、場景、動作、視線、相對位置、構圖意圖及必要限制；不得重複 recommended_style.prompt（通常 50-120 個英文單字）
    - "source_text": (string, 繁體中文) 擷取對應原文片段（30字內）
    
 5. "characters": (array of objects) 核心角色/物件陣列（若無則為空陣列）：
@@ -79,8 +79,11 @@ const DOCUMENT_ANALYSIS_PROMPT_BASE = `請擔任專業的文件分析師與視�
 
 **重要規則：**
 - 敘事流暢，專注於將文字轉化為視覺畫面。
-- recommended_style 必須是完整且一致的文件級風格方向，不能只回傳抽象形容詞；prompt 必須能直接套用到每個場景的圖片生成。
-- visual_prompt 必須精簡有力，只保留視覺名詞與形容詞，不要寫完整的長句子。
+- recommended_style 必須是完整且一致、與主體無關的文件級風格方向，不能只回傳抽象形容詞。
+- visual_prompt 必須使用自然、可執行的英文完整句子，不得輸出逗號分隔的關鍵字串，也不得加入 8K、masterpiece、best quality 等空泛品質詞。
+- visual_prompt 只負責場景內容；共用風格、storyboard 構圖、畫布方向與圖片文字語言會由後端另行組裝，禁止重複堆疊。
+- 保留文件中的人物、物件、數字、因果與時間關係；不得自行創造統計、品牌、標題、標籤、引言、資料來源、主要人物或主要事件。
+- 需要出現在圖片中的逐字文字必須用雙引號保留原文，說明位置與排版，並要求不要增加其他文字。
 - recommended_style.prompt、scene_description 和 visual_prompt 絕對不可為空。
 - 直接回傳 JSON，不要其他多餘對話。`;
 

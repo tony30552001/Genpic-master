@@ -284,6 +284,7 @@ function SceneModal({
   styleName,
   onOpenStylePicker,
   imageLanguage,
+  aspectRatio,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ ...scene });
@@ -329,6 +330,7 @@ function SceneModal({
         key_elements: scene.key_elements,
         styleContext: styleContext || "",
         imageLanguage,
+        aspectRatio,
       });
 
       // 更新場景資料
@@ -677,6 +679,7 @@ export default function DocumentScenes({
   onApplyStyle,
   onClearStyle,
   imageLanguage = "",
+  aspectRatio = "1:1",
 }) {
   const [generatingIndex, setGeneratingIndex] = useState(null);
   const [modalScene, setModalScene] = useState(null); // { scene, index }
@@ -1489,6 +1492,7 @@ export default function DocumentScenes({
           styleContext={stylePrompt}
           styleName={styleName}
           imageLanguage={imageLanguage}
+          aspectRatio={aspectRatio}
           onOpenStylePicker={() => {
             setModalScene(null);
             setShowStylePicker(true);

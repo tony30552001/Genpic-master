@@ -129,8 +129,23 @@ export const waitForDocumentAnalysisJob = async ({
 export const embedText = async ({ text }) =>
   apiPost(`${API_BASE_URL}/embeddings`, { text });
 
-export const optimizePrompt = async ({ userScript, styleContext, imageLanguage }) =>
-  apiPost(`${API_BASE_URL}/optimize-prompt`, { userScript, styleContext, imageLanguage });
+export const optimizePrompt = async ({
+  userScript,
+  styleContext,
+  imageLanguage,
+  imagePurpose,
+  aspectRatio,
+  optimizationMode,
+  transformMode,
+}) => apiPost(`${API_BASE_URL}/optimize-prompt`, {
+  userScript,
+  styleContext,
+  imageLanguage,
+  imagePurpose,
+  aspectRatio,
+  optimizationMode,
+  transformMode,
+});
 
 export const generateFilename = async ({ userScript }) =>
   apiPost(`${API_BASE_URL}/generate-filename`, { userScript });
@@ -302,8 +317,8 @@ export const waitForDeckJob = async ({
  * @param {string} params.imageLanguage - 圖片內文字語系（可選）
  * @returns {Promise<Object>} 優化後的場景資料
  */
-export const optimizeScene = async ({ scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage }) =>
-  apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage });
+export const optimizeScene = async ({ scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage, aspectRatio }) =>
+  apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage, aspectRatio });
 
 /**
  * AI 圖片轉換 — 透過後端影像工作佇列使用目前模型
@@ -312,6 +327,8 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
  * @param {string} params.mimeType - 圖片 MIME 類型
  * @param {'style_transfer'|'reference_gen'|'element_extract'|'bg_replace'} params.mode - 轉換模式
  * @param {string} params.prompt - 使用者自訂描述
+ * @param {string} [params.stylePrompt] - 風格庫提供的共用風格描述
+ * @param {string[]} [params.styleTags] - 調色盤的補充風格線索
  * @param {string} [params.aspectRatio] - 圖片比例
  * @param {string} [params.imageQuality] - 模型目錄支援的圖片品質
  * @param {string} [params.imageLanguage] - 圖片內文字語系
@@ -323,6 +340,8 @@ export const transformImage = async ({
   mimeType,
   mode,
   prompt,
+  stylePrompt,
+  styleTags,
   aspectRatio,
   imageQuality,
   imageLanguage,
@@ -335,6 +354,8 @@ export const transformImage = async ({
       mimeType,
       mode,
       prompt,
+      stylePrompt,
+      styleTags,
       aspectRatio,
       quality: imageQuality,
       imageLanguage,

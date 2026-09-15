@@ -14,10 +14,10 @@
 const NO_TEXT = "none";
 
 const NO_TEXT_GENERATION_DIRECTIVE =
-  "Do NOT include any text, labels, titles, or words in the image. The image should be purely visual with zero text.";
+  "Do not include any text, labels, titles, letters, numbers, logos, or watermarks. The image must be purely visual.";
 
 const NO_TEXT_OPTIMIZER_DIRECTIVE =
-  "圖片中不得出現任何文字。英文 Prompt 必須明確要求畫面沒有文字、標籤或排版元素，也不要用雙引號標示任何文字內容。";
+  "使用者選擇純視覺輸出；不得創造或保留任何圖片文字內容，也不要在 optimized prompts 中加入逐字文字或文字版面需求。";
 
 /**
  * The generation directives are defaults, never overrides: text the author
@@ -25,48 +25,48 @@ const NO_TEXT_OPTIMIZER_DIRECTIVE =
  * the author left open follows the chosen language.
  */
 const KEEP_QUOTED_TEXT =
-  "Render any text the description quotes exactly as written, in its original language.";
+  "Render every quoted string exactly as written, in its original language, and exactly the number of times requested. If no count is specified, render it once. Do not add decorative, filler, or unrequested text.";
 
 const IMAGE_TEXT_LANGUAGES = Object.freeze({
   en: {
     zh: "英文",
     en: "English",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in English.`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in English.`,
   },
   "zh-TW": {
     zh: "繁體中文",
     en: "Traditional Chinese",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Traditional Chinese (zh-TW) with correct traditional stroke forms, never simplified Chinese characters. All rendered text must be crisp, legible, correctly spelled, and neatly aligned.`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in Traditional Chinese (zh-TW), using correct traditional stroke forms and never simplified Chinese characters. All rendered text must be crisp, legible, correctly spelled, and neatly aligned.`,
   },
   "zh-CN": {
     zh: "簡體中文",
     en: "Simplified Chinese",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Simplified Chinese (zh-CN).`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in Simplified Chinese (zh-CN).`,
   },
   ja: {
     zh: "日文",
     en: "Japanese",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Japanese.`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in Japanese.`,
   },
   ko: {
     zh: "韓文",
     en: "Korean",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Korean.`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in Korean.`,
   },
   es: {
     zh: "西班牙文",
     en: "Spanish",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in Spanish.`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in Spanish.`,
   },
   fr: {
     zh: "法文",
     en: "French",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in French.`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in French.`,
   },
   de: {
     zh: "德文",
     en: "German",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any other text in the image must be in German.`,
+    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in German.`,
   },
 });
 
@@ -80,7 +80,7 @@ const buildImageTextDirective = (imageLanguage) => {
 
   const entry = IMAGE_TEXT_LANGUAGES[language];
   if (!entry) return "";
-  return `圖片中的文字必須使用${entry.zh}（${entry.en}）。英文 Prompt 內以雙引號標示的文字必須保留${entry.zh}原文、不得翻譯成英文，並說明其位置與排版。`;
+  return `只呈現使用者明確要求的圖片文字，不得增加裝飾性或填充文字。以雙引號標示的文字必須逐字保留原文，依使用者要求的次數呈現；未指定次數時只出現一次，並說明位置與排版。使用者要求但未指定逐字內容的必要文字必須使用${entry.zh}（${entry.en}）。`;
 };
 
 /** Image-model-facing directive. Empty when no supported language was chosen. */

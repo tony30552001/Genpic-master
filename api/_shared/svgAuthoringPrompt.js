@@ -206,7 +206,9 @@ ${describeFrameCatalog()}
 
 配圖規則：
 ${IMAGE_DENSITY_GUIDANCE[density]}
-- image_prompt 描述畫面本身，不要出現任何文字、字母、圖表或浮水印。
+- image_prompt 是簡潔、自然的英文 Content brief。用完整句子描述一個清楚主體、可見動作或狀態、場景及必要構圖意圖；不要輸出逗號分隔的關鍵字串或 8K、masterpiece、best quality 等空泛品質詞。
+- image_prompt 只負責每頁獨有的畫面內容，不要加入全份簡報的藝術風格、圖片在頁面上的尺寸或位置；系統會從設計系統與骨架另行加入，避免重複或衝突。
+- image_prompt 不得自行捏造素材沒有的人物、事件、產品、統計或引用，也不要出現任何文字、字母、數字、圖表、標誌或浮水印。
 - 圖片在版面上的角色由骨架決定，你只需要決定哪幾頁值得配圖。
 
 請只回傳 JSON（chart 與 table 為選填，沒有數據就整個省略）：

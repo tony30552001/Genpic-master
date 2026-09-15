@@ -29,7 +29,17 @@ module.exports = async function (context, req) {
   }
 
   const body = req.body || {};
-  const { uploadId, mode, prompt, aspectRatio, imageSize, quality, imageLanguage } = body;
+  const {
+    uploadId,
+    mode,
+    prompt,
+    stylePrompt,
+    styleTags,
+    aspectRatio,
+    imageSize,
+    quality,
+    imageLanguage,
+  } = body;
 
   if (
     Object.prototype.hasOwnProperty.call(body, "imageBase64") ||
@@ -58,7 +68,14 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const textPrompt = buildTransformPrompt({ mode, prompt, imageLanguage });
+    const textPrompt = buildTransformPrompt({
+      mode,
+      prompt,
+      stylePrompt,
+      styleTags,
+      imageLanguage,
+      aspectRatio,
+    });
 
     const job = await createImageJob({
       tenantId: identity.tenantId,

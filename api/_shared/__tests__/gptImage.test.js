@@ -44,7 +44,7 @@ describe("catalog-backed Azure Images v1 adapter", () => {
     const [url, request] = fetchMock.mock.calls[0];
     expect(url).toBe(`${flare.endpoint}/images/generations`);
     expect(JSON.parse(request.body)).toMatchObject({
-      model: flare.deploymentName, quality, size: "1536x1024", n: 1, output_format: "png",
+      model: flare.deploymentName, quality, size: "1536x864", n: 1, output_format: "png",
     });
     const [editUrl, editRequest] = fetchMock.mock.calls[1];
     expect(editUrl).toBe(`${flare.endpoint}/images/edits`);

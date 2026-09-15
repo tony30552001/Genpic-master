@@ -412,7 +412,13 @@ export default function InfographicGenerator({
 
     const handleLanguageChange = (lang) => {
         setImageLanguage(lang);
+        setOptimizedPromptEn('');
         try { localStorage.setItem('genpic_image_language', lang); } catch { /* ignore */ }
+    };
+
+    const handleAspectRatioChange = (ratio) => {
+        setAspectRatio(ratio);
+        setOptimizedPromptEn('');
     };
 
     const generateInfographic = async () => {
@@ -593,6 +599,7 @@ export default function InfographicGenerator({
             onApplyStyle={handleApplyDocumentStyle}
             onClearStyle={handleClearDocumentStyle}
             imageLanguage={imageLanguage}
+            aspectRatio={aspectRatio}
         />
     ) : (
         <DocumentUploader
@@ -913,6 +920,7 @@ export default function InfographicGenerator({
                                             onOptimizedPromptEnChange={setOptimizedPromptEn}
                                             imageLanguage={imageLanguage}
                                             imagePurpose={imagePurpose}
+                                            aspectRatio={aspectRatio}
                                             onImagePurposeChange={setImagePurpose}
                                             onFocus={() => setIsInputFocused(true)}
                                             onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
@@ -1003,7 +1011,7 @@ export default function InfographicGenerator({
                             (hasActiveDocumentResult && documentAnalysisMode === "storyboard")) && (
                             <GenerateBar
                                 aspectRatio={aspectRatio}
-                                onAspectRatioChange={setAspectRatio}
+                                onAspectRatioChange={handleAspectRatioChange}
                                 imageQuality={imageQuality}
                                 onImageQualityChange={setImageQuality}
                                 imageModelConfig={imageModelConfig}

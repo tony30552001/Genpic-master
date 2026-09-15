@@ -81,6 +81,7 @@ export default function ScriptEditor({
   paletteStyleTags = [],
   imageLanguage = "",
   imagePurpose = "infographic",
+  aspectRatio = "1:1",
   onImagePurposeChange,
 }) {
   const [isDraging, setIsDraging] = useState(false);
@@ -102,9 +103,10 @@ export default function ScriptEditor({
     setPaletteSelected(newSelected);
     const allTags = STYLE_DIMENSIONS.flatMap((d) => newSelected[d.id] || []);
     onPaletteStyleChange?.(allTags);
+    onOptimizedPromptEnChange?.("");
     setShowStyleSource(true);
     setStyleSourceTab("palette");
-  }, [onPaletteStyleChange]);
+  }, [onOptimizedPromptEnChange, onPaletteStyleChange]);
 
   const charCount = userScript?.length || 0;
   const contentFieldId = "script-editor-content";
@@ -137,6 +139,7 @@ export default function ScriptEditor({
     setSelectedStyleId(style.id);
     setSelectedStyleInfo({ name: style.name, tags: style.tags, previewUrl: style.previewUrl });
     onApplyStyle?.(style);
+    onOptimizedPromptEnChange?.("");
     setShowStyleSource(true);
     setStyleSourceTab("saved");
   };
@@ -145,6 +148,7 @@ export default function ScriptEditor({
     setSelectedStyleId(null);
     setSelectedStyleInfo(null);
     onClearStyle?.();
+    onOptimizedPromptEnChange?.("");
   };
 
   const handleSmartOptimize = async () => {
@@ -159,6 +163,9 @@ export default function ScriptEditor({
           .filter(Boolean)
           .join("，") || "",
         imageLanguage,
+        imagePurpose,
+        aspectRatio,
+        optimizationMode: "generation",
       });
 
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
@@ -296,7 +303,10 @@ export default function ScriptEditor({
                   <button
                     type="button"
                     key={option.id}
-                    onClick={() => onImagePurposeChange?.(option.id)}
+                    onClick={() => {
+                      onImagePurposeChange?.(option.id);
+                      onOptimizedPromptEnChange?.("");
+                    }}
                     aria-pressed={isSelected}
                     className={cn(
                       "min-h-9 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

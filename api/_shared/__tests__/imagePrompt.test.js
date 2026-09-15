@@ -30,11 +30,10 @@ describe("buildImagePrompt", () => {
     });
 
     expect(prompt).toContain(
-      "Render the whole image in this style: Soft watercolour washes with visible paper grain."
+      "Visual style: Soft watercolour washes with visible paper grain. Additional cues: 柔和, 暖色."
     );
-    expect(prompt).toContain("Apply these additional style cues: 柔和, 暖色.");
-    expect(prompt).toContain("A calm harbour at dawn.");
-    expect(prompt).toContain("infographic or presentation slide");
+    expect(prompt).toContain("Content: A calm harbour at dawn.");
+    expect(prompt).toContain("Deliverable: Create one polished infographic or presentation visual.");
   });
 
   it("composes storyboard scenes as cinematic panels, not slides", () => {
@@ -43,18 +42,23 @@ describe("buildImagePrompt", () => {
       purpose: "storyboard",
     });
 
-    expect(prompt).toContain("cinematic storyboard panel");
+    expect(prompt).toContain("cinematic storyboard frame");
     expect(prompt).not.toContain("infographic");
   });
 
-  it("adds no system directive at all for freeform images", () => {
+  it("keeps freeform content untouched while applying explicit canvas and text settings", () => {
     const prompt = buildImagePrompt({
       userScript: "An orange tabby asleep on a windowsill",
       purpose: "freeform",
       imageLanguage: "zh-TW",
+      aspectRatio: "16:9",
     });
 
-    expect(prompt).toBe("An orange tabby asleep on a windowsill.");
+    expect(prompt).toContain("Content: An orange tabby asleep on a windowsill.");
+    expect(prompt).toContain("requested 16:9 landscape canvas");
+    expect(prompt).toContain("Traditional Chinese");
+    expect(prompt).not.toContain("Deliverable:");
+    expect(prompt).not.toContain("visual hierarchy");
   });
 
   it("appends the image text language directive as a default, not an override", () => {
@@ -64,19 +68,31 @@ describe("buildImagePrompt", () => {
     });
 
     expect(prompt).toContain(
-      "Render any text the description quotes exactly as written, in its original language."
+      "Render every quoted string exactly as written, in its original language, and exactly the number of times requested."
     );
-    expect(prompt).toContain("Any other text in the image must be in Traditional Chinese");
+    expect(prompt).toContain("must be in Traditional Chinese (zh-TW)");
     expect(prompt).not.toContain("MUST be in Traditional Chinese");
     expect(
       buildImagePrompt({ userScript: "A quarterly revenue chart", imageLanguage: "none" })
-    ).toContain("Do NOT include any text");
+    ).toContain("Do not include any text");
+  });
+
+  it("assigns a clear role to the reference image and limits changes", () => {
+    const prompt = buildImagePrompt({
+      userScript: "Place the same bottle on a marble counter",
+      purpose: "infographic",
+      hasReferenceImage: true,
+    });
+
+    expect(prompt).toContain("Reference image: Treat input image 1 as the content reference.");
+    expect(prompt).toContain("Change only what the Content section explicitly requests.");
+    expect(prompt).toContain("Preserve the identity, product geometry, proportions, labels");
   });
 
   it("leaves an author-specified framing alone", () => {
     expect(
       buildImagePrompt({ userScript: "Shot on an 85mm lens at f/2", purpose: "infographic" })
-    ).toContain("Unless the description already specifies the framing");
+    ).toContain("Unless the content already specifies framing");
   });
 
   it("rejects an empty content description", () => {
@@ -90,14 +106,15 @@ describe("buildTransformPrompt", () => {
       mode: "style_transfer",
       prompt: "ukiyo-e woodblock",
     });
-    expect(styleTransfer).toMatch(/^Redraw this image/);
+    expect(styleTransfer).toMatch(/^Edit: Change only the rendering style/);
     expect(styleTransfer).toContain("ukiyo-e woodblock");
+    expect(styleTransfer).toContain("Preserve: Keep every subject");
 
     expect(buildTransformPrompt({ mode: "bg_replace", prompt: "a snowy street" })).toContain(
-      "Replace only the background"
+      "Edit: Replace only the background"
     );
     expect(buildTransformPrompt({ mode: "element_extract" })).toContain(
-      "Take the main foreground subjects"
+      "Move the main foreground subject"
     );
   });
 
@@ -107,7 +124,7 @@ describe("buildTransformPrompt", () => {
 
   it("shares the image text language directive with generation", () => {
     expect(
-      buildTransformPrompt({ mode: "style_transfer", prompt: "oil painting", imageLanguage: "ja" })
+      buildTransformPrompt({ mode: "reference_gen", prompt: "a new poster", imageLanguage: "ja" })
     ).toContain("must be in Japanese");
   });
 });

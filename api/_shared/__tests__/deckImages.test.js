@@ -57,7 +57,7 @@ describe("buildIllustrationPrompt", () => {
 
     expect(
       buildIllustrationPrompt({ slide: slide({ image_role: "background" }), artDirection })
-    ).toContain("full-bleed background");
+    ).toContain("Full-bleed background");
     expect(
       buildIllustrationPrompt({ slide: slide({ image_role: "hero" }), artDirection })
     ).toContain("half of the slide");
@@ -77,7 +77,7 @@ describe("buildIllustrationPrompt", () => {
     const prompt = buildIllustrationPrompt({ slide: slide() });
 
     expect(prompt).toContain("safe margins");
-    expect(prompt).toContain("No text");
+    expect(prompt).toContain("Do not include text");
   });
 });
 

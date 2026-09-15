@@ -98,30 +98,25 @@ export default function useImageTransform() {
     setIsTransforming(true);
     setTransformError("");
 
-    // Build merged prompt: user prompt + palette style tags + applied saved style
-    const paletteStyleStr = STYLE_DIMENSIONS
-      .flatMap((d) => paletteSelected[d.id] || [])
-      .join("，");
-
-    const parts = [
-      prompt.trim(),
-      paletteStyleStr ? `風格：${paletteStyleStr}` : "",
-      appliedStylePrompt.trim(),
-    ].filter(Boolean);
-    const mergedPrompt = parts.join("\n");
+    // Keep content and style separate so the backend can give each concern one
+    // explicit section instead of making the image model infer their roles.
+    const styleTags = STYLE_DIMENSIONS
+      .flatMap((d) => paletteSelected[d.id] || []);
 
     try {
       const admission = requireImageJobAdmission(await transformImage({
         uploadId: sourceUploadId,
         mimeType: sourceMimeType,
         mode,
-        prompt: mergedPrompt,
+        prompt: prompt.trim(),
+        stylePrompt: appliedStylePrompt.trim(),
+        styleTags,
         aspectRatio,
         imageQuality,
         imageLanguage,
         signal: abortController.signal,
       }));
-      const appliedPrompt = admission.prompt || mergedPrompt;
+      const appliedPrompt = admission.prompt || prompt.trim();
       const res = requireCompletedImageJob(
         await waitForImageJob({
           jobId: admission.jobId,

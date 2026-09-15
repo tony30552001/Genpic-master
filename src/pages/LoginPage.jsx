@@ -50,9 +50,9 @@ function ResponsiveGoogleLogin({ onSuccess, onError }) {
 
 function LoginLoadingState() {
     return (
-        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[var(--color-paper-2)] px-5 py-12 text-foreground sm:px-8">
+        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#83cbea] px-5 py-12 text-foreground sm:px-8">
             <LoginShaderBackground />
-            <section className="login-surface relative z-10 w-full max-w-[27rem] p-7 sm:p-9">
+            <section className="login-glass-panel relative z-10 w-full max-w-[27rem] rounded-2xl p-7 sm:p-9">
                 <div
                     className="space-y-7"
                     role="status"
@@ -85,10 +85,13 @@ export default function LoginPage() {
     const location = useLocation();
     const [googleLoginError, setGoogleLoginError] = useState("");
 
-    const from = location.state?.from?.pathname || "/";
+    const returnLocation = location.state?.from;
+    const returnTo = returnLocation
+        ? `${returnLocation.pathname || "/"}${returnLocation.search || ""}${returnLocation.hash || ""}`
+        : "/";
 
     if (isAuthenticated) {
-        return <Navigate to={from} replace />;
+        return <Navigate to={returnTo} replace />;
     }
 
     if (isLoading) {
@@ -106,13 +109,13 @@ export default function LoginPage() {
     };
 
     return (
-        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[var(--color-paper-2)] px-5 py-12 text-foreground sm:px-8">
+        <main className="login-light-theme relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#83cbea] px-5 py-12 text-foreground sm:px-8">
             <LoginShaderBackground />
 
-            <section className="login-surface relative z-10 w-full max-w-[27rem] p-7 sm:p-9" aria-labelledby="login-title">
+            <section className="login-glass-panel relative z-10 w-full max-w-[27rem] rounded-2xl p-7 animate-in fade-in-0 zoom-in-95 duration-500 motion-reduce:animate-none sm:p-9" aria-labelledby="login-title">
                 <div className="mb-8">
                     <div className="mb-5 flex items-center gap-3">
-                        <div className="login-brand-mark">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
                             <PixoraMark className="h-7 w-7" title="Pixora" />
                         </div>
                         <div>
@@ -143,7 +146,7 @@ export default function LoginPage() {
                         type="button"
                         variant="outline"
                         className="login-provider-button w-full gap-3 whitespace-nowrap text-sm font-semibold"
-                        onClick={handleMicrosoftLogin}
+                        onClick={() => handleMicrosoftLogin({ returnTo })}
                     >
                         <MicrosoftMark className="h-5 w-5" />
                         使用 Microsoft 帳號繼續

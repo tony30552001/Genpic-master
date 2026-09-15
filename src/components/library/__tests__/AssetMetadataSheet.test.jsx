@@ -40,6 +40,7 @@ describe("AssetMetadataSheet", () => {
     expect(optimizePrompt).toHaveBeenCalledWith({
       userScript: "柔和的紙張與筆觸",
       styleContext: "風格名稱：水彩手作感；現有標籤：插畫",
+      optimizationMode: "style_description",
     });
     expect(screen.getByText("補充了材質、筆觸與光線細節。")).toBeInTheDocument();
   });

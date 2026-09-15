@@ -76,6 +76,8 @@ module.exports = async function (context, req) {
       styleTags,
       purpose,
       imageLanguage,
+      aspectRatio,
+      hasReferenceImage: Boolean(sourceUploadId),
     });
 
     const job = await createImageJob({

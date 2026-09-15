@@ -122,6 +122,7 @@ export default function AssetMetadataSheet({
           name.trim() && `風格名稱：${name.trim()}`,
           tags.trim() && `現有標籤：${tags.trim()}`,
         ].filter(Boolean).join("；"),
+        optimizationMode: "style_description",
       });
       const optimizedDescription = result?.optimizedPromptZh?.trim();
       if (!optimizedDescription) {

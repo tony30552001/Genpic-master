@@ -57,15 +57,30 @@ describe("LoginPage", () => {
     const { container } = renderLogin();
 
     expect(screen.getByRole("heading", { name: "繼續你的創作" })).toBeInTheDocument();
-    expect(container.querySelector("[data-login-backdrop='static']")).toBeInTheDocument();
-    expect(container.querySelector(".login-surface")).toBeInTheDocument();
-    expect(container.querySelector(".login-glass-panel")).not.toBeInTheDocument();
+    expect(container.querySelector("[data-login-shader='static']")).toBeInTheDocument();
+    expect(container.querySelector(".login-glass-panel")).toBeInTheDocument();
+    expect(container.querySelector(".login-surface")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "使用 Microsoft 帳號繼續" }));
     fireEvent.click(screen.getByRole("button", { name: "Google 成功" }));
 
-    expect(handleMicrosoftLogin).toHaveBeenCalledOnce();
+    expect(handleMicrosoftLogin).toHaveBeenCalledWith({ returnTo: "/" });
     expect(handleGoogleLoginSuccess).toHaveBeenCalledWith({ credential: "google-token" });
+  });
+
+  it("sends Entra directly back to the originally requested route", () => {
+    renderLogin({
+      pathname: "/login",
+      state: {
+        from: { pathname: "/workspace", search: "?tab=history", hash: "#latest" },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "使用 Microsoft 帳號繼續" }));
+
+    expect(handleMicrosoftLogin).toHaveBeenCalledWith({
+      returnTo: "/workspace?tab=history#latest",
+    });
   });
 
   it("keeps the login surface light when the application theme is dark", () => {

@@ -83,6 +83,18 @@ describe("authService", () => {
     );
   });
 
+  it("does not send Entra back through the login route", () => {
+    window.location.pathname = "/login";
+    window.location.search = "";
+    window.location.hash = "";
+
+    loginWithMicrosoft();
+
+    expect(window.location.assign).toHaveBeenCalledWith(
+      "/api/auth/entra/start?returnTo=%2F"
+    );
+  });
+
   it("clears the CSRF token after logout", async () => {
     mocks.apiPost.mockResolvedValue(null);
 

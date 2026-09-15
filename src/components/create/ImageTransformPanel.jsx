@@ -267,7 +267,14 @@ export default function ImageTransformPanel({
       const styleContext = [activeModeInfo.label, paletteTagsStr, appliedStyleName]
         .filter(Boolean)
         .join("，");
-      const result = await optimizePrompt({ userScript: prompt, styleContext, imageLanguage });
+      const result = await optimizePrompt({
+        userScript: prompt,
+        styleContext,
+        imageLanguage,
+        aspectRatio,
+        optimizationMode: "transform",
+        transformMode: mode,
+      });
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
         setSuggestionData({
           originalText: prompt,

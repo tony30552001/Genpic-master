@@ -248,7 +248,7 @@ const synthesizeImagePrompt = (deckTitle, slide) => {
   const parts = [deckTitle, slide.title, ...slide.key_points.slice(0, 2)]
     .map((part) => toText(part))
     .filter(Boolean);
-  return `An editorial illustration for a presentation slide about: ${parts.join(" — ")}`;
+  return `Visualize the central idea of this presentation page with one clear subject and a concrete, easy-to-read visual metaphor. Base the content only on: ${parts.join(" — ")}. Do not add text, numbers, logos, or unsupported factual details.`;
 };
 
 /**

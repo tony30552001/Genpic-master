@@ -17,9 +17,9 @@ const deckImageBlobName = ({ jobId, name }) => `decks/${jobId}/images/${name}`;
 
 const ROLE_DIRECTION = {
   background:
-    "It sits behind slide text as a full-bleed background: very low contrast, generous empty space, no focal point in the centre.",
-  hero: "It occupies about half of the slide as the main visual: one clear subject, composition weighted to one side.",
-  accent: "It is a small supporting accent: a single simple subject, uncluttered composition.",
+    "Full-bleed background behind slide text. Use very low contrast, generous negative space, and no focal point in the centre.",
+  hero: "Main visual occupying about half of the slide. Show one clear subject and weight the composition to one side so the other side remains usable for text.",
+  accent: "Small supporting accent. Show one simple subject with an uncluttered silhouette and ample surrounding space.",
 };
 
 /**
@@ -29,11 +29,12 @@ const ROLE_DIRECTION = {
  */
 const buildIllustrationPrompt = ({ slide, artDirection }) =>
   [
-    slide.image_prompt,
-    artDirection,
-    ROLE_DIRECTION[slide.image_role] || ROLE_DIRECTION.accent,
-    "A clean, professional presentation illustration. Keep the subject centred with safe margins on all sides, because the edges may be cropped.",
-    "No text, no words, no letters, no watermark.",
+    "Deliverable: Create one clean, professional presentation illustration, not a complete slide or a stock-photo collage.",
+    `Content: ${slide.image_prompt}`,
+    `Slide role: ${ROLE_DIRECTION[slide.image_role] || ROLE_DIRECTION.accent}`,
+    artDirection ? `Visual style: ${artDirection}` : "",
+    "Canvas and crop: Compose for a wide frame. Keep every important subject within generous safe margins because the outer edges may be cropped.",
+    "Constraints: Do not include text, labels, titles, letters, numbers, charts, logos, or watermarks. Do not invent factual data or citations.",
   ]
     .filter(Boolean)
     .join("\n");

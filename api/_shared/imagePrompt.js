@@ -11,18 +11,25 @@
  */
 
 const { buildGenerationTextDirective } = require("./imageTextLanguage");
+const { describeCanvas } = require("./imagePromptStrategy");
 
-/** What the finished image is for, which decides how the frame is composed. */
-const COMPOSITION_DIRECTIVES = Object.freeze({
-  infographic:
-    "Unless the description already specifies the framing, compose the frame so it works as an infographic or presentation slide, with a clear visual hierarchy and balanced negative space.",
-  storyboard:
-    "Unless the description already specifies the framing, compose the frame like a cinematic storyboard panel, with a deliberate camera angle and a believable sense of depth.",
-  freeform: "",
+/** Backend-owned deliverable and composition rules for each creation mode. */
+const PURPOSE_PROMPT_SECTIONS = Object.freeze({
+  infographic: Object.freeze({
+    deliverable: "Create one polished infographic or presentation visual.",
+    composition:
+      "Unless the content already specifies framing, use a clear visual hierarchy, readable grouping, and balanced negative space. Keep the primary message immediately scannable and avoid decorative clutter or generic stock-photo staging.",
+  }),
+  storyboard: Object.freeze({
+    deliverable: "Create one cinematic storyboard frame.",
+    composition:
+      "Unless the content already specifies framing, use a deliberate camera angle, clear spatial relationships, believable depth, and an action-focused composition that reads as one moment rather than a poster.",
+  }),
+  freeform: Object.freeze({ deliverable: "", composition: "" }),
 });
 
 const DEFAULT_IMAGE_PURPOSE = "infographic";
-const IMAGE_PURPOSES = Object.freeze(Object.keys(COMPOSITION_DIRECTIVES));
+const IMAGE_PURPOSES = Object.freeze(Object.keys(PURPOSE_PROMPT_SECTIONS));
 
 const normalizeImagePurpose = (value) => {
   const purpose = String(value || "").trim().toLowerCase();
@@ -43,6 +50,27 @@ const asSentence = (text) => {
   return /[.!?。！？]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 };
 
+const asSection = (label, text) => {
+  const content = String(text || "").trim();
+  return content ? `${label}: ${content}` : "";
+};
+
+const buildStyleBrief = (style, tags) => [
+  style ? asSentence(style) : "",
+  tags.length > 0 ? `Additional cues: ${tags.join(", ")}.` : "",
+].filter(Boolean).join(" ");
+
+const buildCanvasDirective = (aspectRatio, action = "compose") => {
+  const canvas = describeCanvas(aspectRatio);
+  if (canvas === "not specified") return "";
+  return action === "edit"
+    ? `Fit the result to the requested ${canvas} canvas without distorting preserved subjects. Extend or crop the background only as needed.`
+    : `Compose for the requested ${canvas} canvas and keep important subjects, labels, and edges comfortably inside the frame.`;
+};
+
+const CONTENT_REFERENCE_DIRECTIVE =
+  "Treat input image 1 as the content reference. Preserve the identity, product geometry, proportions, labels, and defining visual features of any subject the request reuses. Change only what the Content section explicitly requests. Do not copy unrelated text, logos, watermarks, or background elements.";
+
 /**
  * Builds the prompt for a text-to-image generation.
  *
@@ -50,8 +78,8 @@ const asSentence = (text) => {
  * saved style; `styleTags` are the palette cues picked in the UI and stay a
  * separate clause so they never dilute that prose.
  *
- * The `freeform` purpose sends the description untouched: no composition and no
- * text-language directive, because the author already wrote a complete brief.
+ * The `freeform` purpose adds no deliverable-specific composition defaults, but
+ * still applies explicit canvas, style, reference, and text-language settings.
  */
 const buildImagePrompt = ({
   userScript,
@@ -59,6 +87,8 @@ const buildImagePrompt = ({
   styleTags,
   purpose,
   imageLanguage,
+  aspectRatio,
+  hasReferenceImage = false,
 }) => {
   const content = String(userScript || "").trim();
   if (!content) {
@@ -69,18 +99,25 @@ const buildImagePrompt = ({
   const tags = normalizeTags(styleTags);
   const resolvedPurpose = normalizeImagePurpose(purpose);
   const isFreeform = resolvedPurpose === "freeform";
+  const styleBrief = buildStyleBrief(style, tags);
+
+  const purposeBrief = PURPOSE_PROMPT_SECTIONS[resolvedPurpose];
 
   return [
-    style ? asSentence(`Render the whole image in this style: ${style}`) : "",
-    tags.length > 0
-      ? asSentence(`Apply these additional style cues: ${tags.join(", ")}`)
-      : "",
-    asSentence(content),
-    COMPOSITION_DIRECTIVES[resolvedPurpose],
-    isFreeform ? "" : buildGenerationTextDirective(imageLanguage),
+    asSection("Deliverable", purposeBrief.deliverable),
+    asSection("Content", asSentence(content)),
+    hasReferenceImage ? asSection("Reference image", CONTENT_REFERENCE_DIRECTIVE) : "",
+    asSection(
+      "Composition and canvas",
+      [isFreeform ? "" : purposeBrief.composition, buildCanvasDirective(aspectRatio)]
+        .filter(Boolean)
+        .join(" ")
+    ),
+    styleBrief ? asSection("Visual style", styleBrief) : "",
+    asSection("Text", buildGenerationTextDirective(imageLanguage)),
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("\n");
 };
 
 /**
@@ -89,37 +126,64 @@ const buildImagePrompt = ({
  * Image models are not chat models, so each mode states the edit directly
  * instead of assigning the model a role to play.
  */
-const buildTransformPrompt = ({ mode, prompt, imageLanguage }) => {
+const buildTransformPrompt = ({
+  mode,
+  prompt,
+  stylePrompt,
+  styleTags,
+  imageLanguage,
+  aspectRatio,
+}) => {
   const base = String(prompt || "").trim();
+  const style = String(stylePrompt || "").trim();
+  const tags = normalizeTags(styleTags);
+  const styleBrief = buildStyleBrief(style, tags);
 
-  let instruction;
+  let change;
+  let preserve;
+  let textDirective;
   switch (mode) {
     case "style_transfer":
-      instruction = `Redraw this image in the following artistic style: ${base || "a fresh artistic style"}. Keep every subject, object, and their spatial arrangement exactly as they appear in the source image. Change only the rendering style, brushwork, texture, and color treatment.`;
+      change = `Change only the rendering style to: ${[base, styleBrief].filter(Boolean).join(" ") || "a fresh artistic style"}.`;
+      preserve = "Keep every subject, object, facial feature, product detail, proportion, pose, camera angle, layout, lighting direction, and spatial relationship unchanged.";
+      textDirective = "Preserve all existing text and labels exactly as shown and do not add new text.";
       break;
 
     case "element_extract":
-      instruction = `Take the main foreground subjects out of this image and keep their appearance, details, and proportions exactly as they are. Place them into this new scene: ${base || "a new environment"}. Match the lighting direction, cast realistic shadows, and blend the subjects naturally into their new surroundings.`;
+      change = `Move the main foreground subject into this new setting: ${base || "a new environment"}.`;
+      preserve = "Preserve the extracted subject's identity, facial features, product geometry, proportions, clothing, labels, pose, and defining details. Adapt only environmental light and contact shadows so the subject belongs naturally in the new setting.";
+      textDirective = buildGenerationTextDirective(imageLanguage);
       break;
 
     case "bg_replace":
-      instruction = `Replace only the background of this image with: ${base || "a new background"}. Keep the foreground subjects unchanged — the same appearance, clothing, expressions, pose, and position. Relight them so they match the new background and the result looks photorealistic.`;
+      change = `Replace only the background with: ${base || "a new background"}.`;
+      preserve = "Keep every foreground subject unchanged, including identity, product geometry, proportions, clothing, expression, pose, position, camera angle, and labels. Adapt only light interaction, reflections, and contact shadows needed to blend the new background naturally.";
+      textDirective = "Preserve all existing foreground text and labels exactly as shown and do not add new text.";
       break;
 
     case "reference_gen":
     default:
-      instruction = `Use this image only as a visual reference for its color palette, lighting, mood, and compositional structure. Create an entirely new image showing: ${base || "an original scene inspired by this reference"}. Keep the same aesthetic atmosphere and production quality, but none of the original content.`;
+      change = `Create the requested variation from the input image: ${base || "an original variation guided by the source image"}.`;
+      preserve = "Use the source image as both a content and visual reference. Preserve defining subjects and composition when the request refers to them, and change only the differences the request states. Do not carry over unrelated text, logos, or watermarks.";
+      textDirective = buildGenerationTextDirective(imageLanguage);
       break;
   }
 
-  return [instruction, buildGenerationTextDirective(imageLanguage)]
+  return [
+    asSection("Edit", change),
+    asSection("Preserve", preserve),
+    styleBrief && mode !== "style_transfer" ? asSection("Visual style", styleBrief) : "",
+    asSection("Canvas", buildCanvasDirective(aspectRatio, "edit")),
+    asSection("Text", textDirective),
+  ]
     .filter(Boolean)
-    .join(" ");
+    .join("\n");
 };
 
 module.exports = {
   DEFAULT_IMAGE_PURPOSE,
   IMAGE_PURPOSES,
+  buildCanvasDirective,
   buildImagePrompt,
   buildTransformPrompt,
   normalizeImagePurpose,
