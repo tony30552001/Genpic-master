@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import ImageLightbox from "../common/ImageLightbox";
+import { AnimatePresence } from "motion/react";
 import LlmModelSettings from "./LlmModelSettings";
 import ImageModelSettings from "./ImageModelSettings";
 import UserFilterSelect from "./UserFilterSelect";
@@ -1208,27 +1209,29 @@ export default function AdminPanel() {
         </div>
       </main>
 
-      {previewItem && (
-        <ImageLightbox
-          src={previewSource}
-          alt={`${previewItem.userDisplayName} 的生成圖片`}
-          details={previewDetails}
-          downloadUrl={previewSource}
-          downloadName={`pixora-${previewItem.id}.png`}
-          position={{ index: previewIndex, total: viewableHistoryItems.length }}
-          onPrev={
-            previewIndex > 0
-              ? () => openHistoryPreview(viewableHistoryItems[previewIndex - 1].id)
-              : undefined
-          }
-          onNext={
-            previewIndex < viewableHistoryItems.length - 1
-              ? () => openHistoryPreview(viewableHistoryItems[previewIndex + 1].id)
-              : undefined
-          }
-          onClose={() => setPreviewHistoryId(null)}
-        />
-      )}
+      <AnimatePresence>
+        {previewItem && (
+          <ImageLightbox
+            src={previewSource}
+            alt={`${previewItem.userDisplayName} 的生成圖片`}
+            details={previewDetails}
+            downloadUrl={previewSource}
+            downloadName={`pixora-${previewItem.id}.png`}
+            position={{ index: previewIndex, total: viewableHistoryItems.length }}
+            onPrev={
+              previewIndex > 0
+                ? () => openHistoryPreview(viewableHistoryItems[previewIndex - 1].id)
+                : undefined
+            }
+            onNext={
+              previewIndex < viewableHistoryItems.length - 1
+                ? () => openHistoryPreview(viewableHistoryItems[previewIndex + 1].id)
+                : undefined
+            }
+            onClose={() => setPreviewHistoryId(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

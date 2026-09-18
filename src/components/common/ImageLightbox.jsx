@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import * as M from "motion/react-m";
 import {
   ChevronLeft,
   ChevronRight,
@@ -7,6 +8,7 @@ import {
   ZoomIn,
 } from "@/components/icons/lucideControls";
 import { Button } from "@/components/ui/button";
+import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 
 export default function ImageLightbox({
   src,
@@ -61,8 +63,12 @@ export default function ImageLightbox({
   const hasNavigation = Boolean(onPrev || onNext);
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center overscroll-contain bg-black/70 p-3 backdrop-blur-sm animate-in fade-in duration-200 motion-reduce:animate-none sm:p-6"
+    <M.div
+      className="fixed inset-0 z-[70] flex items-center justify-center overscroll-contain bg-black/70 p-3 backdrop-blur-sm sm:p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: OVERLAY_EXIT }}
+      transition={OVERLAY_ENTER}
       role="dialog"
       aria-modal="true"
       aria-label={`放大查看${alt}`}
@@ -80,8 +86,12 @@ export default function ImageLightbox({
         aria-label="關閉圖片預覽"
       />
 
-      <div
-        className="relative z-10 flex max-h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-card shadow-2xl animate-in zoom-in-95 duration-200 motion-reduce:animate-none"
+      <M.div
+        className="relative z-10 flex max-h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-card shadow-2xl"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95, transition: OVERLAY_EXIT }}
+        transition={OVERLAY_ENTER}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-5">
@@ -169,7 +179,7 @@ export default function ImageLightbox({
             </dl>
           )}
         </div>
-      </div>
-    </div>
+      </M.div>
+    </M.div>
   );
 }

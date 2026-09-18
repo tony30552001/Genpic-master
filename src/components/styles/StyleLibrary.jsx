@@ -36,6 +36,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StyleCard from "./StyleCard";
 import ImageLightbox from "../common/ImageLightbox";
+import { AnimatePresence } from "motion/react";
 
 const SCOPE_OPTIONS = [
   { value: "mine", label: "我的風格", description: "私人與已共享的個人風格" },
@@ -869,13 +870,15 @@ export default function StyleLibrary({
         </div>
       )}
 
-      {previewStyle?.previewUrl && (
-        <ImageLightbox
-          src={previewStyle.previewUrl}
-          alt={previewStyle.name}
-          onClose={() => setPreviewStyle(null)}
-        />
-      )}
+      <AnimatePresence>
+        {previewStyle?.previewUrl && (
+          <ImageLightbox
+            src={previewStyle.previewUrl}
+            alt={previewStyle.name}
+            onClose={() => setPreviewStyle(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

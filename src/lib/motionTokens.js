@@ -20,3 +20,15 @@ export const GENERATION_LOOP = {
   ease: "easeInOut",
   repeat: Infinity,
 };
+
+/** Mirrors --motion-enter / --ease-emphasized in src/index.css. */
+export const OVERLAY_ENTER = {
+  duration: 0.25,
+  ease: [0.22, 1, 0.36, 1],
+};
+
+/** Mirrors --motion-exit / --ease-exit in src/index.css. */
+export const OVERLAY_EXIT = {
+  duration: 0.15,
+  ease: [0.4, 0, 0.2, 1],
+};

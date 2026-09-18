@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import * as M from "motion/react-m";
 import {
   X,
   ArrowRightLeft,
   MoveHorizontal,
 } from "@/components/icons/lucideControls";
 import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
+import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 
 export default function ComparisonView({ item1, item2, onClose }) {
     const [viewMode, setViewMode] = useState('slider'); // 'slider' | 'side-by-side'
@@ -18,8 +20,20 @@ export default function ComparisonView({ item1, item2, onClose }) {
         }).format(new Date(seconds * 1000)) : "剛剛";
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-card w-full max-w-6xl h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+        <M.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: OVERLAY_EXIT }}
+            transition={OVERLAY_ENTER}
+        >
+            <M.div
+                className="bg-card w-full max-w-6xl h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95, transition: OVERLAY_EXIT }}
+                transition={OVERLAY_ENTER}
+            >
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
@@ -162,7 +176,7 @@ export default function ComparisonView({ item1, item2, onClose }) {
                     </div>
                 </div>
 
-            </div>
-        </div>
+            </M.div>
+        </M.div>
     );
 }

@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import * as M from "motion/react-m";
+import { AnimatePresence } from "motion/react";
+import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 import {
   LogIn,
   LogOut,
@@ -1149,9 +1152,14 @@ export default function InfographicGenerator({
             </main>
 
             {/* ═══════════ 手機版：生成圖片 Bottom Sheet ═══════════ */}
+            <AnimatePresence>
             {showMobilePreview && generatedImage && (
-                <div
+                <M.div
                     className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, transition: OVERLAY_EXIT }}
+                    transition={OVERLAY_ENTER}
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="mobile-preview-title"
@@ -1164,9 +1172,13 @@ export default function InfographicGenerator({
                         aria-label="關閉生成圖片預覽"
                     />
                     {/* Sheet 主體 */}
-                    <div
-                        className="relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-card text-card-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 motion-reduce:animate-none"
+                    <M.div
+                        className="relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-card text-card-foreground shadow-2xl"
                         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
+                        initial={{ y: "100%" }}
+                        animate={{ y: 0 }}
+                        exit={{ y: "100%", transition: OVERLAY_EXIT }}
+                        transition={OVERLAY_ENTER}
                     >
                         {/* Sheet Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
@@ -1193,9 +1205,10 @@ export default function InfographicGenerator({
                                 user={user}
                             />
                         </div>
-                    </div>
-                </div>
+                    </M.div>
+                </M.div>
             )}
+            </AnimatePresence>
 
             {/* 手機版：圖片已生成時，顯示底部快速預覽入口按鈕 */}
             {generatedImage && !showMobilePreview && !isGenerating && activeTab !== 'general' && (

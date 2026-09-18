@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import * as M from "motion/react-m";
 import {
   Save,
   X,
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { optimizePrompt } from "@/services/aiService";
+import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 
 const toTagsText = (tags) => (Array.isArray(tags) ? tags.join(", ") : "");
 
@@ -151,8 +153,12 @@ export default function AssetMetadataSheet({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-black/40 p-0 backdrop-blur-sm animate-in fade-in duration-200 motion-reduce:animate-none sm:items-center sm:p-4"
+    <M.div
+      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: OVERLAY_EXIT }}
+      transition={OVERLAY_ENTER}
       role="dialog"
       aria-modal="true"
       aria-labelledby="asset-metadata-title"
@@ -164,12 +170,16 @@ export default function AssetMetadataSheet({
         aria-label="關閉編輯視窗"
       />
 
-      <form
+      <M.form
         ref={formRef}
         onSubmit={handleSubmit}
         onKeyDown={handleFormKeyDown}
-        className="relative z-10 max-h-[85dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-2xl border border-border bg-card text-card-foreground shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-200 motion-reduce:animate-none sm:max-h-[88dvh] sm:max-w-2xl sm:rounded-2xl lg:max-w-3xl"
+        className="relative z-10 max-h-[85dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-2xl border border-border bg-card text-card-foreground shadow-2xl sm:max-h-[88dvh] sm:max-w-2xl sm:rounded-2xl lg:max-w-3xl"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16, transition: OVERLAY_EXIT }}
+        transition={OVERLAY_ENTER}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4 sm:px-8 sm:py-5">
           <div>
@@ -298,7 +308,7 @@ export default function AssetMetadataSheet({
             {isSaving ? "儲存中…" : "儲存變更"}
           </Button>
         </div>
-      </form>
-    </div>
+      </M.form>
+    </M.div>
   );
 }

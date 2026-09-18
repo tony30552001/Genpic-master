@@ -43,6 +43,9 @@ import {
   getPptxTables,
   sanitizePptxFilename,
 } from "@/utils/pptxExport";
+import * as M from "motion/react-m";
+import { AnimatePresence } from "motion/react";
+import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 import ImageGeneratingState from "./ImageGeneratingState";
 
 const PPTX_CHART_TYPES = {
@@ -199,13 +202,17 @@ function ImageLightbox({ src, alt, onClose }) {
   };
 
   return (
-    <div
+    <M.div
       ref={overlayRef}
       onClick={handleOverlayClick}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-200"
+      className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-md flex items-center justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: OVERLAY_EXIT }}
+      transition={OVERLAY_ENTER}
     >
       {/* 控制列 */}
       <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
@@ -263,7 +270,7 @@ function ImageLightbox({ src, alt, onClose }) {
       <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/50 text-xs">
         滾輪縮放 · 拖曳移動 · ESC 關閉
       </p>
-    </div>
+    </M.div>
   );
 }
 
@@ -352,12 +359,22 @@ function SceneModal({
   const sceneImage = scene.generatedImage;
 
   return (
-    <div
+    <M.div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: OVERLAY_EXIT }}
+      transition={OVERLAY_ENTER}
     >
-      <div className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border/60 bg-background shadow-2xl animate-in zoom-in-95 duration-200">
+      <M.div
+        className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border/60 bg-background shadow-2xl"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95, transition: OVERLAY_EXIT }}
+        transition={OVERLAY_ENTER}
+      >
         {/* Modal Header */}
         <div className="shrink-0 flex items-center gap-3 px-5 py-3.5 border-b border-border/50 bg-muted/30">
           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0">
@@ -646,17 +663,19 @@ function SceneModal({
             )}
           </Button>
         </div>
-      </div>
+      </M.div>
 
       {/* 圖片放大 Lightbox */}
-      {lightboxSrc && (
-        <ImageLightbox
-          src={lightboxSrc}
-          alt={`Scene ${scene.scene_number}`}
-          onClose={() => setLightboxSrc(null)}
-        />
-      )}
-    </div>
+      <AnimatePresence>
+        {lightboxSrc && (
+          <ImageLightbox
+            src={lightboxSrc}
+            alt={`Scene ${scene.scene_number}`}
+            onClose={() => setLightboxSrc(null)}
+          />
+        )}
+      </AnimatePresence>
+    </M.div>
   );
 }
 
@@ -1479,29 +1498,31 @@ export default function DocumentScenes({
       </div>
 
       {/* ═══════ Popup Modal ═══════ */}
-      {modalScene && (
-        <SceneModal
-          scene={scenes[modalScene.index] || modalScene.scene}
-          index={modalScene.index}
-          isGenerating={isGenerating}
-          generatingIndex={generatingIndex}
-          generationDisabled={generationDisabled}
-          onClose={() => setModalScene(null)}
-          onUpdate={handleModalUpdate}
-          onGenerate={handleGenerateScene}
-          styleContext={stylePrompt}
-          styleName={styleName}
-          imageLanguage={imageLanguage}
-          aspectRatio={aspectRatio}
-          onOpenStylePicker={() => {
-            setModalScene(null);
-            setShowStylePicker(true);
-            window.requestAnimationFrame(() => {
-              stylePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            });
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {modalScene && (
+          <SceneModal
+            scene={scenes[modalScene.index] || modalScene.scene}
+            index={modalScene.index}
+            isGenerating={isGenerating}
+            generatingIndex={generatingIndex}
+            generationDisabled={generationDisabled}
+            onClose={() => setModalScene(null)}
+            onUpdate={handleModalUpdate}
+            onGenerate={handleGenerateScene}
+            styleContext={stylePrompt}
+            styleName={styleName}
+            imageLanguage={imageLanguage}
+            aspectRatio={aspectRatio}
+            onOpenStylePicker={() => {
+              setModalScene(null);
+              setShowStylePicker(true);
+              window.requestAnimationFrame(() => {
+                stylePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              });
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import TemplateLibrary from "@/components/templates/TemplateLibrary";
 import StyleLibrary from "@/components/styles/StyleLibrary";
 import HistoryPanel from "@/components/history/HistoryPanel";
 import AssetMetadataSheet from "./AssetMetadataSheet";
+import { AnimatePresence } from "motion/react";
 import AssetViewModeToggle from "./AssetViewModeToggle";
 import { normalizeViewMode } from "./viewMode";
 
@@ -712,20 +713,24 @@ export default function AssetCenter({
         </div>
       )}
 
-      <AssetMetadataSheet
-        key={editingAsset ? `${editingAsset.type}-${editingAsset.asset.id}` : "asset-metadata-sheet"}
-        asset={editingAsset?.asset}
-        type={editingAsset?.type}
-        error={metadataError}
-        isSaving={isSavingMetadata}
-        onClose={() => {
-          if (!isSavingMetadata) {
-            setEditingAsset(null);
-            setMetadataError("");
-          }
-        }}
-        onSave={handleSaveMetadata}
-      />
+      <AnimatePresence>
+        {editingAsset && (
+          <AssetMetadataSheet
+            key={`${editingAsset.type}-${editingAsset.asset.id}`}
+            asset={editingAsset.asset}
+            type={editingAsset.type}
+            error={metadataError}
+            isSaving={isSavingMetadata}
+            onClose={() => {
+              if (!isSavingMetadata) {
+                setEditingAsset(null);
+                setMetadataError("");
+              }
+            }}
+            onSave={handleSaveMetadata}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

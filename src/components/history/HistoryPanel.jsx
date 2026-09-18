@@ -15,6 +15,7 @@ import {
 import ProductGlyph from "@/components/icons/ProductGlyph";
 import HistoryCard from "./HistoryCard";
 import ComparisonView from "./ComparisonView";
+import { AnimatePresence } from "motion/react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -418,13 +419,15 @@ export default function HistoryPanel({
       )}
 
       {/* 比對與結果顯示區塊 */}
-      {showComparison && selectedItems.length === 2 && (
-        <ComparisonView
-          item1={selectedItems[0]}
-          item2={selectedItems[1]}
-          onClose={() => setShowComparison(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showComparison && selectedItems.length === 2 && (
+          <ComparisonView
+            item1={selectedItems[0]}
+            item2={selectedItems[1]}
+            onClose={() => setShowComparison(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 結果計數與操作按鈕 */}
       <div className="flex items-center justify-between px-1">
