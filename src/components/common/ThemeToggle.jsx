@@ -14,7 +14,7 @@ const ThemeToggle = ({ className }) => {
       size="icon"
       onClick={toggleTheme}
       className={cn(
-        "h-10 w-10 shrink-0 rounded-lg transition-[background-color,color,transform] active:scale-[0.97] motion-reduce:transform-none",
+        "h-10 w-10 shrink-0 rounded-lg",
         className
       )}
       title={label}

@@ -115,6 +115,33 @@
   stroke-width: 1.75;
 }
 
+/* Owns the complete transition for pressable controls: colour-ish properties keep
+   the 200ms hover track while transform gets its own 120ms press track. The
+   doubled class raises specificity above Tailwind's single-class
+   `transition-*` utilities, which would otherwise replace `transition-property`
+   and silently drop the press feedback. */
+@utility press-feedback {
+  &.press-feedback {
+    transition:
+      color var(--motion-hover) var(--ease-emphasized),
+      background-color var(--motion-hover) var(--ease-emphasized),
+      border-color var(--motion-hover) var(--ease-emphasized),
+      box-shadow var(--motion-hover) var(--ease-emphasized),
+      opacity var(--motion-hover) var(--ease-emphasized),
+      transform var(--dur-micro) var(--ease-out);
+  }
+
+  &.press-feedback:active {
+    transform: scale(0.98);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &.press-feedback:active {
+      transform: none;
+    }
+  }
+}
+
 .login-light-theme {
   color-scheme: light;
   --background: 210 40% 98%;

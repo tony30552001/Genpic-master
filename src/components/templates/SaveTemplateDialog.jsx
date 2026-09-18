@@ -157,7 +157,7 @@ export default function SaveTemplateDialog({
                     type="button"
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-primary-foreground bg-primary hover:bg-primary/90 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] motion-reduce:transform-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-primary-foreground bg-primary hover:bg-primary/90 shadow-sm hover:shadow-md press-feedback disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                     {isSaving ? (
                         <>

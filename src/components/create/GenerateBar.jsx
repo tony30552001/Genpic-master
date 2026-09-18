@@ -147,7 +147,7 @@ export default function GenerateBar({
                     disabled={disabled || isGenerating || Boolean(setupError)}
                     size="lg"
                     className={cn(
-                        "flex-1 text-sm font-bold shadow-md transition-shadow hover:shadow-lg active:scale-[0.98] motion-reduce:transform-none",
+                        "flex-1 text-sm font-bold shadow-md hover:shadow-lg",
                         "bg-primary hover:bg-primary/90 text-primary-foreground",
                         "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                     )}
