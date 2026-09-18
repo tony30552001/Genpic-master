@@ -16,6 +16,8 @@ import ProductGlyph from "@/components/icons/ProductGlyph";
 import HistoryCard from "./HistoryCard";
 import ComparisonView from "./ComparisonView";
 import { AnimatePresence } from "motion/react";
+import * as M from "motion/react-m";
+import { OVERLAY_EXIT } from "@/lib/motionTokens";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,7 +82,8 @@ function HistoryListRow({
   onToggleSelect,
 }) {
   return (
-    <article
+    <M.article
+      exit={{ opacity: 0, scale: 0.97, transition: OVERLAY_EXIT }}
       className={`flex min-w-0 flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-[border-color,box-shadow] duration-200 ${
         isSelected
           ? "border-primary ring-2 ring-primary/20 shadow-md"
@@ -136,7 +139,7 @@ function HistoryListRow({
           </button>
         </div>
       )}
-    </article>
+    </M.article>
   );
 }
 
@@ -484,33 +487,37 @@ export default function HistoryPanel({
         />
       ) : viewMode === "list" ? (
         <div className="space-y-2">
-          {filtered.map((item) => (
-            <HistoryListRow
-              key={item.id}
-              item={item}
-              style={item.styleId ? styleMap[item.styleId] : null}
-              onLoad={onLoad}
-              onDelete={(id) => setPendingDeleteId(id)}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedIds.has(item.id)}
-              onToggleSelect={toggleSelect}
-            />
-          ))}
+          <AnimatePresence initial={false}>
+            {filtered.map((item) => (
+              <HistoryListRow
+                key={item.id}
+                item={item}
+                style={item.styleId ? styleMap[item.styleId] : null}
+                onLoad={onLoad}
+                onDelete={(id) => setPendingDeleteId(id)}
+                isSelectionMode={isSelectionMode}
+                isSelected={selectedIds.has(item.id)}
+                onToggleSelect={toggleSelect}
+              />
+            ))}
+          </AnimatePresence>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7 pb-10">
-          {filtered.map((item) => (
-            <HistoryCard
-              key={item.id}
-              item={item}
-              style={item.styleId ? styleMap[item.styleId] : null}
-              onLoad={onLoad}
-              onDelete={(id) => setPendingDeleteId(id)}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedIds.has(item.id)}
-              onToggleSelect={toggleSelect}
-            />
-          ))}
+          <AnimatePresence initial={false}>
+            {filtered.map((item) => (
+              <HistoryCard
+                key={item.id}
+                item={item}
+                style={item.styleId ? styleMap[item.styleId] : null}
+                onLoad={onLoad}
+                onDelete={(id) => setPendingDeleteId(id)}
+                isSelectionMode={isSelectionMode}
+                isSelected={selectedIds.has(item.id)}
+                onToggleSelect={toggleSelect}
+              />
+            ))}
+          </AnimatePresence>
         </div>
       )}
 

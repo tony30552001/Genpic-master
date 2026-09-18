@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import * as M from "motion/react-m";
 import {
   Trash2,
 } from "@/components/icons/lucideControls";
@@ -6,6 +7,7 @@ import {
   FileText,
   Image as ImageIcon,
 } from "@/components/icons/lucideContent";
+import { OVERLAY_EXIT } from "@/lib/motionTokens";
 export default function HistoryCard({
   item,
   style,
@@ -37,9 +39,10 @@ export default function HistoryCard({
   };
 
   return (
-    <div
+    <M.div
       role="button"
       tabIndex={0}
+      exit={{ opacity: 0, scale: 0.97, transition: OVERLAY_EXIT }}
       aria-pressed={isSelectionMode ? isSelected : undefined}
       aria-label={isSelectionMode ? "選取此生成紀錄" : "載入此生成紀錄設定"}
       onKeyDown={handleKeyDown}
@@ -137,6 +140,6 @@ export default function HistoryCard({
           <span className="text-[10px] text-muted-foreground shrink-0">{dateStr}</span>
         </div>
       </div>
-    </div>
+    </M.div>
   );
 }

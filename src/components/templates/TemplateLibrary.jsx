@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from "react";
+import * as M from "motion/react-m";
+import { AnimatePresence } from "motion/react";
+import { OVERLAY_EXIT } from "@/lib/motionTokens";
 import {
   CheckSquare,
   Copy,
@@ -49,9 +52,10 @@ function TemplateCard({
         : null;
 
     return (
-        <div
+        <M.div
             role="button"
             tabIndex={0}
+            exit={{ opacity: 0, scale: 0.97, transition: OVERLAY_EXIT }}
             aria-pressed={isSelectionMode ? isSelected : undefined}
             aria-label={isSelectionMode ? "選取此範本" : `套用範本 ${template.name}`}
             onKeyDown={handleKeyDown}
@@ -188,7 +192,7 @@ function TemplateCard({
                     </button>
                 </div>
             )}
-        </div>
+        </M.div>
     );
 }
 
@@ -260,7 +264,8 @@ function TemplateListRow({
     const scriptPreview = template.userScript || "尚無內容摘要";
 
     return (
-        <article
+        <M.article
+            exit={{ opacity: 0, scale: 0.97, transition: OVERLAY_EXIT }}
             className={`flex min-w-0 flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-[border-color,box-shadow] duration-200 ${
                 isSelected
                     ? "border-primary ring-2 ring-primary/20 shadow-md"
@@ -340,7 +345,7 @@ function TemplateListRow({
                     </button>
                 </div>
             )}
-        </article>
+        </M.article>
     );
 }
 
@@ -785,37 +790,41 @@ export default function TemplateLibrary({
                 />
             ) : viewMode === "list" ? (
                 <div className="space-y-2">
-                    {filtered.map((template) => (
-                        <TemplateListRow
-                            key={template.id}
-                            template={template}
-                            onApply={onApplyTemplate}
-                            onDelete={onDeleteTemplate}
-                            onEdit={onEditTemplate}
-                            selectedTags={selectedTags}
-                            onToggleTag={toggleTag}
-                            isSelectionMode={isSelectionMode}
-                            isSelected={selectedIds.has(template.id)}
-                            onToggleSelect={toggleSelect}
-                        />
-                    ))}
+                    <AnimatePresence initial={false}>
+                        {filtered.map((template) => (
+                            <TemplateListRow
+                                key={template.id}
+                                template={template}
+                                onApply={onApplyTemplate}
+                                onDelete={onDeleteTemplate}
+                                onEdit={onEditTemplate}
+                                selectedTags={selectedTags}
+                                onToggleTag={toggleTag}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedIds.has(template.id)}
+                                onToggleSelect={toggleSelect}
+                            />
+                        ))}
+                    </AnimatePresence>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7">
-                    {filtered.map((tpl) => (
-                        <TemplateCard
-                            key={tpl.id}
-                            template={tpl}
-                            onApply={onApplyTemplate}
-                            onDelete={onDeleteTemplate}
-                            onEdit={onEditTemplate}
-                            selectedTags={selectedTags}
-                            onToggleTag={toggleTag}
-                            isSelectionMode={isSelectionMode}
-                            isSelected={selectedIds.has(tpl.id)}
-                            onToggleSelect={toggleSelect}
-                        />
-                    ))}
+                    <AnimatePresence initial={false}>
+                        {filtered.map((tpl) => (
+                            <TemplateCard
+                                key={tpl.id}
+                                template={tpl}
+                                onApply={onApplyTemplate}
+                                onDelete={onDeleteTemplate}
+                                onEdit={onEditTemplate}
+                                selectedTags={selectedTags}
+                                onToggleTag={toggleTag}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedIds.has(tpl.id)}
+                                onToggleSelect={toggleSelect}
+                            />
+                        ))}
+                    </AnimatePresence>
                 </div>
             )}
         </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import * as M from "motion/react-m";
 import {
   Copy,
   Download,
@@ -18,8 +19,10 @@ import {
 } from "@/components/icons/lucideContent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { CardContent, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+import { OVERLAY_EXIT } from "@/lib/motionTokens";
 
 const formatTimestamp = (value) => {
   if (!value?.seconds) return "";
@@ -83,16 +86,21 @@ export default function StyleCard({
   };
 
   return (
-    <Card
+    <M.div
+      exit={{ opacity: 0, scale: 0.97, transition: OVERLAY_EXIT }}
       tabIndex={isSelectionMode ? 0 : undefined}
       aria-pressed={isSelectionMode ? isSelected : undefined}
       aria-label={isSelectionMode ? `選取風格 ${style.name}` : undefined}
       onClick={handleSelectionClick}
       onKeyDown={handleSelectionKeyDown}
-      className={`group relative flex flex-col overflow-hidden transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isSelected
-        ? "border-primary ring-2 ring-primary/20 shadow-md"
-        : "hover:border-primary/30 hover:shadow-lg"
-        } ${isSelectionMode ? "cursor-pointer" : ""}`}
+      className={cn(
+        "rounded-lg border bg-card text-card-foreground shadow-sm",
+        "group relative flex flex-col overflow-hidden transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        isSelected
+          ? "border-primary ring-2 ring-primary/20 shadow-md"
+          : "hover:border-primary/30 hover:shadow-lg",
+        isSelectionMode && "cursor-pointer",
+      )}
     >
       <div className="relative aspect-[16/9] overflow-hidden bg-muted">
         {hasPreview ? (
@@ -325,6 +333,6 @@ export default function StyleCard({
           )}
         </CardFooter>
       )}
-    </Card>
+    </M.div>
   );
 }
