@@ -692,7 +692,7 @@ export default function InfographicGenerator({
                                         aria-hidden="true"
                                     />
                                     <span className="truncate">{group.label}</span>
-                                    <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
+                                    <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform duration-(--motion-hover) ease-emphasized', isOpen && 'rotate-180')} aria-hidden="true" />
                                 </button>
                             );
                         })}
@@ -770,9 +770,14 @@ export default function InfographicGenerator({
                     </div>
                 </div>
 
+                <AnimatePresence>
                 {compactOpenGroup && (
-                    <div
-                        className="absolute inset-x-4 top-full z-50 mt-2 rounded-xl border border-white/20 bg-card p-2 text-foreground shadow-xl ring-1 ring-black/10"
+                    <M.div
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.96, transition: OVERLAY_EXIT }}
+                        transition={OVERLAY_ENTER}
+                        className="absolute inset-x-4 top-full z-50 mt-2 origin-top rounded-xl border border-white/20 bg-card p-2 text-foreground shadow-xl ring-1 ring-black/10"
                         role="menu"
                         aria-label={`${compactOpenGroup.label}功能`}
                     >
@@ -831,8 +836,9 @@ export default function InfographicGenerator({
                                 </button>
                             )}
                         </div>
-                    </div>
+                    </M.div>
                 )}
+                </AnimatePresence>
             </header>
 
             {/* ═══════════ Main Content Area ═══════════ */}
@@ -1225,9 +1231,14 @@ export default function InfographicGenerator({
 
             {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
             <nav className="relative z-40 shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] md:hidden pb-[env(safe-area-inset-bottom)]">
+                <AnimatePresence>
                 {mobileMoreOpen && (
-                    <div
-                        className="absolute inset-x-3 bottom-full z-50 mb-2 rounded-xl border border-border bg-card p-2 shadow-xl ring-1 ring-border/40"
+                    <M.div
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.96, transition: OVERLAY_EXIT }}
+                        transition={OVERLAY_ENTER}
+                        className="absolute inset-x-3 bottom-full z-50 mb-2 origin-bottom rounded-xl border border-border bg-card p-2 shadow-xl ring-1 ring-border/40"
                         role="menu"
                         aria-label="更多功能"
                     >
@@ -1260,8 +1271,9 @@ export default function InfographicGenerator({
                                 );
                             })}
                         </div>
-                    </div>
+                    </M.div>
                 )}
+                </AnimatePresence>
                 <div className="flex items-stretch h-16">
                     {mobilePrimaryTabs.map((tab) => {
                         const isActive = activeTab === tab.id;
