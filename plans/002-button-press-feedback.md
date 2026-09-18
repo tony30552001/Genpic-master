@@ -1,6 +1,6 @@
 # 002 — Add press feedback to the shared Button primitive and retire the four ad-hoc copies
 
-- **Status**: TODO
+- **Status**: DONE — implemented with a correction, see *As implemented* below
 - **Commit**: df17720
 - **Severity**: MEDIUM
 - **Category**: Physicality & origin / Cohesion & tokens
@@ -228,3 +228,52 @@ Disabled buttons are unaffected: the base already has
     remains.
 - **Done when**: `active:scale-` returns zero grep hits, every `<Button>` in the
   app acknowledges a press, and the shrink is invisible unless you look for it.
+
+
+## As implemented
+
+The plan's core premise — that `press-feedback` could carry the `transform`
+track while each call site kept its own `transition-colors` / `transition-shadow`
+utility as an independent second track — is not achievable in Tailwind v4.
+
+`transition-colors` emits the `transition-property` / `transition-duration` /
+`transition-timing-function` **longhands**, while a custom `@utility` written
+with the `transition` **shorthand** resets all three. Both land in
+`@layer utilities` at the same specificity (0,1,0), so source order decides — and
+Tailwind's own utilities compile after the custom one. Verified in the built
+stylesheet: `.press-feedback` at byte 25405, `.transition-colors` at 77647.
+`transition-colors` won, `transform` never entered the transition list, and every
+`<Button>` would have had a 0ms press: exactly the bug this plan set out to fix.
+
+There was no source-order fix — whichever track compiles last silently kills the
+other. The implemented utility therefore owns the **entire** transition and
+carries a doubled-class specificity bump so a stray `transition-*` utility can
+never override it again:
+
+```css
+@utility press-feedback {
+  &.press-feedback {
+    transition:
+      color var(--motion-hover) var(--ease-emphasized),
+      background-color var(--motion-hover) var(--ease-emphasized),
+      border-color var(--motion-hover) var(--ease-emphasized),
+      box-shadow var(--motion-hover) var(--ease-emphasized),
+      opacity var(--motion-hover) var(--ease-emphasized),
+      transform var(--dur-micro) var(--ease-out);
+  }
+  …
+}
+```
+
+Consequences, all accepted:
+
+- `opacity` **must** be in the list — without it the `sm:transition-opacity`
+  hover-reveal on the destructive icon Button regresses to instant.
+- The redundant `transition-*` classes were removed from all six call sites.
+- `disabled:opacity-50` now fades over 200ms instead of snapping.
+- Three bare buttons moved from a 150ms to a 200ms shadow, which is the
+  cohesion outcome this plan wanted anyway.
+
+The verification step "compiled CSS contains `scale(0.98)` exactly once" is also
+wrong: the pre-existing `@keyframes image-generation-drift` matches too, so the
+correct count is 2.

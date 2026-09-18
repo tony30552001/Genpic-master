@@ -11,11 +11,11 @@ conversation that produced it can implement it from the file alone.
 | # | Title | Severity | Category | Scope | Status |
 | --- | --- | --- | --- | --- | --- |
 | [001](001-deck-completion-success-glyph.md) | Surface the unused `GenerationSignature` success state at PPT deck completion | MEDIUM | Missed opportunities | 1 file | DONE |
-| [002](002-button-press-feedback.md) | Add press feedback to the shared Button primitive and retire the four ad-hoc copies | MEDIUM | Physicality / Cohesion | 5 files | TODO |
-| [003](003-overlay-exit-animations.md) | Give every hand-rolled overlay an exit animation that mirrors its entrance | MEDIUM | Physicality / Interruptibility | 10 files | TODO |
-| [004](004-nav-menu-origin-and-exit.md) | Anchor the two hand-rolled navigation menus to their triggers and give them exits | MEDIUM | Physicality & origin | 1 file | TODO |
-| [005](005-library-item-exit-animations.md) | Animate library items out on delete instead of letting the grid jump | LOW | Cohesion / Missed opportunities | 5 files | TODO |
-| [006](006-alert-banner-and-panel-reveal.md) | Bridge the generation error/warning banner and unify the inline panel reveal recipe | LOW | Cohesion / Accessibility | 13 files | TODO |
+| [002](002-button-press-feedback.md) | Add press feedback to the shared Button primitive and retire the four ad-hoc copies | MEDIUM | Physicality / Cohesion | 5 files | DONE |
+| [003](003-overlay-exit-animations.md) | Give every hand-rolled overlay an exit animation that mirrors its entrance | MEDIUM | Physicality / Interruptibility | 10 files | DONE |
+| [004](004-nav-menu-origin-and-exit.md) | Anchor the two hand-rolled navigation menus to their triggers and give them exits | MEDIUM | Physicality & origin | 1 file | DONE |
+| [005](005-library-item-exit-animations.md) | Animate library items out on delete instead of letting the grid jump | LOW | Cohesion / Missed opportunities | 5 files | DONE |
+| [006](006-alert-banner-and-panel-reveal.md) | Bridge the generation error/warning banner and unify the inline panel reveal recipe | LOW | Cohesion / Accessibility | 13 files | DONE |
 
 ## Recommended execution order
 

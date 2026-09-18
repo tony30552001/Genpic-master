@@ -1,6 +1,6 @@
 # 005 — Animate library items out on delete instead of letting the grid jump
 
-- **Status**: TODO
+- **Status**: DONE — step 7 fallback taken, see *As implemented* below
 - **Commit**: df17720
 - **Severity**: LOW
 - **Category**: Cohesion & tokens / Missed opportunities
@@ -225,3 +225,45 @@ Reduced motion needs no handling: `MotionConfig reducedMotion="user"`
 - **Done when**: deleting from any grid or list view in 紀錄, 風格, and 範本
   fades the item out over 150ms while its neighbours slide into the gap, search
   filtering never replays entrance animations, and the table views are untouched.
+
+
+## As implemented
+
+**Step 7's fallback was taken, for a reason the plan did not anticipate.**
+
+The `layout` prop and `mode="popLayout"` both require Motion's layout-projection
+feature, which ships only in the `domMax` bundle. This repo loads `domAnimation`
+(`src/lib/motionFeatures.js`), whose feature set is
+`renderer, animation, exit, inView, tap, focus, hover` — no `layout`. Under
+`domAnimation` the `layout` prop is silently inert, and `popLayout` would be
+actively worse than the status quo: it pulls the exiting card out of flow
+immediately, so neighbours would snap into the gap *at once* while a ghost faded
+on top of them.
+
+Switching to `domMax` was measured rather than assumed:
+
+| Bundle | `motionFeatures` chunk | gzip |
+| --- | --- | --- |
+| `domAnimation` (current) | 37.28 kB | 14.01 kB |
+| `domMax` | 84.48 kB | 27.75 kB |
+
+That is **+13.7 kB gzip on a chunk fetched on every page load**, plus the drag
+and pan features the product never uses, to buy neighbour-reflow on a LOW
+severity item. Not worth it, so `src/lib/motionFeatures.js` is unchanged.
+
+What shipped: all six map sites use plain `<AnimatePresence initial={false}>`,
+every item root carries
+`exit={{ opacity: 0, scale: 0.97, transition: OVERLAY_EXIT }}`, and no `layout`
+prop was added (a dead prop is worse than none). The deleted card fades and
+shrinks over 150ms and the grid closes the gap once it unmounts — the plan's own
+"still correct, just less fluid" outcome.
+
+**If neighbour reflow is wanted later**, the whole change is: flip
+`src/lib/motionFeatures.js` to `domMax`, add `layout` to the six item roots, and
+add `mode="popLayout"` to the six `AnimatePresence` wrappers.
+
+One extra fix: `StyleCard`'s root replaced the shadcn `<Card>` wrapper, which had
+been merging classes through `cn()`/tailwind-merge. Inlining `Card`'s base
+utilities into a raw template literal broke the selected state — `.shadow-sm`
+compiles *after* `.shadow-md` (bytes 67268 vs 67018), so the base `shadow-sm`
+silently overrode the selected `shadow-md`. The root therefore keeps `cn()`.

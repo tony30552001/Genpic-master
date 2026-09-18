@@ -1,6 +1,6 @@
 # 006 — Bridge the generation error/warning banner and unify the inline panel reveal recipe
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: df17720
 - **Severity**: LOW
 - **Category**: Cohesion & tokens / Accessibility

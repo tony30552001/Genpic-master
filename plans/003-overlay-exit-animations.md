@@ -1,6 +1,6 @@
 # 003 — Give every hand-rolled overlay an exit animation that mirrors its entrance
 
-- **Status**: TODO
+- **Status**: DONE — two spec errata, see *As implemented* below
 - **Commit**: df17720
 - **Severity**: MEDIUM
 - **Category**: Physicality & origin / Interruptibility
@@ -282,3 +282,36 @@ no `useReducedMotion()` branch — the provider handles it.
 - **Done when**: all six overlays exit along the same path they entered, exits
   run at 150ms against 250ms entrances, rapid toggling never strands an overlay,
   and reduced motion leaves opacity-only transitions.
+
+
+## As implemented
+
+Two errata in the spec:
+
+1. **Step 3 says the shared `ImageLightbox` has "three call sites". It has two**
+   — `src/components/admin/AdminPanel.jsx` and
+   `src/components/styles/StyleLibrary.jsx`. The presumed third is the private
+   duplicate defined in `src/components/create/DocumentScenes.jsx`, which step 4
+   already covers separately.
+
+2. **`AssetMetadataSheet` did not get a full bottom-sheet slide.** The plan
+   specified `y: "100%"`, but that element is only a bottom sheet below `sm`; at
+   `sm` and above it is a centred dialog (`sm:items-center`, `sm:rounded-2xl`)
+   up to `max-h-[88dvh]` tall. A 100% translate would have flung a ~700px panel
+   up from off-centre on every desktop open. Its original entrance was
+   `slide-in-from-bottom-4`, so the implementation keeps that 16px rise and adds
+   the missing exit:
+
+   ```jsx
+   initial={{ opacity: 0, y: 16 }}
+   animate={{ opacity: 1, y: 0 }}
+   exit={{ opacity: 0, y: 16, transition: OVERLAY_EXIT }}
+   transition={OVERLAY_ENTER}
+   ```
+
+   The mobile preview sheet in `src/InfographicGenerator.jsx` **is** `sm:hidden`,
+   so it does use the full `y: "100%"` slide.
+
+`AssetCenter.jsx` previously rendered `AssetMetadataSheet` unconditionally and
+relied on an internal `if (!asset) return null`. `AnimatePresence` cannot observe
+that, so the call site became a real conditional render.

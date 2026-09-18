@@ -1,6 +1,6 @@
 # 004 — Anchor the two hand-rolled navigation menus to their triggers and give them exits
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: df17720
 - **Severity**: MEDIUM
 - **Category**: Physicality & origin
