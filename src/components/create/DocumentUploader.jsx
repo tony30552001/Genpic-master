@@ -274,7 +274,7 @@ function AnalysisProgress({ analysisPhase, fileName }) {
                       )}
                     </div>
                     {isCurrent && (
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground animate-in fade-in duration-300">
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
                         {analysisPhase || step.description}
                       </p>
                     )}

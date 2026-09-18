@@ -588,7 +588,7 @@ export default function AssetCenter({
       </div>
 
       {section === "overview" && (
-        <div className="space-y-8 animate-in fade-in duration-200 motion-reduce:animate-none" key="overview">
+        <div className="space-y-8 animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="overview">
           <section className="grid gap-3 sm:grid-cols-3" aria-label="素材摘要">
             {[
               { id: "templates", label: "可重複使用範本", value: counts.templates, glyph: "library" },
@@ -652,7 +652,7 @@ export default function AssetCenter({
       )}
 
       {section === "templates" && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none" key="templates">
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="templates">
           <TemplateLibrary
             templates={templates}
             viewMode={viewMode}
@@ -668,7 +668,7 @@ export default function AssetCenter({
       )}
 
       {section === "styles" && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none" key="styles">
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="styles">
           <StyleLibrary
             savedStyles={savedStyles}
             viewMode={viewMode}
@@ -696,7 +696,7 @@ export default function AssetCenter({
       )}
 
       {section === "history" && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-200 motion-reduce:animate-none" key="history">
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="history">
           <HistoryPanel
             historyItems={historyItems}
             viewMode={viewMode}

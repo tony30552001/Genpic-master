@@ -482,7 +482,7 @@ export default function ScriptEditor({
                   )}
 
                   {(analyzedStyle || analysisResultData) && (
-                    <div className="space-y-3 rounded-xl border border-border bg-background p-3 shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-3 rounded-xl border border-border bg-background p-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
                       <div className="space-y-1">
                         <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                           <Wand2 className="icon-sm text-primary" aria-hidden="true" />

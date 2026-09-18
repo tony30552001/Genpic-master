@@ -262,7 +262,7 @@ export default function StyleSourceTabs({
                     {showStylePicker && (
                       <div
                         id={`${idPrefix}-saved-list`}
-                        className="flex max-h-[320px] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-xl animate-in fade-in slide-in-from-top-2 duration-200"
+                        className="flex max-h-[320px] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-xl animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none"
                       >
                         <div className="sticky top-0 border-b border-border bg-popover px-3 py-2">
                           <div className="relative">

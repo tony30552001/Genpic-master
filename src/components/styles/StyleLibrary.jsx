@@ -741,7 +741,7 @@ export default function StyleLibrary({
 
       {/* ── Batch Selection Banner ── */}
       {isSelectionMode && (
-        <Alert className="border-primary/20 bg-primary/5 text-foreground animate-in fade-in slide-in-from-top-2">
+        <Alert className="border-primary/20 bg-primary/5 text-foreground animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
           <CheckSquare className="icon-sm text-primary" aria-hidden="true" />
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label className="flex items-center gap-2 text-sm font-medium">

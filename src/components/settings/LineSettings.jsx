@@ -323,7 +323,7 @@ export default function LineSettings({ useLineConfigHook }) {
                                 {showIdHelp ? <ChevronDown className="icon-xs" /> : <ChevronRight className="icon-xs" />}
                             </button>
                             {showIdHelp && (
-                                <div className="mt-2 p-3 bg-muted/50 border border-border/30 rounded-lg text-xs text-muted-foreground space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="mt-2 p-3 bg-muted/50 border border-border/30 rounded-lg text-xs text-muted-foreground space-y-2 animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
                                     <p className="font-medium text-foreground">取得群組 ID (Group ID)</p>
                                     <ol className="list-decimal list-inside space-y-1 ml-1">
                                         <li>將你的 LINE 官方帳號（Bot）加入目標群組</li>

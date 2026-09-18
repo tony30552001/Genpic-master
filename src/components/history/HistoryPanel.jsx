@@ -371,7 +371,7 @@ export default function HistoryPanel({
 
       {/* 批次操作列 */}
       {isSelectionMode && (
-        <div className="flex items-center justify-between bg-primary/5 border border-primary/20 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
+        <div className="flex items-center justify-between bg-primary/5 border border-primary/20 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <input

@@ -853,13 +853,13 @@ export default function InfographicGenerator({
                         {(errorMsg || warningMsg) && (
                             <div className="shrink-0 px-4 lg:px-8 pt-3 space-y-2">
                                 {errorMsg && (
-                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/50 bg-destructive/5 text-destructive">
+                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/50 bg-destructive/5 text-destructive animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
                                         <AlertCircle className="icon-sm shrink-0" />
                                         <span className="text-sm">{errorMsg}</span>
                                     </div>
                                 )}
                                 {warningMsg && (
-                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-warning/50 bg-warning/10">
+                                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-warning/50 bg-warning/10 animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
                                         <AlertCircle className="icon-sm text-warning shrink-0" />
                                         <span className="text-sm text-foreground">{warningMsg}</span>
                                     </div>

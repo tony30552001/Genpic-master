@@ -600,7 +600,7 @@ function SceneModal({
                         <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${showSourceText ? "rotate-180" : ""}`} />
                       </button>
                       {showSourceText && (
-                        <div className="mt-2 p-3 rounded-lg bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/40 dark:border-amber-800/30 animate-in slide-in-from-top-2 duration-200">
+                        <div className="mt-2 p-3 rounded-lg bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/40 dark:border-amber-800/30 animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
                           <p className="text-xs text-amber-900/80 dark:text-amber-200/80 leading-relaxed whitespace-pre-wrap">
                             {scene.source_text}
                           </p>
@@ -1168,7 +1168,7 @@ export default function DocumentScenes({
           )}
 
           {showStylePicker && (
-            <div id="document-style-picker" className="mt-2 overflow-hidden rounded-xl border border-border bg-background/80 shadow-lg backdrop-blur-sm animate-in slide-in-from-top-2 duration-200">
+            <div id="document-style-picker" className="mt-2 overflow-hidden rounded-xl border border-border bg-background/80 shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
               {hasDocumentStyle && (
                 <div className="border-b border-border/50 bg-primary/5 px-4 py-3">
                   <div className="flex items-start justify-between gap-3">

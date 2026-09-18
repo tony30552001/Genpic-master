@@ -56,7 +56,7 @@ export default function SaveTemplateDialog({
     };
 
     return (
-        <div className="rounded-xl border border-border bg-secondary shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="rounded-xl border border-border bg-secondary shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-primary text-white">
                 <div className="flex items-center gap-2">

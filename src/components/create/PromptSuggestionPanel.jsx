@@ -21,7 +21,7 @@ export default function PromptSuggestionPanel({
     onReject,
 }) {
     return (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="rounded-xl border border-primary/20 bg-primary/5 shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
             {/* Header */}
             <div className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground">
                 <Sparkles className="icon-sm" aria-hidden="true" />
