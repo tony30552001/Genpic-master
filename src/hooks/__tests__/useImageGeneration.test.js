@@ -38,22 +38,20 @@ describe("useImageGeneration", () => {
       jobId: "job-original", model: "custom-model", imageUrl: completed.imageUrl, finalPrompt: "server prompt",
     });
     expect(await generated.filenamePromise).toBe("scene-title");
-    expect(result.current.generatedImage).toBe(completed.imageUrl);
     expect(result.current.isGenerating).toBe(false);
   });
 
-  it("uses the same asynchronous path for a reference and leaves document previews independent", async () => {
+  it("uses the same asynchronous path for a reference", async () => {
     waitForImageJob.mockResolvedValueOnce({ ...completed, operation: "edit" });
     const { result } = renderHook(() => useImageGeneration());
     let generated;
     await act(async () => {
       generated = await result.current.generateImage({
-        userScript: "reference scene", referenceUploadId: "upload-1", updatePreview: false,
+        userScript: "reference scene", referenceUploadId: "upload-1",
       });
     });
     expect(generateImage.mock.calls[0][0].referenceUploadId).toBe("upload-1");
     expect(generated.jobId).toBe("job-original");
-    expect(result.current.generatedImage).toBeNull();
   });
 
   it.each([
@@ -65,7 +63,6 @@ describe("useImageGeneration", () => {
     await act(async () => {
       await expect(result.current.generateImage({ userScript: "scene" })).rejects.toThrow("圖片工作");
     });
-    expect(result.current.generatedImage).toBeNull();
     expect(result.current.isGenerating).toBe(false);
   });
 
@@ -80,7 +77,6 @@ describe("useImageGeneration", () => {
       await expect(result.current.generateImage({ userScript: "scene" })).rejects.toThrow("圖片工作");
     });
     expect(waitForImageJob).not.toHaveBeenCalled();
-    expect(result.current.generatedImage).toBeNull();
   });
 
   it("preserves cancel UX and passes the same abort signal to admission and polling", async () => {
@@ -119,7 +115,6 @@ describe("useImageGeneration", () => {
     });
     expect(generateFilename).toHaveBeenCalledWith({ userScript: "make it yellow" });
     expect(transformed).toMatchObject({ jobId: "job-original", imageUrl: completed.imageUrl, finalPrompt: "server prompt" });
-    expect(result.current.generatedImage).toBe(completed.imageUrl);
     expect(result.current.isGenerating).toBe(false);
   });
 

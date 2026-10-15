@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   script: null,
   scenes: null,
   bar: null,
+  preview: null,
+  imageUrlToFile: vi.fn(),
 }));
 
 vi.mock("../hooks/useAuth", () => ({
@@ -38,6 +40,7 @@ vi.mock("../lib/imageFile", async (importOriginal) => ({
   ...(await importOriginal()),
   readFileAsDataUrl: vi.fn(async () => "data:image/png;base64,attached"),
   readImageSize: vi.fn(async () => ({ width: 1200, height: 900 })),
+  imageUrlToFile: mocks.imageUrlToFile,
 }));
 vi.mock("../hooks/useDocumentAnalysis", () => ({
   default: () => ({
@@ -58,7 +61,7 @@ vi.mock("../components/create/GenerateBar", async (importOriginal) => {
   const { default: GenerateBar } = await importOriginal();
   return { default: (props) => { mocks.bar = props; return <GenerateBar {...props} />; } };
 });
-vi.mock("../components/create/ImagePreview", () => ({ default: () => null }));
+vi.mock("../components/create/ImagePreview", () => ({ default: (props) => { mocks.preview = props; return null; } }));
 vi.mock("../components/create/DocumentUploader", () => ({ default: () => null }));
 vi.mock("../components/create/PptMasterStudio", () => ({ default: () => null }));
 vi.mock("../components/library/AssetCenter", () => ({ default: () => null }));
@@ -279,5 +282,43 @@ describe("creation orchestration", () => {
     expect(mocks.script.styleReferencePreview).toBe("data:image/png;base64,attached");
     await act(async () => { await invoke("general"); });
     expect(mocks.generateImage).toHaveBeenCalledWith(expect.objectContaining({ referenceUploadId: null }));
+  });
+
+  it("refines the shown result into a version chain, uploading each version once", async () => {
+    mocks.imageUrlToFile.mockResolvedValue(new File(["v1"], "v1.png", { type: "image/png" }));
+    mocks.transformImage
+      .mockResolvedValueOnce(completed("refine-1"))
+      .mockResolvedValueOnce(completed("refine-2"));
+    await mount("general");
+    await act(async () => { await invoke("general"); });
+    expect(mocks.preview.generatedImage).toBe("data:image/png;base64,default-job");
+
+    let ok;
+    await act(async () => { ok = await mocks.preview.onRefine("把衣服改成黃色"); });
+    expect(ok).toBe(true);
+    expect(mocks.imageUrlToFile).toHaveBeenCalledWith("data:image/png;base64,default-job", expect.any(String));
+    expect(mocks.transformImage).toHaveBeenCalledWith(expect.objectContaining({
+      uploadId: "upload-1", mode: "refine", prompt: "把衣服改成黃色", aspectRatio: "4:3", imageQuality: "auto",
+    }));
+    expect(mocks.saveHistoryItem).toHaveBeenLastCalledWith(expect.objectContaining({ jobId: "refine-1", source: "refine" }));
+    expect(mocks.preview.generatedImage).toBe("data:image/png;base64,refine-1");
+
+    const [root] = mocks.preview.versionRows[0].items;
+    act(() => { mocks.preview.onSelectVersion(root.id); });
+    expect(mocks.preview.generatedImage).toBe("data:image/png;base64,default-job");
+    await act(async () => { await mocks.preview.onRefine("換成夜景"); });
+    expect(mocks.uploadFile).toHaveBeenCalledTimes(1);
+    expect(mocks.preview.versionRows.map((row) => row.items.length)).toEqual([2, 1]);
+    expect(mocks.preview.versionRows[1].fromId).toBe(root.id);
+  });
+
+  it("shows refinement failures inline and keeps the current image", async () => {
+    mocks.imageUrlToFile.mockResolvedValue(new File(["v1"], "v1.png", { type: "image/png" }));
+    mocks.transformImage.mockRejectedValueOnce(new Error("模型忙碌"));
+    await mount("general");
+    await act(async () => { await invoke("general"); });
+    await act(async () => { await mocks.preview.onRefine("改色"); });
+    expect(mocks.preview.refineError).toBe("模型忙碌");
+    expect(mocks.preview.generatedImage).toBe("data:image/png;base64,default-job");
   });
 });

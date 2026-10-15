@@ -27,7 +27,6 @@ const isAbortError = (error) =>
 export default function useImageGeneration() {
   const [analyzedStyle, setAnalyzedStyle] = useState("");
   const [analysisResultData, setAnalysisResultData] = useState(null);
-  const [generatedImage, setGeneratedImage] = useState(null);
   const [generatedFilename, setGeneratedFilename] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -88,10 +87,11 @@ export default function useImageGeneration() {
 
   /**
    * Shared lifecycle for every image job started from the creation workspace or
-   * the storyboard: one abort controller, one progress clock, one preview.
+   * the storyboard: one abort controller and one progress clock. The caller owns
+   * where the resulting image is shown.
    */
   const runImageJob = useCallback(
-    async ({ admit, operation, filenameSource, updatePreview }) => {
+    async ({ admit, operation, filenameSource }) => {
       abortControllerRef.current?.abort();
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
@@ -101,7 +101,6 @@ export default function useImageGeneration() {
       setGenerationStartedAt(startedAt);
       setGenerationElapsedSeconds(0);
       setGeneratedFilename("");
-      if (updatePreview) setGeneratedImage(null);
 
       try {
         // 檔名在背景產生，不阻擋主流程
@@ -127,9 +126,6 @@ export default function useImageGeneration() {
           { jobId: admission.jobId, model: admission.model, operation }
         );
 
-        if (updatePreview) {
-          setGeneratedImage(result.imageUrl);
-        }
         return {
           jobId: result.jobId,
           imageUrl: result.imageUrl,
@@ -156,7 +152,7 @@ export default function useImageGeneration() {
   );
 
   const runGeneration = useCallback(
-    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageQuality, imageLanguage, referenceUploadId, updatePreview = true }) => {
+    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageQuality, imageLanguage, referenceUploadId }) => {
       if (!userScript) {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
@@ -176,7 +172,6 @@ export default function useImageGeneration() {
         }),
         operation: referenceUploadId ? "edit" : "generate",
         filenameSource: userScript,
-        updatePreview,
       });
     },
     [runImageJob]
@@ -202,7 +197,6 @@ export default function useImageGeneration() {
         }),
         operation: "edit",
         filenameSource: filenameSource || prompt,
-        updatePreview: true,
       });
     },
     [runImageJob]
@@ -219,7 +213,6 @@ export default function useImageGeneration() {
   return {
     analyzedStyle,
     analysisResultData,
-    generatedImage,
     generatedFilename, // 匯出產生的檔名
     isAnalyzing,
     isGenerating,
@@ -232,6 +225,5 @@ export default function useImageGeneration() {
     clearStyle,
     setAnalyzedStyle,
     setAnalysisResultData,
-    setGeneratedImage,
   };
 }

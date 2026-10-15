@@ -23,8 +23,9 @@ function setup() {
   const generateImage = vi.fn().mockResolvedValue(job);
   const transformImage = vi.fn().mockResolvedValue(job);
   const saveHistoryItem = vi.fn().mockResolvedValue(undefined);
-  const hook = renderHook(() => useCreateWorkspace({ generateImage, transformImage, saveHistoryItem }));
-  return { ...hook, generateImage, transformImage, saveHistoryItem };
+  const onImageCreated = vi.fn();
+  const hook = renderHook(() => useCreateWorkspace({ generateImage, transformImage, saveHistoryItem, onImageCreated }));
+  return { ...hook, generateImage, transformImage, saveHistoryItem, onImageCreated };
 }
 
 const submitInput = {
@@ -59,6 +60,15 @@ describe("useCreateWorkspace", () => {
       stylePrompt: "watercolor，柔和", fullPrompt: "assembled", styleId: "style-1", source: "general",
     });
     expect(output.styleId).toBe("style-1");
+  });
+
+  it("shows the finished image even when the history write fails", async () => {
+    const { result, saveHistoryItem, onImageCreated } = setup();
+    saveHistoryItem.mockRejectedValueOnce(new Error("db down"));
+    await act(async () => {
+      await expect(result.current.submit(submitInput)).rejects.toThrow("db down");
+    });
+    expect(onImageCreated).toHaveBeenCalledWith({ jobId: "job-1", imageUrl: job.imageUrl, instruction: "使用者描述" });
   });
 
   it("uses an attachment as content reference by default", async () => {

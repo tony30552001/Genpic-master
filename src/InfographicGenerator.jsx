@@ -26,6 +26,8 @@ import useImageGeneration from './hooks/useImageGeneration';
 import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import useCreateWorkspace from './hooks/useCreateWorkspace';
+import useImageVersions from './hooks/useImageVersions';
+import useImageRefine from './hooks/useImageRefine';
 import { uploadFile } from './services/storageService';
 import { STYLE_TRANSFER_PURPOSE, REFERENCE_PURPOSE } from './lib/attachmentPurposes';
 import { readFileAsDataUrl } from './lib/imageFile';
@@ -178,13 +180,26 @@ export default function InfographicGenerator({
         documentAnalysisMode === "storyboard" && Boolean(documentResult);
 
     const {
-        analyzedStyle, analysisResultData, generatedImage, generatedFilename,
+        analyzedStyle, analysisResultData, generatedFilename,
         isAnalyzing, isGenerating, analysisPhase, generationStatus,
         analyzeStyle, generateImage, transformImage, cancelGeneration, clearStyle,
-        setAnalyzedStyle, setAnalysisResultData, setGeneratedImage
+        setAnalyzedStyle, setAnalysisResultData
     } = useImageGeneration();
 
-    const workspace = useCreateWorkspace({ generateImage, transformImage, saveHistoryItem });
+    const imageVersions = useImageVersions();
+    const { activeVersion } = imageVersions;
+    const generatedImage = activeVersion?.imageUrl || null;
+    const workspace = useCreateWorkspace({
+        generateImage,
+        transformImage,
+        saveHistoryItem,
+        onImageCreated: imageVersions.startChain,
+    });
+    const { refine, isRefining, refineError, clearRefineError } = useImageRefine({
+        versions: imageVersions,
+        transformImage,
+        saveHistoryItem,
+    });
 
     // --- Core Logic Functions ---
 
@@ -387,6 +402,7 @@ export default function InfographicGenerator({
                 });
             }
             setErrorMsg('');
+            clearRefineError();
             setShowMobilePreview(true); // 手機版：生成後自動顯示預覽
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -403,7 +419,13 @@ export default function InfographicGenerator({
         setOptimizedPromptEn(''); // 歷史紀錄沒有記錄優化後的 prompt，所以清空
         setAnalyzedStyle(item.stylePrompt || '');
         setAnalysisResultData(null);
-        setGeneratedImage(item.imageUrl);
+        imageVersions.startChain({
+            jobId: item.jobId || null,
+            imageUrl: item.imageUrl,
+            instruction: item.userScript || '',
+            fromHistory: true,
+        });
+        clearRefineError();
         setAppliedStyleId(item.styleId || null);
         setActiveTab('general');
     };
@@ -417,6 +439,33 @@ export default function InfographicGenerator({
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handleRefine = (instruction) =>
+        refine(instruction, () => ({ imageQuality: requireGenerationQuality(), imageLanguage }));
+
+    const handleSelectVersion = (versionId) => {
+        imageVersions.selectVersion(versionId);
+        clearRefineError();
+    };
+
+    const previewProps = {
+        generatedImage,
+        isGenerating,
+        aspectRatio,
+        generationStatus,
+        promptSummary: userScript,
+        onDownload: handleDownload,
+        user,
+        isRefining,
+        refineError,
+        onRefine: handleRefine,
+        isCompressedPreview: Boolean(activeVersion?.fromHistory),
+        versionRows: imageVersions.rows,
+        activeVersionId: imageVersions.activeVersionId,
+        onSelectVersion: handleSelectVersion,
+        getVersionLabel: imageVersions.getVersionLabel,
+        getVersion: imageVersions.getVersion,
     };
 
     const handleAnalyzeDocument = async (file, sceneCount) => {
@@ -464,7 +513,6 @@ export default function InfographicGenerator({
                 aspectRatio,
                 imageQuality: quality,
                 imageLanguage,
-                updatePreview: false
             });
 
             // 1. 更新 DocumentAnalysis 的狀態 (顯示在卡片上)
@@ -921,16 +969,7 @@ export default function InfographicGenerator({
                                                 </p>
                                             </div>
                                             <div className="bg-background p-3">
-                                                <ImagePreview
-                                                    generatedImage={generatedImage}
-                                                    isGenerating={isGenerating}
-                                                    aspectRatio={aspectRatio}
-                                                    generationStatus={generationStatus}
-                                                    promptSummary={userScript}
-                                                    analyzedStyle={analyzedStyle}
-                                                    onDownload={handleDownload}
-                                                    user={user}
-                                                />
+                                                <ImagePreview {...previewProps} />
                                             </div>
                                         </section>
                                     </div>
@@ -945,17 +984,8 @@ export default function InfographicGenerator({
                                                 backgroundSize: '24px 24px'
                                             }}
                                         />
-                                        <div className="relative z-10 w-full max-w-2xl p-6">
-                                            <ImagePreview
-                                                generatedImage={generatedImage}
-                                                isGenerating={isGenerating}
-                                                aspectRatio={aspectRatio}
-                                                generationStatus={generationStatus}
-                                                promptSummary={userScript}
-                                                analyzedStyle={analyzedStyle}
-                                                onDownload={handleDownload}
-                                                user={user}
-                                            />
+                                        <div className="relative z-10 max-h-full w-full max-w-2xl overflow-y-auto p-6">
+                                            <ImagePreview {...previewProps} />
                                         </div>
                                     </div>
                                 </div>
@@ -1103,16 +1133,7 @@ export default function InfographicGenerator({
                         </div>
                         {/* 圖片內容（可捲動） */}
                         <div className="flex-1 overflow-y-auto overscroll-contain">
-                            <ImagePreview
-                                generatedImage={generatedImage}
-                                isGenerating={isGenerating}
-                                aspectRatio={aspectRatio}
-                                generationStatus={generationStatus}
-                                promptSummary={userScript}
-                                analyzedStyle={analyzedStyle}
-                                onDownload={handleDownload}
-                                user={user}
-                            />
+                            <ImagePreview {...previewProps} />
                         </div>
                     </M.div>
                 </M.div>

@@ -19,10 +19,11 @@ const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
  * and one submit that routes to generate-images or image-transform and records
  * the result in the history.
  *
- * The job lifecycle (progress, cancel, preview) belongs to useImageGeneration;
- * this hook decides which job to start and with which inputs.
+ * The job lifecycle (progress, cancel) belongs to useImageGeneration; this hook
+ * decides which job to start and with which inputs. onImageCreated shows the
+ * result before the history write, so a failed write never hides a finished image.
  */
-export default function useCreateWorkspace({ generateImage, transformImage, saveHistoryItem }) {
+export default function useCreateWorkspace({ generateImage, transformImage, saveHistoryItem, onImageCreated }) {
   const [attachment, setAttachment] = useState(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [purposeId, setPurposeId] = useState(REFERENCE_PURPOSE);
@@ -118,6 +119,8 @@ export default function useCreateWorkspace({ generateImage, transformImage, save
         imageLanguage,
         referenceUploadId: attachment?.uploadId || null,
       });
+
+    onImageCreated({ jobId: result.jobId, imageUrl: result.imageUrl, instruction: userScript || purpose.label });
 
     await saveHistoryItem({
       jobId: result.jobId,
