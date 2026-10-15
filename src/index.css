@@ -3,6 +3,14 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* 觸控筆與自稱支援 hover 的 Android 裝置也排除，避免點擊後 hover 樣式殘留。 */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
 
 @theme inline {
   --color-border: hsl(var(--border));
@@ -395,9 +403,26 @@
   * {
     @apply border-border;
   }
+  /* 應用程式自管捲動容器：去除點擊灰框、橫向字體放大與整頁下拉重新整理。 */
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    overscroll-behavior: none;
+  }
+
+  /* 控制項立即回應點擊（無雙擊縮放延遲）；長按不選取標籤文字。 */
+  button, a, [role="button"], summary, label {
+    touch-action: manipulation;
+  }
+  button, [role="button"], [role="tab"], [role="menuitem"] {
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   svg.lucide {
@@ -412,6 +437,15 @@
       --motion-exit: 0.01ms;
       --motion-hover: 0.01ms;
     }
+  }
+}
+
+/* iOS Safari 會放大字級小於 16px 的輸入框且不回縮；刻意不放進 layer，以覆蓋 text-sm 等 utility。 */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
   }
 }
 

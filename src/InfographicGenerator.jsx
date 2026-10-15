@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import * as M from "motion/react-m";
 import { AnimatePresence } from "motion/react";
@@ -47,6 +48,8 @@ import DocumentScenes from './components/create/DocumentScenes';
 import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
 import ExpandedCanvas from './components/create/ExpandedCanvas';
+import MobileResultView from './components/create/MobileResultView';
+import { MOBILE_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import SettingsPanel from './components/settings/SettingsPanel';
 import AttachmentPicker from './components/create/AttachmentPicker';
 import AssetCenter from './components/library/AssetCenter';
@@ -86,6 +89,7 @@ export default function InfographicGenerator({
     const [appliedStyleId, setAppliedStyleId] = useState(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [canvasOrigin, setCanvasOrigin] = useState(null);
+    const isMobileLayout = useMediaQuery(MOBILE_LAYOUT_QUERY);
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [compactNavSection, setCompactNavSection] = useState(null);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
@@ -406,7 +410,7 @@ export default function InfographicGenerator({
             }
             setErrorMsg('');
             clearRefineError();
-            setShowMobilePreview(true); // 手機版：生成後自動顯示預覽
+            if (isMobileLayout) setShowMobilePreview(true);
         } catch (err) {
             if (err.name === 'AbortError') {
                 setErrorMsg(err.message);
@@ -480,6 +484,8 @@ export default function InfographicGenerator({
     const suggestsRefine = Boolean(generatedImage) && !workspace.attachment && isNearDuplicatePrompt(chainPrompt, userScript);
 
     const focusRefineInput = () => {
+        // 手機版的修改輸入列在結果頁裡；同步開啟才能在同一次點擊內叫出鍵盤。
+        if (isMobileLayout) flushSync(() => setShowMobilePreview(true));
         const inputs = [...document.querySelectorAll('[data-refine-input]')];
         const input = inputs.find((element) => element.getClientRects().length > 0) || inputs[0];
         input?.scrollIntoView({ block: 'nearest' });
@@ -641,11 +647,11 @@ export default function InfographicGenerator({
 
     // --- Render ---
     return (
-        <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden">
+        <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
 
             {/* ═══════════ Top Header Bar ═══════════ */}
-            <header className="relative shrink-0 border-b border-border bg-primary text-white shadow-md">
-                <div className="flex min-w-0 items-center justify-between gap-2 px-3 h-14 sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
+            <header className="relative shrink-0 border-b border-border bg-primary pt-[env(safe-area-inset-top)] text-white shadow-md">
+                <div className="flex min-w-0 items-center justify-between gap-2 px-3 h-12 sm:px-4 md:h-14 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
                     {/* Logo */}
                     <div className="flex min-w-0 flex-1 items-center gap-2 justify-self-start sm:gap-3">
                         <PixoraMark className="h-8 w-8 text-white" title="Pixora" />
@@ -979,6 +985,7 @@ export default function InfographicGenerator({
                                             paletteStyleTags={paletteStyleTags}
                                         />
 
+                                        {!isMobileLayout && (
                                         <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40 lg:hidden">
                                             <div className="border-b border-border bg-muted/30 px-4 py-3">
                                                 <h3 className="text-sm font-semibold text-foreground">預覽與結果</h3>
@@ -990,9 +997,11 @@ export default function InfographicGenerator({
                                                 <ImagePreview {...previewProps} />
                                             </div>
                                         </section>
+                                        )}
                                     </div>
 
                                     {/* Right: Preview (takes 2/5 on large screens) */}
+                                    {!isMobileLayout && (
                                     <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40">
                                         {/* Decorative grid background */}
                                         <div
@@ -1006,6 +1015,7 @@ export default function InfographicGenerator({
                                             <ImagePreview {...previewProps} />
                                         </div>
                                     </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1043,6 +1053,9 @@ export default function InfographicGenerator({
                                 actionKind={hasActiveDocumentResult ? "document" : workspace.isTransform ? "transform" : "create"}
                                 aspectRatioLocked={!hasActiveDocumentResult && workspace.aspectRatioLocked}
                                 onSuggestRefine={!hasActiveDocumentResult && suggestsRefine ? focusRefineInput : undefined}
+                                compact={isMobileLayout}
+                                resultImage={hasActiveDocumentResult ? undefined : generatedImage}
+                                onOpenResult={() => setShowMobilePreview(true)}
                                 disabled={
                                     hasActiveDocumentResult
                                         ? !scenes || scenes.length === 0
@@ -1109,53 +1122,14 @@ export default function InfographicGenerator({
                 )}
             </main>
 
-            {/* ═══════════ 手機版：生成圖片 Bottom Sheet ═══════════ */}
+            {/* ═══════════ 手機版：生成結果頁 ═══════════ */}
             <AnimatePresence>
-            {showMobilePreview && generatedImage && (
-                <M.div
-                    className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0, transition: OVERLAY_EXIT }}
-                    transition={OVERLAY_ENTER}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="mobile-preview-title"
-                >
-                    {/* 半透明遮罩 */}
-                    <button
-                        type="button"
-                        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                        onClick={() => setShowMobilePreview(false)}
-                        aria-label="關閉生成圖片預覽"
-                    />
-                    {/* Sheet 主體 */}
-                    <M.div
-                        className="relative z-10 flex max-h-[85dvh] flex-col rounded-t-2xl bg-card text-card-foreground shadow-2xl"
-                        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
-                        initial={{ y: "100%" }}
-                        animate={{ y: 0 }}
-                        exit={{ y: "100%", transition: OVERLAY_EXIT }}
-                        transition={OVERLAY_ENTER}
-                    >
-                        {/* Sheet Header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-                            <h2 id="mobile-preview-title" className="text-sm font-semibold text-foreground">生成結果</h2>
-                            <button
-                                type="button"
-                                onClick={() => setShowMobilePreview(false)}
-                                className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                aria-label="關閉預覽"
-                            >
-                                <X className="icon-sm" aria-hidden="true" />
-                            </button>
-                        </div>
-                        {/* 圖片內容（可捲動） */}
-                        <div className="flex-1 overflow-y-auto overscroll-contain">
-                            <ImagePreview {...previewProps} />
-                        </div>
-                    </M.div>
-                </M.div>
+            {isMobileLayout && showMobilePreview && generatedImage && (
+                <MobileResultView key="mobile-result" onClose={() => setShowMobilePreview(false)}>
+                    <div className="p-3">
+                        <ImagePreview {...previewProps} />
+                    </div>
+                </MobileResultView>
             )}
             </AnimatePresence>
 
@@ -1182,10 +1156,10 @@ export default function InfographicGenerator({
             </AnimatePresence>
 
             {/* 手機版：圖片已生成時，顯示底部快速預覽入口按鈕 */}
-            {generatedImage && !showMobilePreview && !isGenerating && activeTab !== 'general' && (
+            {isMobileLayout && generatedImage && !showMobilePreview && !isGenerating && activeTab !== 'general' && (
                 <button
                     type="button"
-                    className="sm:hidden fixed bottom-[calc(64px+env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="fixed bottom-[calc(64px+env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     onClick={() => setShowMobilePreview(true)}
                     aria-label="查看生成圖片"
                 >
@@ -1251,7 +1225,7 @@ export default function InfographicGenerator({
                                     setMobileMoreOpen(false);
                                 }}
                                 aria-pressed={isActive}
-                                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isActive
+                                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 relative active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isActive
                                     ? 'text-primary'
                                     : 'text-muted-foreground hover:text-foreground'
                                     }`}
@@ -1280,7 +1254,7 @@ export default function InfographicGenerator({
                         aria-haspopup="menu"
                         aria-pressed={isMobileMoreActive}
                         aria-label="更多功能"
-                        className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isMobileMoreActive || mobileMoreOpen
+                        className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isMobileMoreActive || mobileMoreOpen
                             ? 'text-primary'
                             : 'text-muted-foreground hover:text-foreground'
                             }`}

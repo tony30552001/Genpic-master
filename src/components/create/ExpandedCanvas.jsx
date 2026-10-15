@@ -4,6 +4,7 @@ import { ArrowLeft } from "@/components/icons/lucideControls";
 import { Button } from "@/components/ui/button";
 import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 import { cn } from "@/lib/utils";
+import { useHistoryLayer } from "@/hooks/useHistoryLayer";
 import RefineForm from "./RefineForm";
 import VersionStrip from "./VersionStrip";
 
@@ -12,13 +13,6 @@ const COMPARE_MODES = [
   { id: "slider", label: "前後滑桿" },
 ];
 const SLIDER_STEP = 5;
-const HISTORY_MARK = "pixoraExpandedCanvas";
-
-/** Leaves through the canvas's own history entry so back and close stay in sync. */
-const closeCanvas = (onCloseRef) => {
-  if (window.history.state?.[HISTORY_MARK]) window.history.back();
-  else onCloseRef.current();
-};
 
 const isTypingTarget = (target) =>
   target instanceof HTMLElement &&
@@ -163,40 +157,11 @@ export default function ExpandedCanvas({
 }) {
   const titleId = useId();
   const closeButtonRef = useRef(null);
-  const onCloseRef = useRef(onClose);
+  const requestClose = useHistoryLayer(onClose, closeButtonRef);
   const [mode, setMode] = useState("hold");
   const label = getVersionLabel(version);
   const parentLabel = parent ? getVersionLabel(parent) : "";
   const versionCount = versionRows.reduce((count, row) => count + row.items.length, 0);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  // The canvas owns one history entry so the browser back button closes it.
-  useEffect(() => {
-    const returnFocusTo = document.activeElement;
-    if (!window.history.state?.[HISTORY_MARK]) {
-      window.history.pushState({ ...window.history.state, [HISTORY_MARK]: true }, "");
-    }
-    const onPopState = () => onCloseRef.current();
-    window.addEventListener("popstate", onPopState);
-    closeButtonRef.current?.focus();
-    return () => {
-      window.removeEventListener("popstate", onPopState);
-      if (returnFocusTo instanceof HTMLElement && returnFocusTo.isConnected) returnFocusTo.focus();
-    };
-  }, []);
-
-  const requestClose = () => closeCanvas(onCloseRef);
-
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") closeCanvas(onCloseRef);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   const Compare = mode === "slider" ? SliderCompare : HoldCompare;
 
@@ -213,7 +178,7 @@ export default function ExpandedCanvas({
       transition={OVERLAY_ENTER}
       data-expanded-canvas
     >
-      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
         <Button ref={closeButtonRef} type="button" variant="outline" size="sm" onClick={requestClose}>
           <ArrowLeft className="icon-sm" aria-hidden="true" /> 關閉
         </Button>
@@ -263,7 +228,7 @@ export default function ExpandedCanvas({
         )}
       </div>
 
-      <div className="mx-auto mb-4 w-[min(calc(100%-2rem),56rem)] space-y-3 rounded-2xl border border-border/60 bg-card/75 p-3 shadow-xl backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-card [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none">
+      <div className="mx-auto mb-[max(1rem,env(safe-area-inset-bottom))] w-[min(calc(100%-2rem),56rem)] space-y-3 rounded-2xl border border-border/60 bg-card/75 p-3 shadow-xl backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-card [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none">
         <RefineForm onRefine={onRefine} isRefining={isRefining} disabled={refineDisabled} refineError={refineError} />
         {versionCount > 1 && (
           <VersionStrip

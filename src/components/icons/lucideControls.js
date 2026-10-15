@@ -30,6 +30,7 @@ export {
   Save,
   Search,
   Share2,
+  SlidersHorizontal,
   Table2,
   Trash2,
   Upload,

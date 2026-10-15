@@ -105,7 +105,7 @@ export default function ImagePreview({
             width={1536}
             height={1024}
             className={cn(
-              "mx-auto h-auto max-h-[55vh] w-auto max-w-full rounded-lg object-contain shadow-xl transition-opacity duration-(--motion-enter) ease-emphasized animate-in fade-in zoom-in-95 motion-reduce:zoom-in-100",
+              "mx-auto h-auto max-h-[55svh] w-auto max-w-full rounded-lg object-contain shadow-xl transition-opacity duration-(--motion-enter) ease-emphasized animate-in fade-in zoom-in-95 motion-reduce:zoom-in-100",
               isRefining && "opacity-40"
             )}
             onError={() => setFailedImage(generatedImage)}

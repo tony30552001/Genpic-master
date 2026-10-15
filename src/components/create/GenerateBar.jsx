@@ -1,93 +1,49 @@
-import React from "react";
-import {
-  Monitor,
-  Layout,
-  Square,
-  Smartphone,
-} from "@/components/icons/lucideContent";
-import {
-  Loader2,
-} from "@/components/icons/lucideStatus";
+import React, { useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { SlidersHorizontal } from "@/components/icons/lucideControls";
+import { Loader2 } from "@/components/icons/lucideStatus";
 import ProductGlyph from "@/components/icons/ProductGlyph";
+import MobileSheet from "@/components/common/MobileSheet";
 import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { IMAGE_QUALITY_LABELS } from "@/config";
 import { getImageQualityError } from "@/lib/imageModel";
-import { LANGUAGE_OPTIONS, NO_TEXT_LANGUAGE, getImageTextModeLabel } from "@/lib/imageTextLanguage";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { getImageTextModeLabel } from "@/lib/imageTextLanguage";
+import OutputSettings from "./OutputSettings";
 
-const ASPECT_RATIOS = [
-    { id: "16:9", label: "16:9 簡報", icon: Monitor },
-    { id: "4:3", label: "4:3 傳統", icon: Layout },
-    { id: "1:1", label: "1:1 社群", icon: Square },
-    { id: "9:16", label: "9:16 手機", icon: Smartphone },
-];
-
-const PRIMARY_TEXT_LANGUAGES = ["zh-TW", NO_TEXT_LANGUAGE];
-const OTHER_TEXT_LANGUAGES = LANGUAGE_OPTIONS.filter((option) => !PRIMARY_TEXT_LANGUAGES.includes(option.id));
-
-const SEGMENT_CLASS =
-    "min-h-11 touch-manipulation whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted";
-const SEGMENT_ACTIVE_CLASS = "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60";
-const SEGMENT_IDLE_CLASS = "text-muted-foreground hover:bg-background/70 hover:text-foreground";
-
-function TextModeControl({ imageLanguage, onImageLanguageChange }) {
-    const otherOption = OTHER_TEXT_LANGUAGES.find((option) => option.id === imageLanguage);
-
+function GenerationProgress({ generationStatus, compact = false }) {
     return (
         <div
-            className="flex gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner"
-            role="group"
-            aria-label="圖中文字"
+            className={cn(
+                "space-y-2 rounded-lg border border-border bg-muted/45 px-3 py-2 shadow-inner",
+                compact && "min-w-0 flex-1 space-y-1.5 py-1.5"
+            )}
+            aria-live="polite"
         >
-            {PRIMARY_TEXT_LANGUAGES.map((id) => {
-                const option = LANGUAGE_OPTIONS.find((item) => item.id === id);
-                return (
-                    <button
-                        type="button"
-                        key={id}
-                        onClick={() => onImageLanguageChange(id)}
-                        aria-pressed={imageLanguage === id}
-                        className={cn(SEGMENT_CLASS, imageLanguage === id ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS)}
-                    >
-                        {option.shortLabel}
-                    </button>
-                );
-            })}
-            <Select value={otherOption ? otherOption.id : ""} onValueChange={onImageLanguageChange}>
-                <SelectTrigger
-                    aria-label="其他圖中文字語言"
-                    className={cn(
-                        SEGMENT_CLASS,
-                        "h-auto w-auto gap-1 border-0 bg-transparent ring-offset-0 focus:ring-2 focus:ring-offset-0",
-                        otherOption ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS
-                    )}
-                >
-                    <SelectValue placeholder="其他">{otherOption?.shortLabel}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                    {OTHER_TEXT_LANGUAGES.map((option) => (
-                        <SelectItem key={option.id} value={option.id}>
-                            {option.shortLabel}（{option.label}）
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate font-medium text-foreground">{generationStatus.label}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {compact ? generationStatus.elapsedLabel : `已等待 ${generationStatus.elapsedLabel}`}
+                </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                    style={{ width: `${generationStatus.progress}%` }}
+                />
+            </div>
+            {!compact && (
+                <p className="text-xs leading-relaxed text-muted-foreground">{generationStatus.helperText}</p>
+            )}
         </div>
     );
 }
 
 /**
- * 固定底部的生成控制列
- * 包含比例選擇、模型目錄品質和主要的 CTA 生成按鈕
+ * 固定底部的生成控制列。
+ * 桌面版直接列出比例、品質與圖中文字；`compact`（手機版）只留結果縮圖、設定摘要與生成按鈕，
+ * 設定收進底部面板。
  */
 export default function GenerateBar({
     aspectRatio,
@@ -108,7 +64,11 @@ export default function GenerateBar({
     disabled = false,
     aspectRatioLocked = false,
     onSuggestRefine,
+    compact = false,
+    resultImage,
+    onOpenResult,
 }) {
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const quality = imageQuality === undefined ? imageModelConfig?.defaultQuality : imageQuality;
     const setupError = configurationError || getImageQualityError(imageModelConfig, quality);
     const supportedQualities = Array.isArray(imageModelConfig?.supportedQualities)
@@ -118,6 +78,141 @@ export default function GenerateBar({
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
         : isGeneratingText || "AI 生成中…";
+    const canGenerate = !disabled && !isGenerating && !setupError;
+
+    const settings = (layout) => (
+        <OutputSettings
+            layout={layout}
+            aspectRatio={aspectRatio}
+            onAspectRatioChange={onAspectRatioChange}
+            aspectRatioLocked={aspectRatioLocked}
+            quality={quality}
+            supportedQualities={supportedQualities}
+            onImageQualityChange={onImageQualityChange}
+            imageLanguage={imageLanguage}
+            onImageLanguageChange={onImageLanguageChange}
+        />
+    );
+
+    const setupMessage = setupError ? (
+        <p role="alert" className="text-xs text-destructive">{setupError}</p>
+    ) : (
+        <p className="text-xs text-muted-foreground">較高品質可能增加生成時間與費用。</p>
+    );
+
+    const refineHint = onSuggestRefine && !isGenerating && (
+        <button
+            type="button"
+            onClick={onSuggestRefine}
+            className="w-full rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs text-foreground transition-colors duration-(--motion-hover) hover:bg-primary/10 active:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+            只改一小部分？用「修改這張」，構圖會保留。
+        </button>
+    );
+
+    const generateButton = (label, className, beforeGenerate) => (
+        <Button
+            onClick={() => {
+                if (!canGenerate) return;
+                beforeGenerate?.();
+                onGenerate();
+            }}
+            disabled={!canGenerate}
+            size="lg"
+            className={cn(
+                "text-sm font-bold shadow-md hover:shadow-lg",
+                "bg-primary hover:bg-primary/90 text-primary-foreground",
+                "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none",
+                className
+            )}
+        >
+            {isGenerating ? (
+                <span className="flex items-center gap-2">
+                    <Loader2
+                        className="icon-md animate-spin motion-reduce:animate-none"
+                        data-generation-spinner
+                        aria-hidden="true"
+                    />
+                    {generationLabel}
+                </span>
+            ) : (
+                <span className="flex items-center gap-2">
+                    <ProductGlyph kind={actionKind} active className="icon-md" aria-hidden="true" />
+                    {label}
+                </span>
+            )}
+        </Button>
+    );
+
+    const cancelButton = isGenerating && onCancelGeneration && (
+        <Button type="button" variant="outline" size="lg" onClick={onCancelGeneration} className="shrink-0 px-4">
+            取消
+        </Button>
+    );
+
+    if (compact) {
+        const summary = [
+            aspectRatioLocked ? "原圖比例" : aspectRatio,
+            IMAGE_QUALITY_LABELS[quality] || quality,
+            onImageLanguageChange && getImageTextModeLabel(imageLanguage),
+        ].filter(Boolean).join(" · ");
+
+        return (
+            <div className="shrink-0 space-y-2 border-t border-border bg-card px-3 py-2 shadow-[0_-10px_24px_hsl(var(--foreground)/0.08)]">
+                {setupError && <p role="alert" className="text-xs text-destructive">{setupError}</p>}
+                {refineHint}
+                <div className="flex items-center gap-2">
+                    {resultImage && !isGenerating && (
+                        <button
+                            type="button"
+                            onClick={onOpenResult}
+                            aria-label="查看生成結果"
+                            className="size-11 shrink-0 overflow-hidden rounded-lg border border-border bg-muted press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <img src={resultImage} alt="" className="size-full object-cover" decoding="async" />
+                        </button>
+                    )}
+                    {isGenerating && generationStatus ? (
+                        <GenerationProgress generationStatus={generationStatus} compact />
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setSettingsOpen(true)}
+                            aria-haspopup="dialog"
+                            aria-label={`輸出設定：${summary}`}
+                            className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border/70 bg-muted/70 px-3 text-left text-xs text-foreground press-feedback active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <SlidersHorizontal className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <span className="truncate">{summary}</span>
+                        </button>
+                    )}
+                    {isGenerating ? cancelButton : generateButton("生成", "shrink-0 px-5")}
+                </div>
+
+                <AnimatePresence>
+                    {settingsOpen && (
+                        <MobileSheet
+                            title="輸出設定"
+                            onClose={() => setSettingsOpen(false)}
+                            footer={(close) => (
+                                <div className="space-y-2">
+                                    <p className="text-center text-xs text-muted-foreground">
+                                        {imageModelConfig?.label || "尚未設定圖片模型"} · {selectedSizeLabel}
+                                    </p>
+                                    {generateButton(buttonText || "開始生成圖片", "w-full", close)}
+                                </div>
+                            )}
+                        >
+                            <div className="space-y-4">
+                                {settings("stack")}
+                                {setupMessage}
+                            </div>
+                        </MobileSheet>
+                    )}
+                </AnimatePresence>
+            </div>
+        );
+    }
 
     return (
         <div className="shrink-0 space-y-3 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_24px_hsl(var(--foreground)/0.08)] ring-1 ring-border/40">
@@ -129,148 +224,16 @@ export default function GenerateBar({
                 </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-                {/* Aspect Ratios */}
-                <div
-                    className="flex flex-1 gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner"
-                    role="group"
-                    aria-label={aspectRatioLocked ? "圖片比例（沿用原圖）" : "圖片比例"}
-                >
-                    {ASPECT_RATIOS.map((ratio) => (
-                        <button
-                            type="button"
-                            key={ratio.id}
-                            onClick={() => onAspectRatioChange(ratio.id)}
-                            disabled={aspectRatioLocked}
-                            aria-label={`設定圖片比例為 ${ratio.label}`}
-                            aria-pressed={!aspectRatioLocked && aspectRatio === ratio.id}
-                            className={cn(
-                                "min-h-11 flex-1 touch-manipulation flex items-center justify-center gap-1 rounded-md px-1 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted disabled:cursor-not-allowed disabled:opacity-50",
-                                !aspectRatioLocked && aspectRatio === ratio.id
-                                     ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
-                                     : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
-                            )}
-                            title={ratio.label}
-                        >
-                            <ratio.icon className="icon-sm" aria-hidden="true" />
-                            <span className="hidden lg:inline">{ratio.id}</span>
-                        </button>
-                    ))}
-                </div>
+            {settings("row")}
+            {setupMessage}
 
-                <Separator orientation="vertical" className="h-6" />
+            {isGenerating && generationStatus && <GenerationProgress generationStatus={generationStatus} />}
 
-                <div
-                    className="flex flex-wrap gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner"
-                    role="group"
-                    aria-label="圖片品質"
-                >
-                    {supportedQualities.map((option) => (
-                        <button
-                            type="button"
-                            key={option}
-                            onClick={() => onImageQualityChange(option)}
-                            aria-label={`設定圖片品質為${IMAGE_QUALITY_LABELS[option] || option}`}
-                            aria-pressed={quality === option}
-                            className={cn(
-                                "min-h-11 min-w-11 touch-manipulation rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted",
-                                quality === option
-                                    ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
-                                    : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
-                            )}
-                        >
-                            {IMAGE_QUALITY_LABELS[option] || option}
-                        </button>
-                    ))}
-                </div>
+            {refineHint}
 
-                {onImageLanguageChange && (
-                    <>
-                        <Separator orientation="vertical" className="h-6" />
-                        <TextModeControl
-                            imageLanguage={imageLanguage}
-                            onImageLanguageChange={onImageLanguageChange}
-                        />
-                    </>
-                )}
-            </div>
-            {setupError ? (
-                <p role="alert" className="text-xs text-destructive">{setupError}</p>
-            ) : (
-                <p className="text-xs text-muted-foreground">較高品質可能增加生成時間與費用。</p>
-            )}
-
-            {isGenerating && generationStatus && (
-                <div className="space-y-2 rounded-lg border border-border bg-muted/45 px-3 py-2 shadow-inner" aria-live="polite">
-                    <div className="flex items-center justify-between gap-3 text-xs">
-                        <span className="font-medium text-foreground">{generationStatus.label}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">
-                            已等待 {generationStatus.elapsedLabel}
-                        </span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div
-                            className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
-                            style={{ width: `${generationStatus.progress}%` }}
-                        />
-                    </div>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                        {generationStatus.helperText}
-                    </p>
-                </div>
-            )}
-
-            {onSuggestRefine && !isGenerating && (
-                <button
-                    type="button"
-                    onClick={onSuggestRefine}
-                    className="w-full rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs text-foreground transition-colors duration-(--motion-hover) hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                    只改一小部分？用「修改這張」，構圖會保留。
-                </button>
-            )}
-
-            {/* Generate CTA */}
             <div className="flex gap-2">
-                <Button
-                    onClick={() => {
-                        if (!disabled && !isGenerating && !setupError) onGenerate();
-                    }}
-                    disabled={disabled || isGenerating || Boolean(setupError)}
-                    size="lg"
-                    className={cn(
-                        "flex-1 text-sm font-bold shadow-md hover:shadow-lg",
-                        "bg-primary hover:bg-primary/90 text-primary-foreground",
-                        "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-                    )}
-                >
-                    {isGenerating ? (
-                        <span className="flex items-center gap-2">
-                            <Loader2
-                                className="icon-md animate-spin motion-reduce:animate-none"
-                                data-generation-spinner
-                                aria-hidden="true"
-                            />
-                            {generationLabel}
-                        </span>
-                    ) : (
-                        <span className="flex items-center gap-2">
-                            <ProductGlyph kind={actionKind} active className="icon-md" aria-hidden="true" />
-                            {buttonText || "開始生成圖片"}
-                        </span>
-                    )}
-                </Button>
-                {isGenerating && onCancelGeneration && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="lg"
-                        onClick={onCancelGeneration}
-                        className="shrink-0 px-4"
-                    >
-                        取消
-                    </Button>
-                )}
+                {generateButton(buttonText || "開始生成圖片", "flex-1")}
+                {cancelButton}
             </div>
         </div>
     );

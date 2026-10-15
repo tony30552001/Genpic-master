@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import GenerateBar from "../GenerateBar";
@@ -143,5 +143,47 @@ describe("GenerateBar", () => {
     expect(container.querySelector("[data-generation-signature]")).not.toBeInTheDocument();
     expect(screen.getAllByText("正在配置版面").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /配置版面/ })).toBeDisabled();
+  });
+});
+
+describe("GenerateBar compact (phone)", () => {
+  const STATUS = { shortLabel: "配置版面", label: "正在配置版面", elapsedLabel: "12 秒", progress: 40, helperText: "x" };
+
+  it("collapses output settings into a summary that opens a sheet", async () => {
+    const onAspectRatioChange = vi.fn();
+    const { rerender } = render(
+      <GenerateBar {...BASE_PROPS} compact onAspectRatioChange={onAspectRatioChange} imageLanguage="zh-TW" onImageLanguageChange={vi.fn()} />
+    );
+    expect(screen.queryByRole("group", { name: "圖片比例" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "輸出設定：16:9 · 中 · 繁中文字" }));
+
+    const sheet = screen.getByRole("dialog", { name: "輸出設定" });
+    fireEvent.click(within(sheet).getByRole("button", { name: "設定圖片比例為 1:1 社群" }));
+    expect(onAspectRatioChange).toHaveBeenCalledWith("1:1");
+
+    rerender(<GenerateBar {...BASE_PROPS} compact aspectRatio="1:1" onAspectRatioChange={onAspectRatioChange} imageLanguage="zh-TW" onImageLanguageChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "輸出設定：1:1 · 中 · 繁中文字" })).toBeInTheDocument();
+  });
+
+  it("closes the sheet before generating from it", async () => {
+    const onGenerate = vi.fn();
+    render(<GenerateBar {...BASE_PROPS} compact onGenerate={onGenerate} />);
+    fireEvent.click(screen.getByRole("button", { name: /輸出設定：/ }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "輸出設定" })).getByRole("button", { name: /開始生成圖片/ }));
+    expect(onGenerate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "輸出設定" })).toBeNull());
+  });
+
+  it("shows the result thumbnail and swaps the summary for progress while generating", () => {
+    const onOpenResult = vi.fn();
+    const { rerender } = render(<GenerateBar {...BASE_PROPS} compact resultImage="data:image/png;base64,AA" onOpenResult={onOpenResult} />);
+    fireEvent.click(screen.getByRole("button", { name: "查看生成結果" }));
+    expect(onOpenResult).toHaveBeenCalled();
+
+    rerender(<GenerateBar {...BASE_PROPS} compact isGenerating generationStatus={STATUS} onCancelGeneration={vi.fn()} resultImage="data:image/png;base64,AA" />);
+    expect(screen.queryByRole("button", { name: /輸出設定：/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "查看生成結果" })).toBeNull();
+    expect(screen.getByText("正在配置版面")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "取消" })).toBeInTheDocument();
   });
 });

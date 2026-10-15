@@ -341,4 +341,39 @@ describe("creation orchestration", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(document.querySelector("[data-expanded-canvas]")).toBeNull());
   });
+
+  describe("phone layout", () => {
+    beforeEach(() => {
+      mocks.preview = null;
+      vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+        matches: query === "(max-width: 767.98px)", media: query,
+        addEventListener: () => {}, removeEventListener: () => {},
+      }));
+    });
+
+    it("opens the result full screen after generating and leaves it with the back button", async () => {
+      await mount("general");
+      expect(mocks.preview).toBeNull();
+      expect(mocks.bar.compact).toBe(true);
+      await act(async () => { await invoke("general"); });
+      const view = document.querySelector("[data-mobile-result]");
+      expect(view).not.toBeNull();
+      expect(mocks.preview.generatedImage).toBe("data:image/png;base64,default-job");
+
+      fireEvent.click(screen.getByRole("button", { name: "編輯" }));
+      await waitFor(() => expect(document.querySelector("[data-mobile-result]")).toBeNull());
+      fireEvent.click(screen.getByRole("button", { name: "查看生成結果" }));
+      expect(document.querySelector("[data-mobile-result]")).not.toBeNull();
+    });
+
+    it("opens the result view when the refine hint is tapped", async () => {
+      await mount("general");
+      await act(async () => { await invoke("general"); });
+      fireEvent.click(screen.getByRole("button", { name: "編輯" }));
+      await waitFor(() => expect(document.querySelector("[data-mobile-result]")).toBeNull());
+
+      fireEvent.click(screen.getByRole("button", { name: /只改一小部分/ }));
+      expect(document.querySelector("[data-mobile-result]")).not.toBeNull();
+    });
+  });
 });

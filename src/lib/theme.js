@@ -6,6 +6,9 @@ const emit = () => listeners.forEach((listener) => listener());
 
 const isTheme = (value) => value === "light" || value === "dark";
 
+/* 狀態列顏色對齊頂部的主色頁首（--primary）；index.html 的首次繪製腳本使用相同的值。 */
+const THEME_COLORS = { light: "#2563eb", dark: "#3b82f6" };
+
 const readStoredTheme = () => {
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
   return isTheme(stored) ? stored : null;
@@ -15,6 +18,7 @@ const applyTheme = (theme) => {
   const root = document.documentElement;
   root.classList.toggle("dark", theme === "dark");
   root.style.colorScheme = theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[theme]);
 };
 
 export const getTheme = () =>

@@ -82,7 +82,7 @@ describe("ExpandedCanvas", () => {
 
   it("closes through its history entry with Esc, the close button or back", async () => {
     const { onClose } = renderCanvas();
-    expect(window.history.state?.pixoraExpandedCanvas).toBe(true);
+    expect(window.history.state?.pixoraLayerDepth).toBe(1);
     expect(screen.getByRole("button", { name: "關閉" })).toHaveFocus();
 
     fireEvent.keyDown(window, { key: "Escape" });
@@ -95,10 +95,8 @@ describe("ExpandedCanvas", () => {
     cleanup();
 
     const third = renderCanvas();
-    act(() => {
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
-    expect(third.onClose).toHaveBeenCalledTimes(1);
+    act(() => window.history.back());
+    await waitFor(() => expect(third.onClose).toHaveBeenCalledTimes(1));
   });
 
   it("shows a root version without compare controls", () => {

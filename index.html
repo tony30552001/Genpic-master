@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/pixora-favicon.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#2563eb" />
   <title>Pixora 智繪</title>
   <script>
     /* 在首次繪製前套用主題，避免重新整理時閃現錯誤色系。 */
@@ -15,6 +16,8 @@
         : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.classList.toggle("dark", theme === "dark");
       document.documentElement.style.colorScheme = theme;
+      /* 狀態列顏色對齊頂部的主色頁首；值與 src/lib/theme.js 的 THEME_COLORS 相同。 */
+      document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#3b82f6" : "#2563eb";
     })();
   </script>
 </head>
