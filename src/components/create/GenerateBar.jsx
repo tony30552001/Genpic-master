@@ -107,6 +107,7 @@ export default function GenerateBar({
     actionKind = "create",
     disabled = false,
     aspectRatioLocked = false,
+    onSuggestRefine,
 }) {
     const quality = imageQuality === undefined ? imageModelConfig?.defaultQuality : imageQuality;
     const setupError = configurationError || getImageQualityError(imageModelConfig, quality);
@@ -217,6 +218,16 @@ export default function GenerateBar({
                         {generationStatus.helperText}
                     </p>
                 </div>
+            )}
+
+            {onSuggestRefine && !isGenerating && (
+                <button
+                    type="button"
+                    onClick={onSuggestRefine}
+                    className="w-full rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs text-foreground transition-colors duration-(--motion-hover) hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                    只改一小部分？用「修改這張」，構圖會保留。
+                </button>
             )}
 
             {/* Generate CTA */}

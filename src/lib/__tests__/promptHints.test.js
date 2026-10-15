@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectNoTextIntent } from "../promptHints";
+import { detectNoTextIntent, isNearDuplicatePrompt } from "../promptHints";
 
 describe("detectNoTextIntent", () => {
   it.each([
@@ -36,5 +36,24 @@ describe("detectNoTextIntent", () => {
     "context matters",
   ])("does not flag local or unrelated text requests: %s", (prompt) => {
     expect(detectNoTextIntent(prompt)).toBe(false);
+  });
+});
+
+describe("isNearDuplicatePrompt", () => {
+  it.each([
+    ["公車盲區示意圖，司機視角，藍色系", "公車盲區示意圖，司機視角，藍色系"],
+    ["公車盲區示意圖，司機視角，藍色系", "公車盲區示意圖，司機視角，綠色系"],
+    ["A city street at night with rain", "a city street at night with  rain!"],
+  ])("treats %s → %s as a near duplicate", (prev, next) => {
+    expect(isNearDuplicatePrompt(prev, next)).toBe(true);
+  });
+
+  it.each([
+    ["公車盲區示意圖", "工廠安全宣導海報，黃黑配色"],
+    ["公車盲區示意圖，司機視角", "公車盲區示意圖，司機視角，加上三個行人與一台機車"],
+    ["", "公車盲區示意圖"],
+    [null, "公車盲區示意圖"],
+  ])("does not flag %s → %s", (prev, next) => {
+    expect(isNearDuplicatePrompt(prev, next)).toBe(false);
   });
 });

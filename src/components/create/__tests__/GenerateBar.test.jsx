@@ -32,6 +32,23 @@ describe("GenerateBar", () => {
     expect(screen.getByRole("button", { name: "修改這張" })).toBeEnabled();
   });
 
+  it("suggests refining without blocking regeneration", () => {
+    const onSuggestRefine = vi.fn();
+    const onGenerate = vi.fn();
+    render(<GenerateBar {...BASE_PROPS} onGenerate={onGenerate} onSuggestRefine={onSuggestRefine} />);
+    fireEvent.click(screen.getByRole("button", { name: /只改一小部分/ }));
+    expect(onSuggestRefine).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /開始生成圖片/ }));
+    expect(onGenerate).toHaveBeenCalled();
+  });
+
+  it("hides the refine suggestion while generating or when not offered", () => {
+    const { rerender } = render(<GenerateBar {...BASE_PROPS} />);
+    expect(screen.queryByRole("button", { name: /只改一小部分/ })).toBeNull();
+    rerender(<GenerateBar {...BASE_PROPS} isGenerating onSuggestRefine={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /只改一小部分/ })).toBeNull();
+  });
+
   it.each([
     ["gpt-image-2", ["low", "medium", "high"], ["低", "中", "高"]],
     ["gpt-image-2.5-flare", ["low", "medium", "high", "xhigh", "max", "auto"], ["低", "中", "高", "超高", "最高", "自動"]],

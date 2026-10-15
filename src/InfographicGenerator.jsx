@@ -31,6 +31,7 @@ import useImageRefine from './hooks/useImageRefine';
 import { uploadFile } from './services/storageService';
 import { STYLE_TRANSFER_PURPOSE, REFERENCE_PURPOSE } from './lib/attachmentPurposes';
 import { readFileAsDataUrl } from './lib/imageFile';
+import { isNearDuplicatePrompt } from './lib/promptHints';
 import { DEFAULT_IMAGE_LANGUAGE } from './config';
 import { getImageModelSetupError, getImageQualityError } from './lib/imageModel';
 import { cn } from './lib/utils';
@@ -45,6 +46,7 @@ import DocumentUploader from './components/create/DocumentUploader';
 import DocumentScenes from './components/create/DocumentScenes';
 import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
+import ExpandedCanvas from './components/create/ExpandedCanvas';
 import SettingsPanel from './components/settings/SettingsPanel';
 import AttachmentPicker from './components/create/AttachmentPicker';
 import AssetCenter from './components/library/AssetCenter';
@@ -83,6 +85,7 @@ export default function InfographicGenerator({
     const [isStyleTagsTouched, setIsStyleTagsTouched] = useState(false);
     const [appliedStyleId, setAppliedStyleId] = useState(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
+    const [canvasOrigin, setCanvasOrigin] = useState(null);
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [compactNavSection, setCompactNavSection] = useState(null);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
@@ -466,6 +469,21 @@ export default function InfographicGenerator({
         onSelectVersion: handleSelectVersion,
         getVersionLabel: imageVersions.getVersionLabel,
         getVersion: imageVersions.getVersion,
+        onExpand: (rect) => setCanvasOrigin({
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+            scale: Math.min(1, Math.max(0.2, Math.min(rect.width / window.innerWidth, rect.height / window.innerHeight))),
+        }),
+    };
+
+    const chainPrompt = imageVersions.versions[0]?.instruction;
+    const suggestsRefine = Boolean(generatedImage) && !workspace.attachment && isNearDuplicatePrompt(chainPrompt, userScript);
+
+    const focusRefineInput = () => {
+        const inputs = [...document.querySelectorAll('[data-refine-input]')];
+        const input = inputs.find((element) => element.getClientRects().length > 0) || inputs[0];
+        input?.scrollIntoView({ block: 'nearest' });
+        input?.focus();
     };
 
     const handleAnalyzeDocument = async (file, sceneCount) => {
@@ -1024,6 +1042,7 @@ export default function InfographicGenerator({
                                 }
                                 actionKind={hasActiveDocumentResult ? "document" : workspace.isTransform ? "transform" : "create"}
                                 aspectRatioLocked={!hasActiveDocumentResult && workspace.aspectRatioLocked}
+                                onSuggestRefine={!hasActiveDocumentResult && suggestsRefine ? focusRefineInput : undefined}
                                 disabled={
                                     hasActiveDocumentResult
                                         ? !scenes || scenes.length === 0
@@ -1137,6 +1156,28 @@ export default function InfographicGenerator({
                         </div>
                     </M.div>
                 </M.div>
+            )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+            {canvasOrigin && activeVersion && (
+                <ExpandedCanvas
+                    key="expanded-canvas"
+                    origin={canvasOrigin}
+                    version={activeVersion}
+                    parent={imageVersions.getVersion(activeVersion.parentId)}
+                    getVersionLabel={imageVersions.getVersionLabel}
+                    onClose={() => setCanvasOrigin(null)}
+                    isRefining={isRefining}
+                    refineError={refineError}
+                    onRefine={handleRefine}
+                    refineDisabled={isGenerating}
+                    generationStatus={generationStatus}
+                    versionRows={imageVersions.rows}
+                    activeVersionId={imageVersions.activeVersionId}
+                    onSelectVersion={handleSelectVersion}
+                    getVersion={imageVersions.getVersion}
+                />
             )}
             </AnimatePresence>
 

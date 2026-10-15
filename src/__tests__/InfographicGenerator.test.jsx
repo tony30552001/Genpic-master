@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -320,5 +320,25 @@ describe("creation orchestration", () => {
     await act(async () => { await mocks.preview.onRefine("改色"); });
     expect(mocks.preview.refineError).toBe("模型忙碌");
     expect(mocks.preview.generatedImage).toBe("data:image/png;base64,default-job");
+  });
+
+  it("suggests refining when the prompt barely changes after a result", async () => {
+    await mount("general");
+    expect(mocks.bar.onSuggestRefine).toBeUndefined();
+    await act(async () => { await invoke("general"); });
+    expect(mocks.bar.onSuggestRefine).toEqual(expect.any(Function));
+    fireEvent.change(screen.getByRole("textbox", { name: "Script" }), { target: { value: "User scenes" } });
+    expect(mocks.bar.onSuggestRefine).toEqual(expect.any(Function));
+    fireEvent.change(screen.getByRole("textbox", { name: "Script" }), { target: { value: "完全不同的海報主題" } });
+    expect(mocks.bar.onSuggestRefine).toBeUndefined();
+  });
+
+  it("opens the expanded canvas from the preview and closes it with Esc", async () => {
+    await mount("general");
+    await act(async () => { await invoke("general"); });
+    act(() => { mocks.preview.onExpand({ left: 0, top: 0, width: 400, height: 300 }); });
+    expect(document.querySelector("[data-expanded-canvas]")).toHaveTextContent("v1");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector("[data-expanded-canvas]")).toBeNull());
   });
 });

@@ -29,3 +29,31 @@ export function detectNoTextIntent(text) {
   const match = EN_NO_TEXT.exec(text);
   return Boolean(match) && !EN_LOCAL_SUBJECT.test(text.slice(0, match.index));
 }
+
+const NEAR_DUPLICATE_THRESHOLD = 0.8;
+
+const normalizeForComparison = (text) =>
+  typeof text === "string" ? text.trim().replace(/\s+/g, " ").toLowerCase() : "";
+
+/** 以字元層級的編輯距離判斷兩段 prompt 是否幾乎相同（相似度 ≥ 0.8）。 */
+export function isNearDuplicatePrompt(prev, next) {
+  const a = [...normalizeForComparison(prev)];
+  const b = [...normalizeForComparison(next)];
+  if (!a.length || !b.length) return false;
+  const longest = Math.max(a.length, b.length);
+  if (Math.min(a.length, b.length) / longest < NEAR_DUPLICATE_THRESHOLD) return false;
+
+  let previousRow = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      row[j] = Math.min(
+        previousRow[j] + 1,
+        row[j - 1] + 1,
+        previousRow[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    previousRow = row;
+  }
+  return 1 - previousRow[b.length] / longest >= NEAR_DUPLICATE_THRESHOLD;
+}

@@ -95,6 +95,13 @@ describe("ImagePreview refinement", () => {
     expect(onSelectVersion).toHaveBeenCalledWith("a");
   });
 
+  it("expands from the shown image's position", () => {
+    const onExpand = vi.fn();
+    render(<ImagePreview generatedImage="v2.png" onExpand={onExpand} />);
+    fireEvent.click(screen.getByRole("button", { name: "展開畫布比較版本" }));
+    expect(onExpand).toHaveBeenCalledWith(expect.objectContaining({ width: expect.any(Number), left: expect.any(Number) }));
+  });
+
   it("hides the version strip for a single version and labels compressed history previews", () => {
     render(
       <ImagePreview

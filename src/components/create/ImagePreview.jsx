@@ -1,17 +1,18 @@
-import React, { useId, useState } from "react";
+import React, { useState } from "react";
 import {
+  Maximize2,
   Save,
 } from "@/components/icons/lucideControls";
 import {
   Image as ImageIcon,
 } from "@/components/icons/lucideContent";
 import ProductGlyph from "@/components/icons/ProductGlyph";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
 import ShareToLineButton from "../share/ShareToLineButton";
 import ImageGeneratingState from "./ImageGeneratingState";
+import RefineForm from "./RefineForm";
+import VersionStrip from "./VersionStrip";
 
 const EMPTY_FRAME_CLASSES = {
   "16:9": "aspect-video w-44",
@@ -22,96 +23,6 @@ const EMPTY_FRAME_CLASSES = {
 
 const getEmptyFrameClass = (aspectRatio) =>
   EMPTY_FRAME_CLASSES[aspectRatio] || EMPTY_FRAME_CLASSES["16:9"];
-
-function RefineForm({ onRefine, isRefining, disabled, refineError }) {
-  const inputId = useId();
-  const errorId = useId();
-  const [instruction, setInstruction] = useState("");
-  const canSubmit = Boolean(instruction.trim()) && !disabled;
-
-  const submit = async (event) => {
-    event.preventDefault();
-    if (!canSubmit) return;
-    if (await onRefine(instruction)) setInstruction("");
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-1.5">
-      <div className="flex gap-2">
-        <Input
-          id={inputId}
-          value={instruction}
-          onChange={(event) => setInstruction(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault();
-          }}
-          placeholder="要修改哪裡？例如：把行人的衣服改成黃色"
-          aria-label="描述要修改的地方"
-          aria-invalid={Boolean(refineError)}
-          aria-describedby={refineError ? errorId : undefined}
-          data-refine-input
-          className="h-10 min-w-0"
-        />
-        <Button type="submit" disabled={!canSubmit} className="h-10 shrink-0 font-semibold">
-          {isRefining ? "修改中…" : "修改這張"}
-        </Button>
-      </div>
-      {refineError && (
-        <p id={errorId} role="alert" className="text-xs text-destructive">
-          {refineError}
-        </p>
-      )}
-    </form>
-  );
-}
-
-function VersionStrip({ rows, activeVersionId, onSelectVersion, getVersionLabel, getVersion }) {
-  return (
-    <div className="space-y-1.5" aria-label="版本" role="group">
-      {rows.map((row) => (
-        <ul
-          key={row.items[0].id}
-          className={cn("flex items-center gap-1.5 overflow-x-auto pb-0.5", row.fromId && "pl-4")}
-        >
-          {row.fromId && (
-            <li className="shrink-0 text-[11px] text-muted-foreground" aria-hidden="true">
-              ↳ 從 {getVersionLabel(getVersion(row.fromId))}
-            </li>
-          )}
-          {row.items.map((version) => {
-            const label = getVersionLabel(version);
-            const isActive = version.id === activeVersionId;
-            const description = version.parentId ? version.instruction : "原始";
-            return (
-              <li key={version.id} className="shrink-0">
-                <button
-                  type="button"
-                  aria-current={isActive ? "true" : undefined}
-                  aria-label={`${label}：${description}`}
-                  onClick={() => onSelectVersion(version.id)}
-                  className={cn(
-                    "w-20 rounded-md border-2 p-0.5 text-left transition-colors duration-(--motion-hover) ease-emphasized active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    isActive ? "border-primary" : "border-transparent hover:border-border"
-                  )}
-                >
-                  <img src={version.imageUrl} alt="" className="aspect-video w-full rounded object-cover" />
-                  <span
-                    className={cn(
-                      "block truncate px-0.5 text-[10px]",
-                      isActive ? "font-semibold text-primary" : "text-muted-foreground"
-                    )}
-                  >
-                    {label} {description}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ))}
-    </div>
-  );
-}
 
 export default function ImagePreview({
   generatedImage,
@@ -130,6 +41,7 @@ export default function ImagePreview({
   onSelectVersion,
   getVersionLabel,
   getVersion,
+  onExpand,
 }) {
   const [failedImage, setFailedImage] = useState(null);
   const imageError = Boolean(generatedImage) && failedImage === generatedImage;
@@ -188,6 +100,7 @@ export default function ImagePreview({
           <img
             key={generatedImage}
             src={generatedImage}
+            data-preview-image
             alt="AI 產生的圖片"
             width={1536}
             height={1024}
@@ -239,6 +152,21 @@ export default function ImagePreview({
 
       {!imageError && (
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {onExpand && (
+            <button
+              type="button"
+              onClick={(event) => {
+                const frame = event.currentTarget.closest("[data-image-preview]");
+                const image = frame.querySelector("[data-preview-image]") || frame;
+                onExpand(image.getBoundingClientRect());
+              }}
+              aria-label="展開畫布比較版本"
+              className="mr-auto flex h-9 items-center gap-1.5 rounded-lg border border-border/50 bg-background px-3 text-xs font-medium text-foreground transition-colors duration-(--motion-hover) hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Maximize2 className="icon-sm" aria-hidden="true" />
+              <span className="whitespace-nowrap">展開比較</span>
+            </button>
+          )}
           <ShareToLineButton
             imageUrl={generatedImage}
             user={user}
@@ -265,7 +193,7 @@ export default function ImagePreview({
   };
 
   return (
-    <div className="relative flex h-auto min-h-[260px] w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-border bg-background shadow-sm lg:min-h-[500px] lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none">
+    <div data-image-preview className="relative flex h-auto min-h-[260px] w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-border bg-background shadow-sm lg:min-h-[500px] lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none">
       {renderContent()}
     </div>
   );
