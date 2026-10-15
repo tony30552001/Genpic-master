@@ -112,6 +112,7 @@ const invoke = (tab) => tab === "document"
 describe("creation orchestration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mocks.profile = profileFor(flare);
     mocks.profileError = "";
     mocks.isProfileLoading = false;
@@ -208,6 +209,17 @@ describe("creation orchestration", () => {
     await act(async () => { await invoke(tab); });
     const request = tab === "image-transform" ? mocks.runTransform : mocks.generateImage;
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ imageQuality: "high" }));
+  });
+
+  it("shares the no-text mode between the generate bar, the editor and the request", async () => {
+    mount("general");
+    fireEvent.click(screen.getByRole("button", { name: "無文字" }));
+    expect(mocks.script.imageLanguage).toBe("none");
+    expect(localStorage.getItem("genpic_image_language")).toBe("none");
+    await act(async () => { await invoke("general"); });
+    expect(mocks.generateImage).toHaveBeenCalledWith(expect.objectContaining({ imageLanguage: "none" }));
+    act(() => { mocks.script.onImageLanguageChange("zh-TW"); });
+    expect(screen.getByRole("button", { name: "繁中" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("requires choosing again when catalog capabilities change without a policy switch", async () => {

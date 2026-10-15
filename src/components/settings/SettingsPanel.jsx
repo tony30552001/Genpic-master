@@ -11,81 +11,15 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import LineSettings from "./LineSettings";
 import useLineConfig from "../../hooks/useLineConfig";
-import { DEFAULT_IMAGE_LANGUAGE, IMAGE_QUALITY_LABELS } from "../../config";
+import { IMAGE_QUALITY_LABELS } from "../../config";
+import { LANGUAGE_OPTIONS, getLanguageOption } from "../../lib/imageTextLanguage";
 import { getImageModelSetupError } from "../../lib/imageModel";
-
-const LANGUAGE_OPTIONS = [
-    {
-        id: "en",
-        label: "English",
-        labelZh: "英文",
-        code: "EN",
-        description: "Generate images with English text, suitable for international use.",
-    },
-    {
-        id: "zh-TW",
-        label: "繁體中文",
-        labelZh: "繁體中文",
-        code: "繁",
-        description: "生成包含繁體中文文字的圖片，適合台灣市場。",
-    },
-    {
-        id: "zh-CN",
-        label: "简体中文",
-        labelZh: "簡體中文",
-        code: "简",
-        description: "生成包含简体中文文字的图片，适合中国大陆市场。",
-    },
-    {
-        id: "ja",
-        label: "日本語",
-        labelZh: "日文",
-        code: "日",
-        description: "日本語のテキストを含む画像を生成します。",
-    },
-    {
-        id: "ko",
-        label: "한국어",
-        labelZh: "韓文",
-        code: "韓",
-        description: "한국어 텍스트가 포함된 이미지를 생성합니다.",
-    },
-    {
-        id: "es",
-        label: "Español",
-        labelZh: "西班牙文",
-        code: "ES",
-        description: "Generar imágenes con texto en español.",
-    },
-    {
-        id: "fr",
-        label: "Français",
-        labelZh: "法文",
-        code: "FR",
-        description: "Générer des images avec du texte en français.",
-    },
-    {
-        id: "de",
-        label: "Deutsch",
-        labelZh: "德文",
-        code: "DE",
-        description: "Bilder mit deutschem Text generieren.",
-    },
-    {
-        id: "none",
-        label: "No Text",
-        labelZh: "無文字",
-        code: "無",
-        description: "圖片中不包含任何文字，純圖像模式。",
-    },
-];
 
 /**
  * 設定面板 — 全域生成偏好與整合設定
  */
 export default function SettingsPanel({ imageLanguage, onImageLanguageChange, imageModelConfig, configurationError, user }) {
-    const currentLang = LANGUAGE_OPTIONS.find((l) => l.id === imageLanguage)
-        || LANGUAGE_OPTIONS.find((l) => l.id === DEFAULT_IMAGE_LANGUAGE);
+    const currentLang = getLanguageOption(imageLanguage);
     const currentModel = imageModelConfig;
     const setupError = configurationError || getImageModelSetupError(currentModel);
     const lineConfigHook = useLineConfig({ user });

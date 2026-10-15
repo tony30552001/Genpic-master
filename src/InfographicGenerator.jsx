@@ -928,6 +928,7 @@ export default function InfographicGenerator({
                                             onUserScriptChange={setUserScript}
                                             onOptimizedPromptEnChange={setOptimizedPromptEn}
                                             imageLanguage={imageLanguage}
+                                            onImageLanguageChange={handleLanguageChange}
                                             imagePurpose={imagePurpose}
                                             aspectRatio={aspectRatio}
                                             onImagePurposeChange={setImagePurpose}
@@ -1024,6 +1025,8 @@ export default function InfographicGenerator({
                                 imageQuality={imageQuality}
                                 onImageQualityChange={setImageQuality}
                                 imageModelConfig={imageModelConfig}
+                                imageLanguage={imageLanguage}
+                                onImageLanguageChange={handleLanguageChange}
                                 configurationError={modelSetupError}
                                 isGenerating={isGenerating}
                                 generationStatus={generationStatus}

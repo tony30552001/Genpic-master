@@ -36,7 +36,7 @@ describe("GenerateBar", () => {
       fireEvent.click(button);
       expect(onImageQualityChange).toHaveBeenNthCalledWith(index + 1, supportedQualities[index]);
     });
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /品質|模型|解析度/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /解析度/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/1K|2K|4K/)).not.toBeInTheDocument();
   });
@@ -58,6 +58,29 @@ describe("GenerateBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "開始生成圖片" }));
     expect(onGenerate).not.toHaveBeenCalled();
     expect(within(screen.getByRole("group", { name: "圖片品質" })).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("switches the in-image text mode next to the generate button", () => {
+    const onImageLanguageChange = vi.fn();
+    const { rerender } = render(
+      <GenerateBar {...BASE_PROPS} imageLanguage="zh-TW" onImageLanguageChange={onImageLanguageChange} />
+    );
+    const group = screen.getByRole("group", { name: "圖中文字" });
+    expect(within(group).getByRole("button", { name: "繁中" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(group).getByRole("button", { name: "無文字" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(group).getByRole("combobox", { name: "其他圖中文字語言" })).toHaveTextContent("其他");
+    expect(screen.getByText(/GPT Image 2 ·/)).toHaveTextContent("· 繁中文字");
+
+    fireEvent.click(within(group).getByRole("button", { name: "無文字" }));
+    expect(onImageLanguageChange).toHaveBeenCalledWith("none");
+
+    rerender(<GenerateBar {...BASE_PROPS} imageLanguage="none" onImageLanguageChange={onImageLanguageChange} />);
+    expect(within(group).getByRole("button", { name: "無文字" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/GPT Image 2 ·/)).toHaveTextContent("· 無文字");
+
+    rerender(<GenerateBar {...BASE_PROPS} imageLanguage="ja" onImageLanguageChange={onImageLanguageChange} />);
+    expect(within(group).getByRole("button", { name: "繁中" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(group).getByRole("combobox", { name: "其他圖中文字語言" })).toHaveTextContent("日文");
   });
 
   it("uses the semantic product glyph for the current action", () => {

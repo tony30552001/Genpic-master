@@ -25,6 +25,9 @@ import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
 import { STYLE_DIMENSIONS } from "./styleDimensions";
 import StyleSourceTabs from "./StyleSourceTabs";
+import PromptHints from "./PromptHints";
+import { detectNoTextIntent } from "@/lib/promptHints";
+import { NO_TEXT_LANGUAGE } from "@/lib/imageTextLanguage";
 
 /** 決定系統是否為畫面補上構圖與文字語系指令。 */
 const IMAGE_PURPOSE_OPTIONS = [
@@ -80,6 +83,7 @@ export default function ScriptEditor({
   onGenerate,
   paletteStyleTags = [],
   imageLanguage = "",
+  onImageLanguageChange,
   imagePurpose = "infographic",
   aspectRatio = "1:1",
   onImagePurposeChange,
@@ -97,6 +101,23 @@ export default function ScriptEditor({
   const [showStyleSource, setShowStyleSource] = useState(false);
   const [styleSourceTab, setStyleSourceTab] = useState("templates");
   const [paletteSelected, setPaletteSelected] = useState({});
+  const [noTextHintDismissedFor, setNoTextHintDismissedFor] = useState(null);
+
+  const promptHints = [];
+  if (
+    onImageLanguageChange &&
+    imageLanguage !== NO_TEXT_LANGUAGE &&
+    noTextHintDismissedFor !== userScript &&
+    detectNoTextIntent(userScript)
+  ) {
+    promptHints.push({
+      id: "no-text",
+      message: "偵測到你不要圖中文字，改用「無文字」效果更穩定。",
+      actionLabel: "改用無文字",
+      onAction: () => onImageLanguageChange(NO_TEXT_LANGUAGE),
+      onDismiss: () => setNoTextHintDismissedFor(userScript),
+    });
+  }
 
   // 調色盤 tag 選擇變更時，計算風格字串並通知父元件
   const handlePaletteChange = useCallback((newSelected) => {
@@ -270,6 +291,8 @@ export default function ScriptEditor({
             placeholder={"描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
             className="min-h-[112px] resize-y rounded-xl border-input bg-background text-sm leading-relaxed shadow-inner focus-visible:border-primary/50 focus-visible:ring-primary/30 md:min-h-[140px]"
           />
+
+          <PromptHints hints={promptHints} />
 
           <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-3">

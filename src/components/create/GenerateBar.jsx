@@ -15,6 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { IMAGE_QUALITY_LABELS } from "@/config";
 import { getImageQualityError } from "@/lib/imageModel";
+import { LANGUAGE_OPTIONS, NO_TEXT_LANGUAGE, getImageTextModeLabel } from "@/lib/imageTextLanguage";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const ASPECT_RATIOS = [
     { id: "16:9", label: "16:9 簡報", icon: Monitor },
@@ -22,6 +30,60 @@ const ASPECT_RATIOS = [
     { id: "1:1", label: "1:1 社群", icon: Square },
     { id: "9:16", label: "9:16 手機", icon: Smartphone },
 ];
+
+const PRIMARY_TEXT_LANGUAGES = ["zh-TW", NO_TEXT_LANGUAGE];
+const OTHER_TEXT_LANGUAGES = LANGUAGE_OPTIONS.filter((option) => !PRIMARY_TEXT_LANGUAGES.includes(option.id));
+
+const SEGMENT_CLASS =
+    "min-h-11 touch-manipulation whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted";
+const SEGMENT_ACTIVE_CLASS = "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60";
+const SEGMENT_IDLE_CLASS = "text-muted-foreground hover:bg-background/70 hover:text-foreground";
+
+function TextModeControl({ imageLanguage, onImageLanguageChange }) {
+    const otherOption = OTHER_TEXT_LANGUAGES.find((option) => option.id === imageLanguage);
+
+    return (
+        <div
+            className="flex gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner"
+            role="group"
+            aria-label="圖中文字"
+        >
+            {PRIMARY_TEXT_LANGUAGES.map((id) => {
+                const option = LANGUAGE_OPTIONS.find((item) => item.id === id);
+                return (
+                    <button
+                        type="button"
+                        key={id}
+                        onClick={() => onImageLanguageChange(id)}
+                        aria-pressed={imageLanguage === id}
+                        className={cn(SEGMENT_CLASS, imageLanguage === id ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS)}
+                    >
+                        {option.shortLabel}
+                    </button>
+                );
+            })}
+            <Select value={otherOption ? otherOption.id : ""} onValueChange={onImageLanguageChange}>
+                <SelectTrigger
+                    aria-label="其他圖中文字語言"
+                    className={cn(
+                        SEGMENT_CLASS,
+                        "h-auto w-auto gap-1 border-0 bg-transparent ring-offset-0 focus:ring-2 focus:ring-offset-0",
+                        otherOption ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS
+                    )}
+                >
+                    <SelectValue placeholder="其他">{otherOption?.shortLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                    {OTHER_TEXT_LANGUAGES.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                            {option.shortLabel}（{option.label}）
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+    );
+}
 
 /**
  * 固定底部的生成控制列
@@ -33,6 +95,8 @@ export default function GenerateBar({
     imageQuality,
     onImageQualityChange,
     imageModelConfig,
+    imageLanguage,
+    onImageLanguageChange,
     configurationError,
     isGenerating,
     onGenerate,
@@ -59,6 +123,7 @@ export default function GenerateBar({
                 <p className="text-xs font-semibold text-foreground">輸出設定</p>
                 <p className="min-w-0 truncate text-xs text-muted-foreground">
                     {imageModelConfig?.label || "尚未設定圖片模型"} · {selectedSizeLabel}
+                    {onImageLanguageChange && ` · ${getImageTextModeLabel(imageLanguage)}`}
                 </p>
             </div>
 
@@ -111,6 +176,16 @@ export default function GenerateBar({
                         </button>
                     ))}
                 </div>
+
+                {onImageLanguageChange && (
+                    <>
+                        <Separator orientation="vertical" className="h-6" />
+                        <TextModeControl
+                            imageLanguage={imageLanguage}
+                            onImageLanguageChange={onImageLanguageChange}
+                        />
+                    </>
+                )}
             </div>
             {setupError ? (
                 <p role="alert" className="text-xs text-destructive">{setupError}</p>
