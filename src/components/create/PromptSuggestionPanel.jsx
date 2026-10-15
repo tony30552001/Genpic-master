@@ -1,17 +1,11 @@
-import React from "react";
-import {
-  X,
-  ArrowRight,
-} from "@/components/icons/lucideControls";
-import {
-  Check,
-} from "@/components/icons/lucideStatus";
-import {
-  Sparkles,
-} from "@/components/icons/lucideContent";
+import React, { useId } from "react";
+import { ChevronDown } from "@/components/icons/lucideControls";
+import { Check } from "@/components/icons/lucideStatus";
+import { Sparkles } from "@/components/icons/lucideContent";
+
 /**
  * PromptSuggestionPanel — AI 優化建議預覽面板
- * 顯示原始/優化後的文字比較與 AI 說明，讓使用者選擇套用或取消
+ * 以優化後文字為主體，原文收在可展開的對照區，讓使用者決定套用或保留原文
  */
 export default function PromptSuggestionPanel({
     originalText,
@@ -20,75 +14,59 @@ export default function PromptSuggestionPanel({
     onAccept,
     onReject,
 }) {
+    const titleId = useId();
+
     return (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
-            {/* Header */}
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground">
-                <Sparkles className="icon-sm" aria-hidden="true" />
-                <span className="text-sm font-bold">AI 優化建議</span>
-            </div>
+        <section
+            aria-labelledby={titleId}
+            className="overflow-hidden rounded-xl border border-border bg-card shadow-sm ring-1 ring-primary/10 animate-in fade-in slide-in-from-top-1 duration-(--motion-enter) ease-emphasized motion-reduce:slide-in-from-top-0"
+        >
+            <header className="space-y-1 px-4 pt-3.5">
+                <h3 id={titleId} className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <Sparkles className="icon-sm text-primary" aria-hidden="true" />
+                    AI 優化建議
+                </h3>
+                {explanation && (
+                    <p className="text-xs leading-relaxed text-muted-foreground">{explanation}</p>
+                )}
+            </header>
 
-            {/* AI Explanation */}
-            {explanation && (
-                <div className="px-4 pt-3 pb-1">
-                    <p className="text-xs text-primary bg-primary/10 px-3 py-2 rounded-lg leading-relaxed">
-                        {explanation}
-                    </p>
-                </div>
-            )}
+            <div className="space-y-2 px-4 py-3">
+                <p className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/40 px-3.5 py-3 text-sm leading-7 text-foreground custom-scrollbar">
+                    {optimizedText}
+                </p>
 
-            {/* Comparison */}
-            <div className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-3">
-                {/* Original */}
-                <div className="space-y-1">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                            原始內容
-                        </span>
-                    </div>
-                    <div className="break-words rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+                <details className="group">
+                    <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors duration-(--motion-hover) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                        <ChevronDown
+                            className="icon-xs -rotate-90 transition-transform duration-(--motion-hover) ease-emphasized group-open:rotate-0"
+                            aria-hidden="true"
+                        />
+                        對照原始內容
+                    </summary>
+                    <p className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-xs leading-relaxed text-muted-foreground custom-scrollbar">
                         {originalText || "(空白)"}
-                    </div>
-                </div>
-
-                {/* Arrow */}
-                <div className="flex justify-center py-0.5 sm:px-1">
-                    <ArrowRight className="icon-sm rotate-90 text-primary/40 sm:rotate-0" aria-hidden="true" />
-                </div>
-
-                {/* Optimized */}
-                <div className="space-y-1">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">
-                            優化後
-                        </span>
-                        <Sparkles className="icon-xs text-primary/60" aria-hidden="true" />
-                    </div>
-                    <div className="max-h-48 overflow-y-auto break-words rounded-lg border border-primary/20 bg-card px-3 py-2.5 text-xs leading-relaxed text-foreground shadow-sm whitespace-pre-wrap custom-scrollbar">
-                        {optimizedText}
-                    </div>
-                </div>
+                    </p>
+                </details>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2 border-t border-primary/10 bg-background/60 px-4 py-3 sm:flex-row sm:items-center">
+            <footer className="flex flex-col-reverse gap-2 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                    type="button"
+                    onClick={onReject}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg px-3.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:min-h-0"
+                >
+                    保留原文
+                </button>
                 <button
                     type="button"
                     onClick={onAccept}
-                    className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-9 sm:min-h-0"
                 >
                     <Check className="icon-sm" aria-hidden="true" />
                     套用優化
                 </button>
-                <button
-                    type="button"
-                    onClick={onReject}
-                    className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-muted px-4 py-2 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-auto"
-                >
-                    <X className="icon-sm" aria-hidden="true" />
-                    取消
-                </button>
-            </div>
-        </div>
+            </footer>
+        </section>
     );
 }

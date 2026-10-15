@@ -93,6 +93,20 @@ describe("ScriptEditor attachment purposes", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "套用優化" })).toBeNull());
   });
 
+  it("keeps the original prompt when the suggestion is declined", async () => {
+    vi.mocked(optimizePrompt).mockResolvedValue({ optimizedPromptZh: "黃昏下的城市街景", optimizedPromptEn: "city" });
+    render(<Harness initialScript="城市" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 智能優化" }));
+    expect(await screen.findByRole("region", { name: "AI 優化建議" })).toHaveTextContent("黃昏下的城市街景");
+    expect(screen.getByText("對照原始內容")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "保留原文" }));
+
+    expect(screen.getByRole("textbox", { name: "內容描述" })).toHaveValue("城市");
+    await waitFor(() => expect(screen.queryByRole("region", { name: "AI 優化建議" })).toBeNull());
+  });
+
   it("keeps the advanced style section collapsed until opened and remembers it", () => {
     const { unmount } = render(<Harness />);
     const toggle = screen.getByRole("button", { name: /進階：風格/ });
