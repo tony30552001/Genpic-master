@@ -12,7 +12,7 @@ describe("AssetViewModeToggle", () => {
       <AssetViewModeToggle value="grid" onChange={onChange} />
     );
 
-    expect(screen.getByRole("button", { name: "Grid模式" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "網格模式" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "條列模式" })).toHaveAttribute("aria-pressed", "false");
     expect(container.querySelector("[data-view-mode]")).toHaveAttribute("data-view-mode", "grid");
 

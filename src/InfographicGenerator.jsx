@@ -7,9 +7,7 @@ import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 import {
   LogIn,
   LogOut,
-  X,
   MoreHorizontal,
-  ChevronDown,
 } from "@/components/icons/lucideControls";
 import {
   AlertCircle,
@@ -35,7 +33,6 @@ import { readFileAsDataUrl } from './lib/imageFile';
 import { isNearDuplicatePrompt } from './lib/promptHints';
 import { DEFAULT_IMAGE_LANGUAGE } from './config';
 import { getImageModelSetupError, getImageQualityError } from './lib/imageModel';
-import { cn } from './lib/utils';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -91,24 +88,20 @@ export default function InfographicGenerator({
     const [canvasOrigin, setCanvasOrigin] = useState(null);
     const isMobileLayout = useMediaQuery(MOBILE_LAYOUT_QUERY);
     const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
-    const [compactNavSection, setCompactNavSection] = useState(null);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
     const [imagePurpose, setImagePurpose] = useState('infographic');
     const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
 
     useEffect(() => {
-        if (!mobileMoreOpen && !compactNavSection) return undefined;
+        if (!mobileMoreOpen) return undefined;
 
         const handleKeyDown = (event) => {
-            if (event.key === 'Escape') {
-                setMobileMoreOpen(false);
-                setCompactNavSection(null);
-            }
+            if (event.key === 'Escape') setMobileMoreOpen(false);
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [compactNavSection, mobileMoreOpen]);
+    }, [mobileMoreOpen]);
 
     const handlePaletteStyleChange = (tags) => {
         setPaletteStyleTags(tags);
@@ -632,77 +625,31 @@ export default function InfographicGenerator({
         ['document', 'settings'].includes(tab.id)
     );
     const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
-    const compactNavGroups = [
-        { id: 'create', label: '創作', glyph: 'create', tabIds: ['general', 'document'] },
-        { id: 'library', label: '素材中心', glyph: 'library', tabIds: ['library'] },
-        { id: 'more', label: '更多', glyph: 'settings', tabIds: ['settings'] },
-    ];
-    const compactActiveGroup = compactNavGroups.find((group) => group.tabIds.includes(activeTab))?.id;
-    const compactOpenGroup = compactNavGroups.find((group) => group.id === compactNavSection);
-    const setCompactActiveTab = (tabId) => {
-        setActiveTab(tabId);
-        setCompactNavSection(null);
-        setMobileMoreOpen(false);
-    };
-
     // --- Render ---
     return (
         <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
 
             {/* ═══════════ Top Header Bar ═══════════ */}
             <header className="relative shrink-0 border-b border-border bg-primary pt-[env(safe-area-inset-top)] text-white shadow-md">
-                <div className="flex min-w-0 items-center justify-between gap-2 px-3 h-12 sm:px-4 md:h-14 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
+                <div className="flex min-w-0 items-center justify-between gap-2 px-3 h-12 sm:px-4 lg:h-14 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
                     {/* Logo */}
                     <div className="flex min-w-0 flex-1 items-center gap-2 justify-self-start sm:gap-3">
                         <PixoraMark className="h-8 w-8 text-white" title="Pixora" />
                         <div className="min-w-0">
                             <h1 className="truncate text-sm font-bold leading-tight sm:text-base">Pixora 智繪</h1>
-                            <p className="text-[10px] text-white/70 leading-none hidden sm:block">AI 智能視覺創作平台</p>
+                            <p className="text-[10px] text-white/70 leading-none hidden lg:block">AI 智能視覺創作平台</p>
                         </div>
-                        {/* 手機版：顯示當前頁面名稱 */}
+                        {/* 手機版（< lg）：顯示當前頁面名稱 */}
                         {activeTabInfo && (
-                            <span className="sm:hidden flex min-w-0 shrink items-center gap-1.5 text-[10px] font-medium text-white/75">
+                            <span className="lg:hidden flex min-w-0 shrink items-center gap-1.5 text-[10px] font-medium text-white/75">
                                 <span aria-hidden="true">/</span>
                                 <span className="truncate">{activeTabInfo.label}</span>
                             </span>
                         )}
                     </div>
 
-                    {/* 平板版：Compact Main Navigation */}
-                    <nav className="hidden w-fit items-center justify-center gap-1 px-3 md:flex xl:hidden" aria-label="主要功能">
-                        {compactNavGroups.map((group) => {
-                            const isOpen = compactNavSection === group.id;
-                            const isActive = compactActiveGroup === group.id;
-                            return (
-                                <button
-                                    type="button"
-                                    key={group.id}
-                                    onClick={() => setCompactNavSection(isOpen ? null : group.id)}
-                                    aria-expanded={isOpen}
-                                    aria-haspopup="menu"
-                                    aria-pressed={isActive}
-                                    className={cn(
-                                        'flex min-w-0 shrink items-center justify-center gap-1 rounded-md px-2.5 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80',
-                                        isActive || isOpen
-                                            ? 'bg-white text-primary shadow-sm'
-                                            : 'text-white/80 hover:bg-white/10 hover:text-white'
-                                    )}
-                                >
-                                    <ProductGlyph
-                                        kind={group.glyph}
-                                        active={isActive || isOpen}
-                                        className="icon-sm"
-                                        aria-hidden="true"
-                                    />
-                                    <span className="truncate">{group.label}</span>
-                                    <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform duration-(--motion-hover) ease-emphasized', isOpen && 'rotate-180')} aria-hidden="true" />
-                                </button>
-                            );
-                        })}
-                    </nav>
-
                     {/* 桌面版：Inline Main Tabs */}
-                    <nav className="hidden w-fit items-center justify-center gap-0.5 rounded-lg bg-white/10 p-1 xl:flex" aria-label="主要功能">
+                    <nav className="hidden w-fit items-center justify-center gap-0.5 rounded-lg bg-white/10 p-1 lg:flex" aria-label="主要功能">
                         {tabs.map((tab) => (
                             <button
                                 type="button"
@@ -727,7 +674,7 @@ export default function InfographicGenerator({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => navigate("/admin")}
-                                className="hidden gap-1.5 text-white/90 hover:bg-white/10 hover:text-white xl:flex"
+                                className="hidden gap-1.5 text-white/90 hover:bg-white/10 hover:text-white lg:flex"
                                 title="開啟管理中心"
                             >
                                 <ShieldCheck className="icon-sm" aria-hidden="true" />
@@ -773,75 +720,6 @@ export default function InfographicGenerator({
                     </div>
                 </div>
 
-                <AnimatePresence>
-                {compactOpenGroup && (
-                    <M.div
-                        initial={{ opacity: 0, scale: 0.96 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.96, transition: OVERLAY_EXIT }}
-                        transition={OVERLAY_ENTER}
-                        className="absolute inset-x-4 top-full z-50 mt-2 origin-top rounded-xl border border-white/20 bg-card p-2 text-foreground shadow-xl ring-1 ring-black/10"
-                        role="menu"
-                        aria-label={`${compactOpenGroup.label}功能`}
-                    >
-                        <div className="flex items-center justify-between border-b border-border px-2 pb-2">
-                            <span className="text-xs font-semibold text-muted-foreground">{compactOpenGroup.label}</span>
-                            <button
-                                type="button"
-                                onClick={() => setCompactNavSection(null)}
-                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                aria-label="關閉功能選單"
-                            >
-                                <X className="icon-sm" aria-hidden="true" />
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-3">
-                            {compactOpenGroup.tabIds.map((tabId) => {
-                                const tab = tabs.find((item) => item.id === tabId);
-                                if (!tab) return null;
-                                const isActive = activeTab === tab.id;
-                                return (
-                                    <button
-                                        type="button"
-                                        key={tab.id}
-                                        role="menuitem"
-                                        onClick={() => setCompactActiveTab(tab.id)}
-                                        aria-pressed={isActive}
-                                        className={cn(
-                                            'flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                            isActive
-                                                ? 'border-primary/30 bg-primary/10 text-primary'
-                                                : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
-                                        )}
-                                    >
-                                        <ProductGlyph
-                                            kind={tab.glyph}
-                                            active={isActive}
-                                            className="icon-sm"
-                                            aria-hidden="true"
-                                        />
-                                        <span className="truncate">{tab.label}</span>
-                                    </button>
-                                );
-                            })}
-                            {compactOpenGroup.id === 'more' && isAdmin && (
-                                <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                        setCompactNavSection(null);
-                                        navigate('/admin');
-                                    }}
-                                    className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <ShieldCheck className="icon-sm shrink-0" aria-hidden="true" />
-                                    <span className="truncate">管理中心</span>
-                                </button>
-                            )}
-                        </div>
-                    </M.div>
-                )}
-                </AnimatePresence>
             </header>
 
             {/* ═══════════ Main Content Area ═══════════ */}
@@ -985,24 +863,11 @@ export default function InfographicGenerator({
                                             paletteStyleTags={paletteStyleTags}
                                         />
 
-                                        {!isMobileLayout && (
-                                        <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40 lg:hidden">
-                                            <div className="border-b border-border bg-muted/30 px-4 py-3">
-                                                <h3 className="text-sm font-semibold text-foreground">預覽與結果</h3>
-                                                <p className="text-xs text-muted-foreground">
-                                                    生成前可先確認比例，生成後結果會在此顯示。
-                                                </p>
-                                            </div>
-                                            <div className="bg-background p-3">
-                                                <ImagePreview {...previewProps} />
-                                            </div>
-                                        </section>
-                                        )}
                                     </div>
 
                                     {/* Right: Preview (takes 2/5 on large screens) */}
                                     {!isMobileLayout && (
-                                    <div className="lg:col-span-2 min-h-0 hidden lg:flex items-center justify-center relative overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40">
+                                    <div className="lg:col-span-2 min-h-0 flex items-center justify-center relative overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40">
                                         {/* Decorative grid background */}
                                         <div
                                             className={`absolute inset-0 bg-muted/35 transition-opacity duration-300 ${isGenerating ? 'opacity-0' : 'opacity-100'}`}
@@ -1169,7 +1034,7 @@ export default function InfographicGenerator({
             )}
 
             {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
-            <nav className="relative z-40 shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] md:hidden pb-[env(safe-area-inset-bottom)]">
+            <nav className="relative z-40 shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:hidden pb-[env(safe-area-inset-bottom)]">
                 <AnimatePresence>
                 {mobileMoreOpen && (
                     <M.div
@@ -1209,6 +1074,20 @@ export default function InfographicGenerator({
                                     </button>
                                 );
                             })}
+                            {isAdmin && (
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                        setMobileMoreOpen(false);
+                                        navigate('/admin');
+                                    }}
+                                    className="flex min-h-11 touch-manipulation flex-col items-center justify-center gap-1 rounded-lg border border-transparent px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <ShieldCheck className="icon-sm" aria-hidden="true" />
+                                    管理中心
+                                </button>
+                            )}
                         </div>
                     </M.div>
                 )}

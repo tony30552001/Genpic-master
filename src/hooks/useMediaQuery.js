@@ -13,5 +13,5 @@ export function useMediaQuery(query) {
   return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches);
 }
 
-/** Below Tailwind's `md`: the phone layout with bottom navigation. */
-export const MOBILE_LAYOUT_QUERY = "(max-width: 767.98px)";
+/** Below Tailwind's `lg`: the phone layout with bottom navigation. The web layout starts at 1024px. */
+export const MOBILE_LAYOUT_QUERY = "(max-width: 1023.98px)";

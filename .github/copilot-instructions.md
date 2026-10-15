@@ -91,10 +91,9 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 - Use existing CSS color variables and shadcn/ui primitives.
 - Full-page creation panels use the existing 60/40 layout: controls at `lg:col-span-3`, preview at `lg:col-span-2`.
 - Do not use fixed-width panels for full-page layouts.
-- Navigation breakpoints are:
-  - `xl` and above: full tab navigation.
-  - `md` through `xl`: compact `創作`, `素材庫`, `紀錄`, and `更多` navigation.
-  - Below `md`: bottom navigation.
+- Web and phone are separate layouts split at `lg` (1024px, `MOBILE_LAYOUT_QUERY` in `src/hooks/useMediaQuery.js`):
+  - `lg` and above: web layout with full header tabs and the inline result preview. Do not add tablet-only variants.
+  - Below `lg`: phone layout with bottom navigation, the compact generate bar, and the full-screen result view.
 - Navigation labels MUST remain on one line. Shrinkable flex children use `min-w-0` and `truncate`.
 - Interactive controls MUST use semantic elements, visible `focus-visible` states, and accessible labels for icon-only actions.
 - `StylePalette` and `PromptTemplates` are controlled components.

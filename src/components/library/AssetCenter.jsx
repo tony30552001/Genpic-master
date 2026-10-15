@@ -556,9 +556,9 @@ export default function AssetCenter({
       {/* 分頁＋搜尋：sticky 吸頂，長列表操作不迷路 */}
       <div className="sticky top-0 z-20 -mx-1 space-y-2 bg-background/80 px-1 py-2 backdrop-blur-md">
         <Tabs value={section} onValueChange={setSection}>
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4" aria-label="素材中心分類">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:inline-flex lg:w-fit" aria-label="素材中心分類">
             {SECTIONS.map(({ id, label }) => (
-              <TabsTrigger key={id} value={id} className="min-h-11 gap-1.5">
+              <TabsTrigger key={id} value={id} className="min-h-11 gap-1.5 lg:min-h-9 lg:px-4">
                 <span>{label}</span>
                 {id !== "overview" && (
                   <span className="ml-0.5 text-[11px] tabular-nums text-muted-foreground">{counts[id]}</span>

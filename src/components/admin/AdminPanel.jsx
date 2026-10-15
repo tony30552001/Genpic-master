@@ -665,25 +665,25 @@ export default function AdminPanel() {
 
   return (
     <div className="min-h-screen bg-muted/30 text-foreground">
-      <header className="border-b border-border bg-primary text-primary-foreground shadow-sm">
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-4 lg:px-8">
+      <header className="sticky top-0 z-30 border-b border-border bg-primary text-primary-foreground shadow-sm">
+        <div className="mx-auto flex h-14 max-w-[1800px] items-center justify-between gap-4 px-4 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={() => navigate("/")}
-              className="h-10 w-10 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              className="size-9 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
               aria-label="返回創作平台"
             >
               <ArrowLeft className="icon-md" aria-hidden="true" />
             </Button>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15">
-              <ShieldCheck className="icon-md" aria-hidden="true" />
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/15">
+              <ShieldCheck className="icon-sm" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-base font-semibold">Administrator 管理中心</p>
-              <p className="truncate text-xs text-primary-foreground/70">
+              <p className="truncate text-sm font-semibold leading-tight">管理中心</p>
+              <p className="truncate text-[11px] leading-tight text-primary-foreground/70">
                 {profile?.displayName || user?.displayName || "系統管理員"}
               </p>
             </div>
@@ -701,7 +701,7 @@ export default function AdminPanel() {
 
       <main className="mx-auto max-w-[1800px] space-y-6 px-4 py-6 lg:px-8 lg:py-8">
         <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="h-fit rounded-2xl border border-border bg-card p-2 shadow-sm">
+          <aside className="h-fit rounded-2xl border border-border bg-card p-2 shadow-sm lg:sticky lg:top-20">
             <nav className="space-y-1" aria-label="管理功能">
               {SECTIONS.map((section) => {
                 const Icon = section.icon;

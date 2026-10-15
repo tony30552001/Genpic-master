@@ -33,7 +33,7 @@ const SEGMENT_CLASS =
 const SEGMENT_ACTIVE_CLASS = "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60";
 const SEGMENT_IDLE_CLASS = "text-muted-foreground hover:bg-background/70 hover:text-foreground";
 
-function TextModeControl({ imageLanguage, onImageLanguageChange, className }) {
+function TextModeControl({ imageLanguage, onImageLanguageChange, compact = false, className }) {
   const otherOption = OTHER_TEXT_LANGUAGES.find((option) => option.id === imageLanguage);
 
   return (
@@ -46,7 +46,7 @@ function TextModeControl({ imageLanguage, onImageLanguageChange, className }) {
             key={id}
             onClick={() => onImageLanguageChange(id)}
             aria-pressed={imageLanguage === id}
-            className={cn(SEGMENT_CLASS, "flex-1", imageLanguage === id ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS)}
+            className={cn(SEGMENT_CLASS, "flex-1", compact && "min-h-9", imageLanguage === id ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS)}
           >
             {option.shortLabel}
           </button>
@@ -57,6 +57,7 @@ function TextModeControl({ imageLanguage, onImageLanguageChange, className }) {
           aria-label="其他圖中文字語言"
           className={cn(
             SEGMENT_CLASS,
+            compact && "min-h-9",
             "h-auto w-auto flex-1 justify-center gap-1 border-0 bg-transparent ring-offset-0 focus:ring-2 focus:ring-offset-0",
             otherOption ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS
           )}
@@ -86,7 +87,7 @@ function Field({ label, children }) {
 
 /**
  * Aspect ratio, catalog quality and in-image text controls. `row` packs them into
- * the desktop generate bar; `stack` gives each its own labelled full-width row
+ * the desktop generate bar with pointer-sized (36px) segments; `stack` gives each its own labelled full-width row
  * for the phone settings sheet.
  */
 export default function OutputSettings({
@@ -104,7 +105,7 @@ export default function OutputSettings({
 
   const ratioGroup = (
     <div
-      className={cn(GROUP_CLASS, "flex-1")}
+      className={cn(GROUP_CLASS, stacked && "flex-1")}
       role="group"
       aria-label={aspectRatioLocked ? "圖片比例（沿用原圖）" : "圖片比例"}
     >
@@ -120,14 +121,14 @@ export default function OutputSettings({
             aria-pressed={active}
             className={cn(
               SEGMENT_CLASS,
-              "flex flex-1 items-center justify-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-50",
-              stacked && "flex-col gap-0.5 py-2",
+              "flex flex-1 items-center justify-center gap-1 disabled:cursor-not-allowed disabled:opacity-50",
+              stacked ? "flex-col gap-0.5 px-1 py-2" : "min-h-9 px-2.5",
               active ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS
             )}
             title={ratio.label}
           >
             <ratio.icon className="icon-sm" aria-hidden="true" />
-            <span className={stacked ? "text-[11px]" : "hidden lg:inline"}>{stacked ? ratio.label : ratio.id}</span>
+            <span className={stacked ? "text-[11px]" : "tabular-nums"}>{stacked ? ratio.label : ratio.id}</span>
           </button>
         );
       })}
@@ -135,7 +136,7 @@ export default function OutputSettings({
   );
 
   const qualityGroup = (
-    <div className={cn(GROUP_CLASS, "flex-wrap")} role="group" aria-label="圖片品質">
+    <div className={cn(GROUP_CLASS, "flex-wrap")} role="group" aria-label="圖片品質" title="較高品質可能增加生成時間與費用">
       {supportedQualities.map((option) => (
         <button
           type="button"
@@ -143,7 +144,7 @@ export default function OutputSettings({
           onClick={() => onImageQualityChange(option)}
           aria-label={`設定圖片品質為${IMAGE_QUALITY_LABELS[option] || option}`}
           aria-pressed={quality === option}
-          className={cn(SEGMENT_CLASS, "min-w-11", stacked && "flex-1", quality === option ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS)}
+          className={cn(SEGMENT_CLASS, "min-w-11", stacked ? "flex-1" : "min-h-9", quality === option ? SEGMENT_ACTIVE_CLASS : SEGMENT_IDLE_CLASS)}
         >
           {IMAGE_QUALITY_LABELS[option] || option}
         </button>
@@ -152,7 +153,7 @@ export default function OutputSettings({
   );
 
   const textGroup = onImageLanguageChange && (
-    <TextModeControl imageLanguage={imageLanguage} onImageLanguageChange={onImageLanguageChange} />
+    <TextModeControl imageLanguage={imageLanguage} onImageLanguageChange={onImageLanguageChange} compact={!stacked} />
   );
 
   if (stacked) {
@@ -166,7 +167,7 @@ export default function OutputSettings({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2.5">
       {ratioGroup}
       <Separator orientation="vertical" className="h-6" />
       {qualityGroup}

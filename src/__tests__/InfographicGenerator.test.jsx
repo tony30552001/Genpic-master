@@ -346,7 +346,7 @@ describe("creation orchestration", () => {
     beforeEach(() => {
       mocks.preview = null;
       vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
-        matches: query === "(max-width: 767.98px)", media: query,
+        matches: query === "(max-width: 1023.98px)", media: query,
         addEventListener: () => {}, removeEventListener: () => {},
       }));
     });
