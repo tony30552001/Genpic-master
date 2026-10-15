@@ -42,7 +42,7 @@ function GenerationProgress({ generationStatus, compact = false }) {
 
 /**
  * 固定底部的生成控制列。
- * 桌面版是單列：左側比例、品質與圖中文字，右側固定寬度的生成按鈕；`compact`（手機版）只留結果縮圖、設定摘要與生成按鈕，
+ * 桌面版沿用 60/40 格線：左 3 欄放比例、品質與圖中文字，生成按鈕置中於右 2 欄（預覽區下方）；`compact`（手機版）只留結果縮圖、設定摘要與生成按鈕，
  * 設定收進底部面板。
  */
 export default function GenerateBar({
@@ -215,18 +215,23 @@ export default function GenerateBar({
     }
 
     return (
-        <div className="shrink-0 space-y-2 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_24px_hsl(var(--foreground)/0.08)] ring-1 ring-border/40">
+        <div className="shrink-0 space-y-2 border-t border-border bg-card px-8 py-3 shadow-[0_-10px_24px_hsl(var(--foreground)/0.08)] ring-1 ring-border/40">
             {setupError && <p role="alert" className="text-xs text-destructive">{setupError}</p>}
             {isGenerating && generationStatus && <GenerationProgress generationStatus={generationStatus} />}
             {refineHint}
 
-            <div className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">{settings("row")}</div>
-                <p className="hidden max-w-60 truncate text-right text-xs text-muted-foreground xl:block">
-                    {imageModelConfig?.label || "尚未設定圖片模型"} · {selectedSizeLabel}
-                </p>
-                {generateButton(buttonText || "開始生成圖片", "w-56 shrink-0")}
-                {cancelButton}
+            {/* 與上方 60/40 版面同一格線，讓生成按鈕落在預覽區正下方的中線上。 */}
+            <div className="grid grid-cols-5 items-center gap-6">
+                <div className="col-span-3 min-w-0">{settings("row")}</div>
+                <div className="col-span-2 flex min-w-0 flex-col items-center gap-1">
+                    <div className="flex items-center gap-3">
+                        {generateButton(buttonText || "開始生成圖片", "w-56 shrink-0")}
+                        {cancelButton}
+                    </div>
+                    <p className="hidden max-w-full truncate text-xs text-muted-foreground xl:block">
+                        {imageModelConfig?.label || "尚未設定圖片模型"} · {selectedSizeLabel}
+                    </p>
+                </div>
             </div>
         </div>
     );
