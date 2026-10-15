@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import * as M from "motion/react-m";
+import { animate, useReducedMotion } from "motion/react";
 import { ArrowLeft } from "@/components/icons/lucideControls";
 import { Button } from "@/components/ui/button";
 import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
@@ -13,6 +14,8 @@ const COMPARE_MODES = [
   { id: "slider", label: "前後滑桿" },
 ];
 const SLIDER_STEP = 5;
+/** Strong ease-in-out for the one-off slider demonstration sweep. */
+const SLIDER_INTRO = { duration: 0.4, ease: [0.77, 0, 0.175, 1] };
 
 const isTypingTarget = (target) =>
   target instanceof HTMLElement &&
@@ -73,9 +76,32 @@ function HoldCompare({ before, after, beforeLabel, afterLabel }) {
   );
 }
 
-function SliderCompare({ before, after, beforeLabel, afterLabel }) {
+function SliderCompare({ before, after, beforeLabel, afterLabel, intro = false, onIntroEnd }) {
   const frameRef = useRef(null);
-  const [position, setPosition] = useState(50);
+  const introRef = useRef(null);
+  const reduceMotion = useReducedMotion();
+  const playIntro = intro && !reduceMotion;
+  const [position, setPosition] = useState(playIntro ? 100 : 50);
+
+  // Entering slider mode sweeps the divider from the edge to the middle once, showing that
+  // the left side is the original and the divider can be dragged. Any user input stops it.
+  useEffect(() => {
+    if (!intro) return undefined;
+    if (!playIntro) {
+      onIntroEnd();
+      return undefined;
+    }
+    introRef.current = animate(100, 50, { ...SLIDER_INTRO, onUpdate: setPosition, onComplete: onIntroEnd });
+    return () => introRef.current?.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per mount
+  }, []);
+
+  const stopIntro = () => {
+    if (!introRef.current) return;
+    introRef.current.stop();
+    introRef.current = null;
+    onIntroEnd();
+  };
 
   const moveTo = (clientX) => {
     const rect = frameRef.current.getBoundingClientRect();
@@ -94,6 +120,7 @@ function SliderCompare({ before, after, beforeLabel, afterLabel }) {
     }[event.key];
     if (next === undefined) return;
     event.preventDefault();
+    stopIntro();
     setPosition(Math.min(100, Math.max(0, next)));
   };
 
@@ -119,6 +146,7 @@ function SliderCompare({ before, after, beforeLabel, afterLabel }) {
         aria-valuetext={`左側顯示 ${beforeLabel} 原圖 ${Math.round(position)}%`}
         onKeyDown={onKeyDown}
         onPointerDown={(event) => {
+          stopIntro();
           event.currentTarget.setPointerCapture?.(event.pointerId);
           moveTo(event.clientX);
         }}
@@ -159,9 +187,9 @@ export default function ExpandedCanvas({
   const closeButtonRef = useRef(null);
   const requestClose = useHistoryLayer(onClose, closeButtonRef);
   const [mode, setMode] = useState("hold");
+  const [sliderIntro, setSliderIntro] = useState(false);
   const label = getVersionLabel(version);
   const parentLabel = parent ? getVersionLabel(parent) : "";
-  const versionCount = versionRows.reduce((count, row) => count + row.items.length, 0);
 
   const Compare = mode === "slider" ? SliderCompare : HoldCompare;
 
@@ -193,7 +221,11 @@ export default function ExpandedCanvas({
                 key={option.id}
                 type="button"
                 aria-pressed={mode === option.id}
-                onClick={() => setMode(option.id)}
+                onClick={() => {
+                  if (option.id === mode) return;
+                  setMode(option.id);
+                  setSliderIntro(option.id === "slider");
+                }}
                 className={cn(
                   "rounded-md px-2.5 py-1 text-xs transition-colors duration-(--motion-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   mode === option.id ? "bg-background font-semibold text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -207,17 +239,25 @@ export default function ExpandedCanvas({
       </div>
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center p-4 sm:p-6" aria-busy={isRefining}>
-        {parent ? (
-          <Compare
-            key={`${version.id}-${mode}`}
-            before={parent.imageUrl}
-            after={version.imageUrl}
-            beforeLabel={parentLabel}
-            afterLabel={label}
-          />
-        ) : (
-          <img src={version.imageUrl} alt={label} className="max-h-full max-w-full rounded-lg object-contain shadow-xl" />
-        )}
+        <div
+          key={version.id}
+          className="flex h-full min-h-0 w-full items-center justify-center animate-in fade-in duration-(--motion-enter) ease-emphasized"
+          data-canvas-version
+        >
+          {parent ? (
+            <Compare
+              key={mode}
+              before={parent.imageUrl}
+              after={version.imageUrl}
+              beforeLabel={parentLabel}
+              afterLabel={label}
+              intro={mode === "slider" && sliderIntro}
+              onIntroEnd={() => setSliderIntro(false)}
+            />
+          ) : (
+            <img src={version.imageUrl} alt={label} className="max-h-full max-w-full rounded-lg object-contain shadow-xl" />
+          )}
+        </div>
         {isRefining && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-background/60 text-center" role="status">
             <p className="text-sm font-semibold text-foreground">{generationStatus?.label || "AI 正在修改"}</p>
@@ -230,15 +270,13 @@ export default function ExpandedCanvas({
 
       <div className="mx-auto mb-[max(1rem,env(safe-area-inset-bottom))] w-[min(calc(100%-2rem),56rem)] space-y-3 rounded-2xl border border-border/60 bg-card/75 p-3 shadow-xl backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-card [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none">
         <RefineForm onRefine={onRefine} isRefining={isRefining} disabled={refineDisabled} refineError={refineError} />
-        {versionCount > 1 && (
-          <VersionStrip
-            rows={versionRows}
-            activeVersionId={activeVersionId}
-            onSelectVersion={onSelectVersion}
-            getVersionLabel={getVersionLabel}
-            getVersion={getVersion}
-          />
-        )}
+        <VersionStrip
+          rows={versionRows}
+          activeVersionId={activeVersionId}
+          onSelectVersion={onSelectVersion}
+          getVersionLabel={getVersionLabel}
+          getVersion={getVersion}
+        />
       </div>
     </M.div>
   );

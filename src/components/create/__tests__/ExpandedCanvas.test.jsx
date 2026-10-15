@@ -65,12 +65,13 @@ describe("ExpandedCanvas", () => {
     expect(screen.queryByAltText("v1（原圖）")).not.toBeInTheDocument();
   });
 
-  it("moves the before/after slider with the keyboard", () => {
+  it("sweeps the slider to the middle once when entering slider mode, then follows the keyboard", async () => {
     renderCanvas();
     fireEvent.click(screen.getByRole("button", { name: "前後滑桿" }));
 
     const slider = screen.getByRole("slider", { name: "前後比較位置" });
-    expect(slider).toHaveAttribute("aria-valuenow", "50");
+    expect(slider).toHaveAttribute("aria-valuenow", "100");
+    await waitFor(() => expect(slider).toHaveAttribute("aria-valuenow", "50"));
     fireEvent.keyDown(slider, { key: "ArrowRight" });
     expect(slider).toHaveAttribute("aria-valuenow", "55");
     fireEvent.keyDown(slider, { key: "Home" });
@@ -78,6 +79,22 @@ describe("ExpandedCanvas", () => {
     fireEvent.keyDown(slider, { key: "ArrowLeft" });
     expect(slider).toHaveAttribute("aria-valuenow", "0");
     expect(screen.getByAltText("v1（原圖）")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "按住看原圖" }));
+    fireEvent.click(screen.getByRole("button", { name: "前後滑桿" }));
+    const again = screen.getByRole("slider", { name: "前後比較位置" });
+    expect(again).toHaveAttribute("aria-valuenow", "100");
+  });
+
+  it("stops the slider sweep as soon as the user takes over", async () => {
+    renderCanvas();
+    fireEvent.click(screen.getByRole("button", { name: "前後滑桿" }));
+
+    const slider = screen.getByRole("slider", { name: "前後比較位置" });
+    fireEvent.keyDown(slider, { key: "End" });
+    expect(slider).toHaveAttribute("aria-valuenow", "100");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(slider).toHaveAttribute("aria-valuenow", "100");
   });
 
   it("closes through its history entry with Esc, the close button or back", async () => {

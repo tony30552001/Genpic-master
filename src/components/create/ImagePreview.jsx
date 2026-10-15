@@ -45,7 +45,14 @@ export default function ImagePreview({
 }) {
   const [failedImage, setFailedImage] = useState(null);
   const imageError = Boolean(generatedImage) && failedImage === generatedImage;
-  const versionCount = versionRows.reduce((count, row) => count + row.items.length, 0);
+  const shownImage = generatedImage && !(isGenerating && !isRefining) ? generatedImage : null;
+  // A refine or version switch swaps the image in place: keep the outgoing one underneath and
+  // fade the new one in once it has loaded, so only the edited area appears to change.
+  const [swap, setSwap] = useState({ image: shownImage, under: null, loaded: false });
+  if (swap.image !== shownImage) {
+    setSwap({ image: shownImage, under: shownImage && swap.image, loaded: false });
+  }
+  const crossfading = Boolean(swap.under);
 
   // 狀態 1：生成中畫面（修改中則保留目前圖片）
   const renderGeneratingState = () => (
@@ -97,6 +104,15 @@ export default function ImagePreview({
         </div>
       ) : (
         <div className="relative mx-auto" aria-busy={isRefining}>
+          {crossfading && (
+            <img
+              src={swap.under}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full rounded-lg object-contain"
+              data-outgoing-image
+            />
+          )}
           <img
             key={generatedImage}
             src={generatedImage}
@@ -105,10 +121,17 @@ export default function ImagePreview({
             width={1536}
             height={1024}
             className={cn(
-              "mx-auto h-auto max-h-[55svh] w-auto max-w-full rounded-lg object-contain shadow-xl transition-opacity duration-(--motion-enter) ease-emphasized animate-in fade-in zoom-in-95 motion-reduce:zoom-in-100",
+              "relative mx-auto h-auto max-h-[55svh] w-auto max-w-full rounded-lg object-contain shadow-xl transition-opacity duration-(--motion-enter) ease-emphasized",
+              crossfading
+                ? !swap.loaded && "opacity-0"
+                : "animate-in fade-in zoom-in-95 motion-reduce:zoom-in-100",
               isRefining && "opacity-40"
             )}
             onError={() => setFailedImage(generatedImage)}
+            onLoad={() => setSwap((current) => (current.image === generatedImage ? { ...current, loaded: true } : current))}
+            onTransitionEnd={(event) => {
+              if (event.propertyName === "opacity" && swap.loaded) setSwap((current) => ({ ...current, under: null }));
+            }}
             decoding="async"
           />
           {isRefining && (
@@ -140,15 +163,13 @@ export default function ImagePreview({
         />
       )}
 
-      {versionCount > 1 && (
-        <VersionStrip
-          rows={versionRows}
-          activeVersionId={activeVersionId}
-          onSelectVersion={onSelectVersion}
-          getVersionLabel={getVersionLabel}
-          getVersion={getVersion}
-        />
-      )}
+      <VersionStrip
+        rows={versionRows}
+        activeVersionId={activeVersionId}
+        onSelectVersion={onSelectVersion}
+        getVersionLabel={getVersionLabel}
+        getVersion={getVersion}
+      />
 
       {!imageError && (
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -161,7 +182,7 @@ export default function ImagePreview({
                 onExpand(image.getBoundingClientRect());
               }}
               aria-label="展開畫布比較版本"
-              className="mr-auto flex h-9 items-center gap-1.5 rounded-lg border border-border/50 bg-background px-3 text-xs font-medium text-foreground transition-colors duration-(--motion-hover) hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="mr-auto flex h-9 items-center gap-1.5 rounded-lg border border-border/50 bg-background px-3 text-xs font-medium text-foreground press-feedback hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <Maximize2 className="icon-sm" aria-hidden="true" />
               <span className="whitespace-nowrap">展開比較</span>
@@ -176,7 +197,7 @@ export default function ImagePreview({
             type="button"
             onClick={onDownload}
             aria-label="下載產生的圖片"
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-border/50 bg-background px-3 text-xs font-medium text-foreground transition-colors duration-(--motion-hover) hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-border/50 bg-background px-3 text-xs font-medium text-foreground press-feedback hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <Save className="icon-sm" aria-hidden="true" />
             <span className="whitespace-nowrap">下載圖片</span>

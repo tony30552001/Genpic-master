@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ScriptEditor from "../ScriptEditor";
 import { optimizePrompt } from "../../../services/aiService";
@@ -78,6 +78,19 @@ describe("ScriptEditor attachment purposes", () => {
       optimizationMode: "transform",
       transformMode: "refine",
     }));
+  });
+
+  it("applies an optimization, closes the suggestion and marks the rewritten prompt", async () => {
+    vi.mocked(optimizePrompt).mockResolvedValue({ optimizedPromptZh: "黃昏下的城市街景", optimizedPromptEn: "city" });
+    const { container } = render(<Harness initialScript="城市" />);
+    expect(container.querySelector("[data-applied-flash]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 智能優化" }));
+    fireEvent.click(await screen.findByRole("button", { name: "套用優化" }));
+
+    expect(screen.getByRole("textbox", { name: "內容描述" })).toHaveValue("黃昏下的城市街景");
+    expect(container.querySelector("[data-applied-flash]")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "套用優化" })).toBeNull());
   });
 
   it("keeps the advanced style section collapsed until opened and remembers it", () => {

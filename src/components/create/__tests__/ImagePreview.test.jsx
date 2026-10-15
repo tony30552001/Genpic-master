@@ -114,4 +114,40 @@ describe("ImagePreview refinement", () => {
     expect(screen.queryByRole("button", { name: "v1：原始" })).toBeNull();
     expect(screen.getByText("此為壓縮預覽")).toBeInTheDocument();
   });
+
+  it("animates only versions added after the strip was shown, starting from a lone version", () => {
+    const props = { generatedImage: "v1.png", getVersionLabel: versionProps.getVersionLabel, getVersion: versionProps.getVersion };
+    const { rerender } = render(<ImagePreview {...props} versionRows={[{ fromId: null, items: [v1] }]} />);
+    rerender(<ImagePreview {...props} versionRows={[{ fromId: null, items: [v1, v2] }]} />);
+
+    const item = (name) => screen.getByRole("button", { name }).closest("li");
+    expect(item("v1：原始")).not.toHaveClass("animate-in");
+    expect(item("v2：改黃色")).toHaveClass("animate-in", "zoom-in-95");
+  });
+});
+
+describe("ImagePreview image swap", () => {
+  it("crossfades a refined image over the outgoing one once it has loaded", () => {
+    const { container, rerender } = render(<ImagePreview generatedImage="v1.png" onRefine={vi.fn()} />);
+    expect(screen.getByAltText("AI 產生的圖片")).toHaveClass("zoom-in-95");
+
+    rerender(<ImagePreview generatedImage="v2.png" onRefine={vi.fn()} />);
+    const incoming = screen.getByAltText("AI 產生的圖片");
+    expect(container.querySelector("[data-outgoing-image]")).toHaveAttribute("src", "v1.png");
+    expect(incoming).toHaveClass("opacity-0");
+    expect(incoming).not.toHaveClass("zoom-in-95");
+
+    fireEvent.load(incoming);
+    expect(incoming).not.toHaveClass("opacity-0");
+    fireEvent.transitionEnd(incoming, { propertyName: "opacity" });
+    expect(container.querySelector("[data-outgoing-image]")).toBeNull();
+  });
+
+  it("does not crossfade a new generation out of the generating state", () => {
+    const { container, rerender } = render(<ImagePreview generatedImage="v1.png" />);
+    rerender(<ImagePreview generatedImage="v1.png" isGenerating />);
+    rerender(<ImagePreview generatedImage="v2.png" />);
+    expect(container.querySelector("[data-outgoing-image]")).toBeNull();
+    expect(screen.getByAltText("AI 產生的圖片")).toHaveClass("zoom-in-95");
+  });
 });

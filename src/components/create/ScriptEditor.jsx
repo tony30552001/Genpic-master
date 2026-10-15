@@ -13,12 +13,15 @@ import {
   Wand2,
   LayoutTemplate,
 } from "@/components/icons/lucideContent";
+import * as M from "motion/react-m";
+import { AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 import { optimizePrompt } from "../../services/aiService";
 import PromptSuggestionPanel from "./PromptSuggestionPanel";
 import SaveTemplateDialog from "../templates/SaveTemplateDialog";
@@ -111,6 +114,7 @@ export default function ScriptEditor({
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizeError, setOptimizeError] = useState("");
   const [suggestionData, setSuggestionData] = useState(null);
+  const [appliedFlash, setAppliedFlash] = useState(0);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(readAdvancedStyleOpen);
   const [showStyleSource, setShowStyleSource] = useState(false);
@@ -251,6 +255,7 @@ export default function ScriptEditor({
       onOptimizedPromptEnChange(suggestionData.optimizedTextEn);
     }
     setSuggestionData(null);
+    setAppliedFlash((count) => count + 1);
   };
 
   const handleRejectSuggestion = () => {
@@ -302,7 +307,9 @@ export default function ScriptEditor({
             </div>
           )}
 
+          <AnimatePresence initial={false}>
           {suggestionData && (
+            <M.div key="prompt-suggestion" exit={{ opacity: 0, transition: OVERLAY_EXIT }}>
             <PromptSuggestionPanel
               originalText={suggestionData.originalText}
               optimizedText={suggestionData.optimizedText}
@@ -310,8 +317,11 @@ export default function ScriptEditor({
               onAccept={handleAcceptSuggestion}
               onReject={handleRejectSuggestion}
             />
+            </M.div>
           )}
+          </AnimatePresence>
 
+          <div className="relative">
           <Textarea
             id={contentFieldId}
             name="generationPrompt"
@@ -329,6 +339,18 @@ export default function ScriptEditor({
             placeholder={placeholder}
             className="min-h-[112px] resize-y rounded-xl border-input bg-background text-sm leading-relaxed shadow-inner focus-visible:border-primary/50 focus-visible:ring-primary/30 md:min-h-[140px]"
           />
+          {appliedFlash > 0 && (
+            <M.span
+              key={appliedFlash}
+              className="pointer-events-none absolute inset-0 rounded-xl bg-primary/10 ring-1 ring-primary/40"
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 0 }}
+              transition={{ ...OVERLAY_ENTER, duration: 0.4 }}
+              aria-hidden="true"
+              data-applied-flash
+            />
+          )}
+          </div>
 
           <PromptHints hints={promptHints} />
 

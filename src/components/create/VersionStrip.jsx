@@ -1,10 +1,32 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 
-/** Version thumbnails: the main line on one row, each branch indented on its own row. */
+/** Version thumbnails: the main line on one row, each branch indented on its own row. Renders nothing for a single version. */
 export default function VersionStrip({ rows, activeVersionId, onSelectVersion, getVersionLabel, getVersion }) {
+  const containerRef = useRef(null);
+  const reduceMotion = useReducedMotion();
+  const ids = rows.flatMap((row) => row.items.map((version) => version.id));
+  const hidden = ids.length < 2;
+  // Versions present at mount, or while a lone version keeps the strip hidden, are history;
+  // only versions added afterwards animate in.
+  const [knownIds, setKnownIds] = useState(() => new Set(ids));
+  if (hidden && ids.some((id) => !knownIds.has(id))) {
+    setKnownIds(new Set([...knownIds, ...ids]));
+  }
+  const newestAdded = hidden ? undefined : ids.findLast((id) => !knownIds.has(id));
+
+  useEffect(() => {
+    if (!newestAdded) return;
+    containerRef.current
+      ?.querySelector(`[data-version-id="${CSS.escape(newestAdded)}"]`)
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+  }, [newestAdded, reduceMotion]);
+
+  if (hidden) return null;
+
   return (
-    <div className="space-y-1.5" aria-label="版本" role="group">
+    <div ref={containerRef} className="space-y-1.5" aria-label="版本" role="group">
       {rows.map((row) => (
         <ul
           key={row.items[0].id}
@@ -20,7 +42,15 @@ export default function VersionStrip({ rows, activeVersionId, onSelectVersion, g
             const isActive = version.id === activeVersionId;
             const description = version.parentId ? version.instruction : "原始";
             return (
-              <li key={version.id} className="shrink-0">
+              <li
+                key={version.id}
+                data-version-id={version.id}
+                className={cn(
+                  "shrink-0",
+                  !knownIds.has(version.id) &&
+                    "origin-left animate-in fade-in zoom-in-95 duration-(--motion-enter) ease-emphasized motion-reduce:zoom-in-100"
+                )}
+              >
                 <button
                   type="button"
                   aria-current={isActive ? "true" : undefined}
