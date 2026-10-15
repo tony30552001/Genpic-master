@@ -5,10 +5,11 @@ vi.mock("../../services/aiService", () => ({
   analyzeStyle: vi.fn(),
   generateImage: vi.fn(),
   generateFilename: vi.fn(),
+  transformImage: vi.fn(),
   waitForImageJob: vi.fn(),
 }));
 
-import { generateImage, generateFilename, waitForImageJob } from "../../services/aiService";
+import { generateImage, generateFilename, transformImage, waitForImageJob } from "../../services/aiService";
 import useImageGeneration from "../useImageGeneration";
 
 const admission = { jobId: "job-original", model: "custom-model", status: "queued", prompt: "server prompt" };
@@ -99,5 +100,34 @@ describe("useImageGeneration", () => {
     });
     expect(generateImage.mock.calls[0][0].signal).toBe(waitForImageJob.mock.calls[0][0].signal);
     expect(result.current.isGenerating).toBe(false);
+  });
+
+  it("runs a transform through the same job lifecycle and expects an edit job", async () => {
+    transformImage.mockResolvedValue(admission);
+    waitForImageJob.mockResolvedValueOnce({ ...completed, operation: "edit" });
+    const { result } = renderHook(() => useImageGeneration());
+    let transformed;
+    await act(async () => {
+      transformed = await result.current.transformImage({
+        uploadId: "upload-1", mode: "refine", prompt: "make it yellow", aspectRatio: "3:2",
+        imageQuality: "high", imageLanguage: "none",
+      });
+    });
+    expect(transformImage).toHaveBeenCalledWith({
+      uploadId: "upload-1", mode: "refine", prompt: "make it yellow", stylePrompt: undefined, styleTags: undefined,
+      aspectRatio: "3:2", imageQuality: "high", imageLanguage: "none", signal: expect.any(AbortSignal),
+    });
+    expect(generateFilename).toHaveBeenCalledWith({ userScript: "make it yellow" });
+    expect(transformed).toMatchObject({ jobId: "job-original", imageUrl: completed.imageUrl, finalPrompt: "server prompt" });
+    expect(result.current.generatedImage).toBe(completed.imageUrl);
+    expect(result.current.isGenerating).toBe(false);
+  });
+
+  it("rejects a transform without an uploaded source", async () => {
+    const { result } = renderHook(() => useImageGeneration());
+    await act(async () => {
+      await expect(result.current.transformImage({ mode: "bg_replace" })).rejects.toThrow("請先附上");
+    });
+    expect(transformImage).not.toHaveBeenCalled();
   });
 });

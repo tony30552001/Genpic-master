@@ -1,8 +1,7 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   X,
   ChevronDown,
-  ChevronUp,
   Save,
 } from "@/components/icons/lucideControls";
 import {
@@ -28,6 +27,19 @@ import StyleSourceTabs from "./StyleSourceTabs";
 import PromptHints from "./PromptHints";
 import { detectNoTextIntent } from "@/lib/promptHints";
 import { NO_TEXT_LANGUAGE } from "@/lib/imageTextLanguage";
+import { REFERENCE_PURPOSE, STYLE_TRANSFER_PURPOSE } from "@/lib/attachmentPurposes";
+
+const ADVANCED_STYLE_OPEN_KEY = "genpic_advanced_style_open";
+
+const readAdvancedStyleOpen = () => {
+  try {
+    return localStorage.getItem(ADVANCED_STYLE_OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const DEFAULT_PLACEHOLDER = "描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物";
 
 /** 決定系統是否為畫面補上構圖與文字語系指令。 */
 const IMAGE_PURPOSE_OPTIONS = [
@@ -49,8 +61,8 @@ const IMAGE_PURPOSE_OPTIONS = [
 ];
 
 /**
- * ScriptEditor — 內容描述編輯器
- * 支援 AI 智能優化、風格庫快速選取、內容參考圖片
+ * ScriptEditor — 內容描述、附圖與進階風格
+ * 附圖用途決定欄位文字、AI 優化模式與是否套用風格；風格參考圖與附圖彼此獨立。
  */
 export default function ScriptEditor({
   userScript,
@@ -58,14 +70,17 @@ export default function ScriptEditor({
   onFocus,
   onBlur,
 
+  attachmentPurpose = null,
+  attachmentSlot = null,
+  onUseStyleTransfer,
   savedStyles = [],
   analyzedStyle,
   onApplyStyle,
   onClearStyle,
-  contentImagePreview,
-  onContentImageUpload,
-  onClearContentImage,
-  isUploadingContent,
+  styleReferencePreview,
+  onStyleReferenceUpload,
+  onClearStyleReference,
+  isUploadingStyleReference,
   isAnalyzing,
   analysisPhase,
   analysisResultData,
@@ -97,11 +112,23 @@ export default function ScriptEditor({
   const [optimizeError, setOptimizeError] = useState("");
   const [suggestionData, setSuggestionData] = useState(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const [showAssistTools, setShowAssistTools] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(readAdvancedStyleOpen);
   const [showStyleSource, setShowStyleSource] = useState(false);
   const [styleSourceTab, setStyleSourceTab] = useState("templates");
   const [paletteSelected, setPaletteSelected] = useState({});
   const [noTextHintDismissedFor, setNoTextHintDismissedFor] = useState(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ADVANCED_STYLE_OPEN_KEY, advancedOpen ? "1" : "0");
+    } catch {
+      // The panel falls back to collapsed next time when storage is unavailable.
+    }
+  }, [advancedOpen]);
+
+  const purposeId = attachmentPurpose?.id || REFERENCE_PURPOSE;
+  const isTransform = purposeId !== REFERENCE_PURPOSE;
+  const styleIgnored = attachmentPurpose ? !attachmentPurpose.usesStyle : false;
 
   const promptHints = [];
   if (
@@ -132,20 +159,21 @@ export default function ScriptEditor({
   const charCount = userScript?.length || 0;
   const contentFieldId = "script-editor-content";
   const contentHelpId = "script-editor-content-help";
-  const assistToolsId = "script-editor-assist-tools";
+  const advancedId = "script-editor-advanced-style";
   const purposeLabelId = "script-editor-purpose";
   const activePurpose =
     IMAGE_PURPOSE_OPTIONS.find((option) => option.id === imagePurpose) ||
     IMAGE_PURPOSE_OPTIONS[0];
-  const hasActiveAssistTools = Boolean(
-    contentImagePreview ||
-    analyzedStyle ||
-    analysisResultData ||
-    selectedStyleInfo ||
-    showStyleSource ||
-    showSaveTemplate
-  );
-  const assistToolsOpen = showAssistTools || hasActiveAssistTools;
+  const fieldLabel = attachmentPurpose?.fieldLabel || "內容描述";
+  const placeholder = attachmentPurpose?.placeholder || DEFAULT_PLACEHOLDER;
+  const appliedStyleName =
+    selectedStyleInfo?.name ||
+    (analyzedStyle ? String(analysisResultData?.style_name || "參考圖風格") : "") ||
+    (paletteStyleTags.length ? `${paletteStyleTags.length} 個風格標籤` : "");
+  const hasAppliedStyle = Boolean(appliedStyleName);
+  const advancedSummary = purposeId === STYLE_TRANSFER_PURPOSE
+    ? `套用風格到附圖${appliedStyleName ? `：${appliedStyleName}` : ""}`
+    : appliedStyleName || "未套用";
 
   const handleChange = useCallback((e) => {
     const text = e.target.value;
@@ -172,6 +200,12 @@ export default function ScriptEditor({
     onOptimizedPromptEnChange?.("");
   };
 
+  const handleClearAllStyle = () => {
+    handleClearStyle();
+    setPaletteSelected({});
+    onPaletteStyleChange?.([]);
+  };
+
   const handleSmartOptimize = async () => {
     if (!userScript || !userScript.trim()) return;
     setIsOptimizing(true);
@@ -186,7 +220,9 @@ export default function ScriptEditor({
         imageLanguage,
         imagePurpose,
         aspectRatio,
-        optimizationMode: "generation",
+        ...(isTransform
+          ? { optimizationMode: "transform", transformMode: purposeId }
+          : { optimizationMode: "generation" }),
       });
 
       if (result && (result.optimizedPromptZh || result.optimizedPrompt)) {
@@ -229,10 +265,12 @@ export default function ScriptEditor({
             <div className="space-y-1">
               <label htmlFor={contentFieldId} className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <PenLine className="icon-sm text-primary" aria-hidden="true" />
-                內容描述
+                {fieldLabel}
               </label>
               <p id={contentHelpId} className="text-xs leading-relaxed text-muted-foreground">
-                先描述主角、場景、動作與氛圍，下一步再加入參考與風格。
+                {isTransform
+                  ? "描述這次要對附圖做的事，未提到的部分會盡量保持不變。"
+                  : "先描述主角、場景、動作與氛圍，需要時再附圖或設定風格。"}
               </p>
             </div>
 
@@ -288,7 +326,7 @@ export default function ScriptEditor({
               }
             }}
             aria-describedby={contentHelpId}
-            placeholder={"描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物"}
+            placeholder={placeholder}
             className="min-h-[112px] resize-y rounded-xl border-input bg-background text-sm leading-relaxed shadow-inner focus-visible:border-primary/50 focus-visible:ring-primary/30 md:min-h-[140px]"
           />
 
@@ -296,7 +334,7 @@ export default function ScriptEditor({
 
           <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-3">
-              <span>建議先完成內容，再用下方參考與風格補強。</span>
+              <span>{isTransform ? "結果會沿用附圖比例。" : "建議先完成內容，再用附圖或風格補強。"}</span>
               {onGenerate && (
                 <span className="hidden items-center gap-1 sm:flex">
                   <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">Ctrl</kbd>
@@ -309,6 +347,7 @@ export default function ScriptEditor({
             <span className="shrink-0 tabular-nums">{charCount} 字</span>
           </div>
 
+          {!isTransform && (
           <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span id={purposeLabelId} className="text-xs font-semibold text-foreground">
@@ -344,68 +383,110 @@ export default function ScriptEditor({
               })}
             </div>
           </div>
+          )}
 
         </CardContent>
       </Card>
 
+      {attachmentSlot}
+
       <Card className="rounded-2xl border-border bg-card">
-        <button
-          type="button"
-          onClick={() => setShowAssistTools((open) => !open)}
-          className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          aria-expanded={assistToolsOpen}
-          aria-controls={assistToolsId}
-        >
-          <span className="min-w-0 space-y-0.5">
-            <span className="block text-sm font-semibold text-foreground">參考與風格</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              需要時再加入參考圖片、風格分析、風格庫或範本保存。
+        <div className="flex items-center gap-2 pr-2">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((open) => !open)}
+            className="flex min-h-11 min-w-0 flex-1 touch-manipulation items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors duration-(--motion-hover) hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-expanded={advancedOpen}
+            aria-controls={advancedId}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <ChevronDown
+                className={cn(
+                  "icon-sm shrink-0 text-muted-foreground transition-transform duration-(--motion-hover) ease-emphasized",
+                  !advancedOpen && "-rotate-90"
+                )}
+                aria-hidden="true"
+              />
+              <span className="shrink-0 text-sm font-semibold text-foreground">進階：風格</span>
             </span>
-          </span>
-          <span className="flex shrink-0 items-center gap-2">
-            {hasActiveAssistTools && (
-              <Badge variant="outline" className="border-primary/20 bg-primary/5 px-2 py-0 text-primary">
-                已套用
-              </Badge>
-            )}
-            {assistToolsOpen ? (
-              <ChevronUp className="icon-sm text-muted-foreground" aria-hidden="true" />
-            ) : (
-              <ChevronDown className="icon-sm text-muted-foreground" aria-hidden="true" />
-            )}
-          </span>
-        </button>
+            <span
+              className={cn(
+                "min-w-0 truncate text-xs",
+                hasAppliedStyle || purposeId === STYLE_TRANSFER_PURPOSE
+                  ? "font-semibold text-primary"
+                  : "text-muted-foreground"
+              )}
+            >
+              {advancedSummary}
+            </span>
+          </button>
+          {hasAppliedStyle && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={handleClearAllStyle}
+              aria-label="清除套用的風格"
+            >
+              <X className="icon-sm" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
 
         <div
-          id={assistToolsId}
-          aria-hidden={!assistToolsOpen}
-          inert={!assistToolsOpen}
+          id={advancedId}
+          aria-hidden={!advancedOpen}
+          inert={!advancedOpen}
           className={cn(
-            "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-            assistToolsOpen
+            "grid overflow-hidden transition-[grid-template-rows,opacity] duration-(--motion-enter) ease-emphasized motion-reduce:transition-none",
+            advancedOpen
               ? "grid-rows-[1fr] opacity-100"
               : "pointer-events-none grid-rows-[0fr] opacity-0"
           )}
         >
           <div className="min-h-0 overflow-hidden">
             <CardContent className="space-y-4 border-t border-border bg-background/80 p-4">
-              <section className="space-y-3 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="reference-style-title">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <h3 id="reference-style-title" className="text-xs font-semibold text-foreground">
-                      參考圖片
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      加入一張參考圖，分析並保存可重複使用的風格。
-                    </p>
+              {styleIgnored && hasAppliedStyle && (
+                <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  「{attachmentPurpose.label}」只依你的描述修改，不會套用風格。
+                </p>
+              )}
+
+              {onUseStyleTransfer && (
+                <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-muted/35 p-3" aria-labelledby="style-transfer-title">
+                  <div className="min-w-0 space-y-0.5">
+                    <h3 id="style-transfer-title" className="text-xs font-semibold text-foreground">套用風格到附圖</h3>
+                    <p className="text-xs text-muted-foreground">保留附圖內容與構圖，只改變畫風。</p>
                   </div>
+                  <Button
+                    type="button"
+                    variant={purposeId === STYLE_TRANSFER_PURPOSE ? "default" : "outline"}
+                    size="sm"
+                    className="h-9 shrink-0 text-xs"
+                    onClick={onUseStyleTransfer}
+                    aria-pressed={purposeId === STYLE_TRANSFER_PURPOSE}
+                  >
+                    {purposeId === STYLE_TRANSFER_PURPOSE ? "使用中" : "使用"}
+                  </Button>
+                </section>
+              )}
+
+              <section className="space-y-3 rounded-xl border border-border/80 bg-muted/35 p-3 shadow-inner" aria-labelledby="reference-style-title">
+                <div className="space-y-0.5">
+                  <h3 id="reference-style-title" className="text-xs font-semibold text-foreground">
+                    風格參考圖
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    上傳一張圖分析畫風，套用後可保存成可重複使用的風格。
+                  </p>
                 </div>
 
-              {contentImagePreview ? (
+              {styleReferencePreview ? (
                 <div className="relative overflow-hidden rounded-xl border border-border bg-background shadow-sm">
                   <img
-                    src={contentImagePreview}
-                    alt="內容參考圖片"
+                    src={styleReferencePreview}
+                    alt="風格參考圖"
                     width={640}
                     height={192}
                     className="h-48 w-full object-contain bg-muted/40"
@@ -413,17 +494,13 @@ export default function ScriptEditor({
                   <div className="absolute inset-0 flex items-start justify-end bg-black/0 p-2 opacity-0 transition-colors hover:bg-black/10 hover:opacity-100 focus-within:opacity-100">
                     <button
                       type="button"
-                      onClick={onClearContentImage}
+                      onClick={onClearStyleReference}
                       className="flex h-10 w-10 items-center justify-center rounded-full bg-card text-muted-foreground shadow-sm transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      title="移除參考圖片"
-                      aria-label="移除參考圖片"
+                      aria-label="移除風格參考圖"
                     >
                       <X className="icon-sm" aria-hidden="true" />
                     </button>
                   </div>
-                  <span className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
-                    參考圖片
-                  </span>
                 </div>
               ) : (
                 <>
@@ -431,7 +508,12 @@ export default function ScriptEditor({
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
-                    onChange={onContentImageUpload}
+                    aria-label="選擇風格參考圖檔案"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onStyleReferenceUpload?.(file);
+                      e.target.value = "";
+                    }}
                     className="hidden"
                   />
                   <button
@@ -443,25 +525,24 @@ export default function ScriptEditor({
                       e.preventDefault();
                       setIsDraging(false);
                       const file = e.dataTransfer.files[0];
-                      if (file && onContentImageUpload) {
-                        onContentImageUpload({ target: { files: [file] } });
-                      }
+                      if (file?.type.startsWith("image/")) onStyleReferenceUpload?.(file);
                     }}
+                    disabled={isUploadingStyleReference}
                     className={cn(
                       "group flex w-full items-center gap-3 rounded-xl border-2 border-dashed bg-background px-4 py-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                       isDraging
                         ? "border-primary bg-primary/10"
                         : "border-border hover:border-primary/50 hover:bg-primary/5"
                     )}
-                    aria-label="上傳內容參考圖片"
+                    aria-label="上傳風格參考圖"
                   >
                     <span
                       className={cn(
                         "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
-                        isUploadingContent ? "bg-muted" : "bg-primary/10 text-primary group-hover:bg-primary/15"
+                        isUploadingStyleReference ? "bg-muted" : "bg-primary/10 text-primary group-hover:bg-primary/15"
                       )}
                     >
-                      {isUploadingContent ? (
+                      {isUploadingStyleReference ? (
                         <span className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary motion-reduce:animate-none" aria-hidden="true" />
                       ) : (
                         <Image className="icon-md" aria-hidden="true" />
@@ -469,17 +550,16 @@ export default function ScriptEditor({
                     </span>
                     <span className="flex-1 text-left">
                       <span className="block text-sm font-medium text-foreground transition-colors group-hover:text-primary">
-                        上傳內容參考圖片
+                        上傳風格參考圖
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        作為生成內容的視覺參考，支援 JPG、PNG。
+                        只用來分析畫風，不會當成內容參考。
                       </span>
                     </span>
                   </button>
                 </>
               )}
-
-              {contentImagePreview && (
+              {styleReferencePreview && (
                 <div className="space-y-2">
                   {!analyzedStyle && !analysisResultData && (
                     <Button
@@ -487,7 +567,7 @@ export default function ScriptEditor({
                       variant="outline"
                       size="sm"
                       onClick={onAnalyze}
-                      disabled={isAnalyzing || isUploadingContent}
+                      disabled={isAnalyzing || isUploadingStyleReference}
                       className="h-9 w-full gap-2 rounded-lg border-primary/15 text-xs font-medium text-primary hover:bg-primary/10"
                     >
                       {isAnalyzing ? (

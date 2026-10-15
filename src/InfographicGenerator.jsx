@@ -25,8 +25,10 @@ import useHistory from './hooks/useHistory';
 import useImageGeneration from './hooks/useImageGeneration';
 import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
-import useImageTransform from './hooks/useImageTransform';
+import useCreateWorkspace from './hooks/useCreateWorkspace';
 import { uploadFile } from './services/storageService';
+import { STYLE_TRANSFER_PURPOSE, REFERENCE_PURPOSE } from './lib/attachmentPurposes';
+import { readFileAsDataUrl } from './lib/imageFile';
 import { DEFAULT_IMAGE_LANGUAGE } from './config';
 import { getImageModelSetupError, getImageQualityError } from './lib/imageModel';
 import { cn } from './lib/utils';
@@ -42,7 +44,7 @@ import DocumentScenes from './components/create/DocumentScenes';
 import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
 import SettingsPanel from './components/settings/SettingsPanel';
-import ImageTransformPanel from './components/create/ImageTransformPanel';
+import AttachmentPicker from './components/create/AttachmentPicker';
 import AssetCenter from './components/library/AssetCenter';
 import ThemeToggle from './components/common/ThemeToggle';
 
@@ -55,19 +57,13 @@ export default function InfographicGenerator({
     const [activeTab, setActiveTab] = useState(initialTab);
     const [documentAnalysisMode, setDocumentAnalysisMode] = useState('storyboard');
 
-    // Input States
+    // 風格參考圖（只用於風格分析，與內容附圖分開）
     const [referencePreview, setReferencePreview] = useState(null);
     const [referenceUploadId, setReferenceUploadId] = useState(null);
-
+    const [isUploadingStyleReference, setIsUploadingStyleReference] = useState(false);
 
     const [userScript, setUserScript] = useState('');
     const [optimizedPromptEn, setOptimizedPromptEn] = useState('');
-
-    // Content Image States
-    const [contentImagePreview, setContentImagePreview] = useState(null);
-    const [contentUploadId, setContentUploadId] = useState(null);
-    const [isUploadingContent, setIsUploadingContent] = useState(false);
-    const [, setContentUploadProgress] = useState(0);
 
     // 全域設定
     const [imageLanguage, setImageLanguage] = useState(() => {
@@ -184,136 +180,81 @@ export default function InfographicGenerator({
     const {
         analyzedStyle, analysisResultData, generatedImage, generatedFilename,
         isAnalyzing, isGenerating, analysisPhase, generationStatus,
-        analyzeStyle, generateImage, cancelGeneration, clearStyle,
+        analyzeStyle, generateImage, transformImage, cancelGeneration, clearStyle,
         setAnalyzedStyle, setAnalysisResultData, setGeneratedImage
     } = useImageGeneration();
 
-    const {
-        sourcePreview: transformSourcePreview,
-        isUploadingSource: isUploadingTransformSource,
-        sourceUploadProgress: transformSourceUploadProgress,
-        handleSourceImageUpload: handleTransformSourceUpload,
-        clearSource: clearTransformSource,
-        mode: transformMode, setMode: setTransformMode,
-        prompt: transformPrompt, setPrompt: setTransformPrompt,
-        aspectRatio: transformAspectRatio, setAspectRatio: setTransformAspectRatio,
-        paletteSelected: transformPaletteSelected, setPaletteSelected: setTransformPaletteSelected,
-        setAppliedStylePrompt: setTransformAppliedStylePrompt,
-        appliedStyleName: transformAppliedStyleName, setAppliedStyleName: setTransformAppliedStyleName,
-        appliedStyleId: transformAppliedStyleId, setAppliedStyleId: setTransformAppliedStyleId,
-        result: transformResult,
-        isTransforming,
-        transformError, setTransformError,
-        runTransform,
-        cancelTransform,
-    } = useImageTransform();
-
-    const handleApplyStyleForTransform = (styleData) => {
-        setTransformAppliedStylePrompt(styleData.prompt || '');
-        setTransformAppliedStyleName(styleData.name || '');
-        setTransformAppliedStyleId(styleData.id || null);
-    };
-
-    const handleClearAppliedStyleForTransform = () => {
-        setTransformAppliedStylePrompt('');
-        setTransformAppliedStyleName('');
-        setTransformAppliedStyleId(null);
-    };
-
-    const handleTransform = async () => {
-        try {
-            setTransformError('');
-            const quality = requireGenerationQuality();
-            const result = await runTransform({ imageQuality: quality, imageLanguage });
-            if (result?.imageUrl) {
-                await saveHistoryItem({
-                    jobId: result.jobId,
-                    imageUrl: result.imageUrl,
-                    userScript: transformPrompt || `圖片轉換 (${transformMode})`,
-                    stylePrompt: transformAppliedStyleName || '',
-                    fullPrompt: result.mergedPrompt || transformPrompt,
-                    source: 'image-transform',
-                });
-                if (transformAppliedStyleId) {
-                    markStyleUsed(transformAppliedStyleId).catch(() => {});
-                }
-            }
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                setTransformError(err.message);
-                return;
-            }
-            console.error('Image transform failed:', err);
-            setTransformError(`轉換失敗: ${err.message || '請稍後再試'}`);
-        }
-    };
-
-    const handleDownloadTransformResult = () => {
-        if (!transformResult) return;
-        const link = document.createElement('a');
-        link.href = transformResult;
-        link.download = `pixora-transform-${Date.now()}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
+    const workspace = useCreateWorkspace({ generateImage, transformImage, saveHistoryItem });
 
     // --- Core Logic Functions ---
 
-    const handleContentImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 10 * 1024 * 1024) { setErrorMsg("圖片過大，請上傳小於 10MB 的圖片。"); return; }
+    const handleAttachFile = async (file) => {
         try {
-            setIsUploadingContent(true);
-            setContentUploadProgress(0);
-            const uploadResult = await uploadFile(file, "image");
-            if (!uploadResult?.uploadId) throw new Error('無法完成圖片上傳，請確認已登入');
-            setContentUploadProgress(100);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setContentImagePreview(reader.result);
-                setContentUploadId(uploadResult.uploadId);
-
-                // 同步設定為風格參考圖，以便進行風格分析
-                setReferencePreview(reader.result);
-                setReferenceUploadId(uploadResult.uploadId);
-
-                setErrorMsg('');
-                setAppliedStyleId(null);
-                setTimeout(() => { setIsUploadingContent(false); setContentUploadProgress(0); }, 1500);
-            };
-            reader.readAsDataURL(file);
+            await workspace.attachFile(file);
+            setOptimizedPromptEn('');
+            setErrorMsg('');
         } catch (err) {
-            console.error("Content Upload failed:", err);
-            setErrorMsg(err.message || "上傳失敗，請稍後再試。");
-            setIsUploadingContent(false);
-            setContentUploadProgress(0);
+            console.error('Attachment upload failed:', err);
+            setErrorMsg(err.message || '上傳失敗，請稍後再試。');
         }
     };
 
-    const handleClearContentImage = (e) => {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        setContentImagePreview(null);
-        setContentUploadId(null);
-        setIsUploadingContent(false);
-        setContentUploadProgress(0);
+    const handleAttachCurrentResult = async () => {
+        try {
+            await workspace.attachImageUrl(generatedImage);
+            setOptimizedPromptEn('');
+            setErrorMsg('');
+        } catch (err) {
+            console.error('Attaching current result failed:', err);
+            setErrorMsg(`無法使用目前結果：${err.message || '請下載後再上傳'}`);
+        }
+    };
 
-        // 同步清除風格參考
-        setReferencePreview(null);
-        setReferenceUploadId(null);
-        clearStyle(); // 清除已分析的風格
-        setAppliedStyleId(null);
-
-        // 清除 AI 生成的英文 prompt (如果有的話)
+    const handleClearAttachment = () => {
+        workspace.clearAttachment();
         setOptimizedPromptEn('');
     };
 
+    const handleAttachmentPurposeChange = (purposeId) => {
+        workspace.setPurpose(purposeId);
+        setOptimizedPromptEn('');
+    };
+
+    const handleUseStyleTransfer = () => {
+        handleAttachmentPurposeChange(
+            workspace.purpose.id === STYLE_TRANSFER_PURPOSE ? REFERENCE_PURPOSE : STYLE_TRANSFER_PURPOSE
+        );
+    };
+
+    const handleStyleReferenceUpload = async (file) => {
+        if (file.size > 10 * 1024 * 1024) { setErrorMsg("圖片過大，請上傳小於 10MB 的圖片。"); return; }
+        try {
+            setIsUploadingStyleReference(true);
+            const uploadResult = await uploadFile(file, "image");
+            if (!uploadResult?.uploadId) throw new Error('無法完成圖片上傳，請確認已登入');
+            const previewUrl = await readFileAsDataUrl(file);
+            setReferencePreview(previewUrl);
+            setReferenceUploadId(uploadResult.uploadId);
+            setErrorMsg('');
+        } catch (err) {
+            console.error("Style reference upload failed:", err);
+            setErrorMsg(err.message || "上傳失敗，請稍後再試。");
+        } finally {
+            setIsUploadingStyleReference(false);
+        }
+    };
+
+    const handleClearStyleReference = () => {
+        setReferencePreview(null);
+        setReferenceUploadId(null);
+        clearStyle();
+        setAppliedStyleId(null);
+        setOptimizedPromptEn('');
+    };
     const analyzeImageStyle = async () => {
         try {
             const analysisResult = await analyzeStyle({ referenceUploadId });
             setAppliedStyleId(null);
-            setUserScript(typeof analysisResult.image_content === 'string' ? analysisResult.image_content : String(analysisResult.image_content || ''));
             const tags = Array.isArray(analysisResult.suggested_tags) ? analysisResult.suggested_tags : [];
             const autoStyleName = String(analysisResult.style_name || tags[0] || '未命名風格');
             const shouldSetName = !isStyleNameTouched;
@@ -425,32 +366,23 @@ export default function InfographicGenerator({
     };
 
     const generateInfographic = async () => {
+        if (!workspace.canSubmit(userScript)) return;
         try {
-            // 如果存在 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的中文 userScript
-            const finalScriptToUse = optimizedPromptEn || userScript;
-
             const quality = requireGenerationQuality();
-            const { jobId, imageUrl, finalPrompt } = await generateImage({
-                userScript: finalScriptToUse,
-                analyzedStyle,
+            const { styleId } = await workspace.submit({
+                // 若有 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的 userScript
+                prompt: optimizedPromptEn || userScript,
+                userScript,
+                stylePrompt: analyzedStyle,
                 styleTags: paletteStyleTags,
-                purpose: imagePurpose,
+                styleId: appliedStyleId || analysisResultData?.styleId || null,
+                imagePurpose,
                 aspectRatio,
                 imageQuality: quality,
                 imageLanguage,
-                referenceUploadId: contentUploadId,
             });
-            await saveHistoryItem({
-                jobId,
-                imageUrl,
-                userScript,
-                stylePrompt: [analyzedStyle, paletteStyleTags.join('，')].filter(Boolean).join('，'),
-                fullPrompt: finalPrompt,
-                styleId: appliedStyleId || analysisResultData?.styleId || null,
-                source: 'general',
-            });
-            if (appliedStyleId) {
-                markStyleUsed(appliedStyleId).catch((err) => {
+            if (styleId) {
+                markStyleUsed(styleId).catch((err) => {
                     console.warn("Style usage tracking failed:", err);
                 });
             }
@@ -462,7 +394,7 @@ export default function InfographicGenerator({
                 return;
             }
             console.error("Image Generation Failed:", err);
-            setErrorMsg(`圖片生成失敗: ${err.message || "請確認模型名稱支援圖片生成"}`);
+            setErrorMsg(`${workspace.isTransform ? '圖片修改' : '圖片生成'}失敗: ${err.message || "請稍後再試"}`);
         }
     };
 
@@ -617,7 +549,6 @@ export default function InfographicGenerator({
     const tabs = [
         { id: 'general', label: '一般創作', shortLabel: '創作', glyph: 'create' },
         { id: 'document', label: '文件創作', shortLabel: '文件', glyph: 'document' },
-        { id: 'image-transform', label: '圖片轉換', shortLabel: '轉換', glyph: 'transform' },
         { id: 'library', label: '素材中心', shortLabel: '素材', glyph: 'library' },
         { id: 'settings', label: '設定', shortLabel: '設定', glyph: 'settings' },
     ];
@@ -626,11 +557,11 @@ export default function InfographicGenerator({
         ['general', 'library'].includes(tab.id)
     );
     const mobileSecondaryTabs = tabs.filter((tab) =>
-        ['document', 'image-transform', 'settings'].includes(tab.id)
+        ['document', 'settings'].includes(tab.id)
     );
     const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
     const compactNavGroups = [
-        { id: 'create', label: '創作', glyph: 'create', tabIds: ['general', 'document', 'image-transform'] },
+        { id: 'create', label: '創作', glyph: 'create', tabIds: ['general', 'document'] },
         { id: 'library', label: '素材中心', glyph: 'library', tabIds: ['library'] },
         { id: 'more', label: '更多', glyph: 'settings', tabIds: ['settings'] },
     ];
@@ -942,10 +873,25 @@ export default function InfographicGenerator({
                                             onApplyStyle={applySavedStyle}
                                             onClearStyle={handleClearStyle}
 
-                                            contentImagePreview={contentImagePreview}
-                                            onContentImageUpload={handleContentImageUpload}
-                                            onClearContentImage={handleClearContentImage}
-                                            isUploadingContent={isUploadingContent}
+                                            styleReferencePreview={referencePreview}
+                                            onStyleReferenceUpload={handleStyleReferenceUpload}
+                                            onClearStyleReference={handleClearStyleReference}
+                                            isUploadingStyleReference={isUploadingStyleReference}
+
+                                            attachmentPurpose={workspace.attachment ? workspace.purpose : null}
+                                            onUseStyleTransfer={workspace.attachment ? handleUseStyleTransfer : undefined}
+                                            attachmentSlot={
+                                                <AttachmentPicker
+                                                    attachment={workspace.attachment}
+                                                    isUploading={workspace.isUploadingAttachment}
+                                                    purposeId={workspace.purpose.id}
+                                                    onPurposeChange={handleAttachmentPurposeChange}
+                                                    onAttachFile={handleAttachFile}
+                                                    onAttachCurrentResult={handleAttachCurrentResult}
+                                                    canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
+                                                    onClear={handleClearAttachment}
+                                                />
+                                            }
 
                                             // 風格分析 Props
                                             isAnalyzing={isAnalyzing}
@@ -1039,68 +985,22 @@ export default function InfographicGenerator({
                                 buttonText={
                                     hasActiveDocumentResult
                                         ? `批次生成所有圖片 (${scenes?.length || 0})`
-                                        : "開始生成圖片"
+                                        : workspace.purpose.buttonText
                                 }
                                 isGeneratingText={
                                     hasActiveDocumentResult
                                         ? "批次生成中…"
-                                        : "AI 生成中…"
+                                        : workspace.isTransform ? "AI 修改中…" : "AI 生成中…"
                                 }
-                                actionKind={hasActiveDocumentResult ? "document" : "create"}
+                                actionKind={hasActiveDocumentResult ? "document" : workspace.isTransform ? "transform" : "create"}
+                                aspectRatioLocked={!hasActiveDocumentResult && workspace.aspectRatioLocked}
                                 disabled={
                                     hasActiveDocumentResult
                                         ? !scenes || scenes.length === 0
-                                        : !userScript && !contentImagePreview
+                                        : !workspace.canSubmit(userScript)
                                 }
                             />
                         )}
-                    </div>
-                )}
-
-                {/* ─── Image Transform Tab ─── */}
-                {activeTab === 'image-transform' && (
-                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                        <div className="flex-1 min-h-0 overflow-hidden">
-                            <ImageTransformPanel
-                                sourcePreview={transformSourcePreview}
-                                isUploadingSource={isUploadingTransformSource}
-                                sourceUploadProgress={transformSourceUploadProgress}
-                                onSourceImageUpload={handleTransformSourceUpload}
-                                onClearSource={clearTransformSource}
-                                mode={transformMode}
-                                onModeChange={setTransformMode}
-                                prompt={transformPrompt}
-                                onPromptChange={setTransformPrompt}
-                                aspectRatio={transformAspectRatio}
-                                paletteSelected={transformPaletteSelected}
-                                onPaletteSelectedChange={setTransformPaletteSelected}
-                                savedStyles={savedStyles}
-                                appliedStyleName={transformAppliedStyleName}
-                                appliedStyleId={transformAppliedStyleId}
-                                onApplyStyle={handleApplyStyleForTransform}
-                                onClearAppliedStyle={handleClearAppliedStyleForTransform}
-                                imageLanguage={imageLanguage}
-                                result={transformResult}
-                                isTransforming={isTransforming}
-                                transformError={transformError}
-                                onDownloadResult={handleDownloadTransformResult}
-                            />
-                        </div>
-                        <GenerateBar
-                            aspectRatio={transformAspectRatio}
-                            onAspectRatioChange={setTransformAspectRatio}
-                            imageQuality={imageQuality}
-                            onImageQualityChange={setImageQuality}
-                            imageModelConfig={imageModelConfig}
-                            configurationError={modelSetupError}
-                            isGenerating={isTransforming}
-                            onGenerate={handleTransform}
-                            onCancelGeneration={cancelTransform}
-                            buttonText="開始 AI 轉換"
-                            isGeneratingText="AI 轉換中…"
-                            actionKind="transform"
-                            disabled={!transformSourcePreview || isUploadingTransformSource}
-                        />
                     </div>
                 )}
 

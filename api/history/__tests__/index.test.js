@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("job-backed image history", () => {
-  it.each(["general", "document", "image-transform"])("records the successful job model for %s", async (source) => {
+  it.each(["general", "document", "refine", "bg_replace", "element_extract", "style_transfer"])("records the successful job model for %s", async (source) => {
     const res = await invoke({ ...payload, source, model: "forged-or-new-default" });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ jobId: JOB_ID, model: "gpt-image-2.5-flare" });
@@ -49,6 +49,11 @@ describe("job-backed image history", () => {
       "gpt-image-2.5-flare", null, source, JOB_ID,
     ]);
     expect(db.query.mock.calls[0][0]).not.toContain("tenant_model_settings");
+  });
+
+  it("no longer records the removed image-transform tab as a source", async () => {
+    await invoke({ ...payload, source: "image-transform" });
+    expect(db.query.mock.calls[0][1][8]).toBeNull();
   });
 
   it("rejects missing or malformed job IDs before database/provider access", async () => {

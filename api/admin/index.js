@@ -22,7 +22,7 @@ const {
   testLlmModel,
   updateLlmModel,
 } = require("../_shared/llmModels");
-const { normalizeHistorySource } = require("../_shared/historySource");
+const { normalizeHistorySourceFilter } = require("../_shared/historySource");
 
 const timestamp = (value) =>
   value ? { seconds: Math.floor(new Date(value).getTime() / 1000) } : null;
@@ -199,7 +199,7 @@ const listHistory = async (context, identity, req) => {
   if (sourceFilter === "unknown") {
     where.push("h.source IS NULL");
   } else if (sourceFilter) {
-    const source = normalizeHistorySource(sourceFilter);
+    const source = normalizeHistorySourceFilter(sourceFilter);
     if (!source) {
       context.res = error("不支援的功能來源", "bad_request", 400, req);
       return;

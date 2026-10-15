@@ -161,6 +161,16 @@ const buildTransformPrompt = ({
       textDirective = "Preserve all existing foreground text and labels exactly as shown and do not add new text.";
       break;
 
+    case "refine":
+      change = `Modify only what this request asks for: ${base || "a small requested adjustment"}.`;
+      preserve = "Keep everything else unchanged, including composition, subjects, colours, lighting, layout, and every existing text element and its position. Do not restyle, reframe, or regenerate the rest of the image.";
+      textDirective = imageLanguage === "none"
+        ? "Remove every visible text element, letter, number, label, and logo text, and fill those areas naturally."
+        : ["Keep existing text exactly as shown unless the request changes it.", buildGenerationTextDirective(imageLanguage)]
+          .filter(Boolean)
+          .join(" ");
+      break;
+
     case "reference_gen":
     default:
       change = `Create the requested variation from the input image: ${base || "an original variation guided by the source image"}.`;
@@ -172,7 +182,7 @@ const buildTransformPrompt = ({
   return [
     asSection("Edit", change),
     asSection("Preserve", preserve),
-    styleBrief && mode !== "style_transfer" ? asSection("Visual style", styleBrief) : "",
+    styleBrief && mode !== "style_transfer" && mode !== "refine" ? asSection("Visual style", styleBrief) : "",
     asSection("Canvas", buildCanvasDirective(aspectRatio, "edit")),
     asSection("Text", textDirective),
   ]

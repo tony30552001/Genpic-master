@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { HISTORY_SOURCE_LABELS, getHistorySourceLabel } from "@/lib/historySource";
 import ImageLightbox from "../common/ImageLightbox";
 import { AnimatePresence } from "motion/react";
 import LlmModelSettings from "./LlmModelSettings";
@@ -73,17 +74,6 @@ const PROVIDER_FILTERS = [
 
 const providerLabel = (authProvider) =>
   PROVIDER_FILTERS.find((group) => group.id === authProvider)?.label || "—";
-
-/** Creation workflows that write into the history, mirroring api/_shared/historySource.js. */
-const HISTORY_SOURCE_FILTERS = [
-  { id: "general", label: "一般創作" },
-  { id: "document", label: "文件分鏡" },
-  { id: "image-transform", label: "圖片轉換" },
-  { id: "unknown", label: "未記錄" },
-];
-
-const historySourceLabel = (source) =>
-  HISTORY_SOURCE_FILTERS.find((item) => item.id === (source || "unknown"))?.label || "—";
 
 const formatDate = (value) => {
   if (!value?.seconds) return "—";
@@ -662,7 +652,7 @@ export default function AdminPanel() {
             .filter(Boolean)
             .join("\n"),
         },
-        { label: "功能", value: historySourceLabel(previewItem.source) },
+        { label: "功能", value: getHistorySourceLabel(previewItem.source) },
         { label: "模型", value: modelLabel(previewItem.model) },
         { label: "風格", value: previewItem.styleName },
         { label: "時間", value: formatDate(previewItem.createdAt) },
@@ -758,7 +748,7 @@ export default function AdminPanel() {
                       aria-label="依功能篩選生成紀錄"
                     >
                       <option value="">全部功能</option>
-                      {HISTORY_SOURCE_FILTERS.map((item) => (
+                      {HISTORY_SOURCE_LABELS.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.label}
                         </option>
@@ -991,7 +981,7 @@ export default function AdminPanel() {
                                 <p className="text-xs text-muted-foreground">{item.userEmail}</p>
                               </td>
                               <td className="px-5 py-3">
-                                <Badge variant="secondary">{historySourceLabel(item.source)}</Badge>
+                                <Badge variant="secondary">{getHistorySourceLabel(item.source)}</Badge>
                               </td>
                               <td className="px-5 py-3">
                                 <Badge variant="outline">{modelLabel(item.model)}</Badge>
@@ -1031,7 +1021,7 @@ export default function AdminPanel() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-                        使用者不會看到模型選擇器，所有一般創作、文件批次生成與圖片轉換都會使用下方的預設模型。
+                        使用者不會看到模型選擇器，所有創作（含附圖修改）與文件批次生成都會使用下方的預設模型。
                       </div>
                       {policyModels === null ? (
                         <div className="space-y-2">

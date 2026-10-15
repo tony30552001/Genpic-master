@@ -448,7 +448,7 @@ addOperation("/api/image-transform", "post", {
     required: ["uploadId"],
     properties: {
       uploadId: { type: "string", format: "uuid" },
-      mode: { type: "string", enum: ["style_transfer", "element_extract", "bg_replace", "reference_gen"] },
+      mode: { type: "string", enum: ["style_transfer", "element_extract", "bg_replace", "reference_gen", "refine"] },
       prompt: { type: "string" },
       aspectRatio: { type: "string" },
       imageSize: { type: "string" },

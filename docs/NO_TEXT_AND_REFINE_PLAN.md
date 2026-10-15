@@ -1,6 +1,6 @@
 # 「無文字」與「修改這張」改善計畫
 
-> 文件狀態：實作中（第 1 階段 A1 + A2 已完成）
+> 文件狀態：實作中（第 1 階段 A1 + A2、第 2 階段 C + B5 已完成）
 > 建立日期：2026-10-15
 > 範圍：整合「一般創作」與「圖片轉換」成單一創作工作區，包含生成設定、附圖用途、預覽區與修改流程
 
@@ -91,11 +91,11 @@
 - 修改輸入列固定在畫布底部，採半透明材質（`backdrop-blur`）。若使用者開啟 `prefers-reduced-transparency`，就改為實色。
 - 畫布是可隨時關閉的平行工作區，不加暗色遮罩。
 
-### B5. 修改的技術流程（不需要資料庫 migration）
+### B5. 修改的技術流程
 
 1. 目前的版本圖片是 data URL（`/api/image-jobs` 回傳），前端轉成 `File` 後呼叫 `uploadFile(file, "image")` 取得 `uploadId`。同一個版本只上傳一次，`uploadId` 快取在版本物件上。
 2. 呼叫 `transformImage({ uploadId, mode: "refine", prompt: instruction, aspectRatio: <原圖比例>, imageQuality, imageLanguage })`，再用 `waitForImageJob()` 等待結果。
-3. 成功後寫入歷史紀錄：`source: "image-transform"`，`userScript` 存修改說明。
+3. 成功後寫入歷史紀錄：`source: "refine"`，`userScript` 存修改說明。`history.source` 有 CHECK 約束，因此新增 `db/migrations/027_history_source_by_purpose.sql` 允許依用途記錄的來源（見功能 C）。
 4. 在後端新增 `refine` 轉換模式，因為現有的 `reference_gen` 指令是「建立變體」，而且「不沿用無關文字」，不符合「只改指定處」的需求：
    - `api/_shared/imagePrompt.js`：`refine` 指令為「只修改要求的部分；構圖、主體、配色、文字與版面其餘保持不變」。文字的處理依 `imageLanguage`，`none` 時移除所有文字。
    - `api/openapi.js` 的 mode enum 加入 `refine`。

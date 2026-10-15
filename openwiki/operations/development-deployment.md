@@ -6,8 +6,8 @@ tags: [operations, development, deployment, sessions, entra, llm, embeddings, pp
 openwiki:
   roles: [operations, workflow]
   change_kinds: [deployment, configuration, session-lifecycle, migrations, provider-adapter]
-  source_paths: [package.json, src/index.css, api/package.json, api/scripts/migrate.cjs, api/scripts/cleanup-legacy-upload-blobs.cjs, api/scripts/legacyUploadBlobs.js, api/_shared/http.js, api/_shared/session.js, api/_shared/azureEmbeddings.js, api/_shared/vector.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, api/_shared/imageJobs.js, db/migrations/024_async_image_transform_jobs.sql, db/migrations/025_gpt_image_only.sql, api/_shared/modelPolicy.js, api/_shared/deckFrames.js, api/_shared/deckContract.js, api/_shared/svgAuthoringPrompt.js, api/scripts/generate-style-previews.cjs, api/scripts/previewAssets.js, api/scripts/deck-repair-stats.cjs, api/scripts/deckRepairStats.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
-  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 023_deck_event_design_step.sql, pnpm test --run api/_shared/__tests__/azureEmbeddings.test.js, pnpm test --run api/_shared/__tests__/deckFrames.test.js api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckEventSteps.test.js api/_shared/__tests__/svgAuthoringPrompt.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
+  source_paths: [package.json, src/index.css, api/package.json, api/scripts/migrate.cjs, api/scripts/cleanup-legacy-upload-blobs.cjs, api/scripts/legacyUploadBlobs.js, api/_shared/http.js, api/_shared/session.js, api/_shared/azureEmbeddings.js, api/_shared/vector.js, api/_shared/llmRuntime.js, api/_shared/azureOpenAI.js, api/_shared/imageProviders.js, api/_shared/gptImage.js, api/_shared/imageJobs.js, db/migrations/024_async_image_transform_jobs.sql, db/migrations/027_history_source_by_purpose.sql, db/migrations/025_gpt_image_only.sql, api/_shared/modelPolicy.js, api/_shared/deckFrames.js, api/_shared/deckContract.js, api/_shared/svgAuthoringPrompt.js, api/scripts/generate-style-previews.cjs, api/scripts/previewAssets.js, api/scripts/deck-repair-stats.cjs, api/scripts/deckRepairStats.js, services/ppt-master-service/Dockerfile, .github/workflows/ppt-master-service.yml, .github/workflows/azure-static-web-apps-thankful-island-0ab89420f.yml]
+  validation_commands: [pnpm lint && pnpm build, node api/scripts/migrate.cjs 027_history_source_by_purpose.sql, node api/scripts/migrate.cjs 023_deck_event_design_step.sql, pnpm test --run api/_shared/__tests__/azureEmbeddings.test.js, pnpm test --run api/_shared/__tests__/deckFrames.test.js api/_shared/__tests__/deckContract.test.js api/_shared/__tests__/deckEventSteps.test.js api/_shared/__tests__/svgAuthoringPrompt.test.js, pnpm test --run api/_shared/__tests__/llmModels.test.js api/_shared/__tests__/llmRuntime.test.js]
 ---
 
 # Development, migrations, and deployment
@@ -80,6 +80,16 @@ pnpm test --run api/_shared/__tests__/imageModels.test.js api/_shared/__tests__/
 ```
 
 `imageCatalog.integration.test.js` is an isolated PostgreSQL integration suite gated by `TEST_DATABASE_URL`; it was not run here because Docker Engine was unavailable. Run it only with an approved disposable database. See [AI generation](../backend/ai-generation.md) for the runtime job and Azure request contracts and [schema](../data/schema.md) for migration ordering.
+
+## Creation-purpose history rollout
+
+Apply `027_history_source_by_purpose.sql` before deploying the unified creation workspace. The API begins writing `refine`, `bg_replace`, `element_extract`, and `style_transfer`; without the widened check constraint those history inserts fail after otherwise successful image jobs. The migration preserves `image-transform` for tab-era rows and performs no data rewrite. Use the exact filename because the migration runner has no ledger:
+
+```sh
+node api/scripts/migrate.cjs 027_history_source_by_purpose.sql
+```
+
+Run `pnpm test --run api/history/__tests__/index.test.js src/lib/__tests__/historySource.test.js src/hooks/__tests__/useCreateWorkspace.test.js` as the provider-free contract check. Database application is conditional on an approved disposable or target database; do not replay the full migration directory. The source/filter distinction and admin labels are documented in [resource APIs](../backend/resources.md), while the constraint is canonical in [schema](../data/schema.md).
 
 ## Azure style-embedding configuration
 

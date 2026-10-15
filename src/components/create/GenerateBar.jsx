@@ -106,13 +106,14 @@ export default function GenerateBar({
     isGeneratingText,
     actionKind = "create",
     disabled = false,
+    aspectRatioLocked = false,
 }) {
     const quality = imageQuality === undefined ? imageModelConfig?.defaultQuality : imageQuality;
     const setupError = configurationError || getImageQualityError(imageModelConfig, quality);
     const supportedQualities = Array.isArray(imageModelConfig?.supportedQualities)
         ? imageModelConfig.supportedQualities
         : [];
-    const selectedSizeLabel = getImageOutputLabel({ aspectRatio });
+    const selectedSizeLabel = aspectRatioLocked ? "沿用原圖比例" : getImageOutputLabel({ aspectRatio });
     const generationLabel = generationStatus
         ? `${generationStatus.shortLabel} · ${generationStatus.elapsedLabel}`
         : isGeneratingText || "AI 生成中…";
@@ -129,17 +130,22 @@ export default function GenerateBar({
 
             <div className="flex flex-wrap items-center gap-3">
                 {/* Aspect Ratios */}
-                <div className="flex flex-1 gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner">
+                <div
+                    className="flex flex-1 gap-1 rounded-lg border border-border/70 bg-muted/70 p-1 shadow-inner"
+                    role="group"
+                    aria-label={aspectRatioLocked ? "圖片比例（沿用原圖）" : "圖片比例"}
+                >
                     {ASPECT_RATIOS.map((ratio) => (
                         <button
                             type="button"
                             key={ratio.id}
                             onClick={() => onAspectRatioChange(ratio.id)}
+                            disabled={aspectRatioLocked}
                             aria-label={`設定圖片比例為 ${ratio.label}`}
-                            aria-pressed={aspectRatio === ratio.id}
+                            aria-pressed={!aspectRatioLocked && aspectRatio === ratio.id}
                             className={cn(
-                                "min-h-11 flex-1 touch-manipulation flex items-center justify-center gap-1 rounded-md px-1 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted",
-                                aspectRatio === ratio.id
+                                "min-h-11 flex-1 touch-manipulation flex items-center justify-center gap-1 rounded-md px-1 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted disabled:cursor-not-allowed disabled:opacity-50",
+                                !aspectRatioLocked && aspectRatio === ratio.id
                                      ? "bg-background text-primary font-semibold shadow-sm ring-1 ring-border/60"
                                      : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
                             )}

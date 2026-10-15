@@ -325,7 +325,7 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
  * @param {Object} params
  * @param {string} params.uploadId - 來源圖片的 owner-scoped upload ID
  * @param {string} params.mimeType - 圖片 MIME 類型
- * @param {'style_transfer'|'reference_gen'|'element_extract'|'bg_replace'} params.mode - 轉換模式
+ * @param {'refine'|'style_transfer'|'reference_gen'|'element_extract'|'bg_replace'} params.mode - 轉換模式
  * @param {string} params.prompt - 使用者自訂描述
  * @param {string} [params.stylePrompt] - 風格庫提供的共用風格描述
  * @param {string[]} [params.styleTags] - 調色盤的補充風格線索

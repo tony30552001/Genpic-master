@@ -21,6 +21,17 @@ const BASE_PROPS = {
 };
 
 describe("GenerateBar", () => {
+  it("locks the aspect ratio to the attached image", () => {
+    render(<GenerateBar {...BASE_PROPS} aspectRatioLocked buttonText="修改這張" actionKind="transform" />);
+    const group = screen.getByRole("group", { name: "圖片比例（沿用原圖）" });
+    for (const button of within(group).getAllByRole("button")) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("aria-pressed", "false");
+    }
+    expect(screen.getByText(/沿用原圖比例/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "修改這張" })).toBeEnabled();
+  });
+
   it.each([
     ["gpt-image-2", ["low", "medium", "high"], ["低", "中", "高"]],
     ["gpt-image-2.5-flare", ["low", "medium", "high", "xhigh", "max", "auto"], ["低", "中", "高", "超高", "最高", "自動"]],

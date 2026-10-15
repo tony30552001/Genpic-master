@@ -127,4 +127,28 @@ describe("buildTransformPrompt", () => {
       buildTransformPrompt({ mode: "reference_gen", prompt: "a new poster", imageLanguage: "ja" })
     ).toContain("must be in Japanese");
   });
+
+  it("limits a refine edit to the requested change and ignores style cues", () => {
+    const prompt = buildTransformPrompt({
+      mode: "refine",
+      prompt: "make the jacket yellow",
+      stylePrompt: "Bold comic ink",
+      imageLanguage: "zh-TW",
+      aspectRatio: "16:9",
+    });
+
+    expect(prompt).toMatch(/^Edit: Modify only what this request asks for: make the jacket yellow\./);
+    expect(prompt).toContain("Keep everything else unchanged, including composition");
+    expect(prompt).toContain("Keep existing text exactly as shown unless the request changes it.");
+    expect(prompt).toContain("Traditional Chinese");
+    expect(prompt).not.toContain("Visual style:");
+    expect(prompt).not.toContain("visual reference");
+  });
+
+  it("removes every text element when a refine edit asks for no text", () => {
+    const prompt = buildTransformPrompt({ mode: "refine", prompt: "clean it up", imageLanguage: "none" });
+
+    expect(prompt).toContain("Text: Remove every visible text element");
+    expect(prompt).not.toContain("Keep existing text");
+  });
 });

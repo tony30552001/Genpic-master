@@ -23,6 +23,7 @@ const TRANSFORM_MODE_CONTEXT = Object.freeze({
   reference_gen: "create a requested variation from the source-image reference",
   element_extract: "move the source foreground subject into a new setting",
   bg_replace: "replace only the source-image background",
+  refine: "change only the requested detail and keep the rest of the source image unchanged",
 });
 
 const normalizeOptimizationMode = (value) => {
