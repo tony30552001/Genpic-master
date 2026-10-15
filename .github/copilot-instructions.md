@@ -21,7 +21,6 @@ Use this sequence when working on repository changes:
 1. Use relevant OpenWiki pages for quick orientation and to locate the likely files and subsystems.
 2. Confirm the current behavior, contracts, and edge cases in source code and tests.
 3. Implement the change only after that source and test confirmation.
-4. Before pushing, update OpenWiki and review the generated documentation for consistency.
 
 ## Commands
 
@@ -116,19 +115,6 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 - Do not amend commits unless explicitly requested.
 - When a task includes a commit, push it immediately to `origin main`.
 
-## OpenWiki maintenance
+## OpenWiki
 
-The `openwiki/` directory is the generated knowledge base for this repository.
-
-Before pushing changes that affect source code, architecture, API behavior,
-database schema, deployment, configuration, or other documented behavior:
-
-1. Run `openwiki --update`.
-2. Review the generated OpenWiki changes.
-3. Verify that the generated documentation is consistent with the implementation.
-4. Include relevant `openwiki/`, `AGENTS.md`, and `CLAUDE.md` changes in the same
-   commit as the code changes, or create a follow-up documentation commit.
-5. Only push after the working tree contains the intended code and OpenWiki changes.
-
-Do not manually edit generated files under `openwiki/` unless explicitly requested.
-Treat source code and tests as authoritative.
+The `openwiki/` directory is the generated knowledge base for this repository. The scheduled OpenWiki workflow refreshes it; do not run `openwiki --update` as part of a change. Do not manually edit generated files under `openwiki/` unless explicitly requested. Treat source code and tests as authoritative.
