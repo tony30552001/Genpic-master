@@ -42,7 +42,7 @@ function GenerationProgress({ generationStatus, compact = false }) {
 
 /**
  * 固定底部的生成控制列。
- * 桌面版沿用 60/40 格線：左 3 欄放比例、品質與圖中文字，生成按鈕置中於右 2 欄（預覽區下方）；`compact`（手機版）只留結果縮圖、設定摘要與生成按鈕，
+ * 桌面版是單列：比例、品質、圖中文字之後緊接生成按鈕，模型摘要靠右；`compact`（手機版）只留結果縮圖、設定摘要與生成按鈕，
  * 設定收進底部面板。
  */
 export default function GenerateBar({
@@ -220,18 +220,14 @@ export default function GenerateBar({
             {isGenerating && generationStatus && <GenerationProgress generationStatus={generationStatus} />}
             {refineHint}
 
-            {/* 與上方 60/40 版面同一格線，讓生成按鈕落在預覽區正下方的中線上。 */}
-            <div className="grid grid-cols-5 items-center gap-6">
-                <div className="col-span-3 min-w-0">{settings("row")}</div>
-                <div className="col-span-2 flex min-w-0 flex-col items-center gap-1">
-                    <div className="flex items-center gap-3">
-                        {generateButton(buttonText || "開始生成圖片", "w-56 shrink-0")}
-                        {cancelButton}
-                    </div>
-                    <p className="hidden max-w-full truncate text-xs text-muted-foreground xl:block">
-                        {imageModelConfig?.label || "尚未設定圖片模型"} · {selectedSizeLabel}
-                    </p>
-                </div>
+            {/* 設定與生成按鈕是同一個動作的前後兩步，緊鄰排列；模型摘要是次要資訊，靠右。 */}
+            <div className="flex items-center gap-3">
+                <div className="min-w-0">{settings("row")}</div>
+                {generateButton(buttonText || "開始生成圖片", "h-11 w-56 shrink-0")}
+                {cancelButton}
+                <p className="ml-auto hidden max-w-60 truncate pl-3 text-right text-xs text-muted-foreground xl:block">
+                    {imageModelConfig?.label || "尚未設定圖片模型"} · {selectedSizeLabel}
+                </p>
             </div>
         </div>
     );
