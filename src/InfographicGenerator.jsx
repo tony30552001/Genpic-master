@@ -5,18 +5,14 @@ import * as M from "motion/react-m";
 import { AnimatePresence } from "motion/react";
 import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 import {
-  LogIn,
-  LogOut,
   MoreHorizontal,
 } from "@/components/icons/lucideControls";
 import {
   AlertCircle,
 } from "@/components/icons/lucideStatus";
 import {
-  User,
   ShieldCheck,
 } from "@/components/icons/lucideContent";
-import PixoraMark from "@/components/icons/PixoraMark";
 import ProductGlyph from "@/components/icons/ProductGlyph";
 import useAuth from './hooks/useAuth';
 import useStyles from './hooks/useStyles';
@@ -50,7 +46,7 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import SettingsPanel from './components/settings/SettingsPanel';
 import AttachmentPicker from './components/create/AttachmentPicker';
 import AssetCenter from './components/library/AssetCenter';
-import ThemeToggle from './components/common/ThemeToggle';
+import AppHeader from './components/common/AppHeader';
 
 export default function InfographicGenerator({
     initialTab = 'general',
@@ -617,7 +613,6 @@ export default function InfographicGenerator({
         { id: 'library', label: '素材中心', shortLabel: '素材', glyph: 'library' },
         { id: 'settings', label: '設定', shortLabel: '設定', glyph: 'settings' },
     ];
-    const activeTabInfo = tabs.find(t => t.id === activeTab);
     const mobilePrimaryTabs = tabs.filter((tab) =>
         ['general', 'library'].includes(tab.id)
     );
@@ -630,97 +625,17 @@ export default function InfographicGenerator({
         <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
 
             {/* ═══════════ Top Header Bar ═══════════ */}
-            <header className="relative shrink-0 border-b border-border bg-primary pt-[env(safe-area-inset-top)] text-white shadow-md">
-                <div className="flex min-w-0 items-center justify-between gap-2 px-3 h-12 sm:px-4 lg:h-14 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
-                    {/* Logo */}
-                    <div className="flex min-w-0 flex-1 items-center gap-2 justify-self-start sm:gap-3">
-                        <PixoraMark className="h-8 w-8 text-white" title="Pixora" />
-                        <div className="min-w-0">
-                            <h1 className="truncate text-sm font-bold leading-tight sm:text-base">Pixora 智繪</h1>
-                            <p className="text-[10px] text-white/70 leading-none hidden lg:block">AI 智能視覺創作平台</p>
-                        </div>
-                        {/* 手機版（< lg）：顯示當前頁面名稱 */}
-                        {activeTabInfo && (
-                            <span className="lg:hidden flex min-w-0 shrink items-center gap-1.5 text-[10px] font-medium text-white/75">
-                                <span aria-hidden="true">/</span>
-                                <span className="truncate">{activeTabInfo.label}</span>
-                            </span>
-                        )}
-                    </div>
-
-                    {/* 桌面版：Inline Main Tabs */}
-                    <nav className="hidden w-fit items-center justify-center gap-0.5 rounded-lg bg-white/10 p-1 lg:flex" aria-label="主要功能">
-                        {tabs.map((tab) => (
-                            <button
-                                type="button"
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                aria-pressed={activeTab === tab.id}
-                                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${activeTab === tab.id
-                                    ? 'bg-white text-primary shadow-sm'
-                                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                                    }`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </nav>
-
-                    {/* User Controls */}
-                    <div className="flex min-w-0 shrink-0 items-center gap-2 justify-self-end sm:gap-3">
-                        <ThemeToggle className="text-white/80 hover:bg-white/10 hover:text-white" />
-                        {isAdmin && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate("/admin")}
-                                className="hidden gap-1.5 text-white/90 hover:bg-white/10 hover:text-white lg:flex"
-                                title="開啟管理中心"
-                            >
-                                <ShieldCheck className="icon-sm" aria-hidden="true" />
-                                管理中心
-                            </Button>
-                        )}
-                        {user && (
-                            <div className="flex items-center gap-2 pl-2 border-l border-white/20 sm:gap-3 sm:pl-3">
-                                <div className="hidden flex-col items-end xl:flex">
-                                    <span className="text-xs font-bold leading-tight">{user.displayName}</span>
-                                    <span className="text-[10px] text-white/70 leading-tight">{user.email}</span>
-                                </div>
-                                <div className="w-8 h-8 shrink-0 rounded-full bg-white/20 border border-white/30 overflow-hidden flex items-center justify-center">
-                                    {user.photoURL ? (
-                                        <img src={user.photoURL} alt="使用者頭像" width={32} height={32} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <User className="icon-sm" />
-                                    )}
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                     size="icon"
-                                     onClick={handleLogout}
-                                     className="h-10 w-10 shrink-0 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-                                     title="登出系統"
-                                     aria-label="登出系統"
-                                 >
-                                    <LogOut className="icon-sm" />
-                                </Button>
-                            </div>
-                        )}
-                        {!user && !isLoading && (
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => navigate("/login")}
-                                className="gap-1.5 bg-white/20 hover:bg-white/30 text-white border-0"
-                            >
-                                <LogIn className="icon-sm" />
-                                登入
-                            </Button>
-                        )}
-                    </div>
-                </div>
-
-            </header>
+            <AppHeader
+                tabs={tabs}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                user={user}
+                isAdmin={isAdmin}
+                isLoading={isLoading}
+                onOpenAdmin={() => navigate("/admin")}
+                onLogin={() => navigate("/login")}
+                onLogout={handleLogout}
+            />
 
             {/* ═══════════ Main Content Area ═══════════ */}
             <main className="flex-1 min-h-0 flex flex-col">

@@ -65,7 +65,6 @@ vi.mock("../components/create/ImagePreview", () => ({ default: (props) => { mock
 vi.mock("../components/create/DocumentUploader", () => ({ default: () => null }));
 vi.mock("../components/create/PptMasterStudio", () => ({ default: () => null }));
 vi.mock("../components/library/AssetCenter", () => ({ default: () => null }));
-vi.mock("../components/common/ThemeToggle", () => ({ default: () => null }));
 vi.mock("../components/settings/SettingsPanel", () => ({ default: () => null }));
 
 import InfographicGenerator from "../InfographicGenerator";
