@@ -7,9 +7,11 @@ import {
   Save,
   Search,
   Trash2,
+  X,
   ZoomIn,
 } from "@/components/icons/lucideControls";
 import {
+  AlertCircle,
   Check,
   Loader2,
   UserCheck,
@@ -17,16 +19,29 @@ import {
 } from "@/components/icons/lucideStatus";
 import {
   Brain,
-  Database,
   Image,
   Palette,
   Settings,
   ShieldCheck,
   Users,
 } from "@/components/icons/lucideContent";
+import PixoraWordmark from "@/components/icons/PixoraWordmark";
+import AccountMenu from "@/components/common/AccountMenu";
+import SegmentedTabs from "@/components/common/SegmentedTabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { HISTORY_SOURCE_LABELS, getHistorySourceLabel } from "@/lib/historySource";
 import ImageLightbox from "../common/ImageLightbox";
@@ -50,12 +65,15 @@ import {
 } from "../../services/adminService";
 
 const SECTIONS = [
-  { id: "users", label: "使用者", icon: Users },
-  { id: "history", label: "生成紀錄", icon: Image },
-  { id: "models", label: "模型政策", icon: Settings },
-  { id: "llm", label: "分析模型", icon: Brain },
-  { id: "styles", label: "風格庫", icon: Palette },
+  { id: "users", label: "使用者", icon: Users, description: "管理帳號角色與存取權限。" },
+  { id: "history", label: "生成紀錄", icon: Image, description: "檢視所有使用者的生成結果與使用的 Prompt。" },
+  { id: "models", label: "模型政策", icon: Settings, description: "登錄圖片模型，並決定開放與預設使用的模型。" },
+  { id: "llm", label: "分析模型", icon: Brain, description: "設定文件分析與簡報授稿使用的語言模型。" },
+  { id: "styles", label: "風格庫", icon: Palette, description: "管理使用者儲存與共享的視覺風格。" },
 ];
+
+const NATIVE_SELECT_CLASS =
+  "h-9 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 const ROLE_OPTIONS = [
   { value: "admin", label: "管理員" },
@@ -117,13 +135,13 @@ const normalizePaginatedData = (data, fallbackPageSize = DEFAULT_USER_PAGE_SIZE)
 };
 
 const PageSizeSelect = ({ value, onChange, disabled, ariaLabel }) => (
-  <label className="flex items-center gap-2 self-end text-xs text-muted-foreground sm:self-auto">
+  <label className="flex items-center gap-2 text-xs text-muted-foreground">
     <span>每頁顯示</span>
     <select
       value={value}
       onChange={onChange}
       disabled={disabled}
-      className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      className={NATIVE_SELECT_CLASS}
       aria-label={ariaLabel}
     >
       {USER_PAGE_SIZE_OPTIONS.map((pageSize) => (
@@ -189,8 +207,8 @@ const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChang
   if (pagination.total <= 0) return null;
 
   return (
-    <div className="flex flex-col gap-3 border-t border-border px-5 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-      <p>
+    <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <p className="tabular-nums">
         顯示 {(pagination.page - 1) * pagination.pageSize + 1}–
         {Math.min(pagination.page * pagination.pageSize, pagination.total)}
         {itemLabel}，共 {pagination.total}{itemLabel}
@@ -226,6 +244,66 @@ const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChang
   );
 };
 
+const AdminTable = ({ columns, minWidth, isEmpty, emptyMessage, footer, children }) => (
+  <div className="overflow-hidden rounded-xl border border-border bg-card">
+    <div className="overflow-x-auto">
+      <table className={cn("w-full text-sm", minWidth)}>
+        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+          <tr>
+            {columns.map((column) => {
+              const { label, align } = typeof column === "string" ? { label: column } : column;
+              return (
+                <th
+                  key={label}
+                  scope="col"
+                  className={cn("whitespace-nowrap px-4 py-3 font-medium", align === "right" && "text-right")}
+                >
+                  {label}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">{children}</tbody>
+      </table>
+    </div>
+    {isEmpty && (
+      <p className="px-4 py-12 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+    )}
+    {footer}
+  </div>
+);
+
+const AdminHeader = ({ user, onBack, onLogout }) => (
+  <header className="relative shrink-0 bg-background pt-[env(safe-area-inset-top)] text-foreground">
+    <div className="flex h-12 min-w-0 items-center justify-between gap-2 px-3 sm:px-4 lg:h-14 lg:px-8">
+      <div className="flex min-w-0 items-center gap-2">
+        <PixoraWordmark />
+        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted-foreground">
+          <span aria-hidden="true">/</span>
+          <ShieldCheck className="icon-sm shrink-0 text-primary" aria-hidden="true" />
+          <span className="truncate text-foreground">管理中心</span>
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          aria-label="返回創作平台"
+          className="gap-1.5 rounded-lg text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+        >
+          <ArrowLeft className="icon-sm" aria-hidden="true" />
+          <span className="hidden sm:inline">返回創作</span>
+        </Button>
+        <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
+        <AccountMenu user={user} onLogout={onLogout} />
+      </div>
+    </div>
+  </header>
+);
+
 export default function AdminPanel() {
   const navigate = useNavigate();
   const { user, profile, handleLogout, refreshProfile } = useAuth();
@@ -254,6 +332,7 @@ export default function AdminPanel() {
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [pendingAction, setPendingAction] = useState(null);
   const requestedSectionsRef = useRef(new Set());
   const appliedUserSearchRef = useRef("");
   const models = policyModels ?? profile?.imageModels ?? [];
@@ -517,15 +596,8 @@ export default function AdminPanel() {
     }
   };
 
-  const handleUserStatusChange = async (item) => {
+  const applyUserStatusChange = async (item) => {
     const nextIsActive = !item.isActive;
-    if (
-      !nextIsActive &&
-      !window.confirm(`確定要停用 ${item.displayName} 嗎？停用後該使用者將無法使用系統。`)
-    ) {
-      return;
-    }
-
     setErrorMessage("");
     setSuccessMessage("");
     try {
@@ -540,6 +612,14 @@ export default function AdminPanel() {
     } catch (error) {
       setErrorMessage(error.message || "使用者狀態更新失敗");
     }
+  };
+
+  const handleUserStatusChange = (item) => {
+    if (item.isActive) {
+      setPendingAction({ kind: "deactivate-user", item });
+      return;
+    }
+    void applyUserStatusChange(item);
   };
 
   const handleAllowedModelToggle = (modelId) => {
@@ -590,12 +670,13 @@ export default function AdminPanel() {
     }
   };
 
-  const handleDeleteStyle = async (styleId) => {
-    if (!window.confirm("確定要刪除這個風格嗎？相關歷史紀錄仍會保留。")) return;
+  const applyDeleteStyle = async (style) => {
     setErrorMessage("");
+    setSuccessMessage("");
     try {
-      await deleteAdminStyle(styleId);
-      setStyles((previous) => previous.filter((style) => style.id !== styleId));
+      await deleteAdminStyle(style.id);
+      setStyles((previous) => previous.filter((item) => item.id !== style.id));
+      setSuccessMessage(`已刪除風格「${style.name}」。`);
     } catch (error) {
       setErrorMessage(error.message || "風格刪除失敗");
     }
@@ -662,381 +743,362 @@ export default function AdminPanel() {
     : [];
 
   const activeSectionInfo = SECTIONS.find((section) => section.id === activeSection);
+  const isSectionLoading = loadingSection === activeSection;
+  const sectionCount = {
+    users: userPagination.total,
+    history: historyPagination.total,
+    styles: stylesPagination.total,
+  }[activeSection];
+  const showsUserFilter = activeSection === "history" || activeSection === "styles";
+
+  const handleSectionChange = (sectionId) => {
+    if (sectionId === activeSection) return;
+    setErrorMessage("");
+    setSuccessMessage("");
+    setActiveSection(sectionId);
+  };
+
+  const handleConfirmPendingAction = () => {
+    const action = pendingAction;
+    setPendingAction(null);
+    if (action?.kind === "deactivate-user") void applyUserStatusChange(action.item);
+    if (action?.kind === "delete-style") void applyDeleteStyle(action.style);
+  };
 
   return (
-    <div className="min-h-screen bg-muted/30 text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-primary text-primary-foreground shadow-sm">
-        <div className="mx-auto flex h-14 max-w-[1800px] items-center justify-between gap-4 px-4 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/")}
-              className="size-9 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              aria-label="返回創作平台"
-            >
-              <ArrowLeft className="icon-md" aria-hidden="true" />
-            </Button>
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/15">
-              <ShieldCheck className="icon-sm" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-tight">管理中心</p>
-              <p className="truncate text-[11px] leading-tight text-primary-foreground/70">
-                {profile?.displayName || user?.displayName || "系統管理員"}
-              </p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleLogout}
-            className="shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-          >
-            登出
-          </Button>
-        </div>
-      </header>
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-background pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] font-sans text-foreground">
+      <AdminHeader user={user} onBack={() => navigate("/")} onLogout={handleLogout} />
 
-      <main className="mx-auto max-w-[1800px] space-y-6 px-4 py-6 lg:px-8 lg:py-8">
-        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="h-fit rounded-2xl border border-border bg-card p-2 shadow-sm lg:sticky lg:top-20">
-            <nav className="space-y-1" aria-label="管理功能">
-              {SECTIONS.map((section) => {
+      <main className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md">
+          <div className="mx-auto max-w-[1760px] overflow-x-auto px-4 py-2 lg:px-8 2xl:px-12">
+            <SegmentedTabs
+              tabs={SECTIONS}
+              activeTab={activeSection}
+              onTabChange={handleSectionChange}
+              ariaLabel="管理功能"
+              className="w-max min-w-full sm:min-w-0"
+              renderIcon={(section) => {
                 const Icon = section.icon;
-                return (
-                  <button
-                    type="button"
-                    key={section.id}
-                    onClick={() => setActiveSection(section.id)}
-                    className={cn(
-                      "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      activeSection === section.id
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                    aria-current={activeSection === section.id ? "page" : undefined}
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {section.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </aside>
+                return <Icon className="icon-sm" aria-hidden="true" />;
+              }}
+            />
+          </div>
+        </div>
 
-          <section className="min-w-0 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-lg font-semibold">{activeSectionInfo?.label}</h1>
-                {selectedUser && (
-                  <p className="text-xs text-muted-foreground">
-                    目前篩選：{selectedUser.displayName}（{selectedUser.email}）
-                  </p>
+        <div
+          key={activeSection}
+          className="mx-auto max-w-[1760px] space-y-5 px-4 pb-10 pt-4 animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none lg:px-8 2xl:px-12"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight">{activeSectionInfo?.label}</h1>
+                {sectionCount !== undefined && !isSectionLoading && (
+                  <Badge variant="secondary" className="tabular-nums">{sectionCount}</Badge>
                 )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {activeSection === "history" && (
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>功能</span>
-                    <select
-                      value={historySource}
-                      onChange={handleHistorySourceChange}
-                      disabled={isRefreshing}
-                      className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label="依功能篩選生成紀錄"
-                    >
-                      <option value="">全部功能</option>
-                      {HISTORY_SOURCE_LABELS.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                {(activeSection === "history" || activeSection === "styles") &&
-                  userFilterGroups.map((group) => (
-                    <UserFilterSelect
-                      key={group.id}
-                      label={group.label}
-                      users={group.users}
-                      value={
-                        group.users.some((item) => item.id === selectedUserId)
-                          ? selectedUserId
-                          : ""
-                      }
-                      onChange={handleUserFilterChange}
-                      disabled={isLoadingUserOptions}
-                      allLabel="全部使用者"
-                    />
-                  ))}
                 {(isRefreshing || loadingSection) && (
                   <Loader2 className="icon-sm animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
                 )}
               </div>
+              <p className="mt-1 text-sm text-muted-foreground">{activeSectionInfo?.description}</p>
             </div>
-
-            {errorMessage && (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
-                {errorMessage}
+            {showsUserFilter && selectedUser && (
+              <div className="flex min-w-0 items-center gap-1 self-start rounded-full border border-primary/30 bg-primary/5 py-1 pl-3 pr-1 text-xs sm:self-auto">
+                <span className="min-w-0 truncate">
+                  篩選：<span className="font-medium">{selectedUser.displayName}</span>
+                  <span className="text-muted-foreground">（{selectedUser.email}）</span>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleUserFilterChange("")}
+                  className="size-6 shrink-0 rounded-full"
+                  aria-label="清除使用者篩選"
+                >
+                  <X className="icon-xs" aria-hidden="true" />
+                </Button>
               </div>
             )}
-            {successMessage && (
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300" role="status">
-                <Check className="icon-sm" aria-hidden="true" />
-                {successMessage}
-              </div>
-            )}
+          </div>
 
-            {loadingSection === activeSection ? (
-              <Card>
-                <CardContent className="flex min-h-56 items-center justify-center">
-                  <Loader2 className="icon-lg animate-spin text-primary motion-reduce:animate-none" aria-label="載入管理資料" />
-                </CardContent>
-              </Card>
-            ) : (
-              <>
+          {errorMessage && (
+            <div
+              className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-2.5 text-sm text-destructive animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none"
+              role="alert"
+            >
+              <AlertCircle className="icon-sm shrink-0" aria-hidden="true" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+          {successMessage && (
+            <div
+              className="flex items-center gap-2 rounded-lg border border-success/40 bg-success/5 px-4 py-2.5 text-sm text-foreground animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none"
+              role="status"
+            >
+              <Check className="icon-sm shrink-0 text-success" aria-hidden="true" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {(activeSection === "users" || showsUserFilter) && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              {activeSection === "users" && (
+                <div className="relative min-w-0 sm:w-72">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 icon-sm -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    type="search"
+                    value={userSearch}
+                    onChange={(event) => setUserSearch(event.target.value)}
+                    placeholder="搜尋姓名或 Email"
+                    aria-label="搜尋使用者"
+                    autoComplete="off"
+                    className="h-9 pl-9"
+                  />
+                </div>
+              )}
+              {activeSection === "history" && (
+                <select
+                  value={historySource}
+                  onChange={handleHistorySourceChange}
+                  disabled={isRefreshing}
+                  className={NATIVE_SELECT_CLASS}
+                  aria-label="依功能篩選生成紀錄"
+                >
+                  <option value="">全部功能</option>
+                  {HISTORY_SOURCE_LABELS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {showsUserFilter &&
+                userFilterGroups.map((group) => (
+                  <UserFilterSelect
+                    key={group.id}
+                    label={group.label}
+                    users={group.users}
+                    value={
+                      group.users.some((item) => item.id === selectedUserId)
+                        ? selectedUserId
+                        : ""
+                    }
+                    onChange={handleUserFilterChange}
+                    disabled={isLoadingUserOptions}
+                    allLabel="全部使用者"
+                  />
+                ))}
+              <div className="sm:ml-auto">
                 {activeSection === "users" && (
-                  <Card>
-                    <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Users className="icon-sm text-primary" aria-hidden="true" />
-                        使用者清單
-                        <Badge variant="secondary" className="ml-auto">{userPagination.total}</Badge>
-                      </CardTitle>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative">
-                          <Search
-                            className="pointer-events-none absolute left-2.5 top-1/2 icon-sm -translate-y-1/2 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                          <input
-                            type="search"
-                            value={userSearch}
-                            onChange={(event) => setUserSearch(event.target.value)}
-                            placeholder="搜尋姓名或 Email"
-                            aria-label="搜尋使用者"
-                            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-56"
-                          />
-                        </div>
-                        <PageSizeSelect
-                          value={userPageSize}
-                          onChange={handleUserPageSizeChange}
-                          disabled={isRefreshing}
-                          ariaLabel="每頁顯示使用者數量"
-                        />
-                      </div>
-                    </CardHeader>
-                    <CardContent className="overflow-x-auto p-0">
-                      <table className="w-full min-w-[980px] text-sm">
-                        <thead className="border-y border-border bg-muted/40 text-left text-xs text-muted-foreground">
-                          <tr>
-                            <th className="px-5 py-3 font-medium">使用者</th>
-                            <th className="px-5 py-3 font-medium">登入方式</th>
-                            <th className="px-5 py-3 font-medium">角色</th>
-                            <th className="px-5 py-3 font-medium">狀態</th>
-                            <th className="px-5 py-3 font-medium">生成圖片</th>
-                            <th className="px-5 py-3 font-medium">儲存風格</th>
-                            <th className="px-5 py-3 font-medium">加入時間</th>
-                            <th className="px-5 py-3 font-medium">操作</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {users.map((item) => (
-                            <tr
-                              key={item.id}
-                              className={cn("hover:bg-muted/30", !item.isActive && "bg-muted/20")}
-                            >
-                              <td className="px-5 py-3">
-                                <p className="font-medium">{item.displayName}</p>
-                                <p className="text-xs text-muted-foreground">{item.email}</p>
-                              </td>
-                              <td className="px-5 py-3 text-xs text-muted-foreground">
-                                {providerLabel(item.authProvider)}
-                              </td>
-                              <td className="px-5 py-3">
-                                <select
-                                  value={item.role}
-                                  onChange={(event) => handleRoleChange(item.id, event.target.value)}
-                                  className="h-8 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                  aria-label={`${item.displayName} 的角色`}
-                                >
-                                  {ROLE_OPTIONS.map((role) => (
-                                    <option key={role.value} value={role.value}>{role.label}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-5 py-3">
-                                <Badge variant={item.isActive ? "secondary" : "destructive"}>
-                                  {item.isActive ? "啟用" : "已停用"}
-                                </Badge>
-                              </td>
-                              <td className="px-5 py-3 tabular-nums">{item.generationCount}</td>
-                              <td className="px-5 py-3 tabular-nums">{item.styleCount}</td>
-                              <td className="px-5 py-3 text-xs text-muted-foreground">{formatDate(item.createdAt)}</td>
-                              <td className="px-5 py-3">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleUserStatusChange(item)}
-                                  disabled={item.id === profile?.id && item.isActive}
-                                  title={item.id === profile?.id && item.isActive ? "不能停用目前登入的管理員帳號" : undefined}
-                                  aria-label={`${item.isActive ? "停用" : "啟用"} ${item.displayName}`}
-                                  className={cn(
-                                    "gap-1.5",
-                                    item.isActive
-                                      ? "text-destructive hover:bg-destructive/5 hover:text-destructive"
-                                      : "text-success hover:bg-success/5 hover:text-success"
-                                  )}
-                                >
-                                  {item.isActive ? (
-                                    <UserX className="icon-sm" aria-hidden="true" />
-                                  ) : (
-                                    <UserCheck className="icon-sm" aria-hidden="true" />
-                                  )}
-                                  {item.isActive ? "停用" : "啟用"}
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {users.length === 0 && (
-                        <p className="px-5 py-10 text-center text-sm text-muted-foreground">
-                          {userSearch.trim()
-                            ? "找不到符合搜尋條件的使用者。"
-                            : "目前沒有使用者資料。"}
-                        </p>
-                      )}
-                      <AdminTablePagination
-                        pagination={userPagination}
-                        itemLabel="位使用者"
-                        isRefreshing={isRefreshing}
-                        onPageChange={handleUserPageChange}
-                      />
-                    </CardContent>
-                  </Card>
+                  <PageSizeSelect
+                    value={userPageSize}
+                    onChange={handleUserPageSizeChange}
+                    disabled={isRefreshing}
+                    ariaLabel="每頁顯示使用者數量"
+                  />
                 )}
-
                 {activeSection === "history" && (
-                  <Card>
-                    <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Database className="icon-sm text-primary" aria-hidden="true" />
-                        使用者生成圖片紀錄
-                        <Badge variant="secondary" className="ml-auto">{historyPagination.total}</Badge>
-                      </CardTitle>
-                      <PageSizeSelect
-                        value={historyPageSize}
-                        onChange={handleHistoryPageSizeChange}
-                        disabled={isRefreshing}
-                        ariaLabel="每頁顯示生成紀錄數量"
-                      />
-                    </CardHeader>
-                    <CardContent className="overflow-x-auto p-0">
-                      <table className="w-full min-w-[960px] text-sm">
-                        <thead className="border-y border-border bg-muted/40 text-left text-xs text-muted-foreground">
-                          <tr>
-                            <th className="px-5 py-3 font-medium">圖片</th>
-                            <th className="px-5 py-3 font-medium">使用者</th>
-                            <th className="px-5 py-3 font-medium">功能</th>
-                            <th className="px-5 py-3 font-medium">模型</th>
-                            <th className="px-5 py-3 font-medium">Prompt</th>
-                            <th className="px-5 py-3 font-medium">時間</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {historyItems.map((item) => (
-                            <tr key={item.id} className="align-top hover:bg-muted/30">
-                              <td className="px-5 py-3">
-                                {item.hasImage ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openHistoryPreview(item.id)}
-                                    aria-label={`放大查看 ${item.userDisplayName} 的生成圖片`}
-                                    className="group relative block h-14 w-20 overflow-hidden rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                  >
-                                    <AdminRemoteImage
-                                      id={item.id}
-                                      fetcher={getAdminHistoryImage}
-                                      alt=""
-                                      width={80}
-                                      height={54}
-                                      className="h-full w-full object-cover"
-                                      placeholderClassName="h-full w-full"
-                                    />
-                                    <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                                      <ZoomIn className="icon-sm text-white" aria-hidden="true" />
-                                    </span>
-                                  </button>
-                                ) : (
-                                  <span className="flex h-14 w-20 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">無預覽</span>
-                                )}
-                              </td>
-                              <td className="px-5 py-3">
-                                <p className="font-medium">{item.userDisplayName}</p>
-                                <p className="text-xs text-muted-foreground">{item.userEmail}</p>
-                              </td>
-                              <td className="px-5 py-3">
-                                <Badge variant="secondary">{getHistorySourceLabel(item.source)}</Badge>
-                              </td>
-                              <td className="px-5 py-3">
-                                <Badge variant="outline">{modelLabel(item.model)}</Badge>
-                              </td>
-                              <td className="max-w-[360px] px-5 py-3">
-                                <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground" title={item.fullPrompt || item.userScript || ""}>
-                                  {item.fullPrompt || item.userScript || "—"}
-                                </p>
-                              </td>
-                              <td className="whitespace-nowrap px-5 py-3 text-xs text-muted-foreground">{formatDate(item.createdAt)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {historyItems.length === 0 && (
-                        <p className="px-5 py-10 text-center text-sm text-muted-foreground">目前沒有生成紀錄。</p>
-                      )}
-                      <AdminTablePagination
-                        pagination={historyPagination}
-                        itemLabel="筆紀錄"
-                        isRefreshing={isRefreshing}
-                        onPageChange={handleHistoryPageChange}
-                      />
-                    </CardContent>
-                  </Card>
+                  <PageSizeSelect
+                    value={historyPageSize}
+                    onChange={handleHistoryPageSizeChange}
+                    disabled={isRefreshing}
+                    ariaLabel="每頁顯示生成紀錄數量"
+                  />
                 )}
+                {activeSection === "styles" && (
+                  <PageSizeSelect
+                    value={stylesPageSize}
+                    onChange={handleStylesPageSizeChange}
+                    disabled={isRefreshing}
+                    ariaLabel="每頁顯示風格數量"
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
-                {activeSection === "models" && (
-                  <div className="space-y-6">
+          {isSectionLoading ? (
+            <div className="flex min-h-56 items-center justify-center rounded-xl border border-border bg-card">
+              <Loader2 className="icon-lg animate-spin text-primary motion-reduce:animate-none" aria-label="載入管理資料" />
+            </div>
+          ) : (
+            <>
+              {activeSection === "users" && (
+                <AdminTable
+                  minWidth="min-w-[980px]"
+                  columns={["使用者", "登入方式", "角色", "狀態", "生成圖片", "儲存風格", "加入時間", { label: "操作", align: "right" }]}
+                  isEmpty={users.length === 0}
+                  emptyMessage={userSearch.trim() ? "找不到符合搜尋條件的使用者。" : "目前沒有使用者資料。"}
+                  footer={
+                    <AdminTablePagination
+                      pagination={userPagination}
+                      itemLabel="位使用者"
+                      isRefreshing={isRefreshing}
+                      onPageChange={handleUserPageChange}
+                    />
+                  }
+                >
+                  {users.map((item) => {
+                    const isSelf = item.id === profile?.id && item.isActive;
+                    return (
+                      <tr
+                        key={item.id}
+                        className={cn("transition-colors hover:bg-muted/30", !item.isActive && "bg-muted/20 text-muted-foreground")}
+                      >
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-foreground">{item.displayName}</p>
+                          <p className="text-xs text-muted-foreground">{item.email}</p>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                          {providerLabel(item.authProvider)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={item.role}
+                            onChange={(event) => handleRoleChange(item.id, event.target.value)}
+                            className={cn(NATIVE_SELECT_CLASS, "h-8")}
+                            aria-label={`${item.displayName} 的角色`}
+                          >
+                            {ROLE_OPTIONS.map((role) => (
+                              <option key={role.value} value={role.value}>{role.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs">
+                            <span
+                              aria-hidden="true"
+                              className={cn("size-1.5 rounded-full", item.isActive ? "bg-success" : "bg-destructive")}
+                            />
+                            {item.isActive ? "啟用" : "已停用"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 tabular-nums">{item.generationCount}</td>
+                        <td className="px-4 py-3 tabular-nums">{item.styleCount}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDate(item.createdAt)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleUserStatusChange(item)}
+                            disabled={isSelf}
+                            title={isSelf ? "不能停用目前登入的管理員帳號" : undefined}
+                            aria-label={`${item.isActive ? "停用" : "啟用"} ${item.displayName}`}
+                            className={cn(
+                              "gap-1.5",
+                              item.isActive
+                                ? "text-destructive hover:bg-destructive/5 hover:text-destructive"
+                                : "text-success hover:bg-success/5 hover:text-success"
+                            )}
+                          >
+                            {item.isActive ? (
+                              <UserX className="icon-sm" aria-hidden="true" />
+                            ) : (
+                              <UserCheck className="icon-sm" aria-hidden="true" />
+                            )}
+                            {item.isActive ? "停用" : "啟用"}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </AdminTable>
+              )}
+
+              {activeSection === "history" && (
+                <AdminTable
+                  minWidth="min-w-[960px]"
+                  columns={["圖片", "使用者", "功能", "模型", "Prompt", "時間"]}
+                  isEmpty={historyItems.length === 0}
+                  emptyMessage="目前沒有生成紀錄。"
+                  footer={
+                    <AdminTablePagination
+                      pagination={historyPagination}
+                      itemLabel="筆紀錄"
+                      isRefreshing={isRefreshing}
+                      onPageChange={handleHistoryPageChange}
+                    />
+                  }
+                >
+                  {historyItems.map((item) => (
+                    <tr key={item.id} className="align-top transition-colors hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        {item.hasImage ? (
+                          <button
+                            type="button"
+                            onClick={() => openHistoryPreview(item.id)}
+                            aria-label={`放大查看 ${item.userDisplayName} 的生成圖片`}
+                            className="group relative block h-14 w-20 overflow-hidden rounded-lg border border-border press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          >
+                            <AdminRemoteImage
+                              id={item.id}
+                              fetcher={getAdminHistoryImage}
+                              alt=""
+                              width={80}
+                              height={54}
+                              className="h-full w-full object-cover"
+                              placeholderClassName="h-full w-full"
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity duration-(--motion-hover) ease-emphasized group-hover:opacity-100 group-focus-visible:opacity-100">
+                              <ZoomIn className="icon-sm text-white" aria-hidden="true" />
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="flex h-14 w-20 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">無預覽</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{item.userDisplayName}</p>
+                        <p className="text-xs text-muted-foreground">{item.userEmail}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary">{getHistorySourceLabel(item.source)}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline">{modelLabel(item.model)}</Badge>
+                      </td>
+                      <td className="max-w-[360px] px-4 py-3">
+                        <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground" title={item.fullPrompt || item.userScript || ""}>
+                          {item.fullPrompt || item.userScript || "—"}
+                        </p>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDate(item.createdAt)}</td>
+                    </tr>
+                  ))}
+                </AdminTable>
+              )}
+
+              {activeSection === "models" && (
+                <div className="space-y-6">
                   <ImageModelSettings onCatalogChange={handleCatalogChange} />
                   <Card>
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Settings className="icon-sm text-primary" aria-hidden="true" />
-                        圖片生成模型政策
-                      </CardTitle>
+                      <CardTitle className="text-base">圖片生成模型政策</CardTitle>
+                      <CardDescription>
+                        使用者不會看到模型選擇器，所有創作（含附圖修改）與文件批次生成都會使用這裡的預設模型。
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                      <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-                        使用者不會看到模型選擇器，所有創作（含附圖修改）與文件批次生成都會使用下方的預設模型。
-                      </div>
                       {policyModels === null ? (
                         <div className="space-y-2">
                           <p role="alert" className="text-sm text-destructive">政策資料尚未載入，請重試。</p>
                           <Button type="button" variant="outline" disabled={isRefreshing} onClick={() => runRefresh(loadSettingsSection, "政策資料載入失敗")}>重新載入政策</Button>
                         </div>
                       ) : models.length === 0 || missingPolicyKeys.length > 0 ? (
-                        <p role="status" className="text-sm text-muted-foreground [overflow-wrap:anywhere]">需要設定圖片模型。請先登錄模型；未登錄的政策識別碼：{missingPolicyKeys.join("、") || "無"}。新增目錄不會自動切換預設模型。</p>
+                        <p role="status" className="rounded-lg border border-warning/50 bg-warning/10 px-4 py-2.5 text-sm text-foreground [overflow-wrap:anywhere]">需要設定圖片模型。請先登錄模型；未登錄的政策識別碼：{missingPolicyKeys.join("、") || "無"}。新增目錄不會自動切換預設模型。</p>
                       ) : null}
                       <div className="space-y-3">
                         <div>
                           <h3 className="text-sm font-semibold">開放模型</h3>
                           <p className="text-xs text-muted-foreground">至少開放一個已登錄模型，並明確選擇預設模型後儲存。</p>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                           {(policyModels || []).map((model) => {
                             const modelId = model.modelKey;
                             const isAllowed = modelPolicy.allowedModels?.includes(modelId);
@@ -1048,7 +1110,7 @@ export default function AdminPanel() {
                                 aria-pressed={isAllowed}
                                 disabled={isSavingPolicy || isRefreshing}
                                 className={cn(
-                                  "min-w-0 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                  "min-w-0 rounded-xl border p-4 text-left press-feedback transition-colors duration-(--motion-hover) ease-emphasized focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60",
                                   isAllowed
                                     ? "border-primary bg-primary/5"
                                     : "border-border hover:border-primary/40 hover:bg-muted/40"
@@ -1060,7 +1122,7 @@ export default function AdminPanel() {
                                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{modelId}</p>
                                   </div>
                                   <span className={cn(
-                                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
+                                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors duration-(--motion-hover) ease-emphasized",
                                     isAllowed ? "border-primary bg-primary text-primary-foreground" : "border-border"
                                   )}>
                                     {isAllowed && <Check className="icon-sm" aria-hidden="true" />}
@@ -1074,130 +1136,132 @@ export default function AdminPanel() {
                           ))}
                         </div>
                       </div>
-                      <div className="max-w-md space-y-2">
-                        <label htmlFor="admin-default-model" className="text-sm font-semibold">預設生成模型</label>
-                        <select
-                          id="admin-default-model"
-                          value={allowedRegisteredModels.some((model) => model.modelKey === modelPolicy.defaultModel) ? modelPolicy.defaultModel : ""}
-                          disabled={isSavingPolicy || isRefreshing || policyModels === null}
-                          onChange={(event) => setModelPolicy((previous) => ({ ...previous, defaultModel: event.target.value }))}
-                          className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <option value="">請選擇已開放的模型</option>
-                          {allowedRegisteredModels.map((model) => (
-                            <option key={model.modelKey} value={model.modelKey}>{model.label}</option>
-                          ))}
-                        </select>
+                      <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-end sm:justify-between">
+                        <div className="w-full max-w-md space-y-2">
+                          <label htmlFor="admin-default-model" className="text-sm font-semibold">預設生成模型</label>
+                          <select
+                            id="admin-default-model"
+                            value={allowedRegisteredModels.some((model) => model.modelKey === modelPolicy.defaultModel) ? modelPolicy.defaultModel : ""}
+                            disabled={isSavingPolicy || isRefreshing || policyModels === null}
+                            onChange={(event) => setModelPolicy((previous) => ({ ...previous, defaultModel: event.target.value }))}
+                            className={cn(NATIVE_SELECT_CLASS, "h-10 w-full text-sm")}
+                          >
+                            <option value="">請選擇已開放的模型</option>
+                            {allowedRegisteredModels.map((model) => (
+                              <option key={model.modelKey} value={model.modelKey}>{model.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <Button type="button" onClick={handleSavePolicy} disabled={isSavingPolicy || !isPolicyValid || isRefreshing} className="shrink-0 gap-2">
+                          {isSavingPolicy ? <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="icon-sm" aria-hidden="true" />}
+                          儲存模型政策
+                        </Button>
                       </div>
-                      <Button type="button" onClick={handleSavePolicy} disabled={isSavingPolicy || !isPolicyValid || isRefreshing} className="gap-2">
-                        {isSavingPolicy ? <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="icon-sm" aria-hidden="true" />}
-                        儲存模型政策
-                      </Button>
                     </CardContent>
                   </Card>
-                  </div>
-                )}
+                </div>
+              )}
 
-                {activeSection === "llm" && <LlmModelSettings />}
+              {activeSection === "llm" && <LlmModelSettings />}
 
-                {activeSection === "styles" && (
-                  <Card>
-                    <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Palette className="icon-sm text-primary" aria-hidden="true" />
-                        使用者儲存風格庫
-                        <Badge variant="secondary" className="ml-auto">{stylesPagination.total}</Badge>
-                      </CardTitle>
-                      <PageSizeSelect
-                        value={stylesPageSize}
-                        onChange={handleStylesPageSizeChange}
-                        disabled={isRefreshing}
-                        ariaLabel="每頁顯示風格數量"
-                      />
-                    </CardHeader>
-                    <CardContent className="overflow-x-auto p-0">
-                      <table className="w-full min-w-[780px] text-sm">
-                        <thead className="border-y border-border bg-muted/40 text-left text-xs text-muted-foreground">
-                          <tr>
-                            <th className="px-5 py-3 font-medium">風格</th>
-                            <th className="px-5 py-3 font-medium">擁有者</th>
-                            <th className="px-5 py-3 font-medium">分類 / 狀態</th>
-                            <th className="px-5 py-3 font-medium">使用次數</th>
-                            <th className="px-5 py-3 font-medium">操作</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {styles.map((style) => (
-                            <tr key={style.id} className="align-top hover:bg-muted/30">
-                              <td className="px-5 py-3">
-                                <div className="flex items-start gap-3">
-                                  {style.hasPreview ? (
-                                    <AdminRemoteImage
-                                      id={style.id}
-                                      fetcher={getAdminStylePreview}
-                                      alt=""
-                                      width={48}
-                                      height={48}
-                                      className="h-12 w-12 rounded-lg border border-border object-cover"
-                                      placeholderClassName="h-12 w-12 rounded-lg border border-border"
-                                    />
-                                  ) : (
-                                    <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted"><Palette className="icon-sm text-muted-foreground" aria-hidden="true" /></span>
-                                  )}
-                                  <div className="min-w-0">
-                                    <p className="font-medium">{style.name}</p>
-                                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{style.description || style.prompt}</p>
-                                    {style.tags?.length > 0 && <p className="mt-1 truncate text-[11px] text-muted-foreground">#{style.tags.join(" #")}</p>}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-5 py-3">
-                                <p className="font-medium">{style.authorName}</p>
-                                <p className="text-xs text-muted-foreground">{style.authorEmail}</p>
-                              </td>
-                              <td className="px-5 py-3">
-                                <div className="flex flex-wrap gap-1.5">
-                                  <Badge variant="secondary">{style.category}</Badge>
-                                  <Badge variant="outline">{style.visibility === "shared" ? "共享" : "私人"}</Badge>
-                                </div>
-                              </td>
-                              <td className="px-5 py-3 tabular-nums">
-                                {style.usageCount}
-                                <span className="ml-1 text-xs text-muted-foreground">次</span>
-                              </td>
-                              <td className="px-5 py-3">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDeleteStyle(style.id)}
-                                  className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive"
-                                >
-                                  <Trash2 className="icon-sm" aria-hidden="true" />
-                                  刪除
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {styles.length === 0 && (
-                        <p className="px-5 py-10 text-center text-sm text-muted-foreground">目前沒有風格資料。</p>
-                      )}
-                      <AdminTablePagination
-                        pagination={stylesPagination}
-                        itemLabel="筆風格"
-                        isRefreshing={isRefreshing}
-                        onPageChange={handleStylesPageChange}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
-              </>
-            )}
-          </section>
+              {activeSection === "styles" && (
+                <AdminTable
+                  minWidth="min-w-[780px]"
+                  columns={["風格", "擁有者", "分類 / 狀態", "使用次數", { label: "操作", align: "right" }]}
+                  isEmpty={styles.length === 0}
+                  emptyMessage="目前沒有風格資料。"
+                  footer={
+                    <AdminTablePagination
+                      pagination={stylesPagination}
+                      itemLabel="筆風格"
+                      isRefreshing={isRefreshing}
+                      onPageChange={handleStylesPageChange}
+                    />
+                  }
+                >
+                  {styles.map((style) => (
+                    <tr key={style.id} className="align-top transition-colors hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-start gap-3">
+                          {style.hasPreview ? (
+                            <AdminRemoteImage
+                              id={style.id}
+                              fetcher={getAdminStylePreview}
+                              alt=""
+                              width={48}
+                              height={48}
+                              className="h-12 w-12 rounded-lg border border-border object-cover"
+                              placeholderClassName="h-12 w-12 rounded-lg border border-border"
+                            />
+                          ) : (
+                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted"><Palette className="icon-sm text-muted-foreground" aria-hidden="true" /></span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-medium">{style.name}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{style.description || style.prompt}</p>
+                            {style.tags?.length > 0 && <p className="mt-1 truncate text-[11px] text-muted-foreground">#{style.tags.join(" #")}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{style.authorName}</p>
+                        <p className="text-xs text-muted-foreground">{style.authorEmail}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge variant="secondary">{style.category}</Badge>
+                          <Badge variant="outline">{style.visibility === "shared" ? "共享" : "私人"}</Badge>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+                        {style.usageCount}
+                        <span className="ml-1 text-xs text-muted-foreground">次</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPendingAction({ kind: "delete-style", style })}
+                          aria-label={`刪除 ${style.name}`}
+                          className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                        >
+                          <Trash2 className="icon-sm" aria-hidden="true" />
+                          刪除
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </AdminTable>
+              )}
+            </>
+          )}
         </div>
       </main>
+
+      <AlertDialog open={Boolean(pendingAction)} onOpenChange={(open) => { if (!open) setPendingAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction?.kind === "delete-style" ? "刪除風格" : "停用使用者"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction?.kind === "delete-style"
+                ? `確定要刪除「${pendingAction.style.name}」嗎？相關歷史紀錄仍會保留。`
+                : `確定要停用 ${pendingAction?.item.displayName} 嗎？停用後該使用者將無法使用系統，之後可再重新啟用。`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmPendingAction}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {pendingAction?.kind === "delete-style" ? "確認刪除" : "確認停用"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AnimatePresence>
         {previewItem && (

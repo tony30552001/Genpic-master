@@ -14,6 +14,7 @@ import {
   listAdminUsers,
   updateAdminModelSettings,
   updateAdminImageModel,
+  updateAdminUserStatus,
 } from "../../../services/adminService";
 
 vi.mock("../../../services/adminService", () => ({
@@ -44,7 +45,7 @@ vi.mock("../../../services/adminService", () => ({
 const { refreshProfile } = vi.hoisted(() => ({ refreshProfile: vi.fn() }));
 vi.mock("../../../hooks/useAuth", () => ({
   default: () => ({
-    user: { email: "admin@example.com" },
+    user: { displayName: "管理員", email: "admin@example.com" },
     profile: { displayName: "管理員", role: "admin" },
     handleLogout: vi.fn(),
     refreshProfile,
@@ -111,6 +112,21 @@ describe("AdminPanel section loading", () => {
     expect(listAdminStyles).not.toHaveBeenCalled();
     expect(getAdminModelSettings).not.toHaveBeenCalled();
     expect(listAdminImageModels).not.toHaveBeenCalled();
+  });
+
+  it("asks for confirmation in a dialog before deactivating a user", async () => {
+    updateAdminUserStatus.mockResolvedValue({ isActive: false });
+    renderPanel();
+    await screen.findByText("alice@example.com");
+
+    fireEvent.click(screen.getByRole("button", { name: "停用 Alice" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("確定要停用 Alice 嗎？");
+    expect(updateAdminUserStatus).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "確認停用" }));
+    await screen.findByText("Alice 已停用。");
+    expect(updateAdminUserStatus).toHaveBeenCalledWith("user-1", false);
   });
 
   it("loads a section once when it is first opened", async () => {

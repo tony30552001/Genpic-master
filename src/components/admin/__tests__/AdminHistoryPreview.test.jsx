@@ -34,7 +34,7 @@ vi.mock("../../../services/adminService", () => ({
 
 vi.mock("../../../hooks/useAuth", () => ({
   default: () => ({
-    user: { email: "admin@example.com" },
+    user: { displayName: "管理員", email: "admin@example.com" },
     profile: { displayName: "管理員", role: "admin", imageModels: [{ modelKey: "compatible-custom", label: "Compatible Custom" }] },
     handleLogout: vi.fn(),
   }),
