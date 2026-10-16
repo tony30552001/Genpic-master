@@ -274,10 +274,10 @@ const AdminTable = ({ columns, minWidth, isEmpty, emptyMessage, footer, children
   </div>
 );
 
-const AdminHeader = ({ user, onBack, onLogout }) => (
+const AdminHeader = ({ user, onBack, onLogout, children }) => (
   <header className="relative shrink-0 bg-background pt-[env(safe-area-inset-top)] text-foreground">
-    <div className="flex h-12 min-w-0 items-center justify-between gap-2 px-3 sm:px-4 lg:h-14 lg:px-8">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 px-3 sm:px-4 lg:h-14 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
+      <div className="flex h-12 min-w-0 items-center gap-2 lg:h-auto">
         <PixoraWordmark />
         <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted-foreground">
           <span aria-hidden="true">/</span>
@@ -285,7 +285,10 @@ const AdminHeader = ({ user, onBack, onLogout }) => (
           <span className="truncate text-foreground">管理中心</span>
         </span>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="col-span-2 row-start-2 min-w-0 overflow-x-auto pb-2 lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:pb-0">
+        {children}
+      </div>
+      <div className="flex shrink-0 items-center gap-2 justify-self-end lg:col-start-3 lg:row-start-1">
         <Button
           type="button"
           variant="ghost"
@@ -767,28 +770,24 @@ export default function AdminPanel() {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-background pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] font-sans text-foreground">
-      <AdminHeader user={user} onBack={() => navigate("/")} onLogout={handleLogout} />
+      <AdminHeader user={user} onBack={() => navigate("/")} onLogout={handleLogout}>
+        <SegmentedTabs
+          tabs={SECTIONS}
+          activeTab={activeSection}
+          onTabChange={handleSectionChange}
+          ariaLabel="管理功能"
+          className="w-max min-w-full lg:min-w-0"
+          renderIcon={(section) => {
+            const Icon = section.icon;
+            return <Icon className="icon-sm" aria-hidden="true" />;
+          }}
+        />
+      </AdminHeader>
 
       <main className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
-        <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md">
-          <div className="mx-auto max-w-[1760px] overflow-x-auto px-4 py-2 lg:px-8 2xl:px-12">
-            <SegmentedTabs
-              tabs={SECTIONS}
-              activeTab={activeSection}
-              onTabChange={handleSectionChange}
-              ariaLabel="管理功能"
-              className="w-max min-w-full sm:min-w-0"
-              renderIcon={(section) => {
-                const Icon = section.icon;
-                return <Icon className="icon-sm" aria-hidden="true" />;
-              }}
-            />
-          </div>
-        </div>
-
         <div
           key={activeSection}
-          className="mx-auto max-w-[1760px] space-y-5 px-4 pb-10 pt-4 animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none lg:px-8 2xl:px-12"
+          className="mx-auto max-w-[1760px] space-y-5 px-4 pb-10 pt-6 animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none lg:px-8 2xl:px-12"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
