@@ -1,4 +1,5 @@
 export {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowRightLeft,
@@ -10,6 +11,7 @@ export {
   ChevronUp,
   ChevronsUpDown,
   Copy,
+  CornerDownLeft,
   Download,
   Edit2,
   Eye,

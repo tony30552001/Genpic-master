@@ -9,7 +9,9 @@ import {
   AlertCircle,
 } from "@/components/icons/lucideStatus";
 import useLineConfig from "../../hooks/useLineConfig";
+import { API_BASE_URL } from "../../config";
 import { sendImageToLine } from "../../services/lineService";
+import { apiGetBlob } from "../../services/apiClient";
 import { uploadFile } from "../../services/storageService";
 
 const LINE_GREEN = "#06C755"; // Official LINE brand color
@@ -45,17 +47,22 @@ export default function ShareToLineButton({ imageUrl, user, message, className =
         setErrorMsg("");
 
         try {
-            if (!imageUrl.startsWith("data:")) {
-                throw new Error("只能分享已上傳的圖片，請重新產生圖片後再試。");
+            let fileToShare;
+            if (imageUrl.startsWith("data:")) {
+                const mimeMatch = imageUrl.match(/^data:([^;]+);/);
+                const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+                const ext = mimeType.split("/")[1] || "png";
+                fileToShare = dataURLtoFile(
+                    imageUrl,
+                    `share-to-line-${Date.now()}.${ext}`
+                );
+            } else if (imageUrl.startsWith(`${API_BASE_URL}/image-jobs/`)) {
+                const blob = await apiGetBlob(imageUrl);
+                const mimeType = blob.type || "image/png";
+                fileToShare = new File([blob], `share-to-line-${Date.now()}.${mimeType.split("/")[1] || "png"}`, { type: mimeType });
+            } else {
+                throw new Error("只能分享已產生的圖片，請重新產生圖片後再試。");
             }
-
-            const mimeMatch = imageUrl.match(/^data:([^;]+);/);
-            const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
-            const ext = mimeType.split("/")[1] || "png";
-            const fileToShare = dataURLtoFile(
-                imageUrl,
-                `share-to-line-${Date.now()}.${ext}`
-            );
             const uploadResult = await uploadFile(fileToShare, "image");
             if (!uploadResult?.uploadId) {
                 throw new Error("上傳圖片準備分享失敗，請稍後再試。");

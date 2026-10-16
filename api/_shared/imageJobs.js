@@ -6,7 +6,8 @@ const {
 const { ImageModelError, isTransientImageError, validateImageQuality } = require("./imageModelConfig");
 const { resolveImageModel, withImageModelTransaction } = require("./imageModels");
 const { ensureModelPolicy } = require("./modelPolicy");
-const { uploadGeneratedImage } = require("./blobStorage");
+const { settleImageChatTurns } = require("./imageChatTurns");
+const { downloadGeneratedImage, uploadGeneratedImage } = require("./blobStorage");
 const {
   downloadOwnedImage,
   resolveOwnedImageUpload,
@@ -27,13 +28,16 @@ const createImageJob = async ({
   model,
   operation = "generate",
   sourceUploadId = null,
+  sourceJobId = null,
+  afterInsert,
 }) => {
   if (!IMAGE_JOB_OPERATIONS.includes(operation)) {
     throw new ImageModelError("不支援的圖片工作類型");
   }
+  const sourceCount = [sourceUploadId, sourceJobId].filter(Boolean).length;
   if (
-    (operation === "generate" && sourceUploadId) ||
-    (operation === "edit" && !sourceUploadId)
+    (operation === "generate" && sourceCount !== 0) ||
+    (operation === "edit" && sourceCount !== 1)
   ) {
     throw new ImageModelError("圖片工作來源設定無效");
   }
@@ -51,11 +55,21 @@ const createImageJob = async ({
     }
     const config = await resolveImageModel({ tenantId, modelKey: selectedModel, client });
     const selectedQuality = validateImageQuality(config, quality);
+    if (sourceJobId) {
+      const source = await client.query(
+        `SELECT id FROM image_generation_jobs
+         WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND status = 'succeeded'`,
+        [sourceJobId, tenantId, userId]
+      );
+      if (!source.rows.length) {
+        throw new ImageModelError("找不到可修改的圖片版本", "source_job_not_found", 404);
+      }
+    }
     const result = await client.query(
       `INSERT INTO image_generation_jobs
        (tenant_id, user_id, model, prompt, aspect_ratio, image_size, quality,
-        operation, source_upload_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        operation, source_upload_id, source_job_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id, status, model, operation, created_at`,
       [
         tenantId,
@@ -67,9 +81,13 @@ const createImageJob = async ({
         selectedQuality,
         operation,
         sourceUploadId,
+        sourceJobId,
       ]
     );
-    return result.rows[0];
+    const job = result.rows[0];
+    // Callers that link the job to their own rows commit both or neither.
+    if (afterInsert) await afterInsert(client, job);
+    return job;
   });
 };
 
@@ -133,7 +151,8 @@ const claimNextImageJob = async () => {
        WHERE jobs.id = candidate.id
        RETURNING jobs.id, jobs.model, jobs.prompt, jobs.aspect_ratio,
                  jobs.image_size, jobs.quality, jobs.operation,
-                 jobs.source_upload_id, jobs.tenant_id, jobs.user_id,
+                 jobs.source_upload_id, jobs.source_job_id,
+                 jobs.tenant_id, jobs.user_id,
                  jobs.attempts`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
     );
@@ -212,6 +231,33 @@ const markImageJobFailure = async ({ jobId, operation, attempts, error }) => {
   });
 };
 
+/** Rechecks the edit source's ownership at execution and reads its bytes. */
+const loadEditSource = async (job) => {
+  if (job.source_job_id) {
+    const sourceJob = await getImageJobForUser({
+      jobId: job.source_job_id,
+      tenantId: job.tenant_id,
+      userId: job.user_id,
+    });
+    if (sourceJob?.status !== "succeeded") {
+      throw new ImageModelError("找不到可修改的圖片版本", "source_job_not_found", 404);
+    }
+    return {
+      buffer: await downloadGeneratedImage({ blobName: sourceJob.result_blob_name }),
+      contentType: sourceJob.result_mime_type || "image/png",
+    };
+  }
+  const upload = await resolveOwnedImageUpload({
+    uploadId: job.source_upload_id,
+    tenantId: job.tenant_id,
+    userId: job.user_id,
+  });
+  if (!upload) {
+    throw new ImageModelError("找不到可用的圖片轉換來源", "upload_not_found", 404);
+  }
+  return downloadOwnedImage(upload);
+};
+
 const processNextImageJob = async () => {
   const job = await claimNextImageJob();
   if (!job) return false;
@@ -224,15 +270,7 @@ const processNextImageJob = async () => {
     validateImageQuality(config, job.quality);
     let result;
     if (job.operation === "edit") {
-      const upload = await resolveOwnedImageUpload({
-        uploadId: job.source_upload_id,
-        tenantId: job.tenant_id,
-        userId: job.user_id,
-      });
-      if (!upload) {
-        throw new ImageModelError("找不到可用的圖片轉換來源", "upload_not_found", 404);
-      }
-      const source = await downloadOwnedImage(upload);
+      const source = await loadEditSource(job);
       result = await editGptImage({
         config,
         imageBase64: source.buffer.toString("base64"),
@@ -288,6 +326,7 @@ const startImageJobWorker = () => {
     workerBusy = true;
     try {
       await processNextImageJob();
+      await settleImageChatTurns();
     } catch (error) {
       console.error("[image-jobs] Worker cycle failed:", {
         code: isTransientImageError(error) ? "transient_io_error" : "worker_cycle_failed",

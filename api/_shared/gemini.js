@@ -1,6 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 
-const { OUTPUT_TRUNCATED } = require("./llmProviders");
+const { INVALID_TOOL_CALL, OUTPUT_TRUNCATED } = require("./llmProviders");
 
 const getClient = (apiKey) => {
   if (!apiKey) {
@@ -121,9 +121,80 @@ const postGeminiJson = async ({
   return parseGeminiResponse(result);
 };
 
+/**
+ * Streams one Gemini call with function declarations. Text parts go to
+ * `onTextDelta`; function calls are returned once the stream ends normally.
+ */
+const streamGeminiResponse = async ({
+  model,
+  systemMessage,
+  messages,
+  tools,
+  maxOutputTokens,
+  signal,
+  onTextDelta,
+}) => {
+  const stream = await getClient(model.apiKey).models.generateContentStream({
+    model: model.modelName,
+    contents: messages.map(({ role, content }) => ({
+      role: role === "assistant" ? "model" : "user",
+      parts: [{ text: content }],
+    })),
+    config: {
+      systemInstruction: systemMessage,
+      tools: [{
+        functionDeclarations: tools.map(({ name, description, parameters }) => ({
+          name,
+          description,
+          parametersJsonSchema: parameters,
+        })),
+      }],
+      abortSignal: signal,
+      ...(maxOutputTokens ? { maxOutputTokens } : {}),
+    },
+  });
+
+  let text = "";
+  const toolCalls = [];
+  let finishReason = null;
+  for await (const chunk of stream) {
+    const candidate = chunk?.candidates?.[0];
+    for (const part of candidate?.content?.parts || []) {
+      if (part.thought) continue;
+      if (part.functionCall) {
+        const args = part.functionCall.args ?? {};
+        if (typeof args !== "object" || Array.isArray(args)) {
+          const error = new Error(`對話模型的 ${part.functionCall.name} 工具參數無效`);
+          error.code = INVALID_TOOL_CALL;
+          throw error;
+        }
+        toolCalls.push({ name: part.functionCall.name, arguments: args });
+      } else if (part.text) {
+        text += part.text;
+        onTextDelta(part.text);
+      }
+    }
+    if (candidate?.finishReason) finishReason = candidate.finishReason;
+  }
+
+  if (finishReason === "MAX_TOKENS") {
+    const error = new Error("對話模型未在輸出上限內完成回應（MAX_TOKENS）");
+    error.code = OUTPUT_TRUNCATED;
+    throw error;
+  }
+  if (finishReason !== "STOP") {
+    const error = new Error(`對話模型未正常完成回應（${finishReason || "stream_ended"}）`);
+    error.status = 502;
+    throw error;
+  }
+
+  return { text, toolCalls };
+};
+
 module.exports = {
   getModel,
   postGeminiJson,
   parseGeminiResponse,
+  streamGeminiResponse,
 };
 

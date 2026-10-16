@@ -13,9 +13,15 @@ vi.mock("../../../services/storageService", () => ({
   uploadFile: vi.fn(),
 }));
 
+vi.mock("../../../services/apiClient", () => ({
+  apiGetBlob: vi.fn(),
+}));
+
 import useLineConfig from "../../../hooks/useLineConfig";
 import { sendImageToLine } from "../../../services/lineService";
 import { uploadFile } from "../../../services/storageService";
+import { apiGetBlob } from "../../../services/apiClient";
+import { API_BASE_URL } from "../../../config";
 import ShareToLineButton from "../ShareToLineButton";
 
 const DATA_URL = "data:image/png;base64,AAAA";
@@ -43,6 +49,18 @@ describe("ShareToLineButton", () => {
     });
     expect(sendImageToLine.mock.calls[0][0]).not.toHaveProperty("imageUrl");
     expect(sendImageToLine.mock.calls[0][0]).not.toHaveProperty("readUrl");
+  });
+
+  it("reads an owned image-job asset before uploading it", async () => {
+    apiGetBlob.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+    const assetUrl = `${API_BASE_URL}/image-jobs/123e4567-e89b-42d3-a456-426614174001/image`;
+    const { getByRole } = render(<ShareToLineButton imageUrl={assetUrl} user={{}} />);
+
+    fireEvent.click(getByRole("button", { name: "分享到 LINE" }));
+
+    await waitFor(() => expect(sendImageToLine).toHaveBeenCalled());
+    expect(apiGetBlob).toHaveBeenCalledWith(assetUrl);
+    expect(uploadFile).toHaveBeenCalledWith(expect.any(File), "image");
   });
 
   it("does not send an arbitrary remote image URL to the first-party endpoint", async () => {

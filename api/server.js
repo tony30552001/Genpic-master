@@ -1,6 +1,7 @@
 const express = require("express");
 const { apiReference } = require("@scalar/express-api-reference");
 const { corsHeaders } = require("./_shared/http");
+const { openEventStream } = require("./_shared/eventStream");
 const openapiDocument = require("./openapi");
 
 const admin = require("./admin");
@@ -18,6 +19,7 @@ const generateFilename = require("./generate-filename");
 const generateImages = require("./generate-images");
 const health = require("./health");
 const history = require("./history");
+const imageChats = require("./image-chats");
 const imageJobs = require("./image-jobs");
 const imageTransform = require("./image-transform");
 const { startImageJobWorker } = require("./_shared/imageJobs");
@@ -90,6 +92,7 @@ const invokeFunction = (handler) => async (req, res, next) => {
     bindingData: { ...req.params },
     log: createLogger(),
     res: undefined,
+    openEventStream: () => openEventStream(req, res),
   };
 
   try {
@@ -145,7 +148,17 @@ registerRoutes(["/api/ppt-templates"], ["GET", "OPTIONS"], pptTemplates);
 registerRoutes(["/api/embeddings"], ["POST", "OPTIONS"], embeddings);
 registerRoutes(["/api/generate-filename"], ["GET", "POST", "OPTIONS"], generateFilename);
 registerRoutes(["/api/generate-images"], ["POST", "OPTIONS"], generateImages);
-registerRoutes(["/api/image-jobs/:id"], ["GET", "OPTIONS"], imageJobs);
+registerRoutes(
+  [
+    "/api/image-chats",
+    "/api/image-chats/:id",
+    "/api/image-chats/:id/:action",
+    "/api/image-chats/:id/turns/:turnId/stop",
+  ],
+  ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  imageChats
+);
+registerRoutes(["/api/image-jobs/:id", "/api/image-jobs/:id/:asset"], ["GET", "OPTIONS"], imageJobs);
 registerRoutes(["/api/image-transform"], ["POST", "OPTIONS"], imageTransform);
 registerRoutes(["/api/line-config"], ["GET", "POST", "DELETE", "OPTIONS"], lineConfig);
 registerRoutes(["/api/optimize-prompt"], ["POST", "OPTIONS"], optimizePrompt);

@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   bar: null,
   preview: null,
   imageUrlToFile: vi.fn(),
+  chatArgs: null,
+  chatWorkspace: null,
 }));
 
 vi.mock("../hooks/useAuth", () => ({
@@ -66,6 +68,12 @@ vi.mock("../components/create/DocumentUploader", () => ({ default: () => null })
 vi.mock("../components/create/PptMasterStudio", () => ({ default: () => null }));
 vi.mock("../components/library/AssetCenter", () => ({ default: () => null }));
 vi.mock("../components/settings/SettingsPanel", () => ({ default: () => null }));
+vi.mock("../hooks/useImageChat", () => ({
+  default: (args) => { mocks.chatArgs = args; return { id: "chat-state" }; },
+}));
+vi.mock("../components/chat/ChatWorkspace", () => ({
+  default: (props) => { mocks.chatWorkspace = props; return <div>Chat workspace</div>; },
+}));
 
 import InfographicGenerator from "../InfographicGenerator";
 
@@ -135,6 +143,23 @@ describe("creation orchestration", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("shows the chat workspace without the generate bar and loads chats only on that tab", () => {
+    localStorage.setItem("genpic_image_language", "none");
+    render(<MemoryRouter><InfographicGenerator initialTab="chat" /></MemoryRouter>);
+
+    expect(screen.getByText("Chat workspace")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "開始生成圖片" })).toBeNull();
+    expect(mocks.chatArgs).toMatchObject({
+      enabled: true,
+      initialSettings: { aspectRatio: "16:9", quality: null, imageLanguage: "none", purpose: "infographic" },
+    });
+    expect(mocks.chatWorkspace).toMatchObject({
+      chat: { id: "chat-state" },
+      imageModelConfig: flare,
+      modelSetupError: "",
+    });
   });
 
   it.each(["general", "document", "refine"])("saves %s history using the submitted job after policy changes", async (tab) => {

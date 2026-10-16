@@ -84,6 +84,8 @@ const parseResponse = async (response, responseType = "json") => {
 
   if (response.status === 204) return null;
 
+  if (responseType === "stream") return response;
+
   if (responseType === "blob") {
     if (typeof response.blob === "function") return response.blob();
     if (typeof response.arrayBuffer === "function") {
@@ -131,6 +133,15 @@ export async function apiPut(url, body, options = {}) {
 
 export async function apiDelete(url, options = {}) {
   return requestWithRetry(url, { method: "DELETE" }, options);
+}
+
+/** POSTs JSON and returns the open `Response` so the caller can read its body as a stream. */
+export async function apiPostStream(url, body, options = {}) {
+  return requestWithRetry(
+    url,
+    { method: "POST", body: JSON.stringify(body ?? {}) },
+    { ...options, headers: { Accept: "text/event-stream", ...options.headers }, responseType: "stream" }
+  );
 }
 
 const notifyAuthExpired = () => {

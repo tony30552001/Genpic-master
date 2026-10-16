@@ -94,6 +94,7 @@ const buildGenerationTextDirective = (imageLanguage) => {
 
 module.exports = {
   IMAGE_TEXT_LANGUAGES,
+  NO_TEXT,
   buildGenerationTextDirective,
   buildImageTextDirective,
 };

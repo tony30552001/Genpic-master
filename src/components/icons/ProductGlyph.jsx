@@ -7,6 +7,7 @@ import { PRODUCT_GLYPH_KINDS } from "./iconPolicy";
 
 const ACCENTS = {
   create: [[4, 4], [18, 5], [17, 18]],
+  chat: [[2, 2.5], [20.5, 2.5], [20.5, 18.5]],
   document: [[4, 7], [18, 5], [18, 18]],
   transform: [[4, 5], [18, 4], [17, 18]],
   library: [[4, 5], [18, 8], [17, 19]],
@@ -16,6 +17,13 @@ const ACCENTS = {
 
 function GlyphShape({ kind }) {
   switch (kind) {
+    case "chat":
+      return (
+        <>
+          <path d="M5.75 5.25h12.5a1.75 1.75 0 0 1 1.75 1.75v7.5a1.75 1.75 0 0 1-1.75 1.75H11l-4.25 3.25V16.25h-1a1.75 1.75 0 0 1-1.75-1.75V7a1.75 1.75 0 0 1 1.75-1.75z" />
+          <path d="m8 13 2.25-2.25 1.75 1.75 1.5-1.5L16 13.5" />
+        </>
+      );
     case "document":
       return (
         <>

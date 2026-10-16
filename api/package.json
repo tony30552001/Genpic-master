@@ -17,6 +17,7 @@
     "@google/genai": "^1.0.0",
     "@scalar/express-api-reference": "^0.10.13",
     "dotenv": "^17.3.1",
+    "eventsource-parser": "^4.1.2",
     "express": "^5.1.0",
     "google-auth-library": "^10.5.0",
     "pg": "^8.13.3",

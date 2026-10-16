@@ -31,6 +31,7 @@ import PromptHints from "./PromptHints";
 import { detectNoTextIntent } from "@/lib/promptHints";
 import { NO_TEXT_LANGUAGE } from "@/lib/imageTextLanguage";
 import { REFERENCE_PURPOSE, STYLE_TRANSFER_PURPOSE } from "@/lib/attachmentPurposes";
+import { IMAGE_PURPOSE_OPTIONS } from "@/lib/imagePurposes";
 
 const ADVANCED_STYLE_OPEN_KEY = "genpic_advanced_style_open";
 
@@ -43,25 +44,6 @@ const readAdvancedStyleOpen = () => {
 };
 
 const DEFAULT_PLACEHOLDER = "描述你想生成的畫面內容…\n例如：一位穿著白色洋裝的女性站在陽光灑落的咖啡廳，背景是落地窗與綠色植物";
-
-/** 決定系統是否為畫面補上構圖與文字語系指令。 */
-const IMAGE_PURPOSE_OPTIONS = [
-  {
-    id: "infographic",
-    label: "資訊圖表",
-    description: "補上簡報版面構圖與文字語系指令",
-  },
-  {
-    id: "storyboard",
-    label: "電影分鏡",
-    description: "補上電影分鏡構圖與文字語系指令",
-  },
-  {
-    id: "freeform",
-    label: "自由創作",
-    description: "完全依照你的描述，不附加任何系統指令",
-  },
-];
 
 /**
  * ScriptEditor — 內容描述、附圖與進階風格

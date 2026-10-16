@@ -88,8 +88,8 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 不可只回滾單一前端或 API 執行個體；需要復原時使用事先準備的協調版本與資料庫備份。
 
 分析用的 LLM 不由環境變數設定。套用 `db/migrations/014_llm_models.sql` 後，
-管理員在管理中心「分析模型」新增模型（模型代號、端點與 API 金鑰）並指派給六個用途：
-文件分鏡、Prompt 優化、設計簡報、風格分析、檔名生成與場景優化。每個用途都可以
+管理員在管理中心「分析模型」新增模型（模型代號、端點與 API 金鑰）並指派給七個用途：
+文件分鏡、Prompt 優化、設計簡報、風格分析、檔名生成、場景優化與對話創作。每個用途都可以
 自由選擇 Azure OpenAI 或 Google Gemini 模型，備援模型也不必與主要模型同一家供應商。
 金鑰以 `SECRET_ENCRYPTION_KEY` 加密後存放於資料庫。
 
@@ -98,6 +98,13 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 
 PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）使用「設計簡報」用途指派的模型。
 這條路徑跑在背景 worker，可接受較長延遲以換取更嚴謹的 SVG 版面推理。
+
+「對話創作」用途以 SSE 串流回覆，並透過工具呼叫決定追問、生成新圖或修改目前版本，
+因此指派的 Azure OpenAI deployment 必須支援 Responses API 串流與 function calling；
+Gemini 模型則需支援串流（`generateContentStream`）與 function calling。單輪回覆有 40 秒期限
+（低於 SWA linked backend 的 45 秒請求上限），圖片入列後串流即結束，圖片進度改由既有 job 輪詢。
+部署後務必經由 `https://<swa-domain>` 實測：首段文字是否逐字出現（未被代理緩衝）、
+停止回覆與重新整理後狀態是否一致。
 
 任何用途尚未指派前，對應 API 會回傳 HTTP 503 與 `llm_not_configured`，
 簡報 job 則會直接標記為失敗，不會重試。
@@ -148,6 +155,9 @@ node api/scripts/migrate.cjs
 ```
 
 `009_image_generation_jobs.sql` 與 `010_auth_sessions.sql` 只新增 job/session tables 和 indexes；不會修改既有 history 資料。執行前請確認 App Service 使用的資料庫連線字串相同。
+
+對話創作需要 `028_image_chats.sql`（對話、訊息與 chat 來源的生成紀錄）。既有資料庫只套用這一支：
+`node api\scripts\migrate.cjs 028_image_chats.sql`，再於管理中心指派「對話創作」用途的模型。
 
 若暫時 rollback 回 Azure Functions，`FUNCTIONS_WORKER_RUNTIME` 會讓 GPT Image 2
 回到原本的同步 handler 路徑；非同步 worker 只在 App Service `npm start` 中啟動。

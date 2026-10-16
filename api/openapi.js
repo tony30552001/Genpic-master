@@ -395,6 +395,138 @@ addOperation("/api/image-jobs/{id}", "get", {
   parameters: pathParameters("id"),
 });
 
+addOperation("/api/image-jobs/{id}/image", "get", {
+  summary: "Download the result image of an owned succeeded image job",
+  description: "Returns 409 until the job succeeds. Results are immutable, so the response is privately cacheable.",
+  tags: ["AI"],
+  parameters: pathParameters("id"),
+  successContentType: "image/*",
+  successSchema: { type: "string", format: "binary" },
+});
+
+const imageChatSettingsSchema = {
+  type: "object",
+  required: ["aspectRatio", "imageLanguage", "purpose"],
+  properties: {
+    aspectRatio: { type: "string", example: "16:9" },
+    quality: { type: "string", nullable: true, description: "Validated against the tenant image model when an image is queued; null uses its default." },
+    imageLanguage: { type: "string", description: "In-image text language, or `none`." },
+    purpose: { type: "string", enum: ["infographic", "storyboard", "freeform"] },
+  },
+};
+
+addOperation("/api/image-chats", "get", {
+  summary: "List the caller's image chats, newest first",
+  tags: ["Image chat"],
+  parameters: [{ name: "cursor", in: "query", required: false, schema: { type: "string" } }],
+});
+
+addOperation("/api/image-chats", "post", {
+  summary: "Create an empty image chat",
+  tags: ["Image chat"],
+  body: true,
+  csrf: true,
+  successStatuses: [201],
+  bodySchema: { type: "object", required: ["settings"], properties: { settings: imageChatSettingsSchema } },
+});
+
+addOperation("/api/image-chats/{id}", "get", {
+  summary: "Get an owned image chat with its newest messages",
+  tags: ["Image chat"],
+  parameters: pathParameters("id"),
+});
+
+addOperation("/api/image-chats/{id}", "delete", {
+  summary: "Delete an owned image chat",
+  description: "Returns 409 `chat_busy` while a reply or image is still in progress. Saved history entries are kept.",
+  tags: ["Image chat"],
+  csrf: true,
+  successStatuses: [204],
+  parameters: pathParameters("id"),
+});
+
+addOperation("/api/image-chats/{id}/messages", "get", {
+  summary: "Page older messages of an owned image chat",
+  tags: ["Image chat"],
+  parameters: [
+    ...pathParameters("id"),
+    { name: "before", in: "query", required: false, schema: { type: "integer", minimum: 1 } },
+  ],
+});
+
+addOperation("/api/image-chats/{id}/messages", "post", {
+  summary: "Send a message and stream the assistant reply",
+  description: [
+    "Validation and admission errors return JSON. Once accepted, the reply streams as `text/event-stream` events:",
+    "`turn` (recorded user and assistant messages), `delta` ({ text }), optional `action` ({ action, jobId, sourceJobId, prompt, status }),",
+    "optional `error` ({ code, message }), and a final `done` ({ message }). A resent `clientMessageId` replays the accepted turn without calling the model.",
+    "A queued image completes in the background; poll `/api/image-jobs/{jobId}`.",
+  ].join(" "),
+  tags: ["Image chat"],
+  body: true,
+  csrf: true,
+  parameters: pathParameters("id"),
+  successContentType: "text/event-stream",
+  successSchema: { type: "string" },
+  bodySchema: {
+    type: "object",
+    required: ["clientMessageId", "content", "settings"],
+    properties: {
+      clientMessageId: { type: "string", format: "uuid" },
+      content: { type: "string", minLength: 1, maxLength: 4000 },
+      settings: imageChatSettingsSchema,
+      style: {
+        type: "object",
+        nullable: true,
+        required: ["prompt"],
+        properties: {
+          id: { type: "string", format: "uuid", nullable: true },
+          name: { type: "string" },
+          prompt: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
+        },
+      },
+      attachmentUploadId: { type: "string", format: "uuid", nullable: true },
+      sourceJobId: { type: "string", format: "uuid", nullable: true, description: "Selected owned succeeded image version the assistant may refine." },
+    },
+  },
+});
+
+addOperation("/api/image-chats/{id}/state", "put", {
+  summary: "Save the chat draft, settings and selected version",
+  description: "Optimistic: returns 409 `state_conflict` with the current `chat` when `stateVersion` is stale.",
+  tags: ["Image chat"],
+  body: true,
+  csrf: true,
+  parameters: pathParameters("id"),
+  bodySchema: {
+    type: "object",
+    required: ["stateVersion", "draft", "settings"],
+    properties: {
+      stateVersion: { type: "integer", minimum: 1 },
+      draft: { type: "string", maxLength: 4000 },
+      settings: imageChatSettingsSchema,
+      selectedJobId: { type: "string", format: "uuid", nullable: true },
+    },
+  },
+});
+
+addOperation("/api/image-chats/{id}/turns/{turnId}/stop", "post", {
+  summary: "Stop a streaming assistant reply",
+  description: "Only a reply that has not queued an image can be stopped; returns { stopped }.",
+  tags: ["Image chat"],
+  csrf: true,
+  parameters: pathParameters("id", "turnId"),
+});
+for (const entry of [
+  paths["/api/image-chats/{id}"].delete,
+  paths["/api/image-chats/{id}/messages"].post,
+  paths["/api/image-chats/{id}/state"].put,
+]) {
+  entry.responses[409] = response("The chat is busy or its state changed");
+}
+paths["/api/image-chats/{id}/messages"].post.responses[503] = response("The image-chat model is not configured");
+
 addOperation("/api/deck-jobs", "post", {
   summary: "Queue a PPT Master deck generation job",
   description: "Pins the tenant image model at admission. Image-free decks do not require an image model; later policy changes do not change this job's illustrations.",
@@ -767,6 +899,7 @@ module.exports = {
     { name: "System" },
     { name: "Authentication" },
     { name: "AI" },
+    { name: "Image chat" },
     { name: "Storage" },
     { name: "History" },
     { name: "Styles" },

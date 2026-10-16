@@ -47,6 +47,9 @@ import SettingsPanel from './components/settings/SettingsPanel';
 import AttachmentPicker from './components/create/AttachmentPicker';
 import AssetCenter from './components/library/AssetCenter';
 import AppHeader from './components/common/AppHeader';
+import ChatWorkspace from './components/chat/ChatWorkspace';
+import useImageChat from './hooks/useImageChat';
+import { DEFAULT_IMAGE_PURPOSE } from './lib/imagePurposes';
 
 export default function InfographicGenerator({
     initialTab = 'general',
@@ -155,6 +158,15 @@ export default function InfographicGenerator({
         updateStyle,
     } = useStyles({ user });
     const { historyItems, saveHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
+    const imageChat = useImageChat({
+        enabled: activeTab === 'chat',
+        initialSettings: {
+            aspectRatio: '16:9',
+            quality: null,
+            imageLanguage,
+            purpose: DEFAULT_IMAGE_PURPOSE,
+        },
+    });
     const {
         templates,
         saveTemplate,
@@ -609,12 +621,13 @@ export default function InfographicGenerator({
     // --- Tab 定義 ---
     const tabs = [
         { id: 'general', label: '一般創作', shortLabel: '創作', glyph: 'create' },
+        { id: 'chat', label: '對話創作', shortLabel: '對話', glyph: 'chat' },
         { id: 'document', label: '文件創作', shortLabel: '文件', glyph: 'document' },
         { id: 'library', label: '素材中心', shortLabel: '素材', glyph: 'library' },
         { id: 'settings', label: '設定', shortLabel: '設定', glyph: 'settings' },
     ];
     const mobilePrimaryTabs = tabs.filter((tab) =>
-        ['general', 'library'].includes(tab.id)
+        ['general', 'chat', 'library'].includes(tab.id)
     );
     const mobileSecondaryTabs = tabs.filter((tab) =>
         ['document', 'settings'].includes(tab.id)
@@ -846,6 +859,19 @@ export default function InfographicGenerator({
                     </div>
                 )}
 
+                {/* ─── Chat-to-Image Tab ─── */}
+                {activeTab === 'chat' && (
+                    <ChatWorkspace
+                        chat={imageChat}
+                        savedStyles={savedStyles}
+                        templates={templates}
+                        imageModelConfig={imageModelConfig}
+                        modelSetupError={modelSetupError}
+                        user={user}
+                        isMobileLayout={isMobileLayout}
+                    />
+                )}
+
                 {/* ─── Unified Asset Center ─── */}
                 {activeTab === 'library' && (
                     <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar lg:px-8 2xl:px-12">
@@ -936,7 +962,7 @@ export default function InfographicGenerator({
             </AnimatePresence>
 
             {/* 手機版：圖片已生成時，顯示底部快速預覽入口按鈕 */}
-            {isMobileLayout && generatedImage && !showMobilePreview && !isGenerating && activeTab !== 'general' && (
+            {isMobileLayout && generatedImage && !showMobilePreview && !isGenerating && activeTab !== 'general' && activeTab !== 'chat' && (
                 <button
                     type="button"
                     className="fixed bottom-[calc(64px+env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

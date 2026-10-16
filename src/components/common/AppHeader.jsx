@@ -21,7 +21,7 @@ export default function AppHeader({
   const activeTabInfo = tabs.find((tab) => tab.id === activeTab);
 
   return (
-    <header className="relative shrink-0 bg-background pt-[env(safe-area-inset-top)] text-foreground">
+    <header className="relative shrink-0 border-b border-border bg-card pt-[env(safe-area-inset-top)] text-foreground">
       <div className="flex h-12 min-w-0 items-center justify-between gap-2 px-3 sm:px-4 lg:grid lg:h-14 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
         <div className="flex min-w-0 flex-1 items-center gap-2 justify-self-start">
           <h1 className="flex shrink-0">

@@ -11,6 +11,7 @@ export const ICON_SIZE_CLASS = Object.freeze({
 
 export const PRODUCT_GLYPH_KINDS = Object.freeze([
   "create",
+  "chat",
   "document",
   "transform",
   "library",

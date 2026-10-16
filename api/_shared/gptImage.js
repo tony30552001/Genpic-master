@@ -142,7 +142,10 @@ const editGptImage = async ({ config, imageBase64, mimeType, prompt, aspectRatio
   });
 };
 
+const ASPECT_RATIOS = Object.freeze(Object.keys(ASPECT_RATIO_TO_SIZE));
+
 module.exports = {
+  ASPECT_RATIOS,
   editGptImage,
   generateGptImage,
 };

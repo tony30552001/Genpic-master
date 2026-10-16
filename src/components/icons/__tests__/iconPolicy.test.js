@@ -29,6 +29,7 @@ describe("icon policy", () => {
     expect(Object.keys(ICON_SIZE_CLASS)).toEqual(["xs", "sm", "md", "lg", "display"]);
     expect(PRODUCT_GLYPH_KINDS).toEqual([
       "create",
+      "chat",
       "document",
       "transform",
       "library",

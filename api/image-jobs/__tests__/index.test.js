@@ -16,9 +16,9 @@ const handler = require("../index");
 const jobId = "123e4567-e89b-42d3-a456-426614174000";
 const owner = { tenantId: "tenant-1", userId: "user-1" };
 const job = { id: jobId, status: "succeeded", model: "gpt-image-2.5-flare", operation: "edit", result_blob_name: "jobs/result/1.png", result_mime_type: "image/png", prompt: "internal prompt" };
-const invoke = async (id = jobId) => {
+const invoke = async (id = jobId, asset) => {
   const context = { log: { error: vi.fn() } };
-  await handler(context, { method: "GET", headers: {}, params: { id } });
+  await handler(context, { method: "GET", headers: {}, params: { id, asset } });
   return context.res;
 };
 
@@ -80,5 +80,23 @@ describe("image job status ownership and provenance", () => {
     rateLimit.rateLimit.mockReturnValue({ limited: true });
     expect((await invoke()).status).toBe(429);
     expect(imageJobs.getImageJobForUser).not.toHaveBeenCalled();
+  });
+
+  it("serves an owned succeeded result as an immutable private image", async () => {
+    const response = await invoke(jobId, "image");
+    expect(response.status).toBe(200);
+    expect(response.headers).toMatchObject({
+      "Content-Type": "image/png",
+      "Cache-Control": "private, max-age=31536000, immutable",
+    });
+    expect(response.body).toEqual(Buffer.from("png"));
+  });
+
+  it("does not serve an image before the job succeeds or for unknown assets", async () => {
+    imageJobs.getImageJobForUser.mockResolvedValue({ ...job, status: "processing" });
+    expect((await invoke(jobId, "image")).status).toBe(409);
+    imageJobs.getImageJobForUser.mockResolvedValue(job);
+    expect((await invoke(jobId, "thumbnail")).status).toBe(404);
+    expect(storage.downloadGeneratedImage).not.toHaveBeenCalled();
   });
 });

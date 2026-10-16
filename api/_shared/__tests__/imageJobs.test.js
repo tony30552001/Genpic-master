@@ -13,6 +13,7 @@ const { ImageModelError } = require("../imageModelConfig");
 db.query = vi.fn();
 db.getPool = vi.fn();
 blobStorage.uploadGeneratedImage = vi.fn();
+blobStorage.downloadGeneratedImage = vi.fn();
 gptImage.editGptImage = vi.fn();
 gptImage.generateGptImage = vi.fn();
 imageUploads.downloadOwnedImage = vi.fn();
@@ -66,7 +67,7 @@ describe("durable catalog-backed image jobs", () => {
     expect(imageModels.resolveImageModel).toHaveBeenCalledWith({ tenantId: input.tenantId, modelKey: config.modelKey, client });
     expect(client.query.mock.calls[0][0]).toContain("RETURNING id, status, model, operation");
     expect(client.query.mock.calls[0][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "generate", null,
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "generate", null, null,
     ]);
     expect(db.query).not.toHaveBeenCalled();
     expect(imageModels.resolveImageModel.mock.invocationCallOrder[0])
@@ -76,8 +77,35 @@ describe("durable catalog-backed image jobs", () => {
   it.each(config.supportedQualities)("persists Flare %s exactly with an owned edit source", async (quality) => {
     await createImageJob({ ...input, quality, operation: "edit", sourceUploadId: "upload-1" });
     expect(client.query.mock.calls[0][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, quality, "edit", "upload-1",
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, quality, "edit", "upload-1", null,
     ]);
+  });
+
+  it("admits an edit of an owned succeeded job and links it in the same transaction", async () => {
+    client.query
+      .mockResolvedValueOnce({ rows: [{ id: "source-job" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "job-2", status: "queued", model: config.modelKey, operation: "edit" }] });
+    const afterInsert = vi.fn();
+    await createImageJob({ ...input, operation: "edit", sourceJobId: "source-job", afterInsert });
+    expect(client.query.mock.calls[0][0]).toContain("status = 'succeeded'");
+    expect(client.query.mock.calls[0][1]).toEqual(["source-job", input.tenantId, input.userId]);
+    expect(client.query.mock.calls[1][1]).toEqual([
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "edit", null, "source-job",
+    ]);
+    expect(afterInsert).toHaveBeenCalledWith(client, expect.objectContaining({ id: "job-2" }));
+  });
+
+  it("rejects an edit of a job the user does not own before inserting", async () => {
+    client.query.mockResolvedValueOnce({ rows: [] });
+    await expect(createImageJob({ ...input, operation: "edit", sourceJobId: "other-job" }))
+      .rejects.toMatchObject({ status: 404, code: "source_job_not_found" });
+    expect(client.query).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates an afterInsert failure so the admission transaction rolls back", async () => {
+    const failure = new Error("turn stopped");
+    await expect(createImageJob({ ...input, afterInsert: vi.fn().mockRejectedValue(failure) }))
+      .rejects.toBe(failure);
   });
 
   it("permits a trusted admin test's explicit model without the user policy", async () => {
@@ -112,6 +140,8 @@ describe("durable catalog-backed image jobs", () => {
 
   it.each([
     { operation: "edit" }, { operation: "generate", sourceUploadId: "upload-1" }, { operation: "unknown" },
+    { operation: "generate", sourceJobId: "job-0" },
+    { operation: "edit", sourceUploadId: "upload-1", sourceJobId: "job-0" },
   ])("rejects invalid operation/source combinations %j", async (values) => {
     await expect(createImageJob({ ...input, ...values })).rejects.toMatchObject({ status: 400 });
     expect(imageModels.withImageModelTransaction).not.toHaveBeenCalled();
@@ -158,6 +188,28 @@ describe("durable catalog-backed image jobs", () => {
     await processNextImageJob();
     expect(gptImage.generateGptImage).not.toHaveBeenCalled();
     expect(db.query.mock.calls[0][0]).toContain("status = 'failed'");
+  });
+
+  it("edits an owned succeeded source job with its stored result", async () => {
+    claim({ ...job, operation: "edit", source_job_id: "source-job" });
+    db.query.mockResolvedValueOnce({
+      rows: [{ id: "source-job", status: "succeeded", result_blob_name: "jobs/source-job/1.webp", result_mime_type: "image/webp" }],
+    });
+    blobStorage.downloadGeneratedImage.mockResolvedValue(Buffer.from("previous"));
+    await processNextImageJob();
+    expect(db.query.mock.calls[0][1]).toEqual(["source-job", job.tenant_id, job.user_id]);
+    expect(imageUploads.resolveOwnedImageUpload).not.toHaveBeenCalled();
+    expect(gptImage.editGptImage).toHaveBeenCalledWith(expect.objectContaining({
+      imageBase64: Buffer.from("previous").toString("base64"), mimeType: "image/webp",
+    }));
+  });
+
+  it("fails an edit whose source job is no longer available", async () => {
+    claim({ ...job, operation: "edit", source_job_id: "source-job" });
+    db.query.mockResolvedValueOnce({ rows: [] });
+    await processNextImageJob();
+    expect(gptImage.editGptImage).not.toHaveBeenCalled();
+    expect(db.query.mock.calls[1][1][1]).toBe("source_job_not_found");
   });
 
   it("rechecks upload ownership at execution and fails missing sources without retry", async () => {

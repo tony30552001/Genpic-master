@@ -8,7 +8,8 @@
  * model from another provider.
  */
 
-const { OUTPUT_TRUNCATED } = require("./llmProviders");
+const { createParser } = require("eventsource-parser");
+const { INVALID_TOOL_CALL, OUTPUT_TRUNCATED } = require("./llmProviders");
 
 class AzureOpenAIError extends Error {
   constructor(message, status) {
@@ -211,9 +212,145 @@ const postJsonCompletion = async ({
   return parseJsonContent(content);
 };
 
+const readErrorMessage = async (response) => {
+  const rawText = await response.text();
+  try {
+    const data = rawText ? JSON.parse(rawText) : null;
+    return data?.error?.message || data?.message || "Azure OpenAI 請求失敗";
+  } catch {
+    return "Azure OpenAI 請求失敗";
+  }
+};
+
+const parseToolArguments = (name, raw) => {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    // Reported below.
+  }
+  const error = new Error(`對話模型的 ${name} 工具參數不是有效的 JSON`);
+  error.code = INVALID_TOOL_CALL;
+  throw error;
+};
+
+/**
+ * Streams one Responses API call. Text deltas go to `onTextDelta` as they
+ * arrive; function calls are collected and returned only after the response
+ * completes, so nothing acts on a call the model has not finished.
+ */
+const streamResponseCompletion = async ({
+  model,
+  systemMessage,
+  messages,
+  tools,
+  maxOutputTokens,
+  signal,
+  onTextDelta,
+}) => {
+  const response = await fetch(getResponsesEndpoint(model.endpoint), {
+    method: "POST",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "api-key": model.apiKey,
+    },
+    body: JSON.stringify({
+      model: model.modelName,
+      instructions: systemMessage,
+      input: messages.map(({ role, content }) => ({ role, content })),
+      tools: tools.map(({ name, description, parameters }) => ({
+        type: "function",
+        name,
+        description,
+        parameters,
+        strict: false,
+      })),
+      tool_choice: "auto",
+      parallel_tool_calls: false,
+      stream: true,
+      ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new AzureOpenAIError(`${message} (${response.status})`, response.status);
+  }
+
+  let text = "";
+  const toolCalls = [];
+  let finished = false;
+  let failure = null;
+
+  const parser = createParser({
+    onEvent: ({ data }) => {
+      if (!data || data === "[DONE]" || failure) return;
+      let event;
+      try {
+        event = JSON.parse(data);
+      } catch {
+        failure = new AzureOpenAIError("Azure OpenAI 串流事件格式異常", 502);
+        return;
+      }
+      switch (event.type) {
+        case "response.output_text.delta":
+          if (event.delta) {
+            text += event.delta;
+            onTextDelta(event.delta);
+          }
+          break;
+        case "response.output_item.done":
+          if (event.item?.type === "function_call") {
+            toolCalls.push({
+              name: event.item.name,
+              arguments: parseToolArguments(event.item.name, event.item.arguments),
+            });
+          }
+          break;
+        case "response.completed":
+          finished = true;
+          break;
+        case "response.incomplete": {
+          const reason = event.response?.incomplete_details?.reason || "unknown";
+          failure = new AzureOpenAIError(`對話模型未完成回應（${reason}）`, 200);
+          failure.code = OUTPUT_TRUNCATED;
+          break;
+        }
+        case "response.failed":
+        case "error": {
+          const detail = event.response?.error || event.error || event;
+          failure = new AzureOpenAIError(
+            detail?.message || "Azure OpenAI 串流失敗",
+            Number(detail?.status) || 502
+          );
+          break;
+        }
+        default:
+          break;
+      }
+    },
+  });
+
+  const decoder = new TextDecoder();
+  for await (const chunk of response.body) {
+    parser.feed(decoder.decode(chunk, { stream: true }));
+    if (failure) throw failure;
+  }
+  parser.feed(decoder.decode());
+  if (failure) throw failure;
+  if (!finished) {
+    throw new AzureOpenAIError("Azure OpenAI 串流在完成前中斷", 502);
+  }
+
+  return { text, toolCalls };
+};
+
 module.exports = {
   buildResponseInput,
   parseJsonContent,
   postJsonCompletion,
   getResponsesEndpoint,
+  streamResponseCompletion,
 };

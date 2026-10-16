@@ -8,6 +8,9 @@ const HISTORY_SOURCES = [
   "style_transfer",
 ];
 
+/** Written only by the image-job worker when a chat turn's image succeeds. */
+const CHAT_HISTORY_SOURCE = "chat";
+
 /** Sources that exist only on records written before the creation workspace merge. */
 const LEGACY_HISTORY_SOURCES = ["image-transform"];
 
@@ -20,12 +23,15 @@ const normalizeHistorySource = (value) => {
 /** Returns a source that history can be filtered by, including legacy records. */
 const normalizeHistorySourceFilter = (value) => {
   const source = String(value || "").trim();
-  return HISTORY_SOURCES.includes(source) || LEGACY_HISTORY_SOURCES.includes(source)
+  return HISTORY_SOURCES.includes(source) ||
+    source === CHAT_HISTORY_SOURCE ||
+    LEGACY_HISTORY_SOURCES.includes(source)
     ? source
     : null;
 };
 
 module.exports = {
+  CHAT_HISTORY_SOURCE,
   HISTORY_SOURCES,
   LEGACY_HISTORY_SOURCES,
   normalizeHistorySource,

@@ -16,6 +16,9 @@ const PROVIDERS = Object.freeze({
  */
 const OUTPUT_TRUNCATED = "output_truncated";
 
+/** A streamed tool call whose arguments are not a JSON object; never acted on. */
+const INVALID_TOOL_CALL = "invalid_tool_call";
+
 const LLM_PROVIDERS = Object.freeze([
   {
     id: PROVIDERS.AZURE_OPENAI,
@@ -63,6 +66,11 @@ const LLM_ROLES = Object.freeze([
     label: "場景優化",
     description: "改寫單一場景的描述與視覺 Prompt",
   },
+  {
+    id: "image_chat",
+    label: "對話創作",
+    description: "串流回覆對話，並決定追問、生成新圖或修改目前版本；需支援工具呼叫",
+  },
 ]);
 
 const getRole = (roleId) =>
@@ -73,6 +81,7 @@ const getProvider = (providerId) =>
   null;
 
 module.exports = {
+  INVALID_TOOL_CALL,
   LLM_PROVIDERS,
   LLM_ROLES,
   OUTPUT_TRUNCATED,

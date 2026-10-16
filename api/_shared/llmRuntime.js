@@ -8,9 +8,9 @@
  * provider than the primary one.
  */
 
-const { postJsonCompletion } = require("./azureOpenAI");
-const { postGeminiJson } = require("./gemini");
-const { PROVIDERS, OUTPUT_TRUNCATED } = require("./llmProviders");
+const { postJsonCompletion, streamResponseCompletion } = require("./azureOpenAI");
+const { postGeminiJson, streamGeminiResponse } = require("./gemini");
+const { INVALID_TOOL_CALL, PROVIDERS, OUTPUT_TRUNCATED } = require("./llmProviders");
 
 /**
  * GlobalStandard deployments reject oversized requests during peak load with
@@ -141,6 +141,112 @@ const generateJson = async ({
   }
 };
 
+/** Keeps a streamed reply, including retries, inside the SWA 45-second request limit. */
+const STREAM_DEADLINE_MS = 40_000;
+const STREAM_ATTEMPTS = 3;
+const STREAM_RETRY_DELAY_MS = 500;
+
+class LlmStreamError extends Error {
+  constructor(message, code, { cause, partial = false } = {}) {
+    super(message, { cause });
+    this.name = "LlmStreamError";
+    this.code = code;
+    this.partial = partial;
+  }
+}
+
+const streamModel = (model, request) =>
+  model.provider === PROVIDERS.GOOGLE_GEMINI
+    ? streamGeminiResponse({ model, ...request })
+    : streamResponseCompletion({ model, ...request });
+
+/**
+ * Streams one reply that may carry tool calls, as `{ text, toolCalls }`.
+ *
+ * Retries and the fallback model are only used before any text reached
+ * `onTextDelta`: once the user has seen part of an answer, it is never
+ * replaced by another model's answer. `signal` aborts the call; the deadline
+ * aborts it with a `llm_timeout` error.
+ *
+ * @param {object} params
+ * @param {{ model: object, fallback: object|null }} params.llm Resolved role assignment.
+ * @param {string} params.systemMessage
+ * @param {{ role: "user"|"assistant", content: string }[]} params.messages
+ * @param {{ name: string, description: string, parameters: object }[]} params.tools
+ * @param {(text: string) => void} params.onTextDelta
+ * @param {AbortSignal} [params.signal]
+ * @param {number} [params.maxOutputTokens]
+ * @param {number} [params.deadlineMs]
+ */
+const streamResponse = async ({
+  llm,
+  systemMessage,
+  messages,
+  tools,
+  onTextDelta,
+  signal,
+  maxOutputTokens,
+  deadlineMs = STREAM_DEADLINE_MS,
+}) => {
+  let activeModel = requireModel(llm?.model, "主要對話模型");
+  const fallbackModel = llm?.fallback ? requireModel(llm.fallback, "備援對話模型") : null;
+  const deadline = AbortSignal.timeout(deadlineMs);
+  const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;
+  let emitted = false;
+  const request = {
+    systemMessage,
+    messages,
+    tools,
+    maxOutputTokens,
+    signal: combined,
+    onTextDelta: (text) => {
+      emitted = true;
+      onTextDelta(text);
+    },
+  };
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await streamModel(activeModel, request);
+    } catch (error) {
+      if (deadline.aborted) {
+        throw new LlmStreamError("對話模型回覆逾時，請稍後重試", "llm_timeout", {
+          cause: error,
+          partial: emitted,
+        });
+      }
+      if (signal?.aborted) {
+        throw new LlmStreamError("回覆已停止", "aborted", { cause: error, partial: emitted });
+      }
+      if (emitted || attempt >= STREAM_ATTEMPTS || !isRetryableStatus(error.status)) {
+        throw new LlmStreamError(
+          error.code === OUTPUT_TRUNCATED
+            ? "對話模型的回覆被截斷，請縮短需求後重試"
+            : error.code === INVALID_TOOL_CALL
+              ? "對話模型回傳的動作無效，未建立圖片工作"
+              : "對話模型暫時無法回覆，請稍後重試",
+          error.code === OUTPUT_TRUNCATED || error.code === INVALID_TOOL_CALL
+            ? error.code
+            : "llm_failed",
+          { cause: error, partial: emitted }
+        );
+      }
+      if (fallbackModel && activeModel.id !== fallbackModel.id) {
+        activeModel = fallbackModel;
+      }
+      console.warn("[llmRuntime] Retrying stream before first token:", {
+        attempt,
+        status: error.status,
+        provider: activeModel.provider,
+        model: activeModel.modelName,
+      });
+      await sleep(STREAM_RETRY_DELAY_MS * attempt);
+    }
+  }
+};
+
 module.exports = {
+  LlmStreamError,
   generateJson,
+  streamResponse,
 };

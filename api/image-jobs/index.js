@@ -1,4 +1,4 @@
-const { ok, error, options } = require("../_shared/http");
+const { ok, error, options, corsHeaders } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
@@ -44,6 +44,29 @@ module.exports = async function (context, req) {
   });
   if (!job) {
     context.res = error("找不到圖片生成工作", "not_found", 404, req);
+    return;
+  }
+
+  const asset = req.params?.asset;
+  if (asset !== undefined) {
+    if (asset !== "image") {
+      context.res = error("API route not found", "not_found", 404, req);
+      return;
+    }
+    if (job.status !== "succeeded") {
+      context.res = error("圖片尚未完成", "not_ready", 409, req);
+      return;
+    }
+    // A succeeded job's image never changes, so the browser may keep it.
+    context.res = {
+      status: 200,
+      headers: {
+        ...corsHeaders(req),
+        "Content-Type": job.result_mime_type || "image/png",
+        "Cache-Control": "private, max-age=31536000, immutable",
+      },
+      body: await downloadGeneratedImage({ blobName: job.result_blob_name }),
+    };
     return;
   }
 
