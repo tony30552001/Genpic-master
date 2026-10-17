@@ -26,6 +26,7 @@ const REQUEST_TIMEOUT_MS = 12 * 60 * 1000;
 class ImageProviderError extends Error {
   constructor(message, code, status, retryable) {
     super(message);
+    this.name = "ImageProviderError";
     this.code = code;
     this.status = status;
     this.retryable = retryable;
@@ -146,6 +147,7 @@ const ASPECT_RATIOS = Object.freeze(Object.keys(ASPECT_RATIO_TO_SIZE));
 
 module.exports = {
   ASPECT_RATIOS,
+  ImageProviderError,
   editGptImage,
   generateGptImage,
 };

@@ -1,5 +1,6 @@
 const { query, getPool } = require("./db");
 const {
+  ImageProviderError,
   editGptImage,
   generateGptImage,
 } = require("./gptImage");
@@ -202,7 +203,9 @@ const markImageJobFailure = async ({ jobId, operation, attempts, error }) => {
   }
 
   const isEdit = operation === "edit";
-  const errorCode = error instanceof ImageModelError ? error.code :
+  // Both error types carry sanitized messages that never include provider bodies.
+  const userFacing = error instanceof ImageModelError || error instanceof ImageProviderError;
+  const errorCode = userFacing ? error.code :
     (isEdit ? "transform_failed" : "generation_failed");
   await query(
     `UPDATE image_generation_jobs
@@ -216,7 +219,7 @@ const markImageJobFailure = async ({ jobId, operation, attempts, error }) => {
     [
       jobId,
       errorCode,
-      error instanceof ImageModelError ? error.message :
+      userFacing ? error.message :
         (isEdit ? "圖片轉換失敗，請稍後重試" : "圖片生成失敗，請稍後重試"),
       attempts,
     ]

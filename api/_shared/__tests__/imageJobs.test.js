@@ -279,6 +279,18 @@ describe("durable catalog-backed image jobs", () => {
     expect(JSON.stringify(console.error.mock.calls)).not.toContain("unknown-sensitive-code");
   });
 
+  it("persists a permanent provider failure's sanitized message and code", async () => {
+    claim();
+    gptImage.generateGptImage.mockRejectedValue(
+      new gptImage.ImageProviderError("圖片服務請求失敗 (400)", "image_provider_error", 400, false)
+    );
+    await processNextImageJob();
+    expect(db.query.mock.calls[0]).toEqual([
+      expect.stringContaining("status = 'failed'"),
+      [job.id, "image_provider_error", "圖片服務請求失敗 (400)", 1],
+    ]);
+  });
+
   it("keeps malformed provider responses terminal despite their HTTP 502 status", async () => {
     claim();
     gptImage.generateGptImage.mockRejectedValue(Object.assign(new Error("Malformed response"), {
