@@ -17,6 +17,7 @@ import {
 } from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { SelectField } from "@/components/ui/select-field";
 import {
   DOCUMENT_ACCEPT,
   DOCUMENT_FORMAT_GROUPS,
@@ -473,20 +474,17 @@ export default function DocumentUploader({
               <Label htmlFor="file-item-count" className="text-sm font-medium whitespace-nowrap">
                 分鏡數量
               </Label>
-              <select
+              <SelectField
                 id="file-item-count"
-                value={itemCount}
-                onChange={(e) => setItemCount(e.target.value)}
-                className="h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                value={String(itemCount)}
+                onValueChange={setItemCount}
+                className="h-9 w-auto min-w-36 gap-2"
                 disabled={disabled}
-              >
-                <option value="auto">自動（AI 決定）</option>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                  <option key={n} value={n}>
-                    {n} 個
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "auto", label: "自動（AI 決定）" },
+                  ...Array.from({ length: 10 }, (_, index) => ({ value: String(index + 1), label: `${index + 1} 個` })),
+                ]}
+              />
             </div>
           </div>
           <Button onClick={handleAnalyze} disabled={disabled} className="w-full">

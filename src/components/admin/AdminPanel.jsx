@@ -42,6 +42,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select-field";
 import { cn } from "@/lib/utils";
 import { HISTORY_SOURCE_LABELS, getHistorySourceLabel } from "@/lib/historySource";
 import ImageLightbox from "../common/ImageLightbox";
@@ -72,8 +73,7 @@ const SECTIONS = [
   { id: "styles", label: "風格庫", icon: Palette },
 ];
 
-const NATIVE_SELECT_CLASS =
-  "h-9 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+const COMPACT_SELECT_CLASS = "h-9 w-auto min-w-24 gap-2 rounded-lg px-2.5 text-xs";
 
 const ROLE_OPTIONS = [
   { value: "admin", label: "管理員" },
@@ -137,19 +137,14 @@ const normalizePaginatedData = (data, fallbackPageSize = DEFAULT_USER_PAGE_SIZE)
 const PageSizeSelect = ({ value, onChange, disabled, ariaLabel }) => (
   <label className="flex items-center gap-2 text-xs text-muted-foreground">
     <span>每頁顯示</span>
-    <select
+    <SelectField
       value={value}
-      onChange={onChange}
+      onValueChange={onChange}
       disabled={disabled}
-      className={NATIVE_SELECT_CLASS}
+      className={COMPACT_SELECT_CLASS}
       aria-label={ariaLabel}
-    >
-      {USER_PAGE_SIZE_OPTIONS.map((pageSize) => (
-        <option key={pageSize} value={pageSize}>
-          {pageSize} 項
-        </option>
-      ))}
-    </select>
+      options={USER_PAGE_SIZE_OPTIONS.map((pageSize) => ({ value: pageSize, label: `${pageSize} 項` }))}
+    />
   </label>
 );
 
@@ -491,8 +486,8 @@ export default function AdminPanel() {
     );
   };
 
-  const handleUserPageSizeChange = (event) => {
-    const pageSize = Number(event.target.value);
+  const handleUserPageSizeChange = (value) => {
+    const pageSize = Number(value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === userPageSize) return;
     void runRefresh(
       () => loadUsersSection({ pageSize, search: appliedUserSearchRef.current }),
@@ -533,8 +528,8 @@ export default function AdminPanel() {
     );
   };
 
-  const handleHistoryPageSizeChange = (event) => {
-    const pageSize = Number(event.target.value);
+  const handleHistoryPageSizeChange = (value) => {
+    const pageSize = Number(value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === historyPageSize) return;
     void runRefresh(
       () => loadHistorySection({ userId: selectedUserId, source: historySource, pageSize }),
@@ -542,8 +537,7 @@ export default function AdminPanel() {
     );
   };
 
-  const handleHistorySourceChange = (event) => {
-    const nextSource = event.target.value;
+  const handleHistorySourceChange = (nextSource) => {
     if (nextSource === historySource) return;
     requestedSectionsRef.current.delete("history");
     setHistorySource(nextSource);
@@ -568,8 +562,8 @@ export default function AdminPanel() {
     );
   };
 
-  const handleStylesPageSizeChange = (event) => {
-    const pageSize = Number(event.target.value);
+  const handleStylesPageSizeChange = (value) => {
+    const pageSize = Number(value);
     if (!USER_PAGE_SIZE_OPTIONS.includes(pageSize) || pageSize === stylesPageSize) return;
     void runRefresh(
       () => loadStylesSection({ userId: selectedUserId, pageSize }),
@@ -747,11 +741,6 @@ export default function AdminPanel() {
 
   const activeSectionInfo = SECTIONS.find((section) => section.id === activeSection);
   const isSectionLoading = loadingSection === activeSection;
-  const sectionCount = {
-    users: userPagination.total,
-    history: historyPagination.total,
-    styles: stylesPagination.total,
-  }[activeSection];
   const showsUserFilter = activeSection === "history" || activeSection === "styles";
 
   const handleSectionChange = (sectionId) => {
@@ -792,9 +781,6 @@ export default function AdminPanel() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="sr-only">{activeSectionInfo?.label}</h1>
-              {sectionCount !== undefined && !isSectionLoading && (
-                <Badge variant="secondary" className="tabular-nums">{sectionCount}</Badge>
-              )}
               {(isRefreshing || loadingSection) && (
                 <Loader2 className="icon-sm animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
               )}
@@ -858,20 +844,15 @@ export default function AdminPanel() {
                 </div>
               )}
               {activeSection === "history" && (
-                <select
+                <SelectField
                   value={historySource}
-                  onChange={handleHistorySourceChange}
+                  onValueChange={handleHistorySourceChange}
                   disabled={isRefreshing}
-                  className={NATIVE_SELECT_CLASS}
+                  className={cn(COMPACT_SELECT_CLASS, "min-w-36")}
                   aria-label="依功能篩選生成紀錄"
-                >
-                  <option value="">全部功能</option>
-                  {HISTORY_SOURCE_LABELS.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                  emptyLabel="全部功能"
+                  options={HISTORY_SOURCE_LABELS.map((item) => ({ value: item.id, label: item.label }))}
+                />
               )}
               {showsUserFilter &&
                 userFilterGroups.map((group) => (
@@ -954,16 +935,13 @@ export default function AdminPanel() {
                           {providerLabel(item.authProvider)}
                         </td>
                         <td className="px-4 py-3">
-                          <select
+                          <SelectField
                             value={item.role}
-                            onChange={(event) => handleRoleChange(item.id, event.target.value)}
-                            className={cn(NATIVE_SELECT_CLASS, "h-8")}
+                            onValueChange={(role) => handleRoleChange(item.id, role)}
+                            className={cn(COMPACT_SELECT_CLASS, "h-8")}
                             aria-label={`${item.displayName} 的角色`}
-                          >
-                            {ROLE_OPTIONS.map((role) => (
-                              <option key={role.value} value={role.value}>{role.label}</option>
-                            ))}
-                          </select>
+                            options={ROLE_OPTIONS}
+                          />
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs">
@@ -1135,18 +1113,14 @@ export default function AdminPanel() {
                       <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-end sm:justify-between">
                         <div className="w-full max-w-md space-y-2">
                           <label htmlFor="admin-default-model" className="text-sm font-semibold">預設生成模型</label>
-                          <select
+                          <SelectField
                             id="admin-default-model"
                             value={allowedRegisteredModels.some((model) => model.modelKey === modelPolicy.defaultModel) ? modelPolicy.defaultModel : ""}
                             disabled={isSavingPolicy || isRefreshing || policyModels === null}
-                            onChange={(event) => setModelPolicy((previous) => ({ ...previous, defaultModel: event.target.value }))}
-                            className={cn(NATIVE_SELECT_CLASS, "h-10 w-full text-sm")}
-                          >
-                            <option value="">請選擇已開放的模型</option>
-                            {allowedRegisteredModels.map((model) => (
-                              <option key={model.modelKey} value={model.modelKey}>{model.label}</option>
-                            ))}
-                          </select>
+                            onValueChange={(defaultModel) => setModelPolicy((previous) => ({ ...previous, defaultModel }))}
+                            placeholder="請選擇已開放的模型"
+                            options={allowedRegisteredModels.map((model) => ({ value: model.modelKey, label: model.label }))}
+                          />
                         </div>
                         <Button type="button" onClick={handleSavePolicy} disabled={isSavingPolicy || !isPolicyValid || isRefreshing} className="shrink-0 gap-2">
                           {isSavingPolicy ? <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="icon-sm" aria-hidden="true" />}

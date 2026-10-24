@@ -30,6 +30,7 @@ import {
 } from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SelectField } from "@/components/ui/select-field";
 import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Small reusable field component ───────────────────────────────────────
@@ -299,15 +300,16 @@ export default function LineSettings({ useLineConfigHook }) {
                                     spellCheck={false}
                                     className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 />
-                                <select
+                                <SelectField
                                     aria-label="目標類型"
                                     value={form.targetType}
-                                    onChange={(e) => setForm((p) => ({ ...p, targetType: e.target.value }))}
-                                    className="px-2 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <option value="group">群組</option>
-                                    <option value="user">使用者</option>
-                                </select>
+                                    onValueChange={(targetType) => setForm((p) => ({ ...p, targetType }))}
+                                    className="w-auto min-w-28 gap-2 rounded-lg"
+                                    options={[
+                                        { value: "group", label: "群組" },
+                                        { value: "user", label: "使用者" },
+                                    ]}
+                                />
                             </div>
 
                             {/* 操作指引 */}

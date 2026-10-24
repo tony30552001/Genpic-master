@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { chooseOption, listOptions } from "../../../test/selectHelpers";
 
 import LlmModelSettings from "../LlmModelSettings";
 import {
@@ -116,20 +117,14 @@ describe("LlmModelSettings", () => {
   it("offers every model to every role regardless of provider", async () => {
     await renderSettings();
 
-    const documentSelect = screen.getByLabelText("文件分析主要模型");
-    const styleSelect = screen.getByLabelText("風格分析主要模型");
     const expected = [
       "未指派",
       "GPT 分析（Azure OpenAI）",
       "Flash 分析（Google Gemini）",
     ];
 
-    expect(Array.from(documentSelect.options).map((option) => option.textContent)).toEqual(
-      expected
-    );
-    expect(Array.from(styleSelect.options).map((option) => option.textContent)).toEqual(
-      expected
-    );
+    expect(await listOptions("文件分析主要模型")).toEqual(expected);
+    expect(await listOptions("風格分析主要模型")).toEqual(expected);
   });
 
   it("hides the endpoint field for providers that do not need one", async () => {
@@ -138,9 +133,7 @@ describe("LlmModelSettings", () => {
     fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
     expect(screen.getByLabelText("端點")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("供應商"), {
-      target: { value: "google-gemini" },
-    });
+    await chooseOption("供應商", "Google Gemini");
     expect(screen.queryByLabelText("端點")).not.toBeInTheDocument();
   });
 
@@ -153,9 +146,7 @@ describe("LlmModelSettings", () => {
     await renderSettings();
 
     fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
-    fireEvent.change(screen.getByLabelText("供應商"), {
-      target: { value: "google-gemini" },
-    });
+    await chooseOption("供應商", "Google Gemini");
     fireEvent.change(screen.getByLabelText("名稱"), { target: { value: "新模型" } });
     fireEvent.change(screen.getByLabelText("模型／部署名稱"), {
       target: { value: "gemini-3" },
@@ -200,9 +191,7 @@ describe("LlmModelSettings", () => {
     });
     await renderSettings();
 
-    fireEvent.change(screen.getByLabelText("文件分析主要模型"), {
-      target: { value: "model-azure" },
-    });
+    await chooseOption("文件分析主要模型", "GPT 分析（Azure OpenAI）");
 
     await waitFor(() =>
       expect(assignAdminLlmRole).toHaveBeenCalledWith("document_analysis", {
@@ -222,9 +211,7 @@ describe("LlmModelSettings", () => {
     });
     await renderSettings();
 
-    fireEvent.change(screen.getByLabelText("文件分析主要模型"), {
-      target: { value: "model-gemini" },
-    });
+    await chooseOption("文件分析主要模型", "Flash 分析（Google Gemini）");
 
     await waitFor(() =>
       expect(assignAdminLlmRole).toHaveBeenCalledWith("document_analysis", {

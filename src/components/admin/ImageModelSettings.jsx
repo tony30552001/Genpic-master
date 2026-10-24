@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SelectField } from "@/components/ui/select-field";
 import { cn } from "@/lib/utils";
 import {
   createAdminImageModel,
@@ -178,9 +179,7 @@ export default function ImageModelSettings({ onCatalogChange }) {
                       <input required pattern=".*\S.*" maxLength={128} className={inputClass} value={form.label} onChange={(event) => updateField("label", event.target.value)} />
                     </label>
                     <label className="space-y-1 text-sm">API 類型
-                      <select required disabled={Boolean(editingKey)} className={inputClass} value={form.apiType} onChange={(event) => updateField("apiType", event.target.value)}>
-                        {catalog.apiTypes.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
-                      </select>
+                      <SelectField required disabled={Boolean(editingKey)} className={inputClass} value={form.apiType} onValueChange={(value) => updateField("apiType", value)} options={catalog.apiTypes.map((type) => ({ value: type.id, label: type.label }))} />
                     </label>
                     <label className="space-y-1 text-sm">部署名稱
                       <input required pattern=".*\S.*" maxLength={128} readOnly={Boolean(editingKey)} aria-describedby="image-model-identity-help" className={inputClass} value={form.deploymentName} onChange={(event) => updateField("deploymentName", event.target.value)} />
@@ -213,10 +212,7 @@ export default function ImageModelSettings({ onCatalogChange }) {
                   </fieldset>
                   <p id="image-model-quality-help" className={cn("text-sm", form.supportedQualities.length ? "text-muted-foreground" : "text-destructive")}>至少選擇一種，並依實際部署能力設定；較高品質可能增加費用。</p>
                   <label className="block space-y-1 text-sm">預設品質
-                    <select required className={inputClass} value={form.defaultQuality} onChange={(event) => updateField("defaultQuality", event.target.value)}>
-                      <option value="">請選擇支援的品質</option>
-                      {form.supportedQualities.map((quality) => <option key={quality} value={quality}>{quality}</option>)}
-                    </select>
+                    <SelectField required className={inputClass} value={form.defaultQuality} onValueChange={(value) => updateField("defaultQuality", value)} placeholder="請選擇支援的品質" options={form.supportedQualities.map((quality) => ({ value: quality, label: quality }))} />
                   </label>
                   <div className="flex flex-wrap gap-2">
                     <Button type="submit">{isSaving ? "儲存中…" : "儲存圖片模型"}</Button>

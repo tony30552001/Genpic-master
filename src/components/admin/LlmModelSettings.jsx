@@ -12,9 +12,9 @@ import {
   Brain,
   PlugZap,
 } from "@/components/icons/lucideContent";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SelectField } from "@/components/ui/select-field";
 import { cn } from "@/lib/utils";
 import {
   assignAdminLlmRole,
@@ -246,7 +246,6 @@ export default function LlmModelSettings() {
           <CardTitle className="flex items-center gap-2 text-base">
             <Brain className="icon-sm text-primary" aria-hidden="true" />
             分析模型
-            <Badge variant="secondary">{settings.models.length}</Badge>
           </CardTitle>
           <Button type="button" onClick={openCreateForm} className="gap-2">
             <Plus className="icon-sm" aria-hidden="true" />
@@ -273,16 +272,13 @@ export default function LlmModelSettings() {
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="llm-provider" className="text-sm font-semibold">供應商</label>
-                  <select
+                  <SelectField
                     id="llm-provider"
                     className={inputClass}
                     value={form.provider}
-                    onChange={(event) => setForm((previous) => ({ ...previous, provider: event.target.value }))}
-                  >
-                    {settings.providers.map((provider) => (
-                      <option key={provider.id} value={provider.id}>{provider.label}</option>
-                    ))}
-                  </select>
+                    onValueChange={(provider) => setForm((previous) => ({ ...previous, provider }))}
+                    options={settings.providers.map((provider) => ({ value: provider.id, label: provider.label }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="llm-model-name" className="text-sm font-semibold">模型／部署名稱</label>
@@ -452,21 +448,15 @@ export default function LlmModelSettings() {
                       尚未建立任何分析模型，請先於上方新增。
                     </p>
                   ) : (
-                    <select
+                    <SelectField
                       id={`llm-role-${role.id}-primary`}
                       aria-label={`${role.label}主要模型`}
-                      className={inputClass}
                       value={assignment.modelId || ""}
                       disabled={isPending}
-                      onChange={(event) => handleAssignmentChange(role, "modelId", event.target.value)}
-                    >
-                      <option value="">未指派</option>
-                      {candidates.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {`${model.label}（${providerLabel(model.provider)}）`}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => handleAssignmentChange(role, "modelId", value)}
+                      emptyLabel="未指派"
+                      options={candidates.map((model) => ({ value: model.id, label: `${model.label}（${providerLabel(model.provider)}）` }))}
+                    />
                   )}
                 </div>
                 <div className="space-y-2">
@@ -478,23 +468,17 @@ export default function LlmModelSettings() {
                       沒有其他模型可作為備援。
                     </p>
                   ) : (
-                    <select
+                    <SelectField
                       id={`llm-role-${role.id}-fallback`}
                       aria-label={`${role.label}備援模型`}
-                      className={inputClass}
                       value={assignment.fallbackModelId || ""}
                       disabled={isPending}
-                      onChange={(event) => handleAssignmentChange(role, "fallbackModelId", event.target.value)}
-                    >
-                      <option value="">不設定</option>
-                      {candidates
+                      onValueChange={(value) => handleAssignmentChange(role, "fallbackModelId", value)}
+                      emptyLabel="不設定"
+                      options={candidates
                         .filter((model) => model.id !== assignment.modelId)
-                        .map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {`${model.label}（${providerLabel(model.provider)}）`}
-                          </option>
-                        ))}
-                    </select>
+                        .map((model) => ({ value: model.id, label: `${model.label}（${providerLabel(model.provider)}）` }))}
+                    />
                   )}
                 </div>
               </div>

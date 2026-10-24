@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { chooseOption, listOptions } from "../../../test/selectHelpers";
 
 import AdminPanel from "../AdminPanel";
 import {
@@ -153,12 +154,12 @@ describe("AdminPanel section loading", () => {
     const select = screen.getByLabelText("預設生成模型");
     const save = screen.getByRole("button", { name: "儲存模型政策" });
     fireEvent.click(allowed);
-    expect(select).toHaveValue("");
+    expect(select).toHaveTextContent("請選擇已開放的模型");
     expect(save).toBeDisabled();
-    expect(within(select).queryByRole("option", { name: model.label })).not.toBeInTheDocument();
+    expect(await listOptions("預設生成模型")).toEqual([]);
     fireEvent.click(allowed);
     expect(save).toBeDisabled();
-    fireEvent.change(select, { target: { value: model.modelKey } });
+    await chooseOption("預設生成模型", model.label);
     updateAdminModelSettings.mockResolvedValue({
       modelPolicy: { allowedModels: [model.modelKey], defaultModel: model.modelKey }, models: [model],
     });
@@ -187,7 +188,7 @@ describe("AdminPanel section loading", () => {
     fireEvent.change(screen.getByLabelText("Azure HTTPS 端點"), { target: { value: registered.endpoint } });
     fireEvent.change(screen.getByLabelText("API 金鑰"), { target: { value: "test-secret" } });
     fireEvent.submit(screen.getByRole("form", { name: "新增圖片模型" }));
-    await waitFor(() => expect(screen.getByLabelText("預設生成模型")).toHaveValue("gpt-image-2"));
+    await waitFor(() => expect(screen.getByLabelText("預設生成模型")).toHaveTextContent(registered.label));
     expect(getAdminModelSettings).toHaveBeenCalledTimes(2);
     expect(updateAdminModelSettings).not.toHaveBeenCalled();
   });
@@ -215,7 +216,7 @@ describe("AdminPanel section loading", () => {
     fireEvent.click(screen.getByRole("button", { name: "模型政策" }));
     fireEvent.click(await screen.findByRole("button", { name: `編輯 ${model.label}` }));
     for (const quality of ["xhigh", "max", "auto"]) fireEvent.click(screen.getByLabelText(quality));
-    fireEvent.change(screen.getByLabelText("預設品質"), { target: { value: "max" } });
+    await chooseOption("預設品質", "max");
     getAdminModelSettings.mockResolvedValue({ modelPolicy: policy, models: [updatedModel] });
     if (failure === "profile") refreshProfile.mockRejectedValueOnce(new Error("profile unavailable"));
     if (failure === "policy") getAdminModelSettings.mockRejectedValueOnce(new Error("policy unavailable"));
@@ -231,7 +232,7 @@ describe("AdminPanel section loading", () => {
       expect(await screen.findByText(/目錄已儲存，但政策或使用者資料重新載入失敗/)).toHaveTextContent(`${failure} unavailable`);
       expect(screen.getByText("圖片模型已更新。")).toBeInTheDocument();
     } else {
-      expect(screen.getByLabelText("預設生成模型")).toHaveValue(model.modelKey);
+      expect(screen.getByLabelText("預設生成模型")).toHaveTextContent(model.label);
     }
   });
 
@@ -387,9 +388,7 @@ describe("AdminPanel section loading", () => {
     const table = await screen.findByRole("table");
     expect(within(table).getByText("圖片轉換")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("依功能篩選生成紀錄"), {
-      target: { value: "document" },
-    });
+    await chooseOption("依功能篩選生成紀錄", "文件分鏡");
 
     await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(2));
     expect(listAdminHistory).toHaveBeenLastCalledWith({

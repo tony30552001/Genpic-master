@@ -1,5 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { chooseOption, listOptions } from "../../../test/selectHelpers";
 import ImageModelSettings from "../ImageModelSettings";
 import {
   createAdminImageModel, deleteAdminImageModel, listAdminImageModels,
@@ -66,7 +67,7 @@ describe("ImageModelSettings", () => {
     render(<ImageModelSettings onCatalogChange={onCatalogChange} />);
     await openCreate();
     for (const quality of ["xhigh", "max", "auto"]) fireEvent.click(screen.getByLabelText(quality));
-    change("預設品質", "auto");
+    await chooseOption("預設品質", "auto");
     const form = screen.getByRole("form", { name: "新增圖片模型" });
     expect(form.checkValidity()).toBe(true);
     fireEvent.submit(form);
@@ -111,13 +112,12 @@ describe("ImageModelSettings", () => {
     render(<ImageModelSettings onCatalogChange={onCatalogChange} />);
     await openCreate();
     for (const quality of ["low", "medium", "high"]) fireEvent.click(screen.getByLabelText(quality));
-    expect(screen.getByLabelText("預設品質")).toHaveValue("");
+    expect(screen.getByLabelText("預設品質")).toHaveTextContent("請選擇支援的品質");
     fireEvent.submit(screen.getByRole("form", { name: "新增圖片模型" }));
     expect(screen.getByRole("alert")).toHaveTextContent("請至少選擇一種支援品質");
     expect(createAdminImageModel).not.toHaveBeenCalled();
     fireEvent.click(screen.getByLabelText("max"));
-    expect(within(screen.getByLabelText("預設品質")).queryByRole("option", { name: "medium" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("預設品質").checkValidity()).toBe(false);
+    expect(await listOptions("預設品質")).toEqual(["max"]);
     change("模型識別碼", "INVALID KEY");
     expect(screen.getByLabelText("模型識別碼").checkValidity()).toBe(false);
   });

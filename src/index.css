@@ -542,6 +542,10 @@ input[type="number"] {
   animation: image-generation-breathe 1.8s ease-in-out infinite;
 }
 
+.generation-shader > .image-gen-child {
+  height: 100%;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .image-generation-glow,
   .image-generation-glow-secondary,
