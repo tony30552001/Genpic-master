@@ -94,7 +94,7 @@ describe("Azure OpenAI streamed responses", () => {
       toolCalls: [{ name: "generate_image", arguments: { prompt: "一隻貓" } }],
     });
     const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body).toMatchObject({ stream: true, parallel_tool_calls: false, instructions: "system" });
+    expect(body).toMatchObject({ stream: true, parallel_tool_calls: true, instructions: "system" });
     expect(body.tools[0]).toMatchObject({ type: "function", name: "generate_image" });
   });
 

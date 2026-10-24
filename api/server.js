@@ -20,6 +20,7 @@ const generateImages = require("./generate-images");
 const health = require("./health");
 const history = require("./history");
 const imageChats = require("./image-chats");
+const imageChatMemory = require("./image-chat-memory");
 const imageJobs = require("./image-jobs");
 const imageTransform = require("./image-transform");
 const { startImageJobWorker } = require("./_shared/imageJobs");
@@ -158,6 +159,7 @@ registerRoutes(
   ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   imageChats
 );
+registerRoutes(["/api/image-chat-memory"], ["GET", "PUT", "OPTIONS"], imageChatMemory);
 registerRoutes(["/api/image-jobs/:id", "/api/image-jobs/:id/:asset"], ["GET", "OPTIONS"], imageJobs);
 registerRoutes(["/api/image-transform"], ["POST", "OPTIONS"], imageTransform);
 registerRoutes(["/api/line-config"], ["GET", "POST", "DELETE", "OPTIONS"], lineConfig);

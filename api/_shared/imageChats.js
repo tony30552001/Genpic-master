@@ -132,6 +132,18 @@ const toChatSummary = (row) => ({
   updatedAt: row.updated_at,
 });
 
+const toImage = (image) => ({
+  jobId: image.jobId,
+  action: image.action,
+  prompt: image.prompt,
+  sourceJobId: image.sourceJobId,
+  status: image.status,
+  imageUrl: image.status === "succeeded" ? imageJobImagePath(image.jobId) : null,
+  error: image.status === "failed"
+    ? { code: image.errorCode, message: image.errorMessage }
+    : null,
+});
+
 const toMessage = (row) => ({
   id: row.id,
   turnId: row.turn_id,
@@ -139,10 +151,7 @@ const toMessage = (row) => ({
   role: row.role,
   content: row.content,
   input: row.input,
-  action: row.action,
-  imageJobId: row.image_job_id,
-  sourceJobId: row.source_job_id,
-  imageUrl: row.job_status === "succeeded" ? imageJobImagePath(row.image_job_id) : null,
+  images: row.images.map(toImage),
   status: row.status,
   error: row.error_code ? { code: row.error_code, message: row.error_message } : null,
   createdAt: row.created_at,
@@ -150,12 +159,24 @@ const toMessage = (row) => ({
 
 const CHAT_COLUMNS = `id, title, draft, settings, selected_job_id, state_version, created_at, updated_at`;
 
+/** The images a reply queued, in order, with each job's current status. */
+const IMAGES_SUBQUERY = `
+  COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'jobId', i.job_id, 'action', i.action, 'prompt', i.prompt,
+      'sourceJobId', i.source_job_id, 'status', j.status,
+      'errorCode', j.error_code, 'errorMessage', j.error_message
+    ) ORDER BY i.position)
+    FROM image_chat_images i
+    JOIN image_generation_jobs j ON j.id = i.job_id
+    WHERE i.message_id = m.id
+  ), '[]'::jsonb)`;
+
 const MESSAGE_SELECT = `
-  SELECT m.id, m.turn_id, m.seq, m.role, m.content, m.input, m.action,
-         m.image_job_id, m.source_job_id, m.status, m.error_code, m.error_message,
-         m.created_at, j.status AS job_status
-  FROM image_chat_messages m
-  LEFT JOIN image_generation_jobs j ON j.id = m.image_job_id`;
+  SELECT m.id, m.turn_id, m.seq, m.role, m.content, m.input, m.status,
+         m.error_code, m.error_message, m.created_at,
+         ${IMAGES_SUBQUERY} AS images
+  FROM image_chat_messages m`;
 
 const encodeCursor = (row) =>
   Buffer.from(`${row.updated_at_key}|${row.id}`, "utf8").toString("base64url");
@@ -258,10 +279,10 @@ const getMessage = async (messageId) => {
 /** Earlier messages, oldest first, that the agent may use as context. */
 const listContextMessages = async ({ chatId, limit }) => {
   const result = await query(
-    `SELECT role, content, input, action, status
-     FROM image_chat_messages
-     WHERE chat_id = $1
-     ORDER BY seq DESC
+    `SELECT m.role, m.content, m.input, m.status, ${IMAGES_SUBQUERY} AS images
+     FROM image_chat_messages m
+     WHERE m.chat_id = $1
+     ORDER BY m.seq DESC
      LIMIT $2`,
     [chatId, limit]
   );
@@ -391,21 +412,37 @@ const endReply = (messageId, { status, content, code, message }) =>
 
 /**
  * Runs inside `createImageJob`'s transaction, so the job exists only if the
- * reply was still responding and now points at it.
+ * reply was still open (responding, or already waiting on an earlier image of
+ * the same reply) and is now linked to it.
  */
-const attachImageJob = async (client, { messageId, action, job, sourceJobId, content, prompt }) => {
+const attachImageJob = async (
+  client,
+  { messageId, action, job, sourceJobId, content, prompt, position }
+) => {
   const result = await client.query(
     `UPDATE image_chat_messages
-     SET status = 'image_pending', action = $2, image_job_id = $3, source_job_id = $4,
-         content = $5, input = $6, updated_at = now()
-     WHERE id = $1 AND status = 'responding'
+     SET status = 'image_pending', content = $2, updated_at = now()
+     WHERE id = $1 AND status IN ('responding', 'image_pending')
      RETURNING id`,
-    [messageId, action, job.id, sourceJobId, content, { prompt }]
+    [messageId, content]
   );
   if (!result.rows[0]) {
     throw new ImageChatRequestError("回覆已停止，未建立圖片工作", "turn_stopped", 409);
   }
+  await client.query(
+    `INSERT INTO image_chat_images (job_id, message_id, position, action, source_job_id, prompt)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [job.id, messageId, position, action, sourceJobId, prompt]
+  );
 };
+
+const recordMemoryNotes = (messageId, notes) =>
+  query(
+    `UPDATE image_chat_messages
+     SET input = $2, updated_at = now()
+     WHERE id = $1 AND status = 'responding'`,
+    [messageId, { memoryNotes: notes }]
+  );
 
 const stopTurn = async (owner, turnId) => {
   await requireChat(owner);
@@ -434,6 +471,7 @@ module.exports = {
   listContextMessages,
   listMessages,
   parseBefore,
+  recordMemoryNotes,
   requireChat,
   requireOwnedSucceededJob,
   requireUuid,

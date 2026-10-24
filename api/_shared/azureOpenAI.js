@@ -268,7 +268,7 @@ const streamResponseCompletion = async ({
         strict: false,
       })),
       tool_choice: "auto",
-      parallel_tool_calls: false,
+      parallel_tool_calls: true,
       stream: true,
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
     }),

@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../config";
 import { apiDelete, apiGet, apiPost, apiPostStream, apiPut } from "./apiClient";
 
 const chatUrl = (chatId) => `${API_BASE_URL}/image-chats/${encodeURIComponent(chatId)}`;
+const MEMORY_URL = `${API_BASE_URL}/image-chat-memory`;
 
 export const imageJobImageUrl = (jobId) =>
   `${API_BASE_URL}/image-jobs/${encodeURIComponent(jobId)}/image`;
@@ -26,13 +27,18 @@ export const saveChatState = ({ chatId, stateVersion, draft, settings, selectedJ
 
 export const deleteChat = ({ chatId }) => apiDelete(chatUrl(chatId));
 
+/** Returns `{ content, updatedAt }`: the markdown memory every chat follows. */
+export const getMemory = ({ signal } = {}) => apiGet(MEMORY_URL, { signal });
+
+export const saveMemory = ({ content }) => apiPut(MEMORY_URL, { content });
+
 export const stopTurn = ({ chatId, turnId }) =>
   apiPost(`${chatUrl(chatId)}/turns/${encodeURIComponent(turnId)}/stop`, {});
 
 /**
- * Sends one message and reports each server event (`turn`, `delta`, `action`,
- * `error`, `done`) through `onEvent`. Resolves when the stream ends. Never
- * resends: a lost stream is recovered by reloading the chat.
+ * Sends one message and reports each server event (`turn`, `delta`, `memory`,
+ * `image`, `error`, `done`) through `onEvent`. Resolves when the stream ends.
+ * Never resends: a lost stream is recovered by reloading the chat.
  */
 export const sendChatMessage = async ({ chatId, body, signal, onEvent }) => {
   const response = await apiPostStream(`${chatUrl(chatId)}/messages`, body, { signal });

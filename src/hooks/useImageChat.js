@@ -8,6 +8,15 @@ const TITLE_CHARS = 40;
 
 const isAbort = (error) => error?.name === "AbortError";
 
+const isImagePending = (image) => image.status === "queued" || image.status === "processing";
+
+/** A reply's status once none of its images is still running. */
+const settledMessageState = (images) => {
+  if (images.some(isImagePending)) return {};
+  if (images.some((image) => image.status === "succeeded")) return { status: "completed" };
+  return { status: "failed", error: images[0]?.error || null };
+};
+
 const toSummary = (chat) => ({ id: chat.id, title: chat.title, updatedAt: chat.updatedAt });
 
 const replaceTurnMessage = (messages, turnId, role, next) =>
@@ -107,12 +116,18 @@ export default function useImageChat({ enabled, initialSettings }) {
     jobWatchersRef.current.set(jobId, controller);
     const settle = (next) =>
       updateChatMessages(chatId, (current) =>
-        current.map((message) => (message.imageJobId === jobId ? { ...message, ...next } : message))
+        current.map((message) => {
+          if (!message.images?.some((image) => image.jobId === jobId)) return message;
+          const images = message.images.map((image) =>
+            image.jobId === jobId ? { ...image, ...next } : image
+          );
+          return { ...message, images, ...settledMessageState(images) };
+        })
       );
 
     waitForImageJob({ jobId, signal: controller.signal })
       .then(() => {
-        settle({ status: "completed", imageUrl: chatApi.imageJobImageUrl(jobId), error: null });
+        settle({ status: "succeeded", imageUrl: chatApi.imageJobImageUrl(jobId), error: null });
         if (activeChatIdRef.current === chatId) {
           setSelectedJobIdState(jobId);
           markDirty();
@@ -122,6 +137,7 @@ export default function useImageChat({ enabled, initialSettings }) {
         if (isAbort(err)) return;
         settle({
           status: "failed",
+          imageUrl: null,
           error: { code: "image_failed", message: err.message || "圖片生成失敗，請稍後重試" },
         });
       })
@@ -130,6 +146,12 @@ export default function useImageChat({ enabled, initialSettings }) {
       });
   }, [updateChatMessages, markDirty]);
 
+  const watchPendingImages = useCallback((chatId, message) => {
+    for (const image of message.images || []) {
+      if (isImagePending(image)) watchJob(chatId, image.jobId);
+    }
+  }, [watchJob]);
+
   const showChat = useCallback((data) => {
     activeChatIdRef.current = data.chat.id;
     adoptChat(data.chat);
@@ -137,10 +159,8 @@ export default function useImageChat({ enabled, initialSettings }) {
     setNextBefore(data.nextBefore);
     setStyle(lastUserStyle(data.messages));
     setAttachment(null);
-    for (const message of data.messages) {
-      if (message.status === "image_pending") watchJob(data.chat.id, message.imageJobId);
-    }
-  }, [adoptChat, watchJob]);
+    for (const message of data.messages) watchPendingImages(data.chat.id, message);
+  }, [adoptChat, watchPendingImages]);
 
   const saveNow = useCallback(async () => {
     clearTimeout(saveTimerRef.current);
@@ -301,14 +321,32 @@ export default function useImageChat({ enabled, initialSettings }) {
             : message
         )
       );
-    } else if (type === "action") {
+    } else if (type === "memory") {
       updateChatMessages(chatId, (current) =>
-        replaceTurnMessage(current, turnId, "assistant", {
-          action: data.action,
-          imageJobId: data.jobId,
-          sourceJobId: data.sourceJobId,
-          status: "image_pending",
-        })
+        replaceTurnMessage(current, turnId, "assistant", { input: { memoryNotes: data.notes } })
+      );
+    } else if (type === "image") {
+      updateChatMessages(chatId, (current) =>
+        current.map((message) =>
+          message.turnId === turnId && message.role === "assistant"
+            ? {
+                ...message,
+                status: "image_pending",
+                images: [
+                  ...message.images,
+                  {
+                    jobId: data.jobId,
+                    action: data.action,
+                    prompt: data.prompt,
+                    sourceJobId: data.sourceJobId,
+                    status: data.status,
+                    imageUrl: null,
+                    error: null,
+                  },
+                ],
+              }
+            : message
+        )
       );
       if (activeChatIdRef.current === chatId) watchJob(chatId, data.jobId);
     } else if (type === "error") {
@@ -316,12 +354,16 @@ export default function useImageChat({ enabled, initialSettings }) {
         replaceTurnMessage(current, turnId, "assistant", { error: { code: data.code, message: data.message } })
       );
     } else if (type === "done") {
-      updateChatMessages(chatId, (current) => replaceTurnMessage(current, turnId, "assistant", data.message));
-      if (data.message.status === "image_pending" && activeChatIdRef.current === chatId) {
-        watchJob(chatId, data.message.imageJobId);
-      }
+      updateChatMessages(chatId, (current) =>
+        current.map((message) =>
+          message.turnId === turnId && message.role === "assistant"
+            ? { ...message, ...data.message, error: data.message.error ?? message.error }
+            : message
+        )
+      );
+      if (activeChatIdRef.current === chatId) watchPendingImages(chatId, data.message);
     }
-  }, [updateChatMessages, watchJob]);
+  }, [updateChatMessages, watchJob, watchPendingImages]);
 
   const send = useCallback(async (content) => {
     const text = content.trim();
@@ -358,7 +400,7 @@ export default function useImageChat({ enabled, initialSettings }) {
     setMessages((current) => [
       ...current,
       { id: `local-user-${turnId}`, turnId, role: "user", content: text, input: userInput, status: "completed", error: null },
-      { id: `local-assistant-${turnId}`, turnId, role: "assistant", content: "", action: "none", status: "responding", error: null },
+      { id: `local-assistant-${turnId}`, turnId, role: "assistant", content: "", images: [], input: {}, status: "responding", error: null },
     ]);
     setDraftState("");
     markDirty();
@@ -439,16 +481,16 @@ export default function useImageChat({ enabled, initialSettings }) {
   }, [stopWatchingJobs]);
 
   const versions = useMemo(() => {
-    const images = messages.filter(
-      (message) => message.role === "assistant" && message.imageJobId && message.imageUrl
-    );
-    const ids = new Set(images.map((message) => message.imageJobId));
-    return images.map((message) => ({
-      id: message.imageJobId,
-      jobId: message.imageJobId,
-      imageUrl: chatApi.imageJobImageUrl(message.imageJobId),
-      instruction: message.content,
-      parentId: ids.has(message.sourceJobId) ? message.sourceJobId : null,
+    const images = messages
+      .filter((message) => message.role === "assistant")
+      .flatMap((message) => message.images.filter((image) => image.imageUrl));
+    const ids = new Set(images.map((image) => image.jobId));
+    return images.map((image) => ({
+      id: image.jobId,
+      jobId: image.jobId,
+      imageUrl: chatApi.imageJobImageUrl(image.jobId),
+      instruction: image.prompt,
+      parentId: ids.has(image.sourceJobId) ? image.sourceJobId : null,
     }));
   }, [messages]);
   const versionRows = useMemo(() => buildVersionRows(versions), [versions]);

@@ -36,7 +36,7 @@ const chatRecord = (id, overrides = {}) => ({
 
 const serverMessages = (turnId, assistant = {}) => ({
   userMessage: { id: "u1", turnId, role: "user", content: "畫一隻貓", input: {}, status: "completed", error: null },
-  assistantMessage: { id: "a1", turnId, role: "assistant", content: "", action: "none", status: "responding", error: null, ...assistant },
+  assistantMessage: { id: "a1", turnId, role: "assistant", content: "", images: [], input: {}, status: "responding", error: null, ...assistant },
 });
 
 const renderChat = () =>
@@ -59,15 +59,19 @@ describe("useImageChat", () => {
       const turnId = body.clientMessageId;
       onEvent({ type: "turn", data: serverMessages(turnId) });
       onEvent({ type: "delta", data: { text: "好的，" } });
-      onEvent({ type: "action", data: { action: "generate", jobId: "job-1", sourceJobId: null } });
+      onEvent({
+        type: "image",
+        data: { action: "generate", jobId: "job-1", sourceJobId: null, prompt: "一隻貓", status: "queued" },
+      });
       onEvent({
         type: "done",
         data: {
           message: {
             ...serverMessages(turnId).assistantMessage,
             content: "好的，馬上畫。",
-            action: "generate",
-            imageJobId: "job-1",
+            images: [
+              { jobId: "job-1", action: "generate", prompt: "一隻貓", sourceJobId: null, status: "queued", imageUrl: null, error: null },
+            ],
             status: "image_pending",
           },
         },
@@ -92,7 +96,7 @@ describe("useImageChat", () => {
     });
     expect(chatApi.sendChatMessage.mock.calls[0][0].body).not.toHaveProperty("model");
     expect(result.current.messages.map((message) => message.id)).toEqual(["u1", "a1"]);
-    expect(result.current.pendingImage).toMatchObject({ imageJobId: "job-1", content: "好的，馬上畫。" });
+    expect(result.current.pendingImage).toMatchObject({ content: "好的，馬上畫。", images: [{ jobId: "job-1" }] });
     expect(result.current.chats[0]).toMatchObject({ id: "c1", title: "畫一隻貓" });
 
     await act(async () => {
@@ -103,6 +107,49 @@ describe("useImageChat", () => {
     expect(result.current.selectedJobId).toBe("job-1");
     expect(result.current.selectedVersion).toMatchObject({ id: "job-1", imageUrl: "/api/image-jobs/job-1/image" });
     expect(result.current.getVersionLabel(result.current.selectedVersion)).toBe("v1");
+  });
+
+  it("tracks several images in one reply and settles when each is terminal", async () => {
+    chatApi.createChat.mockResolvedValue(chatRecord("c1"));
+    waitForImageJob.mockImplementation(async ({ jobId }) => {
+      if (jobId !== "job-1") throw new Error("內容審查未通過");
+      return { status: "succeeded" };
+    });
+    const image = (jobId, prompt) => ({
+      jobId, action: "generate", prompt, sourceJobId: null, status: "queued", imageUrl: null, error: null,
+    });
+    chatApi.sendChatMessage.mockImplementation(async ({ body, onEvent }) => {
+      const turnId = body.clientMessageId;
+      onEvent({ type: "turn", data: serverMessages(turnId) });
+      onEvent({ type: "memory", data: { notes: ["圖中不要人臉"] } });
+      onEvent({ type: "image", data: { ...image("job-1", "貓"), status: "queued" } });
+      onEvent({ type: "image", data: { ...image("job-2", "狗"), status: "queued" } });
+      onEvent({
+        type: "done",
+        data: {
+          message: {
+            ...serverMessages(turnId).assistantMessage,
+            content: "畫兩張",
+            images: [image("job-1", "貓"), image("job-2", "狗")],
+            input: { memoryNotes: ["圖中不要人臉"] },
+            status: "image_pending",
+          },
+        },
+      });
+    });
+    const { result } = renderChat();
+    await waitFor(() => expect(chatApi.listChats).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.send("畫貓和狗");
+    });
+
+    await waitFor(() => expect(result.current.pendingImage).toBeNull());
+    const assistant = result.current.messages.find((message) => message.role === "assistant");
+    expect(assistant.status).toBe("completed");
+    expect(assistant.input.memoryNotes).toEqual(["圖中不要人臉"]);
+    expect(assistant.images.map((item) => item.status)).toEqual(["succeeded", "failed"]);
+    expect(result.current.versions.map((version) => version.id)).toEqual(["job-1"]);
   });
 
   it("restores the draft and removes the optimistic turn when the message is not admitted", async () => {

@@ -18,6 +18,7 @@ const {
   toolsFor,
 } = require("../_shared/imageChatAgent");
 const chats = require("../_shared/imageChats");
+const chatMemory = require("../_shared/imageChatMemory");
 
 const { ImageChatRequestError } = chats;
 
@@ -29,22 +30,22 @@ const isKnownError = (err) =>
   err instanceof ImageModelError ||
   err instanceof LlmConfigurationError;
 
-const queueImage = ({ identity, turn, upload, decision, assistantMessage, text }) => {
+const queueImage = ({ identity, turn, upload, image, position, assistantMessage, text }) => {
   const { settings, style } = turn;
-  const generate = decision.action === "generate";
+  const generate = image.action === "generate";
   const prompt = generate
     ? buildImagePrompt({
-        userScript: decision.prompt,
+        userScript: image.prompt,
         stylePrompt: style?.prompt,
         styleTags: style?.tags,
-        purpose: decision.purpose,
+        purpose: image.purpose,
         imageLanguage: settings.imageLanguage,
         aspectRatio: settings.aspectRatio,
         hasReferenceImage: Boolean(upload),
       })
     : buildTransformPrompt({
         mode: "refine",
-        prompt: decision.prompt,
+        prompt: image.prompt,
         imageLanguage: settings.imageLanguage,
         aspectRatio: settings.aspectRatio,
       });
@@ -62,11 +63,12 @@ const queueImage = ({ identity, turn, upload, decision, assistantMessage, text }
     afterInsert: (client, job) =>
       chats.attachImageJob(client, {
         messageId: assistantMessage.id,
-        action: decision.action,
+        action: image.action,
         job,
         sourceJobId,
         content: text,
-        prompt: decision.prompt,
+        prompt: image.prompt,
+        position,
       }),
   });
 };
@@ -117,10 +119,10 @@ const runTurn = async (context, { identity, owner, turn }) => {
     await chats.requireOwnedSucceededJob({ ...identity, jobId: turn.sourceJobId });
   }
   const llm = await resolveRoleModel(identity.tenantId, "image_chat");
-  const history = await chats.listContextMessages({
-    chatId: owner.chatId,
-    limit: CONTEXT_MESSAGE_LIMIT,
-  });
+  const [history, memory] = await Promise.all([
+    chats.listContextMessages({ chatId: owner.chatId, limit: CONTEXT_MESSAGE_LIMIT }),
+    chatMemory.getMemory(identity),
+  ]);
   const { userMessage, assistantMessage } = await chats.beginTurn(owner, turn);
 
   const stream = context.openEventStream();
@@ -129,6 +131,7 @@ const runTurn = async (context, { identity, owner, turn }) => {
   const agentTurn = {
     settings: turn.settings,
     style: turn.style,
+    memory: memory.content,
     hasAttachment: Boolean(upload),
     hasSelectedImage: Boolean(turn.sourceJobId),
   };
@@ -149,16 +152,22 @@ const runTurn = async (context, { identity, owner, turn }) => {
           stream.send("delta", { text: delta });
         },
       });
-      const decision = resolveDecision(reply.toolCalls, agentTurn);
-      if (decision.action === "none") {
+      const { images, notes } = resolveDecision(reply.toolCalls, agentTurn);
+      if (notes.length > 0) {
+        await chatMemory.appendMemoryNotes({ ...identity, notes });
+        await chats.recordMemoryNotes(assistantMessage.id, notes);
+        stream.send("memory", { notes });
+      }
+      if (images.length === 0) {
         await chats.completeReply(assistantMessage.id, text);
-      } else {
-        const job = await queueImage({ identity, turn, upload, decision, assistantMessage, text });
-        stream.send("action", {
-          action: decision.action,
+      }
+      for (const [position, image] of images.entries()) {
+        const job = await queueImage({ identity, turn, upload, image, position, assistantMessage, text });
+        stream.send("image", {
+          action: image.action,
           jobId: job.id,
-          sourceJobId: decision.action === "refine" ? turn.sourceJobId : null,
-          prompt: decision.prompt,
+          sourceJobId: image.action === "refine" ? turn.sourceJobId : null,
+          prompt: image.prompt,
           status: job.status,
         });
       }

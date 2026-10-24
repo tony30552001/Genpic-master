@@ -1,5 +1,5 @@
 import { AlertCircle } from "@/components/icons/lucideStatus";
-import { Image as ImageIcon, Palette } from "@/components/icons/lucideContent";
+import { Brain, Image as ImageIcon, Palette } from "@/components/icons/lucideContent";
 import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -37,15 +37,61 @@ function UserMessage({ message }) {
   );
 }
 
-function ActionLabel({ message, getVersion, getVersionLabel }) {
-  if (message.action === "generate") return <span>產生新圖</span>;
-  const source = getVersion(message.sourceJobId);
-  return <span>{source ? `修改 ${getVersionLabel(source)}` : "修改圖片"}</span>;
+function actionLabel(image, getVersion, getVersionLabel) {
+  if (image.action === "generate") return "產生新圖";
+  const source = getVersion(image.sourceJobId);
+  return source ? `修改 ${getVersionLabel(source)}` : "修改圖片";
+}
+
+function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersionLabel }) {
+  const version = image.status === "succeeded" ? getVersion(image.jobId) : null;
+  const isPending = image.status === "queued" || image.status === "processing";
+
+  return (
+    <div className="flex w-40 flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">
+        {actionLabel(image, getVersion, getVersionLabel)}
+      </span>
+      {isPending && (
+        <div
+          className="flex aspect-square items-center justify-center gap-2 rounded-md border border-dashed border-border bg-background text-xs"
+          role="status"
+        >
+          <Spinner aria-hidden="true" />
+          生成中…
+        </div>
+      )}
+      {image.status === "failed" && (
+        <p className="flex items-start gap-1.5 rounded-md border border-destructive/40 p-2 text-xs text-destructive" role="alert">
+          <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          {image.error?.message || "圖片生成失敗"}
+        </p>
+      )}
+      {version && (
+        <button
+          type="button"
+          onClick={() => onSelectVersion(version.id)}
+          aria-label={`檢視 ${getVersionLabel(version)}`}
+          aria-pressed={selectedJobId === version.id}
+          className={cn(
+            "group/thumb relative overflow-hidden rounded-md border border-border bg-background press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            selectedJobId === version.id && "ring-2 ring-primary ring-offset-2"
+          )}
+        >
+          <img src={version.imageUrl} alt="" className="h-auto w-full object-contain" loading="lazy" />
+          <span className="absolute left-1.5 top-1.5 rounded bg-background/90 px-1.5 py-0.5 text-[11px] font-semibold shadow-sm">
+            {getVersionLabel(version)}
+          </span>
+        </button>
+      )}
+    </div>
+  );
 }
 
 function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion, getVersionLabel }) {
   const isResponding = message.status === "responding";
-  const version = message.imageJobId ? getVersion(message.imageJobId) : null;
+  const memoryNotes = message.input?.memoryNotes ?? [];
+  const hasPendingImage = message.images.some((image) => image.status === "queued" || image.status === "processing");
 
   return (
     <Message from="assistant">
@@ -56,37 +102,38 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion,
           <Shimmer>思考中…</Shimmer>
         ) : null}
 
-        {message.action !== "none" && (
+        {memoryNotes.length > 0 && (
+          <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
+            <Brain className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-medium text-muted-foreground">已記住</span>
+              {memoryNotes.map((note) => (
+                <span key={note} className="break-words">{note}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {message.images.length > 0 && (
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <ProductGlyph kind="create" className="size-4 text-primary" aria-hidden="true" />
-              <ActionLabel message={message} getVersion={getVersion} getVersionLabel={getVersionLabel} />
+              <span>{message.images.length > 1 ? `${message.images.length} 張圖片` : "圖片"}</span>
             </div>
-            {message.status === "image_pending" && (
-              <div className="flex flex-col gap-1" role="status">
-                <span className="flex items-center gap-2 text-sm">
-                  <Spinner aria-hidden="true" />
-                  圖片生成中…
-                </span>
-                <span className="text-xs text-muted-foreground">停止回覆不會取消已開始生成的圖片。</span>
-              </div>
-            )}
-            {version && (
-              <button
-                type="button"
-                onClick={() => onSelectVersion(version.id)}
-                aria-label={`檢視 ${getVersionLabel(version)}`}
-                aria-pressed={selectedJobId === version.id}
-                className={cn(
-                  "group/thumb relative w-40 overflow-hidden rounded-md border border-border bg-background press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  selectedJobId === version.id && "ring-2 ring-primary ring-offset-2"
-                )}
-              >
-                <img src={version.imageUrl} alt="" className="h-auto w-full object-contain" loading="lazy" />
-                <span className="absolute left-1.5 top-1.5 rounded bg-background/90 px-1.5 py-0.5 text-[11px] font-semibold shadow-sm">
-                  {getVersionLabel(version)}
-                </span>
-              </button>
+            <div className="flex flex-wrap gap-3">
+              {message.images.map((image) => (
+                <ImageTile
+                  key={image.jobId}
+                  image={image}
+                  selectedJobId={selectedJobId}
+                  onSelectVersion={onSelectVersion}
+                  getVersion={getVersion}
+                  getVersionLabel={getVersionLabel}
+                />
+              ))}
+            </div>
+            {hasPendingImage && (
+              <span className="text-xs text-muted-foreground">停止回覆不會取消已開始生成的圖片。</span>
             )}
           </div>
         )}

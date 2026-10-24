@@ -10,6 +10,7 @@ const imageUploads = require("../../_shared/imageUploads");
 const llmModels = require("../../_shared/llmModels");
 const llmRuntime = require("../../_shared/llmRuntime");
 const chats = require("../../_shared/imageChats");
+const chatMemory = require("../../_shared/imageChatMemory");
 
 auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
@@ -21,8 +22,9 @@ llmRuntime.streamResponse = vi.fn();
 [
   "attachImageJob", "beginTurn", "completeReply", "createChat", "deleteChat", "endReply",
   "getMessage", "getTurnMessages", "listChats", "listContextMessages", "listMessages",
-  "requireChat", "requireOwnedSucceededJob", "saveChatState", "stopTurn",
+  "recordMemoryNotes", "requireChat", "requireOwnedSucceededJob", "saveChatState", "stopTurn",
 ].forEach((name) => { chats[name] = vi.fn(); });
+["appendMemoryNotes", "getMemory", "saveMemory"].forEach((name) => { chatMemory[name] = vi.fn(); });
 
 const handler = require("../index");
 const { LlmStreamError } = llmRuntime;
@@ -81,10 +83,13 @@ describe("image chat turns", () => {
     llmModels.resolveRoleModel.mockResolvedValue(llm);
     chats.getTurnMessages.mockResolvedValue({ userMessage: null, assistantMessage: null });
     chats.listContextMessages.mockResolvedValue([]);
+    chatMemory.getMemory.mockResolvedValue({ content: "- 不要出現人臉", updatedAt: null });
     chats.beginTurn.mockResolvedValue({ userMessage, assistantMessage });
     chats.getMessage.mockResolvedValue({ ...assistantMessage, status: "completed" });
+    let jobCount = 0;
     imageJobs.createImageJob.mockImplementation(async ({ afterInsert }) => {
-      const job = { id: "job-1", status: "queued" };
+      jobCount += 1;
+      const job = { id: `job-${jobCount}`, status: "queued" };
       await afterInsert("tx-client", job);
       return job;
     });
@@ -111,8 +116,9 @@ describe("image chat turns", () => {
   });
 
   it("queues a styled generation and links it to the reply in the job transaction", async () => {
-    llmRuntime.streamResponse.mockImplementation(async ({ onTextDelta, tools }) => {
-      expect(tools.map((tool) => tool.name)).toEqual(["generate_image"]);
+    llmRuntime.streamResponse.mockImplementation(async ({ onTextDelta, tools, systemMessage }) => {
+      expect(tools.map((tool) => tool.name)).toEqual(["generate_image", "remember_preference"]);
+      expect(systemMessage).toContain("- 不要出現人臉");
       onTextDelta("馬上畫。");
       return { text: "馬上畫。", toolCalls: [{ name: "generate_image", arguments: { prompt: "a cat on a sofa" } }] };
     });
@@ -128,12 +134,76 @@ describe("image chat turns", () => {
     expect(request.prompt).toContain("soft watercolor");
     expect(chats.attachImageJob).toHaveBeenCalledWith("tx-client", {
       messageId: "m-assistant", action: "generate", job: { id: "job-1", status: "queued" },
-      sourceJobId: null, content: "馬上畫。", prompt: "a cat on a sofa",
+      sourceJobId: null, content: "馬上畫。", prompt: "a cat on a sofa", position: 0,
     });
-    expect(events.find(({ event }) => event === "action").data).toEqual({
+    expect(events.find(({ event }) => event === "image").data).toEqual({
       action: "generate", jobId: "job-1", sourceJobId: null, prompt: "a cat on a sofa", status: "queued",
     });
+    expect(chats.completeReply).not.toHaveBeenCalled();
     expect(events.at(-1).event).toBe("done");
+  });
+
+  it("queues one image per generate call, in order", async () => {
+    llmRuntime.streamResponse.mockResolvedValue({
+      text: "畫兩張。",
+      toolCalls: [
+        { name: "generate_image", arguments: { prompt: "spring" } },
+        { name: "generate_image", arguments: { prompt: "autumn" } },
+      ],
+    });
+
+    const { events } = await sendTurn();
+
+    expect(imageJobs.createImageJob).toHaveBeenCalledTimes(2);
+    expect(chats.attachImageJob.mock.calls.map(([, args]) => [args.position, args.prompt]))
+      .toEqual([[0, "spring"], [1, "autumn"]]);
+    expect(events.filter(({ event }) => event === "image").map(({ data }) => data.jobId))
+      .toEqual(["job-1", "job-2"]);
+  });
+
+  it("saves remembered preferences before queuing images", async () => {
+    llmRuntime.streamResponse.mockResolvedValue({
+      text: "記住了，來畫。",
+      toolCalls: [
+        { name: "remember_preference", arguments: { note: "  一律使用 16:9  " } },
+        { name: "generate_image", arguments: { prompt: "a cat" } },
+      ],
+    });
+
+    const { events } = await sendTurn();
+
+    expect(chatMemory.appendMemoryNotes).toHaveBeenCalledWith({ ...owner, notes: ["一律使用 16:9"] });
+    expect(chats.recordMemoryNotes).toHaveBeenCalledWith("m-assistant", ["一律使用 16:9"]);
+    expect(events.map(({ event }) => event)).toEqual(["turn", "memory", "image", "done"]);
+  });
+
+  it("completes a reply that only remembers a preference", async () => {
+    llmRuntime.streamResponse.mockImplementation(async ({ onTextDelta }) => {
+      onTextDelta("好的。");
+      return { text: "好的。", toolCalls: [{ name: "remember_preference", arguments: { note: "不要文字" } }] };
+    });
+    await sendTurn();
+    expect(chats.completeReply).toHaveBeenCalledWith("m-assistant", "好的。");
+    expect(imageJobs.createImageJob).not.toHaveBeenCalled();
+  });
+
+  it("fails the turn without queuing images when memory is full", async () => {
+    chatMemory.appendMemoryNotes.mockRejectedValue(
+      new chats.ImageChatRequestError("偏好記憶已滿", "memory_full", 409)
+    );
+    llmRuntime.streamResponse.mockResolvedValue({
+      text: "",
+      toolCalls: [
+        { name: "remember_preference", arguments: { note: "x" } },
+        { name: "generate_image", arguments: { prompt: "a cat" } },
+      ],
+    });
+    const { events } = await sendTurn();
+    expect(imageJobs.createImageJob).not.toHaveBeenCalled();
+    expect(chats.endReply).toHaveBeenCalledWith("m-assistant", expect.objectContaining({
+      status: "failed", code: "memory_full",
+    }));
+    expect(events.map(({ event }) => event)).toEqual(["turn", "error", "done"]);
   });
 
   it("uses an attachment as the reference for a new image", async () => {
@@ -149,7 +219,7 @@ describe("image chat turns", () => {
 
   it("refines the selected version only when one is selected", async () => {
     llmRuntime.streamResponse.mockImplementation(async ({ tools }) => {
-      expect(tools.map((tool) => tool.name)).toEqual(["generate_image", "refine_image"]);
+      expect(tools.map((tool) => tool.name)).toEqual(["generate_image", "refine_image", "remember_preference"]);
       return { text: "", toolCalls: [{ name: "refine_image", arguments: { instruction: "make the sky pink" } }] };
     });
     await sendTurn({ sourceJobId });

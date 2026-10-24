@@ -2,9 +2,9 @@
  * Image-chat agent contract.
  *
  * Owns what the chat model is told, which earlier messages it sees, and how
- * its tool call becomes one validated decision. It never builds the final
- * image prompt or queues work; the handler does that with the shared prompt
- * and job helpers.
+ * its tool calls become one validated decision. It never builds the final
+ * image prompt, queues work, or writes memory; the handler does that with the
+ * shared prompt, job, and memory helpers.
  */
 
 const { IMAGE_PURPOSES } = require("./imagePrompt");
@@ -14,7 +14,10 @@ const MAX_USER_MESSAGE_CHARS = 4000;
 const MAX_TOOL_TEXT_CHARS = 4000;
 const CONTEXT_MESSAGE_LIMIT = 24;
 const CONTEXT_CHAR_BUDGET = 16000;
-const MAX_OUTPUT_TOKENS = 4000;
+const MAX_OUTPUT_TOKENS = 6000;
+const MAX_IMAGES_PER_TURN = 4;
+const MAX_MEMORY_NOTES_PER_TURN = 3;
+const MAX_MEMORY_NOTE_CHARS = 200;
 
 class ImageChatDecisionError extends Error {
   constructor(message) {
@@ -27,7 +30,7 @@ class ImageChatDecisionError extends Error {
 const GENERATE_TOOL = Object.freeze({
   name: "generate_image",
   description:
-    "Create a brand-new image. Call only when the request has enough detail to draw. Do not call it to ask questions.",
+    `Create one brand-new image. Call only when the request has enough detail to draw. Call once per distinct image when the user asks for several (at most ${MAX_IMAGES_PER_TURN} images per turn). Do not call it to ask questions.`,
   parameters: {
     type: "object",
     properties: {
@@ -49,7 +52,7 @@ const GENERATE_TOOL = Object.freeze({
 const REFINE_TOOL = Object.freeze({
   name: "refine_image",
   description:
-    "Edit the currently selected image version. Call when the user asks to change something in that image while keeping the rest.",
+    "Edit the currently selected image version. Call when the user asks to change something in that image while keeping the rest. Call once per variant when the user wants several different edits of it.",
   parameters: {
     type: "object",
     properties: {
@@ -59,6 +62,22 @@ const REFINE_TOOL = Object.freeze({
       },
     },
     required: ["instruction"],
+  },
+});
+
+const REMEMBER_TOOL = Object.freeze({
+  name: "remember_preference",
+  description:
+    "Save one lasting user preference or rule to the user's memory. Call when the user asks you to remember something or states a rule for all future images (for example 'always', 'from now on', 'never'). Do not call it for one-off requests.",
+  parameters: {
+    type: "object",
+    properties: {
+      note: {
+        type: "string",
+        description: `One short, self-contained sentence in Traditional Chinese, at most ${MAX_MEMORY_NOTE_CHARS} characters.`,
+      },
+    },
+    required: ["note"],
   },
 });
 
@@ -72,25 +91,30 @@ const describeSettings = ({ settings, style, hasAttachment, hasSelectedImage }) 
 
 const buildSystemMessage = (turn) => `你是 Pixora 的對話式生圖助理，使用繁體中文（台灣用語）簡潔回覆。
 
-每一輪你只能做一件事：
+每一輪你可以做下列事情：
 1. 一般回覆或追問：資訊不足、意圖不明或使用者只是在討論時，用一兩句話回覆或提出最關鍵的一個問題，不呼叫工具。
-2. generate_image：資訊足以畫出一張新圖時呼叫，最多呼叫一次。
-3. refine_image：使用者要求修改目前選取的圖片時呼叫，最多呼叫一次。${turn.hasSelectedImage ? "" : "目前沒有選取的圖片，不能使用。"}
+2. generate_image：資訊足以畫出新圖時呼叫。使用者要求多張不同的圖（例如「四季各一張」「封面和內頁」）時，每張圖各呼叫一次，每次的描述都要完整自足；同一輪最多 ${MAX_IMAGES_PER_TURN} 張。同一張圖的細節調整不要拆成多張。
+3. refine_image：使用者要求修改目前選取的圖片時呼叫；要求多種不同修改時可各呼叫一次。${turn.hasSelectedImage ? "" : "目前沒有選取的圖片，不能使用。"}
+4. remember_preference：使用者要你記住某件事，或說出之後都要遵守的規定時呼叫，每個偏好一次（同一輪最多 ${MAX_MEMORY_NOTES_PER_TURN} 次）。一次性的要求不要記錄。
 
 規則：
 - 呼叫工具時先用一句話說明你要做什麼，不要描述你看不到的圖片內容。
 - 工具參數要完整自足，合併對話中仍有效的要求；不要寫入風格、比例或圖中文字語言設定，系統會自動套用。
+- 使用者記憶中的偏好與規定一律遵守，並寫進生圖或修改的工具參數；若與使用者本輪明確要求衝突，以本輪要求為準。
 - 不要宣稱圖片已完成；圖片會在背景處理。
-- 不要在同一輪呼叫多個工具。
+
+使用者記憶：
+${turn.memory?.trim() || "（目前沒有）"}
 
 目前設定：
 ${describeSettings(turn)}`;
 
 const describeAssistantMessage = (message) => {
   const parts = [message.content.trim()];
-  const toolText = message.input?.prompt;
-  if (message.action === "generate" && toolText) parts.push(`[已送出生成新圖：${toolText}]`);
-  if (message.action === "refine" && toolText) parts.push(`[已送出修改圖片：${toolText}]`);
+  for (const image of message.images || []) {
+    parts.push(`[已送出${image.action === "refine" ? "修改圖片" : "生成新圖"}：${image.prompt}]`);
+  }
+  for (const note of message.input?.memoryNotes || []) parts.push(`[已記住：${note}]`);
   if (message.status === "failed" || message.status === "interrupted") parts.push("[這次回覆未完成]");
   return parts.filter(Boolean).join("\n");
 };
@@ -120,7 +144,11 @@ const buildModelMessages = (history, content) => {
   return [...selected, { role: "user", content }];
 };
 
-const toolsFor = (turn) => (turn.hasSelectedImage ? [GENERATE_TOOL, REFINE_TOOL] : [GENERATE_TOOL]);
+const toolsFor = (turn) => [
+  GENERATE_TOOL,
+  ...(turn.hasSelectedImage ? [REFINE_TOOL] : []),
+  REMEMBER_TOOL,
+];
 
 const requireToolText = (value, label) => {
   const text = typeof value === "string" ? value.trim() : "";
@@ -131,17 +159,15 @@ const requireToolText = (value, label) => {
   return text;
 };
 
-/**
- * Turns the completed reply's tool calls into one decision:
- * `{ action: "none" }`, `{ action: "generate", prompt, purpose }`, or
- * `{ action: "refine", prompt }`. Anything else fails without queuing work.
- */
-const resolveDecision = (toolCalls, turn) => {
-  if (toolCalls.length === 0) return { action: "none" };
-  if (toolCalls.length > 1) {
-    throw new ImageChatDecisionError("對話模型同時要求多個動作，未建立圖片工作");
+const resolveMemoryNote = (value) => {
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim().replace(/^[-*]\s*/, "") : "";
+  if (!text || text.length > MAX_MEMORY_NOTE_CHARS) {
+    throw new ImageChatDecisionError("對話模型要記住的偏好無效，未建立圖片工作");
   }
-  const [call] = toolCalls;
+  return text;
+};
+
+const resolveImageCall = (call, turn) => {
   if (call.name === GENERATE_TOOL.name) {
     const purpose = call.arguments.purpose;
     if (purpose !== undefined && !IMAGE_PURPOSES.includes(purpose)) {
@@ -159,14 +185,41 @@ const resolveDecision = (toolCalls, turn) => {
   throw new ImageChatDecisionError("對話模型要求了不支援的動作，未建立圖片工作");
 };
 
+/**
+ * Turns the completed reply's tool calls into one decision:
+ * `{ images: [{ action: "generate", prompt, purpose } | { action: "refine", prompt }], notes: string[] }`.
+ * Both lists are empty for a plain reply. Anything invalid fails the whole
+ * turn without queuing work.
+ */
+const resolveDecision = (toolCalls, turn) => {
+  const images = [];
+  const notes = [];
+  for (const call of toolCalls) {
+    if (call.name === REMEMBER_TOOL.name) {
+      notes.push(resolveMemoryNote(call.arguments.note));
+    } else {
+      images.push(resolveImageCall(call, turn));
+    }
+  }
+  if (images.length > MAX_IMAGES_PER_TURN) {
+    throw new ImageChatDecisionError(`對話模型一次要求超過 ${MAX_IMAGES_PER_TURN} 張圖片，未建立圖片工作`);
+  }
+  if (notes.length > MAX_MEMORY_NOTES_PER_TURN) {
+    throw new ImageChatDecisionError("對話模型一次要記住過多偏好，未建立圖片工作");
+  }
+  return { images, notes };
+};
+
 module.exports = {
   CONTEXT_CHAR_BUDGET,
   CONTEXT_MESSAGE_LIMIT,
   GENERATE_TOOL,
   ImageChatDecisionError,
+  MAX_IMAGES_PER_TURN,
   MAX_OUTPUT_TOKENS,
   MAX_USER_MESSAGE_CHARS,
   REFINE_TOOL,
+  REMEMBER_TOOL,
   buildModelMessages,
   buildSystemMessage,
   resolveDecision,

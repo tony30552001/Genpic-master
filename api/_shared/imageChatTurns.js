@@ -1,11 +1,12 @@
 /**
  * Server-side completion of chat turns.
  *
- * A chat turn that queued an image stays `image_pending` until its job ends.
- * The image-job worker settles those turns here, so results land in history
- * even when no browser is watching, and exactly once: the message row is
- * locked and moved out of `image_pending` in the same transaction that writes
- * the history row, and history has a unique chat-job key.
+ * A chat turn that queued images stays `image_pending` until every one of its
+ * jobs ends. The image-job worker settles those turns here, so results land in
+ * history even when no browser is watching, and exactly once: the message row
+ * is locked and moved out of `image_pending` in the same transaction that
+ * writes the history rows, and history has a unique chat-job key. A turn is
+ * completed when at least one image succeeded; each image keeps its own status.
  */
 
 const { getPool, query } = require("./db");
@@ -14,6 +15,7 @@ const { CHAT_HISTORY_SOURCE } = require("./historySource");
 /** A model call is capped well below this, so an older responding turn lost its process. */
 const RESPONDING_TIMEOUT_MINUTES = 2;
 const SETTLE_BATCH_SIZE = 20;
+const TERMINAL_JOB_STATUSES = ["succeeded", "failed"];
 
 /** Same-origin API path the browser can load with its session cookie. */
 const imageJobImagePath = (jobId) => `/api/image-jobs/${jobId}/image`;
@@ -35,13 +37,9 @@ const settleTurn = async (messageId) => {
   try {
     await client.query("BEGIN");
     const locked = await client.query(
-      `SELECT m.id, m.input AS decision, u.input AS request,
-              c.tenant_id, c.user_id,
-              j.id AS job_id, j.status AS job_status, j.model, j.prompt,
-              j.error_code AS job_error_code, j.error_message AS job_error_message
+      `SELECT m.id, u.input AS request, c.tenant_id, c.user_id
        FROM image_chat_messages m
        JOIN image_chats c ON c.id = m.chat_id
-       JOIN image_generation_jobs j ON j.id = m.image_job_id
        LEFT JOIN image_chat_messages u
          ON u.chat_id = m.chat_id AND u.turn_id = m.turn_id AND u.role = 'user'
        WHERE m.id = $1 AND m.status = 'image_pending'
@@ -49,13 +47,29 @@ const settleTurn = async (messageId) => {
       [messageId]
     );
     const turn = locked.rows[0];
-    if (!turn || !["succeeded", "failed"].includes(turn.job_status)) {
+    if (!turn) {
+      await client.query("ROLLBACK");
+      return;
+    }
+    const images = (
+      await client.query(
+        `SELECT i.job_id, i.prompt AS script, j.status, j.model, j.prompt,
+                j.error_code, j.error_message
+         FROM image_chat_images i
+         JOIN image_generation_jobs j ON j.id = i.job_id
+         WHERE i.message_id = $1
+         ORDER BY i.position`,
+        [messageId]
+      )
+    ).rows;
+    if (images.some((image) => !TERMINAL_JOB_STATUSES.includes(image.status))) {
       await client.query("ROLLBACK");
       return;
     }
 
-    if (turn.job_status === "succeeded") {
-      const style = turn.request?.style || null;
+    const style = turn.request?.style || null;
+    const succeeded = images.filter((image) => image.status === "succeeded");
+    for (const image of succeeded) {
       await client.query(
         `INSERT INTO history
            (tenant_id, user_id, prompt, image_url, user_script, style_prompt,
@@ -67,16 +81,18 @@ const settleTurn = async (messageId) => {
         [
           turn.tenant_id,
           turn.user_id,
-          turn.prompt,
-          imageJobImagePath(turn.job_id),
-          turn.decision?.prompt || null,
+          image.prompt,
+          imageJobImagePath(image.job_id),
+          image.script || null,
           style?.prompt || null,
-          turn.model,
+          image.model,
           style?.id || null,
           CHAT_HISTORY_SOURCE,
-          turn.job_id,
+          image.job_id,
         ]
       );
+    }
+    if (succeeded.length > 0) {
       await client.query(
         `UPDATE image_chat_messages
          SET status = 'completed', updated_at = now()
@@ -84,14 +100,15 @@ const settleTurn = async (messageId) => {
         [turn.id]
       );
     } else {
+      const [failure] = images;
       await client.query(
         `UPDATE image_chat_messages
          SET status = 'failed', error_code = $2, error_message = $3, updated_at = now()
          WHERE id = $1`,
         [
           turn.id,
-          turn.job_error_code || "generation_failed",
-          turn.job_error_message || "圖片生成失敗，請稍後重試",
+          failure.error_code || "generation_failed",
+          failure.error_message || "圖片生成失敗，請稍後重試",
         ]
       );
     }
@@ -104,17 +121,22 @@ const settleTurn = async (messageId) => {
   }
 };
 
-/** Settles turns whose image job finished and interrupts abandoned replies. */
+/** Settles turns whose image jobs all finished and interrupts abandoned replies. */
 const settleImageChatTurns = async () => {
   await interruptStaleTurns();
   const ready = await query(
     `SELECT m.id
      FROM image_chat_messages m
-     JOIN image_generation_jobs j ON j.id = m.image_job_id
-     WHERE m.status = 'image_pending' AND j.status IN ('succeeded', 'failed')
+     WHERE m.status = 'image_pending'
+       AND NOT EXISTS (
+         SELECT 1
+         FROM image_chat_images i
+         JOIN image_generation_jobs j ON j.id = i.job_id
+         WHERE i.message_id = m.id AND j.status <> ALL($2::text[])
+       )
      ORDER BY m.updated_at
      LIMIT $1`,
-    [SETTLE_BATCH_SIZE]
+    [SETTLE_BATCH_SIZE, TERMINAL_JOB_STATUSES]
   );
   for (const row of ready.rows) {
     try {

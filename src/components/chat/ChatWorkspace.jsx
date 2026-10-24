@@ -22,6 +22,7 @@ import { apiGetBlob } from "@/services/apiClient";
 import { getGenerationStatus } from "@/utils/generationProgress";
 import ChatComposer from "./ChatComposer";
 import ChatHistory from "./ChatHistory";
+import ChatMemoryDialog from "./ChatMemoryDialog";
 import ChatThread from "./ChatThread";
 
 const SAVE_STATUS_LABELS = {
@@ -64,7 +65,9 @@ export default function ChatWorkspace({
 
   const pendingStartedAt = pendingImage ? Date.parse(pendingImage.createdAt) || null : null;
   const elapsedSeconds = useElapsedSeconds(pendingStartedAt);
-  const isRefining = pendingImage?.action === "refine" && Boolean(selectedVersion);
+  const isRefining =
+    Boolean(selectedVersion) &&
+    Boolean(pendingImage?.images.some((image) => image.action === "refine" && image.status !== "succeeded" && image.status !== "failed"));
   const generatedImage = selectedVersion?.imageUrl || null;
 
   const handleSelectVersion = (jobId) => {
@@ -135,6 +138,7 @@ export default function ChatWorkspace({
                 </p>
               )}
             </div>
+            <ChatMemoryDialog />
             <ChatHistory
               chats={chat.chats}
               activeChatId={chat.chat?.id || null}

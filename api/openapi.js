@@ -458,9 +458,10 @@ addOperation("/api/image-chats/{id}/messages", "post", {
   summary: "Send a message and stream the assistant reply",
   description: [
     "Validation and admission errors return JSON. Once accepted, the reply streams as `text/event-stream` events:",
-    "`turn` (recorded user and assistant messages), `delta` ({ text }), optional `action` ({ action, jobId, sourceJobId, prompt, status }),",
+    "`turn` (recorded user and assistant messages), `delta` ({ text }), optional `memory` ({ notes } appended to the user's chat memory),",
+    "one optional `image` ({ action, jobId, sourceJobId, prompt, status }) per queued image (up to 4 per reply),",
     "optional `error` ({ code, message }), and a final `done` ({ message }). A resent `clientMessageId` replays the accepted turn without calling the model.",
-    "A queued image completes in the background; poll `/api/image-jobs/{jobId}`.",
+    "Queued images complete in the background; poll `/api/image-jobs/{jobId}`.",
   ].join(" "),
   tags: ["Image chat"],
   body: true,
@@ -526,6 +527,29 @@ for (const entry of [
   entry.responses[409] = response("The chat is busy or its state changed");
 }
 paths["/api/image-chats/{id}/messages"].post.responses[503] = response("The image-chat model is not configured");
+
+const imageChatMemorySchema = {
+  type: "object",
+  properties: {
+    content: { type: "string", maxLength: 4000, description: "Markdown preferences and rules every image chat follows." },
+    updatedAt: { type: "string", format: "date-time", nullable: true },
+  },
+};
+
+addOperation("/api/image-chat-memory", "get", {
+  summary: "Read the caller's image-chat memory",
+  tags: ["Image chat"],
+  successSchema: imageChatMemorySchema,
+});
+
+addOperation("/api/image-chat-memory", "put", {
+  summary: "Replace the caller's image-chat memory",
+  tags: ["Image chat"],
+  body: true,
+  csrf: true,
+  bodySchema: { type: "object", required: ["content"], properties: { content: { type: "string", maxLength: 4000 } } },
+  successSchema: imageChatMemorySchema,
+});
 
 addOperation("/api/deck-jobs", "post", {
   summary: "Queue a PPT Master deck generation job",
