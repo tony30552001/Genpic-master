@@ -10,7 +10,6 @@ import {
   History,
   Library,
   Palette,
-  Sparkles,
 } from "@/components/icons/lucideContent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -374,8 +373,7 @@ function OverviewSection({
             <p className="mt-1 text-xs text-muted-foreground/80">{TYPE_META[type].emptyHint}</p>
           </div>
           {onGoCreate && (
-            <Button type="button" size="sm" onClick={onGoCreate} className="gap-1.5">
-              <Sparkles className="icon-sm" aria-hidden="true" />
+            <Button type="button" size="sm" onClick={onGoCreate}>
               開始創作
             </Button>
           )}

@@ -13,6 +13,7 @@ export {
   History,
   Image,
   ImagePlay,
+  ImagePlus,
   Languages,
   Layers,
   Layout,
@@ -40,4 +41,5 @@ export {
   User,
   Users,
   Wand2,
+  WandSparkles,
 } from "lucide-react";

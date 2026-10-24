@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { SlidersHorizontal } from "@/components/icons/lucideControls";
 import { Loader2 } from "@/components/icons/lucideStatus";
-import { Sparkles } from "@/components/icons/lucideContent";
+import { WandSparkles } from "@/components/icons/lucideContent";
 import MobileSheet from "@/components/common/MobileSheet";
 import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,7 @@ export default function GenerateBar({
     generationStatus,
     buttonText,
     isGeneratingText,
-    ActionIcon = Sparkles,
+    ActionIcon = WandSparkles,
     disabled = false,
     aspectRatioLocked = false,
     onSuggestRefine,

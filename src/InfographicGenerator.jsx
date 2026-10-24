@@ -16,8 +16,9 @@ import {
   MessageSquare,
   Presentation,
   ShieldCheck,
-  Sparkles,
+  ImagePlus,
   Wand2,
+  WandSparkles,
 } from "@/components/icons/lucideContent";
 import useAuth from './hooks/useAuth';
 import useStyles from './hooks/useStyles';
@@ -625,7 +626,7 @@ export default function InfographicGenerator({
 
     // --- Tab 定義 ---
     const tabs = [
-        { id: 'general', label: '一般創作',         shortLabel: '創作', icon: Sparkles },
+        { id: 'general', label: '一般創作',         shortLabel: '創作', icon: ImagePlus },
                 { id: 'chat', label: '對話創作', shortLabel: '對話', icon: MessageSquare },
                 { id: 'document', label: '文件創作', shortLabel: '文件', icon: FileText },
                 { id: 'library', label: '素材中心', shortLabel: '素材', icon: Library },
@@ -845,7 +846,7 @@ export default function InfographicGenerator({
                                         ? "批次生成中…"
                                         : workspace.isTransform ? "AI 修改中…" : "AI 生成中…"
                                 }
-                                ActionIcon={hasActiveDocumentResult ? FileText : workspace.isTransform ? Wand2 : Sparkles}
+                                ActionIcon={hasActiveDocumentResult ? FileText : workspace.isTransform ? Wand2 : WandSparkles}
                                 aspectRatioLocked={!hasActiveDocumentResult && workspace.aspectRatioLocked}
                                 onSuggestRefine={!hasActiveDocumentResult && suggestsRefine ? focusRefineInput : undefined}
                                 compact={isMobileLayout}

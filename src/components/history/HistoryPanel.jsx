@@ -11,7 +11,6 @@ import {
   Clock3,
   FileText,
   Image as ImageIcon,
-  Sparkles,
 } from "@/components/icons/lucideContent";
 import HistoryCard from "./HistoryCard";
 import ComparisonView from "./ComparisonView";
@@ -469,7 +468,6 @@ export default function HistoryPanel({
                 onClick={onGoCreate}
                 className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <Sparkles className="icon-xs" aria-hidden="true" />
                 前往製作區
               </button>
             </div>

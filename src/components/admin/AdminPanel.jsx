@@ -65,11 +65,11 @@ import {
 } from "../../services/adminService";
 
 const SECTIONS = [
-  { id: "users", label: "使用者", icon: Users, description: "管理帳號角色與存取權限。" },
-  { id: "history", label: "生成紀錄", icon: Image, description: "檢視所有使用者的生成結果與使用的 Prompt。" },
-  { id: "models", label: "模型政策", icon: Settings, description: "登錄圖片模型，並決定開放與預設使用的模型。" },
-  { id: "llm", label: "分析模型", icon: Brain, description: "設定文件分析與簡報授稿使用的語言模型。" },
-  { id: "styles", label: "風格庫", icon: Palette, description: "管理使用者儲存與共享的視覺風格。" },
+  { id: "users", label: "使用者", icon: Users },
+  { id: "history", label: "生成紀錄", icon: Image },
+  { id: "models", label: "模型政策", icon: Settings },
+  { id: "llm", label: "分析模型", icon: Brain },
+  { id: "styles", label: "風格庫", icon: Palette },
 ];
 
 const NATIVE_SELECT_CLASS =
@@ -789,18 +789,15 @@ export default function AdminPanel() {
           key={activeSection}
           className="mx-auto max-w-[1760px] space-y-5 px-4 pb-10 pt-6 animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none lg:px-8 2xl:px-12"
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-semibold tracking-tight">{activeSectionInfo?.label}</h1>
-                {sectionCount !== undefined && !isSectionLoading && (
-                  <Badge variant="secondary" className="tabular-nums">{sectionCount}</Badge>
-                )}
-                {(isRefreshing || loadingSection) && (
-                  <Loader2 className="icon-sm animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
-                )}
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">{activeSectionInfo?.description}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="sr-only">{activeSectionInfo?.label}</h1>
+              {sectionCount !== undefined && !isSectionLoading && (
+                <Badge variant="secondary" className="tabular-nums">{sectionCount}</Badge>
+              )}
+              {(isRefreshing || loadingSection) && (
+                <Loader2 className="icon-sm animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="載入中" />
+              )}
             </div>
             {showsUserFilter && selectedUser && (
               <div className="flex min-w-0 items-center gap-1 self-start rounded-full border border-primary/30 bg-primary/5 py-1 pl-3 pr-1 text-xs sm:self-auto">

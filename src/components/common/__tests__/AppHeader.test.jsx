@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AppHeader from "../AppHeader";
-import { FileText, Library, Sparkles, SlidersHorizontal } from "@/components/icons/lucideContent";
+import { FileText, Library, ImagePlus, SlidersHorizontal } from "@/components/icons/lucideContent";
 
 const tabs = [
-  { id: "general", label: "一般創作", icon: Sparkles },
+  { id: "general", label: "一般創作", icon: ImagePlus },
   { id: "document", label: "文件創作", icon: FileText },
   { id: "library", label: "素材中心", icon: Library },
   { id: "settings", label: "設定", icon: SlidersHorizontal },
