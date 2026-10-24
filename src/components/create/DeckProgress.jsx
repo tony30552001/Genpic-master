@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   CloudCheck,
+  Loader2,
 } from "@/components/icons/lucideStatus";
-import GenerationSignature from "@/components/icons/GenerationSignature";
 import DeckTimeline from "./DeckTimeline";
 
 const formatElapsed = (ms) => {
@@ -41,7 +41,7 @@ export default function DeckProgress({ phase, current, total, startedAt, events 
     >
       <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span className="flex min-w-0 items-center gap-2">
-          <GenerationSignature state="working" className="icon-md text-primary" aria-hidden="true" />
+          <Loader2 className="icon-md animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
             {events?.length > 0 ? "AI 正在設計你的簡報" : phase || "準備中"}
           </span>

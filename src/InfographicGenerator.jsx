@@ -11,9 +11,14 @@ import {
   AlertCircle,
 } from "@/components/icons/lucideStatus";
 import {
+  FileText,
+  Library,
+  MessageSquare,
+  Presentation,
   ShieldCheck,
+  Sparkles,
+  Wand2,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import useAuth from './hooks/useAuth';
 import useStyles from './hooks/useStyles';
 import useHistory from './hooks/useHistory';
@@ -620,10 +625,10 @@ export default function InfographicGenerator({
 
     // --- Tab 定義 ---
     const tabs = [
-        { id: 'general', label: '一般創作', shortLabel: '創作', glyph: 'create' },
-        { id: 'chat', label: '對話創作', shortLabel: '對話', glyph: 'chat' },
-        { id: 'document', label: '文件創作', shortLabel: '文件', glyph: 'document' },
-        { id: 'library', label: '素材中心', shortLabel: '素材', glyph: 'library' },
+        { id: 'general', label: '一般創作',         shortLabel: '創作', icon: Sparkles },
+                { id: 'chat', label: '對話創作', shortLabel: '對話', icon: MessageSquare },
+                { id: 'document', label: '文件創作', shortLabel: '文件', icon: FileText },
+                { id: 'library', label: '素材中心', shortLabel: '素材', icon: Library },
     ];
     const mobilePrimaryTabs = tabs.filter((tab) =>
         ['general', 'chat', 'library'].includes(tab.id)
@@ -693,11 +698,11 @@ export default function InfographicGenerator({
                                     <div className="shrink-0">
                                         <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
                                             <TabsTrigger value="storyboard" className="gap-2 text-xs sm:text-sm">
-                                                <ProductGlyph kind="document" active={documentAnalysisMode === "storyboard"} className="icon-sm" aria-hidden="true" />
+                                                <FileText className="icon-sm" aria-hidden="true" />
                                                 文件分鏡
                                             </TabsTrigger>
                                             <TabsTrigger value="pptmaster" className="gap-2 text-xs sm:text-sm">
-                                                <ProductGlyph kind="deck" active={documentAnalysisMode === "pptmaster"} className="icon-sm" aria-hidden="true" />
+                                                <Presentation className="icon-sm" aria-hidden="true" />
                                                 設計簡報
                                             </TabsTrigger>
                                         </TabsList>
@@ -840,7 +845,7 @@ export default function InfographicGenerator({
                                         ? "批次生成中…"
                                         : workspace.isTransform ? "AI 修改中…" : "AI 生成中…"
                                 }
-                                actionKind={hasActiveDocumentResult ? "document" : workspace.isTransform ? "transform" : "create"}
+                                ActionIcon={hasActiveDocumentResult ? FileText : workspace.isTransform ? Wand2 : Sparkles}
                                 aspectRatioLocked={!hasActiveDocumentResult && workspace.aspectRatioLocked}
                                 onSuggestRefine={!hasActiveDocumentResult && suggestsRefine ? focusRefineInput : undefined}
                                 compact={isMobileLayout}
@@ -989,12 +994,7 @@ export default function InfographicGenerator({
                                             : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
                                             }`}
                                     >
-                                        <ProductGlyph
-                                            kind={tab.glyph}
-                                            active={isActive}
-                                            className="icon-sm"
-                                            aria-hidden="true"
-                                        />
+                                        <tab.icon className="icon-sm" aria-hidden="true" />
                                         {tab.shortLabel}
                                     </button>
                                 );
@@ -1038,12 +1038,7 @@ export default function InfographicGenerator({
                                 {isActive && (
                                     <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-primary" />
                                 )}
-                                <ProductGlyph
-                                    kind={tab.glyph}
-                                    active={isActive}
-                                    className="icon-md"
-                                    aria-hidden="true"
-                                />
+                                <tab.icon className="icon-md" aria-hidden="true" />
                                 <span className={`text-[10px] font-medium leading-none transition-colors ${isActive ? 'font-semibold' : ''
                                     }`}>
                                     {tab.shortLabel}

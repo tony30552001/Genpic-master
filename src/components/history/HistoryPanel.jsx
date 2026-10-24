@@ -11,8 +11,8 @@ import {
   Clock3,
   FileText,
   Image as ImageIcon,
+  Sparkles,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import HistoryCard from "./HistoryCard";
 import ComparisonView from "./ComparisonView";
 import { AnimatePresence } from "motion/react";
@@ -456,7 +456,7 @@ export default function HistoryPanel({
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-3">
-          <ProductGlyph kind="create" className="h-12 w-12 text-muted-foreground/40" aria-hidden="true" />
+          <ImageIcon className="h-12 w-12 text-muted-foreground/40" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-muted-foreground">
               {searchQuery ? "找不到符合的紀錄" : "尚無生成紀錄"}
@@ -469,7 +469,7 @@ export default function HistoryPanel({
                 onClick={onGoCreate}
                 className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <ProductGlyph kind="create" active className="icon-xs" aria-hidden="true" />
+                <Sparkles className="icon-xs" aria-hidden="true" />
                 前往製作區
               </button>
             </div>

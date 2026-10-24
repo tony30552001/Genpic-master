@@ -14,9 +14,9 @@ import {
 import {
   Clock3,
   FileText,
+  Library,
   Palette,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 function TemplateCard({
     template,
     onApply,
@@ -86,7 +86,7 @@ function TemplateCard({
             <div className="flex-1 p-3 flex flex-col gap-2">
                 {/* Icon + 標題 */}
                 <div className="flex items-start gap-2.5">
-                    <ProductGlyph kind="library" className="icon-md mt-0.5 text-primary" aria-hidden="true" />
+                    <Library className="icon-md mt-0.5 text-primary" aria-hidden="true" />
                     <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-foreground text-sm leading-snug line-clamp-1 group-hover:text-primary transition-colors">
                             {template.name}

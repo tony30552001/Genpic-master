@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   CloudCheck,
 } from "@/components/icons/lucideStatus";
-import ProductGlyph from "@/components/icons/ProductGlyph";
+import { Presentation } from "@/components/icons/lucideContent";
 import { describeTemplatePreview } from "./templatePreviewManifest";
 
 /**
@@ -29,7 +29,7 @@ export default function DeckBlueprint({ title, items = [], styleId, styleName })
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-        <ProductGlyph kind="deck" className="icon-sm text-primary" aria-hidden="true" />
+        <Presentation className="icon-sm text-primary" aria-hidden="true" />
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">簡報藍圖</h3>
         <span className="shrink-0 text-xs text-muted-foreground">產生前的設定總覽</span>
       </div>

@@ -6,6 +6,8 @@ import {
 } from "@/components/icons/lucideControls";
 import {
   AlertCircle,
+  CheckCircle2,
+  Loader2,
 } from "@/components/icons/lucideStatus";
 import {
   Compass,
@@ -14,9 +16,8 @@ import {
   Layers,
   LayoutTemplate,
   Palette,
+  Presentation,
 } from "@/components/icons/lucideContent";
-import GenerationSignature from "@/components/icons/GenerationSignature";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import usePptMasterDeck from "@/hooks/usePptMasterDeck";
@@ -161,6 +162,8 @@ export default function PptMasterStudio() {
     setSelectedSlide(null);
   };
 
+  const StatusIcon = isGenerating ? Loader2 : deck ? CheckCircle2 : Presentation;
+
   const actionHint = isGenerating
     ? "生成在雲端進行，離開或重新整理都不會中斷。"
     : deck
@@ -260,10 +263,10 @@ export default function PptMasterStudio() {
         )}
 
         <div className="flex flex-col gap-2 rounded-xl border border-border bg-card/90 px-3 py-2.5 shadow-sm backdrop-blur sm:flex-row sm:items-center">
-          <GenerationSignature
-            state={isGenerating ? "working" : deck ? "success" : "idle"}
+          <StatusIcon
             className={cn(
               "icon-md shrink-0",
+              isGenerating && "animate-spin motion-reduce:animate-none",
               deck && !isGenerating ? "text-success" : "text-primary"
             )}
             aria-hidden="true"
@@ -293,7 +296,7 @@ export default function PptMasterStudio() {
               </>
             ) : (
               <Button type="button" onClick={handleGenerate} disabled={!canGenerate}>
-                <ProductGlyph kind="deck" active className="icon-sm mr-2" aria-hidden="true" />
+                <Presentation className="icon-sm mr-2" aria-hidden="true" />
                 產生簡報
               </Button>
             )}

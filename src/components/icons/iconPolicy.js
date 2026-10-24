@@ -8,13 +8,3 @@ export const ICON_SIZE_CLASS = Object.freeze({
   lg: "icon-lg",
   display: "icon-display",
 });
-
-export const PRODUCT_GLYPH_KINDS = Object.freeze([
-  "create",
-  "chat",
-  "document",
-  "transform",
-  "library",
-  "deck",
-  "settings",
-]);

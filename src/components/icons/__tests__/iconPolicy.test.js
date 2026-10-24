@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import {
   ICON_SIZE_CLASS,
   ICON_STROKE_WIDTH,
-  PRODUCT_GLYPH_KINDS,
 } from "../iconPolicy";
 
 const SOURCE_ROOT = path.resolve(process.cwd(), "src");
@@ -24,18 +23,9 @@ const listSourceFiles = (directory) =>
   });
 
 describe("icon policy", () => {
-  it("keeps the visual scale and product glyph vocabulary finite", () => {
+  it("keeps the visual scale vocabulary finite", () => {
     expect(ICON_STROKE_WIDTH).toBe(1.75);
     expect(Object.keys(ICON_SIZE_CLASS)).toEqual(["xs", "sm", "md", "lg", "display"]);
-    expect(PRODUCT_GLYPH_KINDS).toEqual([
-      "create",
-      "chat",
-      "document",
-      "transform",
-      "library",
-      "deck",
-      "settings",
-    ]);
   });
 
   it("allows direct Lucide imports only inside the registries", () => {

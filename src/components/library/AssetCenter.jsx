@@ -8,9 +8,10 @@ import {
   Clock3,
   FileText,
   History,
+  Library,
   Palette,
+  Sparkles,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -310,7 +311,7 @@ function OverviewSection({
   type,
   title,
   description,
-  glyph,
+  icon: Icon,
   assets,
   viewMode,
   onOpenSection,
@@ -322,7 +323,7 @@ function OverviewSection({
     <section className="space-y-3" aria-labelledby={`overview-${type}-title`}>
       <div className="flex items-end justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
-          <ProductGlyph kind={glyph} className="icon-md mt-0.5 text-primary" aria-hidden="true" />
+          <Icon className="icon-md mt-0.5 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <h2 id={`overview-${type}-title`} className="text-sm font-semibold text-foreground">{title}</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
@@ -367,14 +368,14 @@ function OverviewSection({
         )
       ) : (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
-          <ProductGlyph kind={glyph} className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
+          <Icon className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-muted-foreground">目前還沒有{title}</p>
             <p className="mt-1 text-xs text-muted-foreground/80">{TYPE_META[type].emptyHint}</p>
           </div>
           {onGoCreate && (
             <Button type="button" size="sm" onClick={onGoCreate} className="gap-1.5">
-              <ProductGlyph kind="create" active className="icon-sm" aria-hidden="true" />
+              <Sparkles className="icon-sm" aria-hidden="true" />
               開始創作
             </Button>
           )}
@@ -592,10 +593,10 @@ export default function AssetCenter({
         <div className="space-y-8 animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="overview">
           <section className="grid gap-3 sm:grid-cols-3" aria-label="素材摘要">
             {[
-              { id: "templates", label: "可重複使用範本", value: counts.templates, glyph: "library" },
-              { id: "styles", label: "已儲存風格", value: counts.styles, glyph: "settings" },
-              { id: "history", label: "生成紀錄", value: counts.history, glyph: "create" },
-            ].map(({ id, label, value, glyph }) => (
+              { id: "templates", label: "可重複使用範本",               value: counts.templates, icon: Library },
+                            { id: "styles", label: "已儲存風格", value: counts.styles, icon: Palette },
+                            { id: "history", label: "生成紀錄", value: counts.history, icon: History },
+                          ].map(({ id, label, value, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
@@ -603,7 +604,7 @@ export default function AssetCenter({
                 className="group flex items-center gap-3 rounded-xl border border-border/70 bg-muted/20 p-4 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:bg-muted/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label={`查看${label}`}
               >
-                <ProductGlyph kind={glyph} className="icon-lg text-primary" aria-hidden="true" />
+                <Icon className="icon-lg text-primary" aria-hidden="true" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs text-muted-foreground">{label}</span>
                   <span className="mt-1 block text-2xl font-semibold tabular-nums text-foreground">{value}</span>
@@ -617,7 +618,7 @@ export default function AssetCenter({
             type="template"
             title="範本"
             description="快速套用常用的內容與風格組合"
-            glyph="library"
+            icon={Library}
             assets={overviewByType.templates}
             viewMode={viewMode}
             onOpenSection={() => setSection("templates")}
@@ -628,7 +629,7 @@ export default function AssetCenter({
           <OverviewSection
             title="風格庫"
             description="集中管理個人收藏與共享視覺風格"
-            glyph="settings"
+            icon={Palette}
             type="style"
             assets={overviewByType.styles}
             viewMode={viewMode}
@@ -640,7 +641,7 @@ export default function AssetCenter({
           <OverviewSection
             title="紀錄"
             description="回看最近生成結果，載入設定繼續編輯"
-            glyph="create"
+            icon={History}
             type="history"
             assets={overviewByType.history}
             viewMode={viewMode}

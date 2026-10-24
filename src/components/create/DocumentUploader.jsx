@@ -15,7 +15,6 @@ import {
   Sparkles,
   Clapperboard,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -161,7 +160,7 @@ function AnalysisProgress({ analysisPhase, fileName }) {
         {/* 標題與目前狀態 */}
         <header className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3.5">
-            <ProductGlyph kind="document" active className="h-10 w-10 shrink-0 text-primary" aria-hidden="true" />
+            <FileText className="h-10 w-10 shrink-0 text-primary" aria-hidden="true" />
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 <span>分鏡分析</span>
@@ -491,7 +490,7 @@ export default function DocumentUploader({
             </div>
           </div>
           <Button onClick={handleAnalyze} disabled={disabled} className="w-full">
-            <ProductGlyph kind="document" active className="icon-sm mr-2" aria-hidden="true" />
+            <FileText className="icon-sm mr-2" aria-hidden="true" />
             分析文件並提取場景
           </Button>
         </div>

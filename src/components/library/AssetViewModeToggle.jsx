@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import ViewModeGlyph from "@/components/icons/ViewModeGlyph";
 import { VIEW_MODE_OPTIONS, normalizeViewMode } from "./viewMode";
 
 export default function AssetViewModeToggle({ value, onChange }) {
@@ -11,10 +10,7 @@ export default function AssetViewModeToggle({ value, onChange }) {
       aria-label="選擇素材瀏覽模式"
       className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-background p-1"
     >
-      <span className="flex h-9 w-9 items-center justify-center text-primary" aria-hidden="true">
-        <ViewModeGlyph mode={activeValue} className="icon-md" />
-      </span>
-      {VIEW_MODE_OPTIONS.map(({ id, label }) => (
+      {VIEW_MODE_OPTIONS.map(({ id, label, icon: Icon }) => (
           <Button
             key={id}
             type="button"
@@ -24,8 +20,9 @@ export default function AssetViewModeToggle({ value, onChange }) {
             aria-pressed={activeValue === id}
             aria-label={`${label}模式`}
             title={`${label}模式`}
-            className="min-h-10 min-w-10 px-2.5 text-xs sm:px-3"
+            className="min-h-10 min-w-10 gap-1.5 px-2.5 text-xs sm:px-3"
           >
+            <Icon className="icon-sm" aria-hidden="true" />
             <span>{label}</span>
           </Button>
       ))}

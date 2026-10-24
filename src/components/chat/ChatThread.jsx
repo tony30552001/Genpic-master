@@ -1,6 +1,5 @@
 import { AlertCircle } from "@/components/icons/lucideStatus";
-import { Brain, Image as ImageIcon, Palette } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
+import { Brain, Image as ImageIcon, MessageSquare, Palette } from "@/components/icons/lucideContent";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Conversation,
@@ -117,7 +116,7 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion,
         {message.images.length > 0 && (
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <ProductGlyph kind="create" className="size-4 text-primary" aria-hidden="true" />
+              <ImageIcon className="size-4 text-primary" aria-hidden="true" />
               <span>{message.images.length > 1 ? `${message.images.length} 張圖片` : "圖片"}</span>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -178,7 +177,7 @@ export default function ChatThread({
       <ConversationContent className="gap-6">
         {messages.length === 0 ? (
           <ConversationEmptyState
-            icon={<ProductGlyph kind="chat" className="size-10" aria-hidden="true" />}
+            icon={<MessageSquare className="size-10" aria-hidden="true" />}
             title="用對話開始創作"
             description="描述想要的畫面，AI 會和你確認細節並產生圖片；之後直接說「標題改大一點」就能繼續修改。"
           />

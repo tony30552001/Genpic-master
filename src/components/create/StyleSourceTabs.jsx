@@ -10,9 +10,10 @@ import {
   Check,
 } from "@/components/icons/lucideStatus";
 import {
+  Library,
   Palette,
+  SlidersHorizontal,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -207,7 +208,7 @@ export default function StyleSourceTabs({
                         className="h-9 w-9 shrink-0 rounded-lg border border-primary/20 object-cover"
                       />
                     ) : (
-                      <ProductGlyph kind="settings" className="icon-lg text-primary" aria-hidden="true" />
+                      <SlidersHorizontal className="icon-lg text-primary" aria-hidden="true" />
                     )}
                     <div className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold text-primary">
@@ -369,7 +370,7 @@ export default function StyleSourceTabs({
                 }}
                 className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               >
-                <ProductGlyph kind="library" className="icon-sm" aria-hidden="true" />
+                <Library className="icon-sm" aria-hidden="true" />
                 開啟素材中心管理
               </button>
             </div>

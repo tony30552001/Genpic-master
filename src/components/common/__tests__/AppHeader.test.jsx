@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AppHeader from "../AppHeader";
+import { FileText, Library, Sparkles, SlidersHorizontal } from "@/components/icons/lucideContent";
 
 const tabs = [
-  { id: "general", label: "一般創作", glyph: "create" },
-  { id: "document", label: "文件創作", glyph: "document" },
-  { id: "library", label: "素材中心", glyph: "library" },
-  { id: "settings", label: "設定", glyph: "settings" },
+  { id: "general", label: "一般創作", icon: Sparkles },
+  { id: "document", label: "文件創作", icon: FileText },
+  { id: "library", label: "素材中心", icon: Library },
+  { id: "settings", label: "設定", icon: SlidersHorizontal },
 ];
 
 const user = { displayName: "Tony Lin", email: "tony@example.com" };

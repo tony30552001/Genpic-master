@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { SlidersHorizontal } from "@/components/icons/lucideControls";
 import { Loader2 } from "@/components/icons/lucideStatus";
-import ProductGlyph from "@/components/icons/ProductGlyph";
+import { Sparkles } from "@/components/icons/lucideContent";
 import MobileSheet from "@/components/common/MobileSheet";
 import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,7 @@ export default function GenerateBar({
     generationStatus,
     buttonText,
     isGeneratingText,
-    actionKind = "create",
+    ActionIcon = Sparkles,
     disabled = false,
     aspectRatioLocked = false,
     onSuggestRefine,
@@ -137,7 +137,7 @@ export default function GenerateBar({
                 </span>
             ) : (
                 <span className="flex items-center gap-2">
-                    <ProductGlyph kind={actionKind} active className="icon-md" aria-hidden="true" />
+                    <ActionIcon className="icon-md" aria-hidden="true" />
                     {label}
                 </span>
             )}

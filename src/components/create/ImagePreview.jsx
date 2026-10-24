@@ -6,7 +6,6 @@ import {
 import {
   Image as ImageIcon,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import { getImageOutputLabel } from "@/lib/imageOutput";
 import { cn } from "@/lib/utils";
 import ShareToLineButton from "../share/ShareToLineButton";
@@ -82,7 +81,7 @@ export default function ImagePreview({
           }}
         />
         <div className="absolute inset-0 flex items-center justify-center">
-          <ProductGlyph kind="create" className="h-10 w-10 text-primary/65" aria-hidden="true" />
+          <ImageIcon className="h-10 w-10 text-primary/65" aria-hidden="true" />
         </div>
       </div>
       <div className="space-y-1.5">

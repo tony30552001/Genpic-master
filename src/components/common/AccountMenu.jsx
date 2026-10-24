@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, LogOut } from "@/components/icons/lucideControls";
-import ThemeGlyph from "@/components/icons/ThemeGlyph";
+import { Moon, Sun } from "@/components/icons/lucideContent";
 import useTheme from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +68,11 @@ export default function AccountMenu({ user, onLogout }) {
             toggleTheme();
           }}
         >
-          <ThemeGlyph isDark={isDark} className="icon-sm text-muted-foreground" />
+          {isDark ? (
+            <Sun className="icon-sm text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <Moon className="icon-sm text-muted-foreground" aria-hidden="true" />
+          )}
           {isDark ? "切換至淺色模式" : "切換至深色模式"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />

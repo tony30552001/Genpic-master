@@ -21,10 +21,10 @@ import {
 import {
   Clock3,
   Image as ImageIcon,
+  Palette,
   Sparkles,
   Users,
 } from "@/components/icons/lucideContent";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -809,7 +809,7 @@ export default function StyleLibrary({
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center text-muted-foreground">
-          <ProductGlyph kind="settings" className="h-12 w-12 text-muted-foreground/40" aria-hidden="true" />
+          <Palette className="h-12 w-12 text-muted-foreground/40" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-muted-foreground">{emptyTitle}</p>
             <p className="mt-1 text-xs text-muted-foreground/80">{emptyDescription}</p>

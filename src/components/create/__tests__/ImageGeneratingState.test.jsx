@@ -24,7 +24,6 @@ describe("ImageGeneratingState", () => {
     expect(container.querySelector("[data-generation-dots]")).toBeInTheDocument();
     expect(container.querySelectorAll("[data-generation-glow]")).toHaveLength(2);
     expect(within(container).getByText("1536×1024")).toBeInTheDocument();
-    expect(container.querySelector("[data-generation-signature]")).not.toBeInTheDocument();
     expect(within(container).getByText("正在配置版面")).not.toHaveClass("sr-only");
     expect(
       within(container).getByText("“以清楚的資訊層級介紹產品特色”")

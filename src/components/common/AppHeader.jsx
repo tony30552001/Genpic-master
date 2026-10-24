@@ -3,7 +3,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { LogIn } from "@/components/icons/lucideControls";
 import { ShieldCheck } from "@/components/icons/lucideContent";
 import PixoraWordmark from "@/components/icons/PixoraWordmark";
-import ProductGlyph from "@/components/icons/ProductGlyph";
 import AccountMenu from "@/components/common/AccountMenu";
 import SegmentedTabs from "@/components/common/SegmentedTabs";
 
@@ -41,9 +40,7 @@ export default function AppHeader({
           onTabChange={onTabChange}
           ariaLabel="主要功能"
           className="hidden lg:grid"
-          renderIcon={(tab, isActive) => (
-            <ProductGlyph kind={tab.glyph} active={isActive} className="icon-sm" aria-hidden="true" />
-          )}
+          renderIcon={({ icon: Icon }) => <Icon className="icon-sm" aria-hidden="true" />}
         />
 
         <div className="flex min-w-0 shrink-0 items-center gap-2 justify-self-end">

@@ -22,7 +22,7 @@ const BASE_PROPS = {
 
 describe("GenerateBar", () => {
   it("locks the aspect ratio to the attached image", () => {
-    render(<GenerateBar {...BASE_PROPS} aspectRatioLocked buttonText="修改這張" actionKind="transform" />);
+    render(<GenerateBar {...BASE_PROPS} aspectRatioLocked buttonText="修改這張" />);
     const group = screen.getByRole("group", { name: "圖片比例（沿用原圖）" });
     for (const button of within(group).getAllByRole("button")) {
       expect(button).toBeDisabled();
@@ -109,17 +109,19 @@ describe("GenerateBar", () => {
     expect(within(group).getByRole("combobox", { name: "其他圖中文字語言" })).toHaveTextContent("日文");
   });
 
-  it("uses the semantic product glyph for the current action", () => {
-    const { container } = render(
+  it("renders the icon for the current action", () => {
+    const ActionIcon = (props) => <svg data-testid="action-icon" {...props} />;
+    render(
       <GenerateBar
         {...BASE_PROPS}
-        actionKind="transform"
+        ActionIcon={ActionIcon}
         buttonText="開始 AI 轉換"
       />
     );
 
-    expect(screen.getByRole("button", { name: "開始 AI 轉換" })).toBeInTheDocument();
-    expect(container.querySelector('[data-product-glyph="transform"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "開始 AI 轉換" })).toContainElement(
+      screen.getByTestId("action-icon")
+    );
   });
 
   it("uses a restrained loading spinner without hiding progress text", () => {
@@ -138,7 +140,6 @@ describe("GenerateBar", () => {
     );
 
     expect(container.querySelector("[data-generation-spinner]")).toBeInTheDocument();
-    expect(container.querySelector("[data-generation-signature]")).not.toBeInTheDocument();
     expect(screen.getAllByText("正在配置版面").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /配置版面/ })).toBeDisabled();
   });
