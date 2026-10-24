@@ -38,27 +38,6 @@ export const LANGUAGE_OPTIONS = [
     description: "한국어 텍스트가 포함된 이미지를 생성합니다.",
   },
   {
-    id: "es",
-    label: "Español",
-    shortLabel: "西文",
-    code: "ES",
-    description: "Generar imágenes con texto en español.",
-  },
-  {
-    id: "fr",
-    label: "Français",
-    shortLabel: "法文",
-    code: "FR",
-    description: "Générer des images avec du texte en français.",
-  },
-  {
-    id: "de",
-    label: "Deutsch",
-    shortLabel: "德文",
-    code: "DE",
-    description: "Bilder mit deutschem Text generieren.",
-  },
-  {
     id: "none",
     label: "No Text",
     shortLabel: "無文字",

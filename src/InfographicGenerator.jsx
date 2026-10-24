@@ -28,6 +28,7 @@ import { STYLE_TRANSFER_PURPOSE, REFERENCE_PURPOSE } from './lib/attachmentPurpo
 import { readFileAsDataUrl } from './lib/imageFile';
 import { isNearDuplicatePrompt } from './lib/promptHints';
 import { DEFAULT_IMAGE_LANGUAGE } from './config';
+import { getLanguageOption } from './lib/imageTextLanguage';
 import { getImageModelSetupError, getImageQualityError } from './lib/imageModel';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -70,7 +71,7 @@ export default function InfographicGenerator({
 
     // 全域設定
     const [imageLanguage, setImageLanguage] = useState(() => {
-        try { return localStorage.getItem('genpic_image_language') || DEFAULT_IMAGE_LANGUAGE; } catch { return DEFAULT_IMAGE_LANGUAGE; }
+        try { return getLanguageOption(localStorage.getItem('genpic_image_language')).id; } catch { return DEFAULT_IMAGE_LANGUAGE; }
     });
 
     // 風格設定相關

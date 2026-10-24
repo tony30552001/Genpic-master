@@ -162,6 +162,13 @@ describe("creation orchestration", () => {
     });
   });
 
+  it("falls back to the default language when the stored one is no longer offered", () => {
+    localStorage.setItem("genpic_image_language", "fr");
+    render(<MemoryRouter><InfographicGenerator initialTab="chat" /></MemoryRouter>);
+
+    expect(mocks.chatArgs.initialSettings.imageLanguage).toBe("zh-TW");
+  });
+
   it.each(["general", "document", "refine"])("saves %s history using the submitted job after policy changes", async (tab) => {
     let finish;
     const request = requestFor(tab);

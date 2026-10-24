@@ -53,21 +53,6 @@ const IMAGE_TEXT_LANGUAGES = Object.freeze({
     en: "Korean",
     generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in Korean.`,
   },
-  es: {
-    zh: "西班牙文",
-    en: "Spanish",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in Spanish.`,
-  },
-  fr: {
-    zh: "法文",
-    en: "French",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in French.`,
-  },
-  de: {
-    zh: "德文",
-    en: "German",
-    generationDirective: `${KEEP_QUOTED_TEXT} Any necessary text explicitly requested without exact wording must be in German.`,
-  },
 });
 
 const resolveLanguage = (imageLanguage) => String(imageLanguage || "").trim();
