@@ -67,7 +67,6 @@ vi.mock("../components/create/ImagePreview", () => ({ default: (props) => { mock
 vi.mock("../components/create/DocumentUploader", () => ({ default: () => null }));
 vi.mock("../components/create/PptMasterStudio", () => ({ default: () => null }));
 vi.mock("../components/library/AssetCenter", () => ({ default: () => null }));
-vi.mock("../components/settings/SettingsPanel", () => ({ default: () => null }));
 vi.mock("../hooks/useImageChat", () => ({
   default: (args) => { mocks.chatArgs = args; return { id: "chat-state" }; },
 }));

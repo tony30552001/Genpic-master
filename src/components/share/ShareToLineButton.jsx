@@ -13,6 +13,9 @@ import { API_BASE_URL } from "../../config";
 import { sendImageToLine } from "../../services/lineService";
 import { apiGetBlob } from "../../services/apiClient";
 import { uploadFile } from "../../services/storageService";
+import { Settings2 } from "@/components/icons/lucideContent";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import LineSettings from "./LineSettings";
 
 const LINE_GREEN = "#06C755"; // Official LINE brand color
 
@@ -30,7 +33,9 @@ const dataURLtoFile = (dataurl, filename) => {
 };
 
 export default function ShareToLineButton({ imageUrl, user, message, className = "" }) {
-    const { isBound } = useLineConfig({ user });
+    const lineConfig = useLineConfig({ user });
+    const { isBound } = lineConfig;
+    const [isBindingOpen, setIsBindingOpen] = useState(false);
     const [status, setStatus] = useState("idle"); // "idle" | "loading" | "success" | "error"
     const [errorMsg, setErrorMsg] = useState("");
 
@@ -38,9 +43,7 @@ export default function ShareToLineButton({ imageUrl, user, message, className =
         if (!imageUrl) return;
 
         if (!isBound) {
-            setErrorMsg("查無 LINE 設定，請先去設定頁面綁定 LINE 官方帳號以啟用本功能。");
-            setStatus("error");
-            setTimeout(() => setStatus("idle"), 4000);
+            setIsBindingOpen(true);
             return;
         }
         setStatus("loading");
@@ -89,7 +92,7 @@ export default function ShareToLineButton({ imageUrl, user, message, className =
     const isError = status === "error";
 
     return (
-        <div className={`flex flex-col items-start gap-1 ${className}`}>
+        <div className={`flex flex-wrap items-center gap-1 ${className}`}>
             <Button
                 disabled={!imageUrl || isLoading}
                 onClick={handleShare}
@@ -122,9 +125,26 @@ export default function ShareToLineButton({ imageUrl, user, message, className =
 
             </Button>
 
-            {isError && errorMsg && (
-                <p className="text-xs text-destructive mt-0.5">{errorMsg}</p>
+            {isBound && (
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsBindingOpen(true)}
+                    aria-label="管理 LINE 綁定"
+                >
+                    <Settings2 className="icon-sm" aria-hidden="true" />
+                </Button>
             )}
+
+            {isError && errorMsg && (
+                <p className="basis-full text-xs text-destructive mt-0.5">{errorMsg}</p>
+            )}
+
+            <Dialog open={isBindingOpen} onOpenChange={setIsBindingOpen}>
+                <DialogContent className="max-h-[90dvh] overflow-y-auto">
+                    <LineSettings useLineConfigHook={lineConfig} />
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

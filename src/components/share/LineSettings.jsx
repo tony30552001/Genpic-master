@@ -1,7 +1,7 @@
 /**
  * LineSettings.jsx
  *
- * LINE Official Account binding settings UI.
+ * LINE Official Account binding, shown inside the share dialog.
  * Allows users to:
  * - Enter and verify their Channel Access Token
  * - Configure a default target (group/user)
@@ -28,9 +28,9 @@ import {
   MessageSquare,
   ShieldCheck,
 } from "@/components/icons/lucideContent";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Small reusable field component ───────────────────────────────────────
 function Field({ id, label, hint, children }) {
@@ -119,19 +119,18 @@ export default function LineSettings({ useLineConfigHook }) {
     };
 
     return (
-        <Card className="border-border/60">
-            <CardContent className="p-5 space-y-4">
+        <div className="space-y-4">
                 {/* ── Section Header ──────────────────────────────────────── */}
-                <div className="flex items-center justify-between">
+                <DialogHeader className="flex-row items-center justify-between gap-3 pr-6 text-left">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${LINE_BRAND_COLOR}1A` }}>
                             <MessageSquare className="icon-sm" style={{ color: LINE_BRAND_COLOR }} aria-hidden="true" />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-sm text-foreground">LINE 官方帳號</h3>
-                            <p className="text-xs text-muted-foreground">
+                            <DialogTitle className="text-sm">LINE 官方帳號</DialogTitle>
+                            <DialogDescription className="text-xs">
                                 綁定後可直接以官方帳號名義推送圖片
-                            </p>
+                            </DialogDescription>
                         </div>
                     </div>
                     {isBound && (
@@ -139,7 +138,7 @@ export default function LineSettings({ useLineConfigHook }) {
                             已綁定
                         </Badge>
                     )}
-                </div>
+                </DialogHeader>
 
                 {/* ── Bound: current config summary ──────────────────────── */}
                 {isLoading && (
@@ -405,7 +404,6 @@ export default function LineSettings({ useLineConfigHook }) {
                         {toast.message}
                     </div>
                 )}
-            </CardContent>
-        </Card>
+        </div>
     );
 }

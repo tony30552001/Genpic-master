@@ -1,5 +1,9 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../LineSettings", () => ({
+  default: () => <p>LINE 綁定設定</p>,
+}));
 
 vi.mock("../../../hooks/useLineConfig", () => ({
   default: vi.fn(),
@@ -32,6 +36,32 @@ describe("ShareToLineButton", () => {
     useLineConfig.mockReturnValue({ isBound: true });
     uploadFile.mockResolvedValue({ uploadId: "123e4567-e89b-42d3-a456-426614174000" });
     sendImageToLine.mockResolvedValue({ success: false });
+  });
+
+  afterEach(cleanup);
+
+  it("opens the binding dialog instead of sharing when LINE is not bound", async () => {
+    useLineConfig.mockReturnValue({ isBound: false });
+    const { getByRole, findByText, queryByRole } = render(
+      <ShareToLineButton imageUrl={DATA_URL} user={{}} />
+    );
+
+    expect(queryByRole("button", { name: "管理 LINE 綁定" })).toBeNull();
+    fireEvent.click(getByRole("button", { name: "分享到 LINE" }));
+
+    expect(await findByText("LINE 綁定設定")).toBeTruthy();
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(sendImageToLine).not.toHaveBeenCalled();
+  });
+
+  it("lets a bound user manage the binding from the gear button", async () => {
+    const { getByRole, findByText } = render(
+      <ShareToLineButton imageUrl={DATA_URL} user={{}} />
+    );
+
+    fireEvent.click(getByRole("button", { name: "管理 LINE 綁定" }));
+
+    expect(await findByText("LINE 綁定設定")).toBeTruthy();
   });
 
   it("uploads a data URL as an image and sends only its upload ID", async () => {

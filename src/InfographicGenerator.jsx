@@ -44,7 +44,6 @@ import GenerateBar from './components/create/GenerateBar';
 import ExpandedCanvas from './components/create/ExpandedCanvas';
 import MobileResultView from './components/create/MobileResultView';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
-import SettingsPanel from './components/settings/SettingsPanel';
 import AttachmentPicker from './components/create/AttachmentPicker';
 import AssetCenter from './components/library/AssetCenter';
 import AppHeader from './components/common/AppHeader';
@@ -625,14 +624,11 @@ export default function InfographicGenerator({
         { id: 'chat', label: '對話創作', shortLabel: '對話', glyph: 'chat' },
         { id: 'document', label: '文件創作', shortLabel: '文件', glyph: 'document' },
         { id: 'library', label: '素材中心', shortLabel: '素材', glyph: 'library' },
-        { id: 'settings', label: '設定', shortLabel: '設定', glyph: 'settings' },
     ];
     const mobilePrimaryTabs = tabs.filter((tab) =>
         ['general', 'chat', 'library'].includes(tab.id)
     );
-    const mobileSecondaryTabs = tabs.filter((tab) =>
-        ['document', 'settings'].includes(tab.id)
-    );
+    const mobileSecondaryTabs = tabs.filter((tab) => tab.id === 'document');
     const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
     // --- Render ---
     return (
@@ -911,19 +907,6 @@ export default function InfographicGenerator({
                             onDeleteHistory={deleteHistoryItem}
                             onDeleteHistoryItems={deleteHistoryItems}
                             onGoCreate={() => setActiveTab('general')}
-                        />
-                    </div>
-                )}
-
-                {/* ─── Settings Tab ─── */}
-                {activeTab === 'settings' && (
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        <SettingsPanel
-                            imageLanguage={imageLanguage}
-                            onImageLanguageChange={handleLanguageChange}
-                            imageModelConfig={imageModelConfig}
-                            configurationError={modelSetupError}
-                            user={user}
                         />
                     </div>
                 )}
