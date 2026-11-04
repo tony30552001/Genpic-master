@@ -247,7 +247,6 @@ const loadEditSource = async (job) => {
     }
     return {
       buffer: await downloadGeneratedImage({ blobName: sourceJob.result_blob_name }),
-      contentType: sourceJob.result_mime_type || "image/png",
     };
   }
   const upload = await resolveOwnedImageUpload({
@@ -277,7 +276,6 @@ const processNextImageJob = async () => {
       result = await editGptImage({
         config,
         imageBase64: source.buffer.toString("base64"),
-        mimeType: source.contentType,
         prompt: job.prompt,
         aspectRatio: job.aspect_ratio,
         quality: job.quality,

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 import { editGptImage, generateGptImage } from "../gptImage";
 
 const gpt2 = {
@@ -19,7 +20,11 @@ const flare = {
   apiKey: "flare-test-key",
   supportedQualities: ["low", "medium", "high", "xhigh", "max", "auto"],
 };
-const image = { imageBase64: Buffer.from("png").toString("base64"), mimeType: "image/png" };
+const image = {
+  imageBase64: (await sharp({
+    create: { width: 2, height: 2, channels: 3, background: "#fff" },
+  }).png().toBuffer()).toString("base64"),
+};
 const response = (status = 200, data = { data: [{ b64_json: "abc" }] }) => ({
   ok: status === 200,
   status,
@@ -54,6 +59,27 @@ describe("catalog-backed Azure Images v1 adapter", () => {
     expect(editRequest.body.get("model")).toBe(flare.deploymentName);
     expect(editRequest.body.get("n")).toBe("1");
     expect(editRequest.body.get("output_format")).toBe("png");
+  });
+
+  it("re-encodes the edit source as a metadata-free PNG bounded to 2048px", async () => {
+    const jpeg = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: "#369" } })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    await editGptImage({ config: flare, imageBase64: jpeg.toString("base64"), quality: "low" });
+    const sent = fetchMock.mock.calls[0][1].body.get("image");
+    expect(sent.type).toBe("image/png");
+    const meta = await sharp(Buffer.from(await sent.arrayBuffer())).metadata();
+    expect(meta).toMatchObject({ format: "png", width: 1365, height: 2048 });
+    expect(meta.orientation).toBeUndefined();
+    expect(meta.exif).toBeUndefined();
+  });
+
+  it("rejects an undecodable edit source before calling the provider", async () => {
+    await expect(editGptImage({
+      config: flare, imageBase64: Buffer.from("not an image").toString("base64"), quality: "low",
+    })).rejects.toMatchObject({ code: "invalid_source_image", status: 400, retryable: false });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it.each(gpt2.supportedQualities)("preserves GPT Image 2 %s", async (quality) => {
@@ -119,6 +145,7 @@ describe("catalog-backed Azure Images v1 adapter", () => {
     const failedResponse = response(status);
     fetchMock.mockResolvedValueOnce(failedResponse);
     const request = editGptImage({ config: flare, ...image });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await vi.advanceTimersByTimeAsync(2000);
     await expect(request).resolves.toEqual({ imageUrl: "data:image/png;base64,abc" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -132,10 +159,41 @@ describe("catalog-backed Azure Images v1 adapter", () => {
     const failedResponse = response(status, { error: { message: `leaked ${flare.apiKey}` } });
     fetchMock.mockResolvedValue(failedResponse);
     await expect(generateGptImage({ config: flare, prompt: "cat" })).rejects.toMatchObject({
-      message: `圖片服務請求失敗 (${status})`, status, retryable: false,
+      message: `圖片服務請求失敗 (${status})`, code: "image_provider_error", status, retryable: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(failedResponse.body.cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [{ code: "moderation_blocked", moderation_details: { moderation_stage: "input" } },
+      "image_moderation_blocked", "描述內容被安全審查擋下，請調整描述後再試"],
+    [{ code: "content_filter" }, "image_content_filtered", "內容被安全政策擋下，請調整描述後再試"],
+    [{ code: "invalid_image_file" }, "invalid_source_image", "圖片檔無法處理，請改用其他圖片"],
+  ])("maps provider error %j to a sanitized message without retrying", async (error, code, message) => {
+    fetchMock.mockResolvedValue(response(400, { error: { ...error, message: flare.apiKey } }));
+    const failure = await generateGptImage({ config: flare, prompt: "cat" }).catch((e) => e);
+    expect(failure).toMatchObject({ code, message, status: 400, retryable: false });
+    expect(failure.message).not.toContain(flare.apiKey);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-renders output-stage moderation blocks, then fails without queue retry", async () => {
+    vi.useFakeTimers();
+    const blocked = { error: { code: "moderation_blocked", moderation_details: { moderation_stage: "output" } } };
+    fetchMock.mockResolvedValueOnce(response(400, blocked));
+    const recovered = generateGptImage({ config: flare, prompt: "friends" });
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(recovered).resolves.toEqual({ imageUrl: "data:image/png;base64,abc" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(response(400, blocked));
+    const exhausted = generateGptImage({ config: flare, prompt: "friends" }).catch((e) => e);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(await exhausted).toMatchObject({
+      code: "image_moderation_blocked", message: "生成結果被安全審查擋下，請調整描述後再試", retryable: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("awaits failed response body cancellation before beginning a retry", async () => {

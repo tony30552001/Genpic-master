@@ -162,7 +162,7 @@ describe("durable catalog-backed image jobs", () => {
         uploadId: "upload-1", tenantId: job.tenant_id, userId: job.user_id,
       });
       expect(provider).toHaveBeenCalledWith(expect.objectContaining({
-        imageBase64: Buffer.from("source").toString("base64"), mimeType: "image/png",
+        imageBase64: Buffer.from("source").toString("base64"),
       }));
     }
     expect(client.query.mock.calls[2][0]).toContain("FOR UPDATE SKIP LOCKED");
@@ -200,7 +200,7 @@ describe("durable catalog-backed image jobs", () => {
     expect(db.query.mock.calls[0][1]).toEqual(["source-job", job.tenant_id, job.user_id]);
     expect(imageUploads.resolveOwnedImageUpload).not.toHaveBeenCalled();
     expect(gptImage.editGptImage).toHaveBeenCalledWith(expect.objectContaining({
-      imageBase64: Buffer.from("previous").toString("base64"), mimeType: "image/webp",
+      imageBase64: Buffer.from("previous").toString("base64"),
     }));
   });
 

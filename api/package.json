@@ -21,6 +21,7 @@
     "express": "^5.1.0",
     "google-auth-library": "^10.5.0",
     "pg": "^8.13.3",
-    "pptxgenjs": "^3.12.0"
+    "pptxgenjs": "^3.12.0",
+    "sharp": "^0.35.5"
   }
 }

@@ -5,6 +5,8 @@ const {
   validateImageQuality,
 } = require("./imageModelConfig");
 
+const sharp = require("sharp");
+
 const ASPECT_RATIO_TO_SIZE = Object.freeze({
   "1:1": "1024x1024",
   "16:9": "1536x864",
@@ -18,6 +20,7 @@ const ASPECT_RATIO_TO_SIZE = Object.freeze({
   "21:9": "1792x768",
 });
 
+const MAX_EDIT_SOURCE_EDGE = 2048;
 const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 2000;
 // Includes response streaming and retry delays, below the worker's 15-minute lease.
@@ -46,13 +49,43 @@ const validateConfig = (config) => {
   }
 };
 
+// Only the provider's error code and moderation stage are read; its message may echo request data.
+const readProviderError = async (response) => {
+  try {
+    const error = JSON.parse(await response.text())?.error;
+    return { code: error?.code, stage: error?.moderation_details?.moderation_stage };
+  } catch {
+    return {};
+  }
+};
+
+const providerFailure = ({ code, stage }, status) => {
+  if (code === "moderation_blocked") {
+    const failure = new ImageProviderError(
+      stage === "output" ? "生成結果被安全審查擋下，請調整描述後再試" : "描述內容被安全審查擋下，請調整描述後再試",
+      "image_moderation_blocked", status, false
+    );
+    failure.moderationStage = stage;
+    return failure;
+  }
+  if (code === "content_filter") {
+    return new ImageProviderError("內容被安全政策擋下，請調整描述後再試", "image_content_filtered", status, false);
+  }
+  if (code === "invalid_image_file") {
+    return new ImageProviderError("圖片檔無法處理，請改用其他圖片", "invalid_source_image", status, false);
+  }
+  return new ImageProviderError(`圖片服務請求失敗 (${status})`, "image_provider_error", status, false);
+};
+
 const parseResponse = async (response) => {
   if (!response.ok) {
-    await response.body?.cancel();
-    throw new ImageProviderError(
-      `圖片服務請求失敗 (${response.status})`,
-      "image_provider_error", response.status, isTransientImageError({ status: response.status })
-    );
+    if (isTransientImageError({ status: response.status })) {
+      await response.body?.cancel();
+      throw new ImageProviderError(
+        `圖片服務請求失敗 (${response.status})`, "image_provider_error", response.status, true
+      );
+    }
+    throw providerFailure(await readProviderError(response), response.status);
   }
   const text = await response.text();
   let data;
@@ -93,7 +126,10 @@ const requestImage = async (config, route, makeRequest) => {
         const failure = error instanceof ImageProviderError ? error :
           new ImageProviderError("圖片服務連線失敗", "image_provider_connection", 502,
             isTransientImageError(error));
-        if (attempt >= MAX_RETRIES || !failure.retryable) throw failure;
+        // Output-stage moderation is probabilistic, so a fresh render often passes. It stays
+        // non-retryable for the job queue so attempts are bounded here.
+        const retry = failure.retryable || failure.moderationStage === "output";
+        if (attempt >= MAX_RETRIES || !retry) throw failure;
         await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * 2 ** attempt));
       }
     }
@@ -118,21 +154,35 @@ const generateGptImage = async ({ config, prompt, aspectRatio, quality }) => {
   }));
 };
 
-const editGptImage = async ({ config, imageBase64, mimeType, prompt, aspectRatio, quality }) => {
+// Re-encoding drops container metadata the provider rejects as invalid_image_file
+// (e.g. the MPF index in iPhone JPEGs) and bounds the upload size.
+const normalizeEditSource = async (imageBase64) => {
+  try {
+    return await sharp(Buffer.from(imageBase64, "base64"))
+      .rotate()
+      .resize({
+        width: MAX_EDIT_SOURCE_EDGE,
+        height: MAX_EDIT_SOURCE_EDGE,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .png()
+      .toBuffer();
+  } catch {
+    throw new ImageModelError("無法解析上傳的圖片，請改用其他圖片檔", "invalid_source_image", 400);
+  }
+};
+
+const editGptImage = async ({ config, imageBase64, prompt, aspectRatio, quality }) => {
   validateConfig(config);
   const selectedQuality = validateImageQuality(config, quality);
   if (typeof imageBase64 !== "string" || !imageBase64) {
     throw new ImageModelError("缺少圖片編輯來源");
   }
+  const source = await normalizeEditSource(imageBase64);
   return requestImage(config, "edits", () => {
     const formData = new FormData();
-    formData.append(
-      "image",
-      new Blob([Buffer.from(imageBase64, "base64")], {
-        type: mimeType || "image/png",
-      }),
-      "source.png"
-    );
+    formData.append("image", new Blob([source], { type: "image/png" }), "source.png");
     formData.append("prompt", prompt || "");
     formData.append("model", config.deploymentName);
     formData.append("size", getSize(aspectRatio));
