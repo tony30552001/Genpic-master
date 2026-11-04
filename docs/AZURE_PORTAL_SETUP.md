@@ -60,7 +60,7 @@
 
 ---
 
-## 5. Key Vault（存 Gemini API Key）
+## 5. Key Vault（存放後端機密）
 1. 進入 **Key vaults** → **Create**
 2. **Resource group**：`genpic-rg`
 3. **Name**：`genpic-kv`
@@ -69,8 +69,7 @@
 
 新增 Secret：
 - 進入 `genpic-kv` → **Secrets** → **Generate/Import**
-- **Name**：`GEMINI-API-KEY`
-- **Value**：你的 Gemini API Key
+- 依第 9 節需要的機密逐一新增，例如 **Name**：`SECRET-ENCRYPTION-KEY`、`AZURE-STORAGE-KEY`
 - **Create**
 
 ---

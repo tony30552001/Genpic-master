@@ -12,6 +12,7 @@ const {
   CONTEXT_MESSAGE_LIMIT,
   ImageChatDecisionError,
   MAX_OUTPUT_TOKENS,
+  MAX_WEB_SEARCHES_PER_TURN,
   buildModelMessages,
   buildSystemMessage,
   resolveDecision,
@@ -136,6 +137,7 @@ const runTurn = async (context, { identity, owner, turn }) => {
     hasSelectedImage: Boolean(turn.sourceJobId),
   };
   let text = "";
+  const searches = new Map();
 
   try {
     stream.send("turn", { chatId: owner.chatId, turnId: turn.turnId, userMessage, assistantMessage });
@@ -146,12 +148,19 @@ const runTurn = async (context, { identity, owner, turn }) => {
         messages: buildModelMessages(history, turn.content),
         tools: toolsFor(agentTurn),
         maxOutputTokens: MAX_OUTPUT_TOKENS,
+        maxWebSearches: MAX_WEB_SEARCHES_PER_TURN,
         signal: AbortSignal.any([stream.signal, stop.signal]),
         onTextDelta: (delta) => {
           text += delta;
           stream.send("delta", { text: delta });
         },
+        onSearch: (search) => {
+          searches.set(search.id, search);
+          stream.send("search", search);
+        },
       });
+      searches.clear();
+      if (reply.searches.length > 0) await chats.recordSearches(assistantMessage.id, reply.searches);
       const { images, notes } = resolveDecision(reply.toolCalls, agentTurn);
       if (notes.length > 0) {
         await chatMemory.appendMemoryNotes({ ...identity, notes });
@@ -172,6 +181,14 @@ const runTurn = async (context, { identity, owner, turn }) => {
         });
       }
     } catch (err) {
+      if (searches.size > 0) {
+        await chats.recordSearches(
+          assistantMessage.id,
+          [...searches.values()].map((search) =>
+            search.status === "searching" ? { ...search, status: "failed" } : search
+          )
+        );
+      }
       const failure = describeFailure(err, stream.signal.aborted);
       if (failure.code === "chat_failed") {
         context.log.error("Image chat turn failed:", { code: err?.code, status: err?.status });

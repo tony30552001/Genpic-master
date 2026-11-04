@@ -3,9 +3,8 @@
  *
  * Endpoint, API key and deployment always come from the caller. Analysis models
  * are configured per tenant in the admin center (api/_shared/llmModels.js), so
- * this module never reads environment variables. Retries and peer-model
- * failover live in api/_shared/llmRuntime.js because a role may fail over to a
- * model from another provider.
+ * this module never reads environment variables. Retries and the move to the
+ * role's fallback model live in api/_shared/llmRuntime.js.
  */
 
 const { createParser } = require("eventsource-parser");
@@ -234,20 +233,70 @@ const parseToolArguments = (name, raw) => {
   throw error;
 };
 
+const MAX_SEARCH_SOURCES = 5;
+const CITATION_START = "\ue200";
+const CITATION_END = "\ue201";
+
+/**
+ * Web-search replies embed citation markers such as
+ * `\ue200cite\ue202turn0search0\ue201` in the text, split across deltas. The
+ * sources are returned separately, so the markers are dropped before any text
+ * reaches the user.
+ */
+const createCitationFilter = () => {
+  let inCitation = false;
+  return (chunk) => {
+    let out = "";
+    for (const char of chunk) {
+      if (char === CITATION_START) inCitation = true;
+      else if (char === CITATION_END) inCitation = false;
+      else if (!inCitation) out += char;
+    }
+    return out;
+  };
+};
+
+const searchQuery = (action) => {
+  const query = action?.query || action?.queries?.[0] || "";
+  return typeof query === "string" ? query.trim() : "";
+};
+
+const searchSourceUrls = (action) => {
+  const urls = action?.type === "open_page" && action.url
+    ? [action.url]
+    : (action?.sources || []).map((source) => source?.url);
+  return [...new Set(urls.filter((url) => typeof url === "string" && /^https?:\/\//i.test(url)))];
+};
+
+/** Cited sources first, so the shown five include what the reply relied on. */
+const toSources = (urls, citedTitles) =>
+  [...urls]
+    .sort((a, b) => Number(citedTitles.has(b)) - Number(citedTitles.has(a)))
+    .slice(0, MAX_SEARCH_SOURCES)
+    .map((url) => ({ url, title: citedTitles.get(url) || "" }));
+
 /**
  * Streams one Responses API call. Text deltas go to `onTextDelta` as they
  * arrive; function calls are collected and returned only after the response
  * completes, so nothing acts on a call the model has not finished.
+ *
+ * With `maxWebSearches` above zero the hosted `web_search` tool is enabled.
+ * Each search is reported to `onSearch` when it starts (`searching`, no query
+ * yet) and when it ends (`completed` or `failed`, with its query and sources).
+ * The returned `searches` also carry the titles the reply cited.
  */
 const streamResponseCompletion = async ({
   model,
   systemMessage,
   messages,
   tools,
+  maxWebSearches = 0,
   maxOutputTokens,
   signal,
   onTextDelta,
+  onSearch = () => {},
 }) => {
+  const webSearch = maxWebSearches > 0;
   const response = await fetch(getResponsesEndpoint(model.endpoint), {
     method: "POST",
     signal,
@@ -260,13 +309,19 @@ const streamResponseCompletion = async ({
       model: model.modelName,
       instructions: systemMessage,
       input: messages.map(({ role, content }) => ({ role, content })),
-      tools: tools.map(({ name, description, parameters }) => ({
-        type: "function",
-        name,
-        description,
-        parameters,
-        strict: false,
-      })),
+      tools: [
+        ...(webSearch ? [{ type: "web_search" }] : []),
+        ...tools.map(({ name, description, parameters }) => ({
+          type: "function",
+          name,
+          description,
+          parameters,
+          strict: false,
+        })),
+      ],
+      ...(webSearch
+        ? { include: ["web_search_call.action.sources"], max_tool_calls: maxWebSearches }
+        : {}),
       tool_choice: "auto",
       parallel_tool_calls: true,
       stream: true,
@@ -281,6 +336,9 @@ const streamResponseCompletion = async ({
 
   let text = "";
   const toolCalls = [];
+  const searches = [];
+  const citedTitles = new Map();
+  const stripCitations = createCitationFilter();
   let finished = false;
   let failure = null;
 
@@ -295,10 +353,26 @@ const streamResponseCompletion = async ({
         return;
       }
       switch (event.type) {
-        case "response.output_text.delta":
-          if (event.delta) {
-            text += event.delta;
-            onTextDelta(event.delta);
+        case "response.output_text.delta": {
+          const delta = event.delta ? stripCitations(event.delta) : "";
+          if (delta) {
+            text += delta;
+            onTextDelta(delta);
+          }
+          break;
+        }
+        case "response.output_text.annotation.added": {
+          const { annotation } = event;
+          if (annotation?.type === "url_citation" && annotation.url && annotation.title) {
+            citedTitles.set(annotation.url, annotation.title);
+          }
+          break;
+        }
+        case "response.output_item.added":
+          if (event.item?.type === "web_search_call") {
+            const search = { id: event.item.id, status: "searching", query: "", urls: [] };
+            searches.push(search);
+            onSearch({ id: search.id, status: search.status, query: "", sources: [] });
           }
           break;
         case "response.output_item.done":
@@ -307,6 +381,19 @@ const streamResponseCompletion = async ({
               name: event.item.name,
               arguments: parseToolArguments(event.item.name, event.item.arguments),
             });
+          } else if (event.item?.type === "web_search_call") {
+            const search = searches.find((item) => item.id === event.item.id);
+            if (search) {
+              search.status = event.item.status === "completed" ? "completed" : "failed";
+              search.query = searchQuery(event.item.action);
+              search.urls = searchSourceUrls(event.item.action);
+              onSearch({
+                id: search.id,
+                status: search.status,
+                query: search.query,
+                sources: toSources(search.urls, citedTitles),
+              });
+            }
           }
           break;
         case "response.completed":
@@ -344,7 +431,17 @@ const streamResponseCompletion = async ({
     throw new AzureOpenAIError("Azure OpenAI 串流在完成前中斷", 502);
   }
 
-  return { text, toolCalls };
+  return {
+    text,
+    toolCalls,
+    searches: searches.map(({ id, status, query, urls }) => ({
+      id,
+      // A search the stream never closed did not finish.
+      status: status === "searching" ? "failed" : status,
+      query,
+      sources: toSources(urls, citedTitles),
+    })),
+  };
 };
 
 module.exports = {

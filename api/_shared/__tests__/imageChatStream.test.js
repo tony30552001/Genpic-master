@@ -4,14 +4,12 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 const azurePath = require.resolve("../azureOpenAI");
-const geminiPath = require.resolve("../gemini");
 const runtimePath = require.resolve("../llmRuntime");
 
 const { streamResponseCompletion } = require("../azureOpenAI");
 
 const originalModules = {
   [azurePath]: require.cache[azurePath],
-  [geminiPath]: require.cache[geminiPath],
   [runtimePath]: require.cache[runtimePath],
 };
 
@@ -32,12 +30,6 @@ require.cache[azurePath] = {
   loaded: true,
   exports: { streamResponseCompletion: ({ model, ...request }) => stubProvider(model, request) },
 };
-require.cache[geminiPath] = {
-  id: geminiPath,
-  filename: geminiPath,
-  loaded: true,
-  exports: { streamGeminiResponse: ({ model, ...request }) => stubProvider(model, request) },
-};
 const { streamResponse } = require("../llmRuntime");
 
 const encoder = new TextEncoder();
@@ -52,12 +44,11 @@ const sse = (event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n
 
 const azureModel = {
   id: "model-azure",
-  provider: "azure-openai",
   modelName: "gpt-chat",
   endpoint: "https://pixora.services.ai.azure.com/openai/v1",
   apiKey: "azure-key",
 };
-const geminiModel = { id: "model-gemini", provider: "google-gemini", modelName: "gemini", apiKey: "g-key" };
+const backupModel = { ...azureModel, id: "model-backup", modelName: "gpt-backup" };
 const tools = [{ name: "generate_image", description: "draw", parameters: { type: "object" } }];
 
 describe("Azure OpenAI streamed responses", () => {
@@ -92,10 +83,83 @@ describe("Azure OpenAI streamed responses", () => {
     expect(result).toEqual({
       text: "好的，畫一張圖",
       toolCalls: [{ name: "generate_image", arguments: { prompt: "一隻貓" } }],
+      searches: [],
     });
     const body = JSON.parse(fetch.mock.calls[0][1].body);
     expect(body).toMatchObject({ stream: true, parallel_tool_calls: true, instructions: "system" });
     expect(body.tools[0]).toMatchObject({ type: "function", name: "generate_image" });
+    expect(body).not.toHaveProperty("max_tool_calls");
+  });
+
+  it("enables capped web search, reports each search and strips citation markers", async () => {
+    const cited = "https://example.com/cited";
+    fetch.mockResolvedValue(new Response(sseBody([
+      sse({ type: "response.output_item.added", item: { id: "ws_1", type: "web_search_call", status: "in_progress" } }),
+      sse({
+        type: "response.output_item.done",
+        item: {
+          id: "ws_1",
+          type: "web_search_call",
+          status: "completed",
+          action: {
+            type: "search",
+            query: "2026 台北燈會 主燈",
+            sources: [
+              ...["a", "b", "c", "d", "e"].map((name) => ({ type: "url", url: `https://example.com/${name}` })),
+              { type: "url", url: cited },
+              { type: "url", url: "javascript:alert(1)" },
+            ],
+          },
+        },
+      }),
+      sse({ type: "response.output_text.delta", delta: "主燈是駿馬。\ue200cite" }),
+      sse({ type: "response.output_text.delta", delta: "\ue202turn0search0\ue201我來畫。" }),
+      sse({
+        type: "response.output_text.annotation.added",
+        annotation: { type: "url_citation", url: cited, title: "燈會官網" },
+      }),
+      sse({ type: "response.completed" }),
+    ])));
+    const deltas = [];
+    const onSearch = vi.fn();
+
+    const result = await streamResponseCompletion({
+      model: azureModel,
+      systemMessage: "s",
+      messages: [],
+      tools,
+      maxWebSearches: 2,
+      onTextDelta: (text) => deltas.push(text),
+      onSearch,
+    });
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.tools[0]).toEqual({ type: "web_search" });
+    expect(body).toMatchObject({ max_tool_calls: 2, include: ["web_search_call.action.sources"] });
+    expect(deltas.join("")).toBe("主燈是駿馬。我來畫。");
+    expect(result.text).toBe("主燈是駿馬。我來畫。");
+    expect(onSearch.mock.calls.map(([search]) => [search.status, search.query])).toEqual([
+      ["searching", ""],
+      ["completed", "2026 台北燈會 主燈"],
+    ]);
+    expect(result.searches).toHaveLength(1);
+    expect(result.searches[0].sources).toHaveLength(5);
+    expect(result.searches[0].sources[0]).toEqual({ url: cited, title: "燈會官網" });
+    expect(result.searches[0].sources.every(({ url }) => url.startsWith("https://"))).toBe(true);
+  });
+
+  it("reports a search the stream never closed as failed", async () => {
+    fetch.mockResolvedValue(new Response(sseBody([
+      sse({ type: "response.output_item.added", item: { id: "ws_1", type: "web_search_call" } }),
+      sse({ type: "response.output_text.delta", delta: "找不到資料" }),
+      sse({ type: "response.completed" }),
+    ])));
+
+    const result = await streamResponseCompletion({
+      model: azureModel, systemMessage: "s", messages: [], tools, maxWebSearches: 2, onTextDelta: () => {},
+    });
+
+    expect(result.searches).toEqual([{ id: "ws_1", status: "failed", query: "", sources: [] }]);
   });
 
   it("rejects tool arguments that are not a JSON object", async () => {
@@ -147,7 +211,7 @@ describe("llmRuntime.streamResponse", () => {
   });
 
   const request = (overrides = {}) => ({
-    llm: { model: azureModel, fallback: geminiModel },
+    llm: { model: azureModel, fallback: backupModel },
     systemMessage: "system",
     messages: [{ role: "user", content: "hi" }],
     tools,
@@ -155,10 +219,27 @@ describe("llmRuntime.streamResponse", () => {
     ...overrides,
   });
 
-  it("falls back to the peer model when the primary fails before any text", async () => {
-    providerResults = [Object.assign(new Error("busy"), { status: 429 }), { text: "ok", toolCalls: [] }];
-    await expect(streamResponse(request())).resolves.toEqual({ text: "ok", toolCalls: [] });
-    expect(providerCalls.map((call) => call.model.id)).toEqual(["model-azure", "model-gemini"]);
+  it("falls back to the backup model when the primary fails before any output", async () => {
+    const reply = { text: "ok", toolCalls: [], searches: [] };
+    providerResults = [Object.assign(new Error("busy"), { status: 429 }), reply];
+    await expect(streamResponse(request({ maxWebSearches: 2 }))).resolves.toEqual(reply);
+    expect(providerCalls.map((call) => call.model.id)).toEqual(["model-azure", "model-backup"]);
+    expect(providerCalls[1].request.maxWebSearches).toBe(2);
+  });
+
+  it("never retries once a search was shown to the user", async () => {
+    providerResults = [
+      (req) => {
+        req.onSearch({ id: "ws_1", status: "searching", query: "", sources: [] });
+        throw Object.assign(new Error("reset"), { status: 503 });
+      },
+    ];
+    const onSearch = vi.fn();
+    await expect(streamResponse(request({ maxWebSearches: 2, onSearch }))).rejects.toMatchObject({
+      partial: true,
+    });
+    expect(onSearch).toHaveBeenCalledTimes(1);
+    expect(providerCalls).toHaveLength(1);
   });
 
   it("never retries once text reached the user", async () => {

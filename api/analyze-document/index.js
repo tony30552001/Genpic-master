@@ -495,7 +495,6 @@ const analyzeDocumentHandler = async function (context, req) {
       characters: validatedCharacters,
       total_scenes: validatedScenes.length,
       estimated_generation_time: validatedScenes.length * 15,
-      analysis_provider: llm.model.provider,
       analysis_model: llm.model.modelName,
       source_parser: parsedDocument.parser,
       source_format: parsedDocument.format,

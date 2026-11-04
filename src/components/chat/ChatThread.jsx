@@ -1,5 +1,6 @@
 import { AlertCircle } from "@/components/icons/lucideStatus";
-import { Brain, Image as ImageIcon, MessageSquare, Palette } from "@/components/icons/lucideContent";
+import { Brain, Globe, Image as ImageIcon, MessageSquare, Palette } from "@/components/icons/lucideContent";
+import { ChevronDown } from "@/components/icons/lucideControls";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Conversation,
@@ -87,17 +88,94 @@ function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersi
   );
 }
 
+function sourceLabel(source) {
+  if (source.title) return source.title;
+  try {
+    return new URL(source.url).hostname.replace(/^www\./, "");
+  } catch {
+    return source.url;
+  }
+}
+
+function searchLabel(search) {
+  if (search.status === "searching") return search.query ? `正在搜尋網路：${search.query}` : "正在搜尋網路…";
+  if (search.status === "failed") return search.query ? `搜尋網路失敗：${search.query}` : "搜尋網路失敗";
+  return search.query ? `已搜尋網路：${search.query}` : "已搜尋網路";
+}
+
+function WebSearch({ search }) {
+  const label = searchLabel(search);
+  const icon =
+    search.status === "searching" ? (
+      <Spinner className="size-3.5 shrink-0" aria-hidden="true" />
+    ) : search.status === "failed" ? (
+      <AlertCircle className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />
+    ) : (
+      <Globe className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+    );
+
+  if (search.status !== "completed" || search.sources.length === 0) {
+    return (
+      <div
+        className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+        role={search.status === "searching" ? "status" : undefined}
+      >
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+    );
+  }
+
+  return (
+    <details className="group/search text-xs text-muted-foreground">
+      <summary className="flex min-w-0 cursor-pointer list-none items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        {icon}
+        <span className="truncate">{label}</span>
+        <span className="shrink-0">・{search.sources.length} 個來源</span>
+        <ChevronDown
+          className="size-3.5 shrink-0 transition-transform duration-150 group-open/search:rotate-180 motion-reduce:transition-none"
+          aria-hidden="true"
+        />
+      </summary>
+      <ul className="mt-1.5 flex flex-col gap-1 border-l border-border pl-3">
+        {search.sources.map((source) => (
+          <li key={source.url} className="min-w-0">
+            <a
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block truncate text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {sourceLabel(source)}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion, getVersionLabel }) {
   const isResponding = message.status === "responding";
+  const searches = message.input?.searches ?? [];
   const memoryNotes = message.input?.memoryNotes ?? [];
   const hasPendingImage = message.images.some((image) => image.status === "queued" || image.status === "processing");
+  const isSearching = searches.some((search) => search.status === "searching");
 
   return (
     <Message from="assistant">
       <MessageContent className="w-full">
+        {searches.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {searches.map((search) => (
+              <WebSearch key={search.id} search={search} />
+            ))}
+          </div>
+        )}
+
         {message.content ? (
           <MessageResponse isAnimating={isResponding}>{message.content}</MessageResponse>
-        ) : isResponding ? (
+        ) : isResponding && !isSearching ? (
           <Shimmer>思考中…</Shimmer>
         ) : null}
 

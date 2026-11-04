@@ -75,7 +75,13 @@ describe("image chat agent contract", () => {
           { action: "generate", prompt: "night city" },
           { action: "refine", prompt: "add rain" },
         ],
-        input: { memoryNotes: ["偏好夜景"] },
+        input: {
+          memoryNotes: ["偏好夜景"],
+          searches: [
+            { id: "ws_1", status: "completed", query: "台北夜景", sources: [] },
+            { id: "ws_2", status: "failed", query: "", sources: [] },
+          ],
+        },
       },
     ];
     const messages = agent.buildModelMessages(history, "b".repeat(6000));
@@ -83,7 +89,7 @@ describe("image chat agent contract", () => {
       { role: "user", content: "改成夜景" },
       {
         role: "assistant",
-        content: "好\n[已送出生成新圖：night city]\n[已送出修改圖片：add rain]\n[已記住：偏好夜景]",
+        content: "好\n[已送出生成新圖：night city]\n[已送出修改圖片：add rain]\n[已搜尋網路：台北夜景]\n[已記住：偏好夜景]",
       },
       { role: "user", content: "b".repeat(6000) },
     ]);

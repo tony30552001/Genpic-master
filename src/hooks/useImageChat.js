@@ -321,9 +321,24 @@ export default function useImageChat({ enabled, initialSettings }) {
             : message
         )
       );
+    } else if (type === "search") {
+      updateChatMessages(chatId, (current) =>
+        current.map((message) => {
+          if (message.turnId !== turnId || message.role !== "assistant") return message;
+          const searches = message.input?.searches || [];
+          const next = searches.some((search) => search.id === data.id)
+            ? searches.map((search) => (search.id === data.id ? data : search))
+            : [...searches, data];
+          return { ...message, input: { ...message.input, searches: next } };
+        })
+      );
     } else if (type === "memory") {
       updateChatMessages(chatId, (current) =>
-        replaceTurnMessage(current, turnId, "assistant", { input: { memoryNotes: data.notes } })
+        current.map((message) =>
+          message.turnId === turnId && message.role === "assistant"
+            ? { ...message, input: { ...message.input, memoryNotes: data.notes } }
+            : message
+        )
       );
     } else if (type === "image") {
       updateChatMessages(chatId, (current) =>

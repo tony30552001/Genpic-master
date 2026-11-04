@@ -53,7 +53,7 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // 5. Call the Gemini model assigned to this role in the admin center.
+        // 5. Call the LLM assigned to this role in the admin center.
         const identity = await resolveIdentity(auth.user);
         const llm = await resolveRoleModel(identity.tenantId, "filename");
 
@@ -86,7 +86,7 @@ User Script: "${userScript}"
             }
 
         } catch (e) {
-            context.log.error("[generate-filename] Failed to parse Gemini response:", e);
+            context.log.error("[generate-filename] Failed to parse model response:", e);
             data = {
                 filename: `generated-image-${Date.now()}`
             };

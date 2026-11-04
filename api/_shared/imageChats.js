@@ -439,9 +439,18 @@ const attachImageJob = async (
 const recordMemoryNotes = (messageId, notes) =>
   query(
     `UPDATE image_chat_messages
-     SET input = $2, updated_at = now()
+     SET input = input || $2, updated_at = now()
      WHERE id = $1 AND status = 'responding'`,
     [messageId, { memoryNotes: notes }]
+  );
+
+/** Searches really ran even if the reply later failed or was stopped, so any status is kept. */
+const recordSearches = (messageId, searches) =>
+  query(
+    `UPDATE image_chat_messages
+     SET input = input || $2, updated_at = now()
+     WHERE id = $1`,
+    [messageId, { searches }]
   );
 
 const stopTurn = async (owner, turnId) => {
@@ -472,6 +481,7 @@ module.exports = {
   listMessages,
   parseBefore,
   recordMemoryNotes,
+  recordSearches,
   requireChat,
   requireOwnedSucceededJob,
   requireUuid,

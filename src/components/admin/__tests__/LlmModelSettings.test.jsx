@@ -20,16 +20,6 @@ vi.mock("../../../services/adminService", () => ({
   updateAdminLlmModel: vi.fn(),
 }));
 
-const providers = [
-  {
-    id: "azure-openai",
-    label: "Azure OpenAI",
-    requiresEndpoint: true,
-    endpointHint: "https://<resource>.openai.azure.com",
-  },
-  { id: "google-gemini", label: "Google Gemini", requiresEndpoint: false, endpointHint: "" },
-];
-
 const roles = [
   {
     id: "document_analysis",
@@ -47,22 +37,20 @@ const models = [
   {
     id: "model-azure",
     label: "GPT 分析",
-    provider: "azure-openai",
     modelName: "gpt-5.6-luna",
     endpoint: "https://pixora.openai.azure.com/openai/v1",
     hasApiKey: true,
   },
   {
-    id: "model-gemini",
-    label: "Flash 分析",
-    provider: "google-gemini",
-    modelName: "gemini-2.0-flash",
-    endpoint: "",
+    id: "model-mini",
+    label: "Mini 分析",
+    modelName: "gpt-6-luna",
+    endpoint: "https://pixora-mini.openai.azure.com/openai/v1",
     hasApiKey: true,
   },
 ];
 
-const settings = { models, roles, providers, assignments: [] };
+const settings = { models, roles, assignments: [] };
 
 afterEach(() => {
   cleanup();
@@ -109,47 +97,42 @@ describe("LlmModelSettings", () => {
     await renderSettings();
 
     expect(
-      screen.getByText("Azure OpenAI ・ gpt-5.6-luna ・ https://pixora.openai.azure.com/openai/v1")
+      screen.getByText("gpt-5.6-luna ・ https://pixora.openai.azure.com/openai/v1")
     ).toBeInTheDocument();
-    expect(screen.getByText("Google Gemini ・ gemini-2.0-flash")).toBeInTheDocument();
+    expect(
+      screen.getByText("gpt-6-luna ・ https://pixora-mini.openai.azure.com/openai/v1")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("super-secret")).not.toBeInTheDocument();
   });
 
-  it("offers every model to every role regardless of provider", async () => {
+  it("offers every model to every role", async () => {
     await renderSettings();
 
     const expected = [
       "未指派",
-      "GPT 分析（Azure OpenAI）",
-      "Flash 分析（Google Gemini）",
+      "GPT 分析（gpt-5.6-luna）",
+      "Mini 分析（gpt-6-luna）",
     ];
 
     expect(await listOptions("文件分析主要模型")).toEqual(expected);
     expect(await listOptions("風格分析主要模型")).toEqual(expected);
   });
 
-  it("hides the endpoint field for providers that do not need one", async () => {
-    await renderSettings();
-
-    fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
-    expect(screen.getByLabelText("端點")).toBeInTheDocument();
-
-    await chooseOption("供應商", "Google Gemini");
-    expect(screen.queryByLabelText("端點")).not.toBeInTheDocument();
-  });
-
   it("creates a model and refreshes the settings from the response", async () => {
     const created = {
       ...settings,
-      models: [...models, { id: "model-new", label: "新模型", provider: "google-gemini", modelName: "gemini-3", endpoint: "", hasApiKey: true }],
+      models: [...models, { id: "model-new", label: "新模型", modelName: "gpt-6", endpoint: "https://new.openai.azure.com", hasApiKey: true }],
     };
     createAdminLlmModel.mockResolvedValue(created);
     await renderSettings();
 
     fireEvent.click(screen.getByRole("button", { name: "新增模型" }));
-    await chooseOption("供應商", "Google Gemini");
     fireEvent.change(screen.getByLabelText("名稱"), { target: { value: "新模型" } });
     fireEvent.change(screen.getByLabelText("模型／部署名稱"), {
-      target: { value: "gemini-3" },
+      target: { value: "gpt-6" },
+    });
+    fireEvent.change(screen.getByLabelText("Azure OpenAI 端點"), {
+      target: { value: "https://new.openai.azure.com" },
     });
     fireEvent.change(screen.getByLabelText("API 金鑰"), {
       target: { value: "super-secret" },
@@ -162,9 +145,8 @@ describe("LlmModelSettings", () => {
     await waitFor(() =>
       expect(createAdminLlmModel).toHaveBeenCalledWith({
         label: "新模型",
-        provider: "google-gemini",
-        modelName: "gemini-3",
-        endpoint: "",
+        modelName: "gpt-6",
+        endpoint: "https://new.openai.azure.com",
         apiKey: "super-secret",
       })
     );
@@ -191,7 +173,7 @@ describe("LlmModelSettings", () => {
     });
     await renderSettings();
 
-    await chooseOption("文件分析主要模型", "GPT 分析（Azure OpenAI）");
+    await chooseOption("文件分析主要模型", "GPT 分析（gpt-5.6-luna）");
 
     await waitFor(() =>
       expect(assignAdminLlmRole).toHaveBeenCalledWith("document_analysis", {
@@ -200,25 +182,6 @@ describe("LlmModelSettings", () => {
       })
     );
     expect(await screen.findByRole("status")).toHaveTextContent("文件分析");
-  });
-
-  it("saves a cross-provider role assignment", async () => {
-    assignAdminLlmRole.mockResolvedValue({
-      ...settings,
-      assignments: [
-        { role: "document_analysis", modelId: "model-gemini", fallbackModelId: null },
-      ],
-    });
-    await renderSettings();
-
-    await chooseOption("文件分析主要模型", "Flash 分析（Google Gemini）");
-
-    await waitFor(() =>
-      expect(assignAdminLlmRole).toHaveBeenCalledWith("document_analysis", {
-        modelId: "model-gemini",
-        fallbackModelId: null,
-      })
-    );
   });
 
   it("reports a delete that the backend rejects", async () => {

@@ -1,16 +1,14 @@
 /**
- * Provider-agnostic JSON completion runtime.
+ * Analysis-model runtime.
  *
- * Every analysis role can be assigned any tenant-configured model, so the
+ * Every analysis role is assigned a tenant-configured Azure OpenAI model. The
  * caller describes the request once (system message, user message, optional
- * attachment) and this module dispatches to the client the assigned model
- * needs. Retries also live here: the peer model may belong to a different
- * provider than the primary one.
+ * attachment); retries and the move to the role's fallback model live here,
+ * while api/_shared/azureOpenAI.js only performs single requests.
  */
 
 const { postJsonCompletion, streamResponseCompletion } = require("./azureOpenAI");
-const { postGeminiJson, streamGeminiResponse } = require("./gemini");
-const { INVALID_TOOL_CALL, PROVIDERS, OUTPUT_TRUNCATED } = require("./llmProviders");
+const { INVALID_TOOL_CALL, OUTPUT_TRUNCATED } = require("./llmProviders");
 
 /**
  * GlobalStandard deployments reject oversized requests during peak load with
@@ -47,7 +45,7 @@ const requireModel = (model, label) => {
   if (!model.apiKey) {
     throw new Error(`${label}缺少 API 金鑰`);
   }
-  if (model.provider === PROVIDERS.AZURE_OPENAI && !model.endpoint) {
+  if (!model.endpoint) {
     throw new Error(`${label}缺少 Azure OpenAI 端點`);
   }
   return model;
@@ -58,17 +56,6 @@ const toDataUrl = (attachment) =>
 
 const callModel = async (model, request, maxOutputTokens) => {
   const { systemMessage, userMessage, attachment, fileName } = request;
-
-  if (model.provider === PROVIDERS.GOOGLE_GEMINI) {
-    return postGeminiJson({
-      model,
-      systemMessage,
-      userMessage,
-      attachment,
-      maxOutputTokens,
-    });
-  }
-
   const isPdf = attachment?.mimeType === "application/pdf";
   return postJsonCompletion({
     model,
@@ -116,7 +103,6 @@ const generateJson = async ({
         activeMaxOutputTokens = growOutputTokens(activeMaxOutputTokens);
         console.warn("[llmRuntime] Retrying truncated response:", {
           attempt,
-          provider: activeModel.provider,
           model: activeModel.modelName,
           maxOutputTokens: activeMaxOutputTokens,
         });
@@ -132,7 +118,6 @@ const generateJson = async ({
       console.warn("[llmRuntime] Retrying rejected request:", {
         attempt,
         status: error.status,
-        provider: activeModel.provider,
         model: activeModel.modelName,
         maxOutputTokens: activeMaxOutputTokens,
       });
@@ -155,18 +140,13 @@ class LlmStreamError extends Error {
   }
 }
 
-const streamModel = (model, request) =>
-  model.provider === PROVIDERS.GOOGLE_GEMINI
-    ? streamGeminiResponse({ model, ...request })
-    : streamResponseCompletion({ model, ...request });
-
 /**
- * Streams one reply that may carry tool calls, as `{ text, toolCalls }`.
+ * Streams one reply that may carry tool calls, as `{ text, toolCalls, searches }`.
  *
- * Retries and the fallback model are only used before any text reached
- * `onTextDelta`: once the user has seen part of an answer, it is never
- * replaced by another model's answer. `signal` aborts the call; the deadline
- * aborts it with a `llm_timeout` error.
+ * Retries and the fallback model are only used before anything reached the
+ * user through `onTextDelta` or `onSearch`: once the user has seen part of an
+ * answer, it is never replaced by another model's answer. `signal` aborts the
+ * call; the deadline aborts it with a `llm_timeout` error.
  *
  * @param {object} params
  * @param {{ model: object, fallback: object|null }} params.llm Resolved role assignment.
@@ -174,6 +154,8 @@ const streamModel = (model, request) =>
  * @param {{ role: "user"|"assistant", content: string }[]} params.messages
  * @param {{ name: string, description: string, parameters: object }[]} params.tools
  * @param {(text: string) => void} params.onTextDelta
+ * @param {number} [params.maxWebSearches] Hosted web searches allowed in this reply; 0 disables the tool.
+ * @param {(search: object) => void} [params.onSearch] Receives each web-search progress update.
  * @param {AbortSignal} [params.signal]
  * @param {number} [params.maxOutputTokens]
  * @param {number} [params.deadlineMs]
@@ -184,6 +166,8 @@ const streamResponse = async ({
   messages,
   tools,
   onTextDelta,
+  maxWebSearches = 0,
+  onSearch,
   signal,
   maxOutputTokens,
   deadlineMs = STREAM_DEADLINE_MS,
@@ -197,17 +181,22 @@ const streamResponse = async ({
     systemMessage,
     messages,
     tools,
+    maxWebSearches,
     maxOutputTokens,
     signal: combined,
     onTextDelta: (text) => {
       emitted = true;
       onTextDelta(text);
     },
+    onSearch: (search) => {
+      emitted = true;
+      onSearch?.(search);
+    },
   };
 
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await streamModel(activeModel, request);
+      return await streamResponseCompletion({ model: activeModel, ...request });
     } catch (error) {
       if (deadline.aborted) {
         throw new LlmStreamError("對話模型回覆逾時，請稍後重試", "llm_timeout", {
@@ -237,7 +226,6 @@ const streamResponse = async ({
       console.warn("[llmRuntime] Retrying stream before first token:", {
         attempt,
         status: error.status,
-        provider: activeModel.provider,
         model: activeModel.modelName,
       });
       await sleep(STREAM_RETRY_DELAY_MS * attempt);

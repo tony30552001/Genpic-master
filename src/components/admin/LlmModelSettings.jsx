@@ -27,7 +27,6 @@ import {
 
 const EMPTY_FORM = {
   label: "",
-  provider: "azure-openai",
   modelName: "",
   endpoint: "",
   apiKey: "",
@@ -41,7 +40,6 @@ export default function LlmModelSettings() {
     models: [],
     assignments: [],
     roles: [],
-    providers: [],
   });
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -61,7 +59,6 @@ export default function LlmModelSettings() {
         models: data?.models || [],
         assignments: data?.assignments || [],
         roles: data?.roles || [],
-        providers: data?.providers || [],
       });
     } catch (error) {
       setErrorMessage(error.message || "分析模型設定載入失敗");
@@ -73,18 +70,6 @@ export default function LlmModelSettings() {
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
-
-  const providerLabel = useCallback(
-    (providerId) =>
-      settings.providers.find((provider) => provider.id === providerId)?.label ||
-      providerId,
-    [settings.providers]
-  );
-
-  const selectedProvider = useMemo(
-    () => settings.providers.find((provider) => provider.id === form.provider),
-    [settings.providers, form.provider]
-  );
 
   const assignmentByRole = useMemo(() => {
     const map = {};
@@ -99,12 +84,11 @@ export default function LlmModelSettings() {
       models: data?.models || previous.models,
       assignments: data?.assignments || previous.assignments,
       roles: data?.roles || previous.roles,
-      providers: data?.providers || previous.providers,
     }));
   };
 
   const openCreateForm = () => {
-    setForm({ ...EMPTY_FORM, provider: settings.providers[0]?.id || "azure-openai" });
+    setForm(EMPTY_FORM);
     setEditingId(null);
     setIsFormOpen(true);
     setErrorMessage("");
@@ -114,9 +98,8 @@ export default function LlmModelSettings() {
   const openEditForm = (model) => {
     setForm({
       label: model.label,
-      provider: model.provider,
       modelName: model.modelName,
-      endpoint: model.endpoint || "",
+      endpoint: model.endpoint,
       apiKey: "",
     });
     setEditingId(model.id);
@@ -139,9 +122,8 @@ export default function LlmModelSettings() {
     try {
       const payload = {
         label: form.label,
-        provider: form.provider,
         modelName: form.modelName,
-        endpoint: selectedProvider?.requiresEndpoint ? form.endpoint : "",
+        endpoint: form.endpoint,
       };
       if (form.apiKey) payload.apiKey = form.apiKey;
 
@@ -271,16 +253,6 @@ export default function LlmModelSettings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="llm-provider" className="text-sm font-semibold">供應商</label>
-                  <SelectField
-                    id="llm-provider"
-                    className={inputClass}
-                    value={form.provider}
-                    onValueChange={(provider) => setForm((previous) => ({ ...previous, provider }))}
-                    options={settings.providers.map((provider) => ({ value: provider.id, label: provider.label }))}
-                  />
-                </div>
-                <div className="space-y-2">
                   <label htmlFor="llm-model-name" className="text-sm font-semibold">模型／部署名稱</label>
                   <input
                     id="llm-model-name"
@@ -290,20 +262,18 @@ export default function LlmModelSettings() {
                     required
                   />
                 </div>
-                {selectedProvider?.requiresEndpoint && (
-                  <div className="space-y-2">
-                    <label htmlFor="llm-endpoint" className="text-sm font-semibold">端點</label>
-                    <input
-                      id="llm-endpoint"
-                      type="url"
-                      className={inputClass}
-                      placeholder={selectedProvider.endpointHint}
-                      value={form.endpoint}
-                      onChange={(event) => setForm((previous) => ({ ...previous, endpoint: event.target.value }))}
-                      required
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <label htmlFor="llm-endpoint" className="text-sm font-semibold">Azure OpenAI 端點</label>
+                  <input
+                    id="llm-endpoint"
+                    type="url"
+                    className={inputClass}
+                    placeholder="https://<resource>.openai.azure.com"
+                    value={form.endpoint}
+                    onChange={(event) => setForm((previous) => ({ ...previous, endpoint: event.target.value }))}
+                    required
+                  />
+                </div>
                 <div className="space-y-2">
                   <label htmlFor="llm-api-key" className="text-sm font-semibold">API 金鑰</label>
                   <input
@@ -334,7 +304,6 @@ export default function LlmModelSettings() {
                   disabled={testingKey === "draft" || !form.apiKey}
                   onClick={() =>
                     runTest("draft", {
-                      provider: form.provider,
                       modelName: form.modelName,
                       endpoint: form.endpoint,
                       apiKey: form.apiKey,
@@ -370,7 +339,7 @@ export default function LlmModelSettings() {
                   <div className="min-w-0 space-y-1">
                     <p className="truncate text-sm font-semibold">{model.label}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {[providerLabel(model.provider), model.modelName, model.endpoint]
+                      {[model.modelName, model.endpoint]
                         .filter(Boolean)
                         .join(" ・ ")}
                     </p>
@@ -423,7 +392,7 @@ export default function LlmModelSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            每個用途都必須指派主要模型，否則相關功能會回報尚未設定。任何用途都可以使用 Azure OpenAI 或 Google Gemini 模型，備援模型會在主要模型忙碌或失敗時接手，且不必與主要模型同一家供應商。
+            每個用途都必須指派主要模型，否則相關功能會回報尚未設定。備援模型會在主要模型忙碌或失敗時接手。對話創作會使用 Azure OpenAI 內建網路搜尋，請指派支援 web_search 工具的部署。
           </p>
           {settings.roles.map((role) => {
             const assignment = assignmentByRole[role.id] || {};
@@ -455,7 +424,7 @@ export default function LlmModelSettings() {
                       disabled={isPending}
                       onValueChange={(value) => handleAssignmentChange(role, "modelId", value)}
                       emptyLabel="未指派"
-                      options={candidates.map((model) => ({ value: model.id, label: `${model.label}（${providerLabel(model.provider)}）` }))}
+                      options={candidates.map((model) => ({ value: model.id, label: `${model.label}（${model.modelName}）` }))}
                     />
                   )}
                 </div>
@@ -477,7 +446,7 @@ export default function LlmModelSettings() {
                       emptyLabel="不設定"
                       options={candidates
                         .filter((model) => model.id !== assignment.modelId)
-                        .map((model) => ({ value: model.id, label: `${model.label}（${providerLabel(model.provider)}）` }))}
+                        .map((model) => ({ value: model.id, label: `${model.label}（${model.modelName}）` }))}
                     />
                   )}
                 </div>

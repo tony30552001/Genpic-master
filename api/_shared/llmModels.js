@@ -12,12 +12,7 @@ const { query } = require("./db");
 const { encrypt, decrypt } = require("./secretCrypto");
 const { isPublicHttpsEndpoint } = require("./urlValidator");
 const { generateJson } = require("./llmRuntime");
-const {
-  LLM_PROVIDERS,
-  LLM_ROLES,
-  PROVIDERS,
-  getRole,
-} = require("./llmProviders");
+const { LLM_ROLES, getRole } = require("./llmProviders");
 
 class LlmValidationError extends Error {
   constructor(message) {
@@ -52,7 +47,6 @@ const timestamp = (value) =>
 const mapModel = (row) => ({
   id: row.id,
   label: row.label,
-  provider: row.provider,
   modelName: row.model_name,
   endpoint: row.endpoint || "",
   hasApiKey: Boolean(row.api_key_encrypted),
@@ -69,10 +63,9 @@ const mapAssignment = (row) => ({
 
 const normalizeText = (value) => String(value ?? "").trim();
 
-const validateModelInput = ({ label, provider, modelName, endpoint }) => {
+const validateModelInput = ({ label, modelName, endpoint }) => {
   const normalized = {
     label: normalizeText(label),
-    provider: normalizeText(provider),
     modelName: normalizeText(modelName),
     endpoint: normalizeText(endpoint),
   };
@@ -80,22 +73,15 @@ const validateModelInput = ({ label, provider, modelName, endpoint }) => {
   if (!normalized.label) {
     throw new LlmValidationError("請填寫模型名稱標籤");
   }
-  if (!LLM_PROVIDERS.some((item) => item.id === normalized.provider)) {
-    throw new LlmValidationError("不支援的模型供應商");
-  }
   if (!normalized.modelName) {
     throw new LlmValidationError("請填寫部署或模型代號");
   }
 
-  if (normalized.provider === PROVIDERS.AZURE_OPENAI) {
-    if (!normalized.endpoint) {
-      throw new LlmValidationError("Azure OpenAI 模型必須填寫端點");
-    }
-    if (!isPublicHttpsEndpoint(normalized.endpoint)) {
-      throw new LlmValidationError("端點必須是公開可連線的 https 網址");
-    }
-  } else {
-    normalized.endpoint = "";
+  if (!normalized.endpoint) {
+    throw new LlmValidationError("請填寫 Azure OpenAI 端點");
+  }
+  if (!isPublicHttpsEndpoint(normalized.endpoint)) {
+    throw new LlmValidationError("端點必須是公開可連線的 https 網址");
   }
 
   return normalized;
@@ -103,11 +89,11 @@ const validateModelInput = ({ label, provider, modelName, endpoint }) => {
 
 const listLlmModels = async (tenantId) => {
   const result = await query(
-    `SELECT id, label, provider, model_name, endpoint, api_key_encrypted,
+    `SELECT id, label, model_name, endpoint, api_key_encrypted,
             created_at, updated_at
      FROM llm_models
      WHERE tenant_id = $1
-     ORDER BY provider ASC, lower(label) ASC`,
+     ORDER BY lower(label) ASC`,
     [tenantId]
   );
   return result.rows.map(mapModel);
@@ -118,13 +104,12 @@ const isUniqueViolation = (error) => error?.code === "23505";
 const createLlmModel = async ({
   tenantId,
   label,
-  provider,
   modelName,
   endpoint,
   apiKey,
   createdBy,
 }) => {
-  const normalized = validateModelInput({ label, provider, modelName, endpoint });
+  const normalized = validateModelInput({ label, modelName, endpoint });
   const key = normalizeText(apiKey);
   if (!key) {
     throw new LlmValidationError("請填寫 API 金鑰");
@@ -133,14 +118,13 @@ const createLlmModel = async ({
   try {
     const result = await query(
       `INSERT INTO llm_models
-         (tenant_id, label, provider, model_name, endpoint, api_key_encrypted, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, label, provider, model_name, endpoint, api_key_encrypted,
+         (tenant_id, label, model_name, endpoint, api_key_encrypted, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, label, model_name, endpoint, api_key_encrypted,
                  created_at, updated_at`,
       [
         tenantId,
         normalized.label,
-        normalized.provider,
         normalized.modelName,
         normalized.endpoint || null,
         encrypt(key),
@@ -160,7 +144,6 @@ const updateLlmModel = async ({
   tenantId,
   id,
   label,
-  provider,
   modelName,
   endpoint,
   apiKey,
@@ -168,24 +151,22 @@ const updateLlmModel = async ({
   if (!id) {
     throw new LlmValidationError("缺少模型 id");
   }
-  const normalized = validateModelInput({ label, provider, modelName, endpoint });
+  const normalized = validateModelInput({ label, modelName, endpoint });
   const key = normalizeText(apiKey);
 
   try {
     const result = await query(
       `UPDATE llm_models
        SET label = $1,
-           provider = $2,
-           model_name = $3,
-           endpoint = $4,
-           api_key_encrypted = COALESCE($5, api_key_encrypted),
+           model_name = $2,
+           endpoint = $3,
+           api_key_encrypted = COALESCE($4, api_key_encrypted),
            updated_at = now()
-       WHERE id = $6 AND tenant_id = $7
-       RETURNING id, label, provider, model_name, endpoint, api_key_encrypted,
+       WHERE id = $5 AND tenant_id = $6
+       RETURNING id, label, model_name, endpoint, api_key_encrypted,
                  created_at, updated_at`,
       [
         normalized.label,
-        normalized.provider,
         normalized.modelName,
         normalized.endpoint || null,
         key ? encrypt(key) : null,
@@ -290,7 +271,6 @@ const setRoleAssignment = async ({
 const toRuntimeModel = (row) => ({
   id: row.id,
   label: row.label,
-  provider: row.provider,
   modelName: row.model_name,
   endpoint: row.endpoint || "",
   apiKey: decrypt(row.api_key_encrypted),
@@ -310,13 +290,11 @@ const resolveRoleModel = async (tenantId, role) => {
   const result = await query(
     `SELECT primary_model.id,
             primary_model.label,
-            primary_model.provider,
             primary_model.model_name,
             primary_model.endpoint,
             primary_model.api_key_encrypted,
             fallback_model.id AS fallback_id,
             fallback_model.label AS fallback_label,
-            fallback_model.provider AS fallback_provider,
             fallback_model.model_name AS fallback_model_name,
             fallback_model.endpoint AS fallback_endpoint,
             fallback_model.api_key_encrypted AS fallback_api_key_encrypted
@@ -343,7 +321,6 @@ const resolveRoleModel = async (tenantId, role) => {
       ? toRuntimeModel({
           id: row.fallback_id,
           label: row.fallback_label,
-          provider: row.fallback_provider,
           model_name: row.fallback_model_name,
           endpoint: row.fallback_endpoint,
           api_key_encrypted: row.fallback_api_key_encrypted,
@@ -356,10 +333,9 @@ const resolveRoleModel = async (tenantId, role) => {
  * Calls the model once so an administrator can verify a draft or saved
  * configuration before assigning it to a role.
  */
-const testLlmModel = async ({ provider, modelName, endpoint, apiKey }) => {
+const testLlmModel = async ({ modelName, endpoint, apiKey }) => {
   const normalized = validateModelInput({
     label: "test",
-    provider,
     modelName,
     endpoint,
   });
@@ -372,7 +348,6 @@ const testLlmModel = async ({ provider, modelName, endpoint, apiKey }) => {
   await generateJson({
     llm: {
       model: {
-        provider: normalized.provider,
         modelName: normalized.modelName,
         endpoint: normalized.endpoint,
         apiKey: key,
@@ -389,7 +364,7 @@ const testLlmModel = async ({ provider, modelName, endpoint, apiKey }) => {
 /** Resolves a saved model so it can be tested without exposing its key. */
 const getLlmModelSecret = async ({ tenantId, id }) => {
   const result = await query(
-    `SELECT id, label, provider, model_name, endpoint, api_key_encrypted
+    `SELECT id, label, model_name, endpoint, api_key_encrypted
      FROM llm_models
      WHERE id = $1 AND tenant_id = $2
      LIMIT 1`,
@@ -400,7 +375,6 @@ const getLlmModelSecret = async ({ tenantId, id }) => {
     throw new LlmValidationError("找不到分析模型");
   }
   return {
-    provider: row.provider,
     modelName: row.model_name,
     endpoint: row.endpoint || "",
     apiKey: decrypt(row.api_key_encrypted),
@@ -408,7 +382,6 @@ const getLlmModelSecret = async ({ tenantId, id }) => {
 };
 
 module.exports = {
-  LLM_PROVIDERS,
   LLM_ROLES,
   LlmConfigurationError,
   LlmConflictError,

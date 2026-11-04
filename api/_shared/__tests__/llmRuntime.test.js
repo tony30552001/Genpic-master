@@ -1,48 +1,22 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-
-const geminiPath = require.resolve("../gemini");
-const runtimePath = require.resolve("../llmRuntime");
-
-const originalModules = {
-  [geminiPath]: require.cache[geminiPath],
-  [runtimePath]: require.cache[runtimePath],
-};
-
-const geminiCalls = [];
-let geminiResults = [];
-
-require.cache[geminiPath] = {
-  id: geminiPath,
-  filename: geminiPath,
-  loaded: true,
-  exports: {
-    postGeminiJson: async (request) => {
-      geminiCalls.push(request);
-      const next = geminiResults.shift();
-      if (next instanceof Error) throw next;
-      return next ?? {};
-    },
-  },
-};
 
 const { generateJson } = require("../llmRuntime");
 
 const azureModel = {
   id: "model-azure",
-  provider: "azure-openai",
   modelName: "gpt-document-analysis",
   endpoint: "https://pixora.services.ai.azure.com/openai/v1",
   apiKey: "azure-key",
 };
 
-const geminiModel = {
-  id: "model-gemini",
-  provider: "google-gemini",
-  modelName: "gemini-2.0-flash",
-  apiKey: "gemini-key",
+const backupModel = {
+  id: "model-backup",
+  modelName: "gpt-backup",
+  endpoint: "https://backup.services.ai.azure.com/openai/v1",
+  apiKey: "backup-key",
 };
 
 const peakLoadResponse = () =>
@@ -75,24 +49,9 @@ const truncatedResponse = () =>
     { status: 200 }
   );
 
-beforeEach(() => {
-  geminiCalls.length = 0;
-  geminiResults = [];
-});
-
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
-});
-
-afterAll(() => {
-  for (const [path, mod] of Object.entries(originalModules)) {
-    if (mod) {
-      require.cache[path] = mod;
-    } else {
-      delete require.cache[path];
-    }
-  }
 });
 
 describe("llmRuntime", () => {
@@ -139,40 +98,16 @@ describe("llmRuntime", () => {
     });
   });
 
-  it("dispatches a Gemini model to the Gemini client", async () => {
-    geminiResults.push({ style_name: "水彩" });
-
-    const result = await generateJson({
-      llm: { model: geminiModel },
-      systemMessage: "Return JSON",
-      userMessage: "Analyze",
-      attachment: { mimeType: "image/jpeg", base64: "CCCC" },
-      maxOutputTokens: 4096,
-    });
-
-    expect(result.style_name).toBe("水彩");
-    expect(geminiCalls).toHaveLength(1);
-    expect(geminiCalls[0]).toMatchObject({
-      model: geminiModel,
-      attachment: { mimeType: "image/jpeg", base64: "CCCC" },
-      maxOutputTokens: 4096,
-    });
-  });
-
-  /**
-   * Roles are no longer pinned to one provider, so the peer model may need a
-   * different client than the primary one.
-   */
-  it("fails over from Azure to a Gemini peer model after a 429", async () => {
+  it("fails over to the backup model with a smaller budget after a 429", async () => {
     vi.useFakeTimers();
 
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(peakLoadResponse());
-    geminiResults.push({ svg: "<svg></svg>" });
+      .mockResolvedValueOnce(peakLoadResponse())
+      .mockResolvedValueOnce(jsonResponse({ svg: "<svg></svg>" }));
 
     const pending = generateJson({
-      llm: { model: azureModel, fallback: geminiModel },
+      llm: { model: azureModel, fallback: backupModel },
       systemMessage: "Author one slide",
       userMessage: "Slide 1",
       maxOutputTokens: 16000,
@@ -181,8 +116,13 @@ describe("llmRuntime", () => {
     const result = await pending;
 
     expect(result.svg).toBe("<svg></svg>");
-    expect(fetchMock).toHaveBeenCalledOnce();
-    expect(geminiCalls[0].maxOutputTokens).toBe(9600);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, backupCall] = fetchMock.mock.calls;
+    expect(backupCall[0]).toContain("backup.services.ai.azure.com");
+    expect(JSON.parse(backupCall[1].body)).toMatchObject({
+      model: "gpt-backup",
+      max_output_tokens: 9600,
+    });
   });
 
   it("never shrinks the output budget below the floor and finally surfaces the rejection", async () => {
@@ -222,7 +162,7 @@ describe("llmRuntime", () => {
       .mockResolvedValueOnce(jsonResponse({ slides: [] }));
 
     const result = await generateJson({
-      llm: { model: azureModel, fallback: geminiModel },
+      llm: { model: azureModel, fallback: backupModel },
       systemMessage: "Plan an outline",
       userMessage: "Deck",
       maxOutputTokens: 16000,
@@ -251,23 +191,6 @@ describe("llmRuntime", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("grows the budget for a truncated Gemini answer", async () => {
-    const truncation = new Error("truncated");
-    truncation.code = "output_truncated";
-    geminiResults.push(truncation);
-    geminiResults.push({ filename: "sunset-city" });
-
-    const result = await generateJson({
-      llm: { model: geminiModel },
-      systemMessage: "Name the file",
-      userMessage: "Prompt",
-      maxOutputTokens: 8000,
-    });
-
-    expect(result.filename).toBe("sunset-city");
-    expect(geminiCalls.map((call) => call.maxOutputTokens)).toEqual([8000, 16000]);
-  });
-
   it("does not retry rejections the request itself caused", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { message: "Invalid prompt" } }), {
@@ -277,16 +200,15 @@ describe("llmRuntime", () => {
 
     await expect(
       generateJson({
-        llm: { model: azureModel, fallback: geminiModel },
+        llm: { model: azureModel, fallback: backupModel },
         systemMessage: "Author one slide",
         userMessage: "Slide 1",
       })
     ).rejects.toThrow("Invalid prompt (400)");
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(geminiCalls).toHaveLength(0);
   });
 
-  it("rejects an Azure model that is missing its endpoint", async () => {
+  it("rejects a model that is missing its endpoint", async () => {
     await expect(
       generateJson({
         llm: { model: { ...azureModel, endpoint: "" } },

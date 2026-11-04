@@ -10,7 +10,6 @@ const { listPublicImageModels } = require("../_shared/imageModels");
 const { ImageModelError } = require("../_shared/imageModelConfig");
 const { handleImageModels, handleImageModelTest } = require("./imageModels");
 const {
-  LLM_PROVIDERS,
   LLM_ROLES,
   createLlmModel,
   deleteLlmModel,
@@ -478,7 +477,7 @@ const llmSettingsPayload = async (tenantId) => {
     listLlmModels(tenantId),
     listRoleAssignments(tenantId),
   ]);
-  return { models, assignments, roles: LLM_ROLES, providers: LLM_PROVIDERS };
+  return { models, assignments, roles: LLM_ROLES };
 };
 
 const respondLlmError = (context, req, err) => {
@@ -500,7 +499,6 @@ const handleLlmModels = async (context, identity, req, method, targetId) => {
       await createLlmModel({
         tenantId: identity.tenantId,
         label: req.body?.label,
-        provider: req.body?.provider,
         modelName: req.body?.modelName,
         endpoint: req.body?.endpoint,
         apiKey: req.body?.apiKey,
@@ -519,7 +517,6 @@ const handleLlmModels = async (context, identity, req, method, targetId) => {
         tenantId: identity.tenantId,
         id: targetId,
         label: req.body?.label,
-        provider: req.body?.provider,
         modelName: req.body?.modelName,
         endpoint: req.body?.endpoint,
         apiKey: req.body?.apiKey,
@@ -566,7 +563,6 @@ const handleLlmModelTest = async (context, identity, req) => {
     const config = modelId
       ? await getLlmModelSecret({ tenantId: identity.tenantId, id: modelId })
       : {
-          provider: req.body?.provider,
           modelName: req.body?.modelName,
           endpoint: req.body?.endpoint,
           apiKey: req.body?.apiKey,

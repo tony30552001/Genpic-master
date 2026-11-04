@@ -100,9 +100,7 @@
 
 ### 附圖
 
-- `streamResponse` 的訊息內容改成可以同時帶文字和圖片：
-  - Azure Responses API 使用 `input_image`。
-  - Gemini 使用 `inlineData`。
+- `streamResponse` 的訊息內容改成可以同時帶文字和圖片，Azure Responses API 使用 `input_image`。
 - 只有本輪的附圖交給對話模型看。歷史中的附圖改用文字描述，以控制費用與延遲。
 
 ## 6. ③ 👍／👎／重來

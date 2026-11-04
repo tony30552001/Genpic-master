@@ -18,6 +18,7 @@ const MAX_OUTPUT_TOKENS = 6000;
 const MAX_IMAGES_PER_TURN = 4;
 const MAX_MEMORY_NOTES_PER_TURN = 3;
 const MAX_MEMORY_NOTE_CHARS = 200;
+const MAX_WEB_SEARCHES_PER_TURN = 2;
 
 class ImageChatDecisionError extends Error {
   constructor(message) {
@@ -96,6 +97,14 @@ const buildSystemMessage = (turn) => `你是 Pixora 的對話式生圖助理，�
 2. generate_image：資訊足以畫出新圖時呼叫。使用者要求多張不同的圖（例如「四季各一張」「封面和內頁」）時，每張圖各呼叫一次，每次的描述都要完整自足；同一輪最多 ${MAX_IMAGES_PER_TURN} 張。同一張圖的細節調整不要拆成多張。
 3. refine_image：使用者要求修改目前選取的圖片時呼叫；要求多種不同修改時可各呼叫一次。${turn.hasSelectedImage ? "" : "目前沒有選取的圖片，不能使用。"}
 4. remember_preference：使用者要你記住某件事，或說出之後都要遵守的規定時呼叫，每個偏好一次（同一輪最多 ${MAX_MEMORY_NOTES_PER_TURN} 次）。一次性的要求不要記錄。
+5. web_search：畫面內容需要你不確定或可能已過時的真實資訊時，先搜尋網路再回覆或生圖；同一輪最多 ${MAX_WEB_SEARCHES_PER_TURN} 次。
+
+何時搜尋網路：
+- 要搜尋：近期事件、節慶、賽事或展覽；品牌、產品、包裝、標誌或店家；真實地點、建築或地標；特定人物、角色、作品、在地用語或流行語；要畫進圖裡的數據、日期、規格或價格。
+- 不要搜尋：純創意或虛構的畫面；修改目前圖片或調整風格、構圖、顏色；使用者已經提供的資訊；常識、閒聊或你要追問使用者的時候。
+- 不要為了取得真實人物的長相而搜尋。
+- 生圖模型看不到搜尋結果，必須把查到的關鍵事實（外觀、顏色、文字、數據）寫進 generate_image 的描述。
+- 查不到可靠資料時，直接告訴使用者並詢問細節，不要自行編造。
 
 規則：
 - 呼叫工具時先用一句話說明你要做什麼，不要描述你看不到的圖片內容。
@@ -113,6 +122,9 @@ const describeAssistantMessage = (message) => {
   const parts = [message.content.trim()];
   for (const image of message.images || []) {
     parts.push(`[已送出${image.action === "refine" ? "修改圖片" : "生成新圖"}：${image.prompt}]`);
+  }
+  for (const search of message.input?.searches || []) {
+    if (search.status === "completed" && search.query) parts.push(`[已搜尋網路：${search.query}]`);
   }
   for (const note of message.input?.memoryNotes || []) parts.push(`[已記住：${note}]`);
   if (message.status === "failed" || message.status === "interrupted") parts.push("[這次回覆未完成]");
@@ -218,6 +230,7 @@ module.exports = {
   MAX_IMAGES_PER_TURN,
   MAX_OUTPUT_TOKENS,
   MAX_USER_MESSAGE_CHARS,
+  MAX_WEB_SEARCHES_PER_TURN,
   REFINE_TOOL,
   REMEMBER_TOOL,
   buildModelMessages,

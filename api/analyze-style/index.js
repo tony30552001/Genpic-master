@@ -28,7 +28,7 @@ const sanitizeAnalysisResult = (data) => ({
   style_description_zh: safeString(data.style_description_zh),
   image_content: safeString(data.image_content),
   suggested_tags: normalizeTags(data.suggested_tags),
-  // 保留任何其他 Gemini 可能額外回傳的欄位，但不影響渲染
+  // 保留任何其他模型可能額外回傳的欄位，但不影響渲染
 });
 
 

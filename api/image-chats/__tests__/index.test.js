@@ -22,7 +22,7 @@ llmRuntime.streamResponse = vi.fn();
 [
   "attachImageJob", "beginTurn", "completeReply", "createChat", "deleteChat", "endReply",
   "getMessage", "getTurnMessages", "listChats", "listContextMessages", "listMessages",
-  "recordMemoryNotes", "requireChat", "requireOwnedSucceededJob", "saveChatState", "stopTurn",
+  "recordMemoryNotes", "recordSearches", "requireChat", "requireOwnedSucceededJob", "saveChatState", "stopTurn",
 ].forEach((name) => { chats[name] = vi.fn(); });
 ["appendMemoryNotes", "getMemory", "saveMemory"].forEach((name) => { chatMemory[name] = vi.fn(); });
 
@@ -99,7 +99,7 @@ describe("image chat turns", () => {
     llmRuntime.streamResponse.mockImplementation(async ({ onTextDelta }) => {
       onTextDelta("想要");
       onTextDelta("什麼風格？");
-      return { text: "想要什麼風格？", toolCalls: [] };
+      return { searches: [], text: "想要什麼風格？", toolCalls: [] };
     });
 
     const { events, stream } = await sendTurn();
@@ -120,7 +120,7 @@ describe("image chat turns", () => {
       expect(tools.map((tool) => tool.name)).toEqual(["generate_image", "remember_preference"]);
       expect(systemMessage).toContain("- 不要出現人臉");
       onTextDelta("馬上畫。");
-      return { text: "馬上畫。", toolCalls: [{ name: "generate_image", arguments: { prompt: "a cat on a sofa" } }] };
+      return { searches: [], text: "馬上畫。", toolCalls: [{ name: "generate_image", arguments: { prompt: "a cat on a sofa" } }] };
     });
 
     const { events } = await sendTurn();
@@ -143,9 +143,55 @@ describe("image chat turns", () => {
     expect(events.at(-1).event).toBe("done");
   });
 
+  it("forwards web searches and stores them on the reply before queuing images", async () => {
+    const searching = { id: "ws_1", status: "searching", query: "", sources: [] };
+    const completed = {
+      id: "ws_1", status: "completed", query: "台北燈會 主燈",
+      sources: [{ url: "https://example.com/lantern", title: "" }],
+    };
+    const final = { ...completed, sources: [{ url: "https://example.com/lantern", title: "燈會官網" }] };
+    llmRuntime.streamResponse.mockImplementation(async ({ maxWebSearches, systemMessage, onSearch }) => {
+      expect(maxWebSearches).toBe(2);
+      expect(systemMessage).toContain("web_search");
+      onSearch(searching);
+      onSearch(completed);
+      return { searches: [final], text: "", toolCalls: [{ name: "generate_image", arguments: { prompt: "horse lantern" } }] };
+    });
+
+    const { events } = await sendTurn();
+
+    expect(events.filter(({ event }) => event === "search").map(({ data }) => data)).toEqual([searching, completed]);
+    expect(chats.recordSearches).toHaveBeenCalledWith("m-assistant", [final]);
+    expect(chats.recordSearches.mock.invocationCallOrder[0])
+      .toBeLessThan(imageJobs.createImageJob.mock.invocationCallOrder[0]);
+  });
+
+  it("keeps the searches of a failed reply and marks unfinished ones failed", async () => {
+    const done = { id: "ws_1", status: "completed", query: "q", sources: [] };
+    llmRuntime.streamResponse.mockImplementation(async ({ onSearch }) => {
+      onSearch(done);
+      onSearch({ id: "ws_2", status: "searching", query: "", sources: [] });
+      throw new LlmStreamError("對話模型逾時", "llm_timeout", { partial: true });
+    });
+
+    await sendTurn();
+
+    expect(chats.recordSearches).toHaveBeenCalledWith("m-assistant", [
+      done,
+      { id: "ws_2", status: "failed", query: "", sources: [] },
+    ]);
+    expect(chats.endReply).toHaveBeenCalled();
+  });
+
+  it("does not store searches for a reply that made none", async () => {
+    llmRuntime.streamResponse.mockResolvedValue({ searches: [], text: "hi", toolCalls: [] });
+    await sendTurn();
+    expect(chats.recordSearches).not.toHaveBeenCalled();
+  });
+
   it("queues one image per generate call, in order", async () => {
     llmRuntime.streamResponse.mockResolvedValue({
-      text: "畫兩張。",
+      searches: [], text: "畫兩張。",
       toolCalls: [
         { name: "generate_image", arguments: { prompt: "spring" } },
         { name: "generate_image", arguments: { prompt: "autumn" } },
@@ -163,7 +209,7 @@ describe("image chat turns", () => {
 
   it("saves remembered preferences before queuing images", async () => {
     llmRuntime.streamResponse.mockResolvedValue({
-      text: "記住了，來畫。",
+      searches: [], text: "記住了，來畫。",
       toolCalls: [
         { name: "remember_preference", arguments: { note: "  一律使用 16:9  " } },
         { name: "generate_image", arguments: { prompt: "a cat" } },
@@ -180,7 +226,7 @@ describe("image chat turns", () => {
   it("completes a reply that only remembers a preference", async () => {
     llmRuntime.streamResponse.mockImplementation(async ({ onTextDelta }) => {
       onTextDelta("好的。");
-      return { text: "好的。", toolCalls: [{ name: "remember_preference", arguments: { note: "不要文字" } }] };
+      return { searches: [], text: "好的。", toolCalls: [{ name: "remember_preference", arguments: { note: "不要文字" } }] };
     });
     await sendTurn();
     expect(chats.completeReply).toHaveBeenCalledWith("m-assistant", "好的。");
@@ -192,7 +238,7 @@ describe("image chat turns", () => {
       new chats.ImageChatRequestError("偏好記憶已滿", "memory_full", 409)
     );
     llmRuntime.streamResponse.mockResolvedValue({
-      text: "",
+      searches: [], text: "",
       toolCalls: [
         { name: "remember_preference", arguments: { note: "x" } },
         { name: "generate_image", arguments: { prompt: "a cat" } },
@@ -209,7 +255,7 @@ describe("image chat turns", () => {
   it("uses an attachment as the reference for a new image", async () => {
     imageUploads.resolveOwnedImageUpload.mockResolvedValue({ id: uploadId });
     llmRuntime.streamResponse.mockResolvedValue({
-      text: "", toolCalls: [{ name: "generate_image", arguments: { prompt: "same layout, blue" } }],
+      searches: [], text: "", toolCalls: [{ name: "generate_image", arguments: { prompt: "same layout, blue" } }],
     });
     await sendTurn({ attachmentUploadId: uploadId });
     expect(imageJobs.createImageJob).toHaveBeenCalledWith(expect.objectContaining({
@@ -220,7 +266,7 @@ describe("image chat turns", () => {
   it("refines the selected version only when one is selected", async () => {
     llmRuntime.streamResponse.mockImplementation(async ({ tools }) => {
       expect(tools.map((tool) => tool.name)).toEqual(["generate_image", "refine_image", "remember_preference"]);
-      return { text: "", toolCalls: [{ name: "refine_image", arguments: { instruction: "make the sky pink" } }] };
+      return { searches: [], text: "", toolCalls: [{ name: "refine_image", arguments: { instruction: "make the sky pink" } }] };
     });
     await sendTurn({ sourceJobId });
     expect(chats.requireOwnedSucceededJob).toHaveBeenCalledWith({ ...owner, jobId: sourceJobId });
@@ -233,7 +279,7 @@ describe("image chat turns", () => {
   it("fails the reply when the model asks for a tool it was not offered", async () => {
     llmRuntime.streamResponse.mockImplementation(async ({ onTextDelta }) => {
       onTextDelta("改好了");
-      return { text: "改好了", toolCalls: [{ name: "refine_image", arguments: { instruction: "x" } }] };
+      return { searches: [], text: "改好了", toolCalls: [{ name: "refine_image", arguments: { instruction: "x" } }] };
     });
     const { events } = await sendTurn();
     expect(imageJobs.createImageJob).not.toHaveBeenCalled();
@@ -267,7 +313,7 @@ describe("image chat turns", () => {
   });
 
   it("ends the stream even when the final read fails", async () => {
-    llmRuntime.streamResponse.mockResolvedValue({ text: "hi", toolCalls: [] });
+    llmRuntime.streamResponse.mockResolvedValue({ searches: [], text: "hi", toolCalls: [] });
     chats.getMessage.mockRejectedValue(new Error("db down"));
     const { events, stream } = await sendTurn();
     expect(events.at(-1)).toMatchObject({ event: "error", data: { code: "chat_failed" } });

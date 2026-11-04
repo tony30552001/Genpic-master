@@ -50,7 +50,7 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // Build prompt with the Gemini model assigned in the admin center.
+        // Build prompt with the LLM assigned in the admin center.
         const identity = await resolveIdentity(auth.user);
         const llm = await resolveRoleModel(identity.tenantId, "scene_optimization");
 

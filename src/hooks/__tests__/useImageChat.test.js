@@ -152,6 +152,34 @@ describe("useImageChat", () => {
     expect(result.current.versions.map((version) => version.id)).toEqual(["job-1"]);
   });
 
+  it("updates each web search in place and keeps searches when memory arrives", async () => {
+    chatApi.createChat.mockResolvedValue(chatRecord("c1"));
+    const sources = [{ url: "https://example.com/a", title: "" }];
+    chatApi.sendChatMessage.mockImplementation(async ({ body, onEvent }) => {
+      const turnId = body.clientMessageId;
+      onEvent({ type: "turn", data: serverMessages(turnId) });
+      onEvent({ type: "search", data: { id: "ws_1", status: "searching", query: "", sources: [] } });
+      onEvent({ type: "search", data: { id: "ws_2", status: "searching", query: "", sources: [] } });
+      onEvent({ type: "search", data: { id: "ws_1", status: "completed", query: "燈會", sources } });
+      onEvent({ type: "memory", data: { notes: ["偏好夜景"] } });
+    });
+    const { result } = renderChat();
+    await waitFor(() => expect(chatApi.listChats).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.send("畫燈會");
+    });
+
+    const assistant = result.current.messages.find((message) => message.role === "assistant");
+    expect(assistant.input).toEqual({
+      searches: [
+        { id: "ws_1", status: "completed", query: "燈會", sources },
+        { id: "ws_2", status: "searching", query: "", sources: [] },
+      ],
+      memoryNotes: ["偏好夜景"],
+    });
+  });
+
   it("restores the draft and removes the optimistic turn when the message is not admitted", async () => {
     chatApi.createChat.mockResolvedValue(chatRecord("c1"));
     chatApi.sendChatMessage.mockRejectedValue(Object.assign(new Error("已有進行中的回覆"), { code: "turn_in_progress" }));

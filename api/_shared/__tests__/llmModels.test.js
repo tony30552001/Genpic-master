@@ -73,48 +73,20 @@ describe("llmModels validation", () => {
     expect(() =>
       validateModelInput({
         label: "GPT",
-        provider: "azure-openai",
         modelName: "gpt-5.6-luna",
         endpoint: "",
       })
-    ).toThrow("Azure OpenAI 模型必須填寫端點");
+    ).toThrow("請填寫 Azure OpenAI 端點");
 
     expect(() =>
       validateModelInput({
         label: "GPT",
-        provider: "azure-openai",
         modelName: "gpt-5.6-luna",
         endpoint: "http://127.0.0.1/openai/v1",
       })
     ).toThrow("端點必須是公開可連線的 https 網址");
   });
 
-  it("drops the endpoint for Gemini models because the SDK owns it", () => {
-    expect(
-      validateModelInput({
-        label: "Flash",
-        provider: "google-gemini",
-        modelName: "gemini-2.0-flash",
-        endpoint: "https://example.com",
-      })
-    ).toEqual({
-      label: "Flash",
-      provider: "google-gemini",
-      modelName: "gemini-2.0-flash",
-      endpoint: "",
-    });
-  });
-
-  it("rejects unknown providers", () => {
-    expect(() =>
-      validateModelInput({
-        label: "X",
-        provider: "openai",
-        modelName: "gpt-4",
-        endpoint: "",
-      })
-    ).toThrow("不支援的模型供應商");
-  });
 });
 
 describe("createLlmModel", () => {
@@ -124,7 +96,6 @@ describe("createLlmModel", () => {
         {
           id: "model-1",
           label: "GPT 分析",
-          provider: "azure-openai",
           model_name: "gpt-5.6-luna",
           endpoint: "https://pixora.openai.azure.com/openai/v1",
           api_key_encrypted: "enc:secret",
@@ -137,7 +108,6 @@ describe("createLlmModel", () => {
     const model = await createLlmModel({
       tenantId: TENANT,
       label: "GPT 分析",
-      provider: "azure-openai",
       modelName: "gpt-5.6-luna",
       endpoint: "https://pixora.openai.azure.com/openai/v1",
       apiKey: "secret",
@@ -154,7 +124,6 @@ describe("createLlmModel", () => {
       createLlmModel({
         tenantId: TENANT,
         label: "GPT 分析",
-        provider: "azure-openai",
         modelName: "gpt-5.6-luna",
         endpoint: "https://pixora.openai.azure.com/openai/v1",
         apiKey: "",
@@ -173,7 +142,6 @@ describe("createLlmModel", () => {
       createLlmModel({
         tenantId: TENANT,
         label: "GPT 分析",
-        provider: "azure-openai",
         modelName: "gpt-5.6-luna",
         endpoint: "https://pixora.openai.azure.com/openai/v1",
         apiKey: "secret",
@@ -205,29 +173,6 @@ describe("setRoleAssignment", () => {
         fallbackModelId: "model-1",
       })
     ).rejects.toThrow("備援模型必須與主要模型不同");
-  });
-
-  it("accepts models from any provider because roles are not pinned", async () => {
-    queryResults.push({ rows: [{ id: "model-1" }, { id: "model-2" }] });
-    queryResults.push({
-      rows: [
-        {
-          role: "document_analysis",
-          model_id: "model-1",
-          fallback_model_id: "model-2",
-          updated_at: new Date("2026-01-01T00:00:00Z"),
-        },
-      ],
-    });
-
-    const assignment = await setRoleAssignment({
-      tenantId: TENANT,
-      role: "document_analysis",
-      modelId: "model-1",
-      fallbackModelId: "model-2",
-    });
-
-    expect(assignment.fallbackModelId).toBe("model-2");
   });
 
   it("upserts a valid assignment", async () => {
@@ -262,21 +207,19 @@ describe("setRoleAssignment", () => {
 });
 
 describe("resolveRoleModel", () => {
-  it("decrypts the assigned primary and fallback models across providers", async () => {
+  it("decrypts the assigned primary and fallback models", async () => {
     queryResults.push({
       rows: [
         {
           id: "model-1",
           label: "GPT 分析",
-          provider: "azure-openai",
           model_name: "gpt-5.6-luna",
           endpoint: "https://pixora.openai.azure.com/openai/v1",
           api_key_encrypted: "enc:primary-key",
           fallback_id: "model-2",
-          fallback_label: "Gemini 備援",
-          fallback_provider: "google-gemini",
-          fallback_model_name: "gemini-2.0-flash",
-          fallback_endpoint: null,
+          fallback_label: "備援",
+          fallback_model_name: "gpt-6-luna",
+          fallback_endpoint: "https://backup.openai.azure.com/openai/v1",
           fallback_api_key_encrypted: "enc:peer-key",
         },
       ],
@@ -284,10 +227,9 @@ describe("resolveRoleModel", () => {
 
     const resolved = await resolveRoleModel(TENANT, "document_analysis");
 
-    expect(resolved.model.provider).toBe("azure-openai");
     expect(resolved.model.apiKey).toBe("primary-key");
-    expect(resolved.fallback.provider).toBe("google-gemini");
-    expect(resolved.fallback.modelName).toBe("gemini-2.0-flash");
+    expect(resolved.fallback.modelName).toBe("gpt-6-luna");
+    expect(resolved.fallback.endpoint).toBe("https://backup.openai.azure.com/openai/v1");
     expect(resolved.fallback.apiKey).toBe("peer-key");
   });
 
