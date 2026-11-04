@@ -1,10 +1,4 @@
 import React from "react";
-import {
-  Monitor,
-  Layout,
-  Square,
-  Smartphone,
-} from "@/components/icons/lucideContent";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { IMAGE_QUALITY_LABELS } from "@/config";
@@ -18,11 +12,25 @@ import {
 } from "@/components/ui/select";
 
 const ASPECT_RATIOS = [
-  { id: "16:9", label: "16:9 簡報", icon: Monitor },
-  { id: "4:3", label: "4:3 傳統", icon: Layout },
-  { id: "1:1", label: "1:1 社群", icon: Square },
-  { id: "9:16", label: "9:16 手機", icon: Smartphone },
+  { id: "16:9", label: "16:9 簡報" },
+  { id: "4:3", label: "4:3 傳統" },
+  { id: "1:1", label: "1:1 社群" },
+  { id: "9:16", label: "9:16 手機" },
 ];
+
+/** A frame drawn in the ratio itself, fitted into a 16px box. */
+function RatioShape({ ratio }) {
+  const [w, h] = ratio.split(":").map(Number);
+  const scale = 16 / Math.max(w, h);
+  return (
+    <span className="grid size-4 shrink-0 place-items-center" aria-hidden="true">
+      <span
+        className="block rounded-[2px] border-[1.5px] border-current"
+        style={{ width: `${w * scale}px`, height: `${h * scale}px` }}
+      />
+    </span>
+  );
+}
 
 const PRIMARY_TEXT_LANGUAGES = ["zh-TW", NO_TEXT_LANGUAGE];
 const OTHER_TEXT_LANGUAGES = LANGUAGE_OPTIONS.filter((option) => !PRIMARY_TEXT_LANGUAGES.includes(option.id));
@@ -127,7 +135,7 @@ export default function OutputSettings({
             )}
             title={ratio.label}
           >
-            <ratio.icon className="icon-sm" aria-hidden="true" />
+            <RatioShape ratio={ratio.id} />
             <span className={stacked ? "text-[11px]" : "tabular-nums"}>{stacked ? ratio.label : ratio.id}</span>
           </button>
         );

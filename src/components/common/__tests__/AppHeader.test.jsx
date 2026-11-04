@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AppHeader from "../AppHeader";
 import { FileText, Library, ImagePlus, SlidersHorizontal } from "@/components/icons/lucideContent";
@@ -55,6 +55,22 @@ describe("AppHeader", () => {
 
     renderHeader();
     expect(screen.queryByRole("button", { name: "管理中心" })).not.toBeInTheDocument();
+  });
+
+  it("switches tabs and opens admin from the phone drawer", async () => {
+    const { onTabChange, onOpenAdmin } = renderHeader({ isAdmin: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "開啟選單" }));
+    const drawer = screen.getByRole("dialog", { name: "主要功能" });
+    expect(drawer).toContainElement(screen.getByRole("button", { name: "文件創作", current: "page" }));
+
+    await userEvent.click(within(drawer).getByRole("button", { name: "素材中心" }));
+    await waitFor(() => expect(onTabChange).toHaveBeenCalledWith("library"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "主要功能" })).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "開啟選單" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "主要功能" })).getByRole("button", { name: "管理中心" }));
+    await waitFor(() => expect(onOpenAdmin).toHaveBeenCalled());
   });
 
   it("opens the account menu with identity, theme and logout", async () => {

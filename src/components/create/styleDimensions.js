@@ -18,6 +18,13 @@ export const STYLE_DIMENSIONS = [
     id: "color",
     label: "色彩",
     tags: ["粉彩", "繽紛", "低彩度", "單色", "乾淨"],
+    swatches: {
+      粉彩: "linear-gradient(135deg, #fbcfe8, #bae6fd 55%, #fef08a)",
+      繽紛: "conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444)",
+      低彩度: "linear-gradient(135deg, #a8a29e, #78716c)",
+      單色: "linear-gradient(135deg, #111827, #9ca3af)",
+      乾淨: "linear-gradient(135deg, #ffffff, #e5e7eb)",
+    },
   },
   {
     id: "composition",

@@ -236,7 +236,7 @@ describe("creation orchestration", () => {
     mocks.isProfileLoading = false;
     mocks.profileError = "Catalog refresh failed";
     changePolicy(mocks.profile);
-    expect(mocks.bar.configurationError).toBe("Catalog refresh failed");
+    expect(mocks.bar.configurationError).toBe("無法載入圖片模型設定，請重新載入設定。");
     expect(screen.getByRole("button", { name: buttonFor(tab) })).toBeDisabled();
     await act(async () => { await invoke(tab); });
     expect(mocks.generateImage).not.toHaveBeenCalled();

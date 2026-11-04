@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Plus, Upload, X } from "@/components/icons/lucideControls";
+import { useId, useRef, useState } from "react";
+import { Plus, SlidersHorizontal, Upload, X } from "@/components/icons/lucideControls";
 import { Image as ImageIcon, LayoutTemplate, Palette, Wand2 } from "@/components/icons/lucideContent";
 import { AlertCircle } from "@/components/icons/lucideStatus";
 import {
@@ -48,7 +48,7 @@ function Chip({ icon, label, onRemove, removeLabel, busy }) {
           type="button"
           onClick={onRemove}
           aria-label={removeLabel}
-          className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground after:absolute after:-inset-3 hover:bg-background hover:text-foreground active:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="size-3" aria-hidden="true" />
         </button>
@@ -82,9 +82,11 @@ export default function ChatComposer({
 }) {
   const attachmentInputRef = useRef(null);
   const styleInputRef = useRef(null);
+  const settingsId = useId();
   const [picker, setPicker] = useState(null);
   const [busy, setBusy] = useState(null);
   const [localError, setLocalError] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
 
   const isReplying = Boolean(sending);
   const canSend = Boolean(draft.trim()) && !configurationError && !busy && !disabled;
@@ -139,7 +141,10 @@ export default function ChatComposer({
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      <PromptInput onSubmit={({ text }) => { if (canSend) void onSend(text); }}>
+      <PromptInput
+        className="rounded-3xl lg:rounded-md"
+        onSubmit={({ text }) => { if (canSend) void onSend(text); }}
+      >
         {hasChips && (
           <PromptInputHeader className="justify-start pt-2">
             {busy === "attachment" && <Chip busy label="上傳附圖中…" />}
@@ -207,6 +212,15 @@ export default function ChatComposer({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <PromptInputButton
+              className="lg:hidden"
+              aria-label="輸出設定"
+              aria-expanded={showSettings}
+              aria-controls={settingsId}
+              onClick={() => setShowSettings((value) => !value)}
+            >
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
+            </PromptInputButton>
           </PromptInputTools>
           <PromptInputSubmit
             status={sending?.phase}
@@ -217,6 +231,8 @@ export default function ChatComposer({
       </PromptInput>
 
       <ChatSettingsBar
+        id={settingsId}
+        className={showSettings ? undefined : "hidden lg:flex"}
         settings={settings}
         quality={quality}
         supportedQualities={supportedQualities}

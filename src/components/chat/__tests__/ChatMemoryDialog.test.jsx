@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -10,6 +11,18 @@ vi.mock("@/services/imageChatService", () => ({
 import * as chatApi from "@/services/imageChatService";
 import ChatMemoryDialog from "../ChatMemoryDialog";
 
+function Harness() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        偏好記憶
+      </button>
+      <ChatMemoryDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 describe("ChatMemoryDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -21,7 +34,7 @@ describe("ChatMemoryDialog", () => {
     const user = userEvent.setup();
     chatApi.getMemory.mockResolvedValue({ content: "- 不要人臉", updatedAt: null });
     chatApi.saveMemory.mockResolvedValue({ content: "- 不要人臉\n- 品牌色 #0F766E" });
-    render(<ChatMemoryDialog />);
+    render(<Harness />);
 
     await user.click(screen.getByRole("button", { name: "偏好記憶" }));
     const textarea = await screen.findByLabelText("偏好記憶內容");
@@ -40,7 +53,7 @@ describe("ChatMemoryDialog", () => {
     const user = userEvent.setup();
     chatApi.getMemory.mockResolvedValue({ content: "", updatedAt: null });
     chatApi.saveMemory.mockRejectedValue(new Error("偏好記憶已滿"));
-    render(<ChatMemoryDialog />);
+    render(<Harness />);
 
     await user.click(screen.getByRole("button", { name: "偏好記憶" }));
     await user.type(await screen.findByLabelText("偏好記憶內容"), "x");

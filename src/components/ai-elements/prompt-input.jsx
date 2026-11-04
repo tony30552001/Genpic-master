@@ -8,6 +8,7 @@ import {
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
 /** Multi-line message form; `onSubmit` receives the textarea value. */
@@ -22,27 +23,32 @@ export const PromptInput = ({ className, onSubmit, children, ...props }) => {
   );
 
   return (
-    <form className={cn("w-full", className)} onSubmit={handleSubmit} {...props}>
-      <InputGroup className="overflow-hidden">{children}</InputGroup>
+    <form className="w-full" onSubmit={handleSubmit} {...props}>
+      <InputGroup className={cn("overflow-hidden", className)}>{children}</InputGroup>
     </form>
   );
 };
 
-/** Enter sends, Shift+Enter breaks the line, and IME composition never sends. */
+/**
+ * Enter sends, Shift+Enter breaks the line, and IME composition never sends.
+ * Touch keyboards have no Shift+Enter, so there Enter breaks the line and the
+ * send button sends.
+ */
 export const PromptInputTextarea = ({ onKeyDown, className, ...props }) => {
   const [isComposing, setIsComposing] = useState(false);
+  const isTouch = useMediaQuery("(pointer: coarse)");
 
   const handleKeyDown = useCallback(
     (event) => {
       onKeyDown?.(event);
-      if (event.defaultPrevented || event.key !== "Enter" || event.shiftKey) return;
+      if (isTouch || event.defaultPrevented || event.key !== "Enter" || event.shiftKey) return;
       if (isComposing || event.nativeEvent.isComposing) return;
       event.preventDefault();
       const { form } = event.currentTarget;
       if (form?.querySelector('button[type="submit"]')?.disabled) return;
       form?.requestSubmit();
     },
-    [onKeyDown, isComposing]
+    [onKeyDown, isComposing, isTouch]
   );
 
   return (

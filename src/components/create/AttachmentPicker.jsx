@@ -33,6 +33,7 @@ export default function AttachmentPicker({
   onAttachCurrentResult,
   canAttachCurrentResult,
   onClear,
+  className,
 }) {
   const fileInputRef = useRef(null);
   const purposeLabelId = useId();
@@ -56,8 +57,9 @@ export default function AttachmentPicker({
   return (
     <Card
       className={cn(
-        "rounded-2xl border-border bg-card transition-colors duration-(--motion-hover)",
-        isDragging && "border-primary bg-primary/5"
+        "rounded-none border-0 bg-transparent shadow-none transition-colors duration-(--motion-hover) lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-sm",
+        isDragging && "lg:border-primary lg:bg-primary/5",
+        className
       )}
       onDragOver={(event) => {
         event.preventDefault();
@@ -70,7 +72,7 @@ export default function AttachmentPicker({
         handleFiles(event.dataTransfer?.files);
       }}
     >
-      <CardContent className="space-y-3 p-4">
+      <CardContent className="space-y-3 px-0 py-4 lg:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0 space-y-0.5">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -79,7 +81,7 @@ export default function AttachmentPicker({
               <span className="text-xs font-normal text-muted-foreground">選填</span>
             </h2>
             {!attachment && (
-              <p className="text-xs text-muted-foreground">
+              <p className="hidden text-xs text-muted-foreground lg:block">
                 上傳圖片或用目前結果，就能參考內容、修改、換背景或取出元素。
               </p>
             )}

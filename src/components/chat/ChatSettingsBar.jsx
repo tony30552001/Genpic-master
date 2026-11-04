@@ -33,9 +33,9 @@ function SettingSelect({ label, value, onChange, options, disabled }) {
 }
 
 /** Aspect ratio, quality, in-image text and purpose as compact selects under the chat input. */
-export default function ChatSettingsBar({ settings, quality, supportedQualities, onChange, disabled, className }) {
+export default function ChatSettingsBar({ id, settings, quality, supportedQualities, onChange, disabled, className }) {
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+    <div id={id} className={cn("flex flex-wrap items-center gap-2", className)}>
       <SettingSelect
         label="比例"
         value={settings.aspectRatio}

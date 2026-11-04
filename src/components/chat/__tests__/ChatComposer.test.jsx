@@ -51,6 +51,22 @@ describe("ChatComposer", () => {
     expect(onSend).toHaveBeenCalledWith("畫一隻貓");
   });
 
+  it("breaks the line with Enter on touch keyboards instead of sending", () => {
+    const matchMedia = vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+      matches: query === "(pointer: coarse)",
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    const { onSend } = renderComposer({ draft: "畫一隻貓" });
+
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "訊息" }), { key: "Enter" });
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "送出訊息" }));
+    expect(onSend).toHaveBeenCalledWith("畫一隻貓");
+    matchMedia.mockRestore();
+  });
+
   it("blocks sending while the image model is not configured", () => {
     const { onSend } = renderComposer({ draft: "畫一隻貓", configurationError: "圖片模型尚未完成設定" });
 

@@ -51,6 +51,17 @@ describe("ImagePreview refinement", () => {
     await waitFor(() => expect(input).toHaveValue(""));
   });
 
+  it("submits on Enter but keeps Shift+Enter as a line break", () => {
+    const onRefine = vi.fn().mockResolvedValue(true);
+    render(<ImagePreview generatedImage="v2.png" onRefine={onRefine} />);
+    const input = screen.getByRole("textbox", { name: "描述要修改的地方" });
+    fireEvent.change(input, { target: { value: "改色" } });
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(onRefine).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onRefine).toHaveBeenCalledWith("改色");
+  });
+
   it("keeps the instruction and shows the error inline when refinement fails", async () => {
     const onRefine = vi.fn().mockResolvedValue(false);
     const { rerender } = render(<ImagePreview generatedImage="v2.png" onRefine={onRefine} />);

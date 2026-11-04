@@ -58,7 +58,7 @@ describe("ScriptEditor attachment purposes", () => {
     render(<Harness attachmentPurpose={getAttachmentPurpose("refine")} />);
     expect(screen.getByRole("textbox", { name: "要修改的地方" })).toHaveAttribute(
       "placeholder",
-      expect.stringContaining("其他部分會保持不變")
+      expect.stringContaining("描述要修改的地方")
     );
     expect(screen.queryByRole("group", { name: "畫面用途" })).not.toBeInTheDocument();
   });

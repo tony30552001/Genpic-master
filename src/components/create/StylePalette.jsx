@@ -45,7 +45,7 @@ export default function StylePalette({
   const paletteContent = (
     <CardContent className="space-y-4 border-t border-border bg-background/80 p-4">
       <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
-        {STYLE_DIMENSIONS.map(({ id, label, tags }) => (
+        {STYLE_DIMENSIONS.map(({ id, label, tags, swatches }) => (
           <div key={id} className="space-y-2">
             <p className="text-sm font-semibold text-foreground">{label}</p>
             <div className="flex flex-wrap gap-1.5">
@@ -57,12 +57,19 @@ export default function StylePalette({
                     type="button"
                     onClick={() => toggleTag(id, tag)}
                     className={cn(
-                      "min-h-11 touch-manipulation rounded-full border px-3 py-2 text-sm leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                      "inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-full border px-3 py-2 text-sm leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
                       isActive
                         ? "border-primary/60 bg-primary/10 text-primary hover:border-primary/70 hover:bg-primary/15"
                         : "border-border bg-background text-foreground/70 hover:border-border/70 hover:bg-muted/50 hover:text-foreground"
                     )}
                   >
+                    {swatches?.[tag] && (
+                      <span
+                        className="size-3.5 shrink-0 rounded-full ring-1 ring-foreground/15"
+                        style={{ background: swatches[tag] }}
+                        aria-hidden="true"
+                      />
+                    )}
                     {tag}
                   </button>
                 );

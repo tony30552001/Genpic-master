@@ -176,11 +176,15 @@ export default function ChatThread({
     <Conversation className={cn("min-h-0", className)} aria-label="對話內容">
       <ConversationContent className="gap-6">
         {messages.length === 0 ? (
-          <ConversationEmptyState
-            icon={<MessageSquare className="size-10" aria-hidden="true" />}
-            title="用對話開始創作"
-            description="描述想要的畫面，AI 會和你確認細節並產生圖片；之後直接說「標題改大一點」就能繼續修改。"
-          />
+          <ConversationEmptyState>
+            <MessageSquare className="size-10 text-muted-foreground" aria-hidden="true" />
+            <div className="space-y-1">
+              <h3 className="text-xl font-medium lg:text-sm">用對話開始創作</h3>
+              <p className="hidden text-sm text-muted-foreground lg:block">
+                描述想要的畫面，AI 會和你確認細節並產生圖片；之後直接說「標題改大一點」就能繼續修改。
+              </p>
+            </div>
+          </ConversationEmptyState>
         ) : (
           <>
             {hasOlderMessages && (

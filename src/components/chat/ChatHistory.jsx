@@ -18,16 +18,22 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit",
 });
 
-/** Dropdown listing the user's chats, newest first, with paging. */
-export default function ChatHistory({ chats, activeChatId, hasMore, isLoading, onOpen, onLoadMore }) {
+/** Dropdown listing the user's chats, newest first, with paging. `compact` renders an icon-only trigger for the phone header. */
+export default function ChatHistory({ chats, activeChatId, hasMore, isLoading, onOpen, onLoadMore, compact = false }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 gap-1.5" aria-label="對話紀錄">
-          <History className="size-4" aria-hidden="true" />
-          <span className="hidden whitespace-nowrap sm:inline">對話紀錄</span>
-          <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
-        </Button>
+        {compact ? (
+          <Button variant="ghost" size="icon" className="size-10 rounded-full" aria-label="對話紀錄">
+            <History className="icon-md" aria-hidden="true" />
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" className="h-8 gap-1.5" aria-label="對話紀錄">
+            <History className="size-4" aria-hidden="true" />
+            <span className="whitespace-nowrap">對話紀錄</span>
+            <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-96 w-72 overflow-y-auto">
         <DropdownMenuLabel>最近的對話</DropdownMenuLabel>

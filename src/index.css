@@ -422,9 +422,11 @@
   button, a, [role="button"], summary, label {
     touch-action: manipulation;
   }
+  /* 縮圖按鈕長按時不跳出 iOS 的儲存／分享選單；內容圖片不受影響。 */
   button, [role="button"], [role="tab"], [role="menuitem"] {
     user-select: none;
     -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   svg.lucide {

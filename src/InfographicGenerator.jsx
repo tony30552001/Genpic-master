@@ -1,12 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import * as M from "motion/react-m";
 import { AnimatePresence } from "motion/react";
-import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
-import {
-  MoreHorizontal,
-} from "@/components/icons/lucideControls";
 import {
   AlertCircle,
 } from "@/components/icons/lucideStatus";
@@ -15,7 +10,6 @@ import {
   Library,
   MessageSquare,
   Presentation,
-  ShieldCheck,
   ImagePlus,
   Wand2,
   WandSparkles,
@@ -92,21 +86,9 @@ export default function InfographicGenerator({
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [canvasOrigin, setCanvasOrigin] = useState(null);
     const isMobileLayout = useMediaQuery(MOBILE_LAYOUT_QUERY);
-    const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
     const [imagePurpose, setImagePurpose] = useState('infographic');
     const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
-
-    useEffect(() => {
-        if (!mobileMoreOpen) return undefined;
-
-        const handleKeyDown = (event) => {
-            if (event.key === 'Escape') setMobileMoreOpen(false);
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [mobileMoreOpen]);
 
     const handlePaletteStyleChange = (tags) => {
         setPaletteStyleTags(tags);
@@ -125,7 +107,9 @@ export default function InfographicGenerator({
         : selectedImageQuality;
     const modelSetupError = isProfileLoading
         ? '正在載入圖片模型設定，請稍候。'
-        : profileError || getImageModelSetupError(imageModelConfig);
+        : profileError
+            ? '無法載入圖片模型設定，請重新載入設定。'
+            : getImageModelSetupError(imageModelConfig);
     const generationConfigError = modelSetupError || getImageQualityError(imageModelConfig, imageQuality);
     // A storyboard batch rechecks current settings between independently admitted jobs.
     const generationSettingsRef = useRef({ imageQuality, generationConfigError });
@@ -164,6 +148,7 @@ export default function InfographicGenerator({
         updateStyle,
     } = useStyles({ user });
     const { historyItems, saveHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
+    const [mobileHeaderActions, setMobileHeaderActions] = useState(null);
     const imageChat = useImageChat({
         enabled: activeTab === 'chat',
         initialSettings: {
@@ -224,7 +209,7 @@ export default function InfographicGenerator({
             setErrorMsg('');
         } catch (err) {
             console.error('Attachment upload failed:', err);
-            setErrorMsg(err.message || '上傳失敗，請稍後再試。');
+            setErrorMsg(`附圖上傳失敗：${err.message || '請稍後再試'}`);
         }
     };
 
@@ -267,7 +252,7 @@ export default function InfographicGenerator({
             setErrorMsg('');
         } catch (err) {
             console.error("Style reference upload failed:", err);
-            setErrorMsg(err.message || "上傳失敗，請稍後再試。");
+            setErrorMsg(`風格參考圖上傳失敗：${err.message || "請稍後再試"}`);
         } finally {
             setIsUploadingStyleReference(false);
         }
@@ -626,19 +611,14 @@ export default function InfographicGenerator({
 
     // --- Tab 定義 ---
     const tabs = [
-        { id: 'general', label: '一般創作',         shortLabel: '創作', icon: ImagePlus },
-                { id: 'chat', label: '對話創作', shortLabel: '對話', icon: MessageSquare },
-                { id: 'document', label: '文件創作', shortLabel: '文件', icon: FileText },
-                { id: 'library', label: '素材中心', shortLabel: '素材', icon: Library },
+        { id: 'general', label: '一般創作', icon: ImagePlus },
+        { id: 'chat', label: '對話創作', icon: MessageSquare },
+        { id: 'document', label: '文件創作', icon: FileText },
+        { id: 'library', label: '素材中心', icon: Library },
     ];
-    const mobilePrimaryTabs = tabs.filter((tab) =>
-        ['general', 'chat', 'library'].includes(tab.id)
-    );
-    const mobileSecondaryTabs = tabs.filter((tab) => tab.id === 'document');
-    const isMobileMoreActive = mobileSecondaryTabs.some((tab) => tab.id === activeTab);
     // --- Render ---
     return (
-        <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+        <div className="h-[100dvh] flex flex-col bg-background text-foreground font-sans overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)]">
 
             {/* ═══════════ Top Header Bar ═══════════ */}
             <AppHeader
@@ -651,6 +631,7 @@ export default function InfographicGenerator({
                 onOpenAdmin={() => navigate("/admin")}
                 onLogin={() => navigate("/login")}
                 onLogout={handleLogout}
+                mobileActionsRef={setMobileHeaderActions}
             />
 
             {/* ═══════════ Main Content Area ═══════════ */}
@@ -731,7 +712,7 @@ export default function InfographicGenerator({
 
                         {/* ─── Two-Column Layout (Controls + Preview) for other tabs ─── */}
                         {activeTab === 'general' && (
-                            <div className="flex-1 min-h-0 flex flex-col gap-3 bg-muted/25 px-4 py-3 lg:px-8 overflow-y-auto lg:overflow-hidden custom-scrollbar">
+                            <div className="flex-1 min-h-0 flex flex-col gap-3 lg:bg-muted/25 px-4 py-3 lg:px-8 overflow-y-auto lg:overflow-hidden custom-scrollbar">
                                 <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-5 lg:gap-6">
                                     {/* Left: Controls (takes 3/5 on large screens) */}
                                     <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pl-px pr-1">
@@ -761,8 +742,13 @@ export default function InfographicGenerator({
 
                                             attachmentPurpose={workspace.attachment ? workspace.purpose : null}
                                             onUseStyleTransfer={workspace.attachment ? handleUseStyleTransfer : undefined}
+                                            onAttachFile={handleAttachFile}
+                                            onAttachCurrentResult={handleAttachCurrentResult}
+                                            canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
+                                            isUploadingAttachment={workspace.isUploadingAttachment}
                                             attachmentSlot={
                                                 <AttachmentPicker
+                                                    className={workspace.attachment ? undefined : "max-lg:hidden"}
                                                     attachment={workspace.attachment}
                                                     isUploading={workspace.isUploadingAttachment}
                                                     purposeId={workspace.purpose.id}
@@ -872,6 +858,7 @@ export default function InfographicGenerator({
                         modelSetupError={modelSetupError}
                         user={user}
                         isMobileLayout={isMobileLayout}
+                        mobileHeaderActions={mobileHeaderActions}
                     />
                 )}
 
@@ -955,7 +942,7 @@ export default function InfographicGenerator({
             {isMobileLayout && generatedImage && !showMobilePreview && !isGenerating && activeTab !== 'general' && activeTab !== 'chat' && (
                 <button
                     type="button"
-                    className="fixed bottom-[calc(64px+env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     onClick={() => setShowMobilePreview(true)}
                     aria-label="查看生成圖片"
                 >
@@ -964,112 +951,6 @@ export default function InfographicGenerator({
                 </button>
             )}
 
-            {/* ═══════════ 手機版底部導航欄（Bottom Navigation Bar）═══════════ */}
-            <nav className="relative z-40 shrink-0 bg-card border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:hidden pb-[env(safe-area-inset-bottom)]">
-                <AnimatePresence>
-                {mobileMoreOpen && (
-                    <M.div
-                        initial={{ opacity: 0, scale: 0.96 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.96, transition: OVERLAY_EXIT }}
-                        transition={OVERLAY_ENTER}
-                        className="absolute inset-x-3 bottom-full z-50 mb-2 origin-bottom rounded-xl border border-border bg-card p-2 shadow-xl ring-1 ring-border/40"
-                        role="menu"
-                        aria-label="更多功能"
-                    >
-                        <div className="grid grid-cols-3 gap-2">
-                            {mobileSecondaryTabs.map((tab) => {
-                                const isActive = activeTab === tab.id;
-                                return (
-                                    <button
-                                        type="button"
-                                        key={tab.id}
-                                        role="menuitem"
-                                        onClick={() => {
-                                            setActiveTab(tab.id);
-                                            setMobileMoreOpen(false);
-                                        }}
-                                        aria-pressed={isActive}
-                                        className={`flex min-h-11 touch-manipulation flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isActive
-                                            ? 'border-primary/30 bg-primary/10 text-primary'
-                                            : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
-                                            }`}
-                                    >
-                                        <tab.icon className="icon-sm" aria-hidden="true" />
-                                        {tab.shortLabel}
-                                    </button>
-                                );
-                            })}
-                            {isAdmin && (
-                                <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                        setMobileMoreOpen(false);
-                                        navigate('/admin');
-                                    }}
-                                    className="flex min-h-11 touch-manipulation flex-col items-center justify-center gap-1 rounded-lg border border-transparent px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <ShieldCheck className="icon-sm" aria-hidden="true" />
-                                    管理中心
-                                </button>
-                            )}
-                        </div>
-                    </M.div>
-                )}
-                </AnimatePresence>
-                <div className="flex items-stretch h-16">
-                    {mobilePrimaryTabs.map((tab) => {
-                        const isActive = activeTab === tab.id;
-                        return (
-                            <button
-                                type="button"
-                                key={tab.id}
-                                onClick={() => {
-                                    setActiveTab(tab.id);
-                                    setMobileMoreOpen(false);
-                                }}
-                                aria-pressed={isActive}
-                                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 relative active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isActive
-                                    ? 'text-primary'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                {/* 活躍指示器 */}
-                                {isActive && (
-                                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-primary" />
-                                )}
-                                <tab.icon className="icon-md" aria-hidden="true" />
-                                <span className={`text-[10px] font-medium leading-none transition-colors ${isActive ? 'font-semibold' : ''
-                                    }`}>
-                                    {tab.shortLabel}
-                                </span>
-                            </button>
-                        );
-                    })}
-                    <button
-                        type="button"
-                        onClick={() => setMobileMoreOpen((open) => !open)}
-                        aria-expanded={mobileMoreOpen}
-                        aria-haspopup="menu"
-                        aria-pressed={isMobileMoreActive}
-                        aria-label="更多功能"
-                        className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 active:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isMobileMoreActive || mobileMoreOpen
-                            ? 'text-primary'
-                            : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                    >
-                        {(isMobileMoreActive || mobileMoreOpen) && (
-                            <span className="absolute top-0 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-primary" />
-                        )}
-                        <MoreHorizontal className="icon-md" aria-hidden="true" />
-                        <span className={`text-[10px] font-medium leading-none transition-colors ${isMobileMoreActive ? 'font-semibold' : ''
-                            }`}>
-                            更多
-                        </span>
-                    </button>
-                </div>
-            </nav>
         </div>
     );
 }

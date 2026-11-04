@@ -88,21 +88,21 @@ export default function StyleSourceTabs({
     ? `我的風格：${appliedStyle.name}`
     : selectedPaletteCount > 0
       ? `調色盤已選 ${selectedPaletteCount} 個標籤`
-      : "範本、調色盤、我的風格";
+      : null;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+    <section className="overflow-hidden lg:rounded-2xl lg:border lg:border-border lg:bg-card">
       <button
         type="button"
         onClick={() => onOpenChange?.(!open)}
-        className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-lg py-3 text-left press-feedback hover:bg-muted/60 active:bg-muted/40 lg:rounded-none lg:px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         aria-expanded={open}
         aria-controls={`${idPrefix}-content`}
       >
         <span className="min-w-0">
           <span className="block text-sm font-semibold text-foreground">風格來源</span>
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            {headerSummary}
+          <span className={cn("mt-0.5 truncate text-xs text-muted-foreground", headerSummary ? "block" : "hidden lg:block")}>
+            {headerSummary ?? "範本、調色盤、我的風格"}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
@@ -124,14 +124,14 @@ export default function StyleSourceTabs({
         aria-hidden={!open}
         inert={!open}
         className={cn(
-          "grid overflow-hidden border-t border-border transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+          "grid overflow-hidden transition-[grid-template-rows,opacity] motion-reduce:transition-none lg:border-t lg:border-border",
           open
-            ? "grid-rows-[1fr] opacity-100"
-            : "pointer-events-none grid-rows-[0fr] opacity-0"
+            ? "grid-rows-[1fr] opacity-100 duration-(--motion-enter) ease-emphasized"
+            : "pointer-events-none grid-rows-[0fr] opacity-0 duration-(--motion-exit) ease-exit"
         )}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="space-y-3 p-3 sm:p-4">
+          <div className="space-y-3 pb-1 lg:p-4">
             <div
               role="tablist"
               aria-label="風格來源類型"
@@ -149,7 +149,7 @@ export default function StyleSourceTabs({
                     aria-controls={`${idPrefix}-panel-${id}`}
                     onClick={() => handleTabChange(id)}
                     className={cn(
-                      "flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-[background-color,box-shadow,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       isActive
                         ? "bg-background text-primary shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
