@@ -237,22 +237,66 @@ const MAX_SEARCH_SOURCES = 5;
 const CITATION_START = "\ue200";
 const CITATION_END = "\ue201";
 
+const MAX_CITATION_LABEL_CHARS = 200;
+const PAREN_CITATION = /\(\[[^\]\n]{1,200}\]\(https?:\/\/[^\s)]+\)\)/g;
+const BARE_CITATION = /(^|[^(])\[[^\]\n]{1,200}\]\(https?:\/\/[^\s)]+\)/g;
+const URL_SCHEMES = ["http://", "https://"];
+
+/** Whether `text` could still grow into `([label](url))` or `[label](url)`. */
+const couldBeCitation = (text) => {
+  const outer = text[0] === "(";
+  const open = outer ? 1 : 0;
+  if (text.length === open) return true;
+  if (text[open] !== "[") return false;
+  const close = text.indexOf("]", open);
+  const label = text.slice(open + 1, close === -1 ? undefined : close);
+  if (label.includes("\n") || label.length > MAX_CITATION_LABEL_CHARS) return false;
+  if (close === -1) return true;
+  const rest = text.slice(close + 1);
+  if (rest === "") return true;
+  if (rest[0] !== "(") return false;
+  const url = rest.slice(1);
+  if (!URL_SCHEMES.some((scheme) => scheme.startsWith(url) || url.startsWith(scheme))) return false;
+  // `([label](url)` is complete only once the outer parenthesis closes.
+  return outer ? /^[^\s)]*\)?$/.test(url) : /^[^\s)]*$/.test(url);
+};
+
 /**
- * Web-search replies embed citation markers such as
- * `\ue200cite\ue202turn0search0\ue201` in the text, split across deltas. The
- * sources are returned separately, so the markers are dropped before any text
- * reaches the user.
+ * Web-search replies cite sources inside the text, either as markers such as
+ * `\ue200cite\ue202turn0search0\ue201` or as Markdown links like
+ * `([example.com](https://example.com))`, split across deltas. The sources are
+ * shown separately, so citations are dropped before any text reaches the user;
+ * text that might still become a citation is held until it is decided.
  */
 const createCitationFilter = () => {
-  let inCitation = false;
-  return (chunk) => {
-    let out = "";
-    for (const char of chunk) {
-      if (char === CITATION_START) inCitation = true;
-      else if (char === CITATION_END) inCitation = false;
-      else if (!inCitation) out += char;
-    }
-    return out;
+  let inMarker = false;
+  let pending = "";
+  const strip = (text) => text.replace(PAREN_CITATION, "").replace(BARE_CITATION, "$1");
+  return {
+    push(chunk) {
+      for (const char of chunk) {
+        if (char === CITATION_START) inMarker = true;
+        else if (char === CITATION_END) inMarker = false;
+        else if (!inMarker) pending += char;
+      }
+      pending = strip(pending);
+      let hold = pending.length;
+      for (let index = 0; index < pending.length; index += 1) {
+        const char = pending[index];
+        if ((char === "(" || char === "[") && couldBeCitation(pending.slice(index))) {
+          hold = index;
+          break;
+        }
+      }
+      const out = pending.slice(0, hold);
+      pending = pending.slice(hold);
+      return out;
+    },
+    flush() {
+      const out = strip(pending);
+      pending = "";
+      return out;
+    },
   };
 };
 
@@ -310,7 +354,9 @@ const streamResponseCompletion = async ({
       instructions: systemMessage,
       input: messages.map(({ role, content }) => ({ role, content })),
       tools: [
-        ...(webSearch ? [{ type: "web_search" }] : []),
+        ...(webSearch
+          ? [{ type: "web_search", user_location: { type: "approximate", country: "TW" } }]
+          : []),
         ...tools.map(({ name, description, parameters }) => ({
           type: "function",
           name,
@@ -338,7 +384,7 @@ const streamResponseCompletion = async ({
   const toolCalls = [];
   const searches = [];
   const citedTitles = new Map();
-  const stripCitations = createCitationFilter();
+  const citations = createCitationFilter();
   let finished = false;
   let failure = null;
 
@@ -354,7 +400,7 @@ const streamResponseCompletion = async ({
       }
       switch (event.type) {
         case "response.output_text.delta": {
-          const delta = event.delta ? stripCitations(event.delta) : "";
+          const delta = event.delta ? citations.push(event.delta) : "";
           if (delta) {
             text += delta;
             onTextDelta(delta);
@@ -429,6 +475,11 @@ const streamResponseCompletion = async ({
   if (failure) throw failure;
   if (!finished) {
     throw new AzureOpenAIError("Azure OpenAI 串流在完成前中斷", 502);
+  }
+  const tail = citations.flush();
+  if (tail) {
+    text += tail;
+    onTextDelta(tail);
   }
 
   return {

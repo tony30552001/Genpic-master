@@ -134,7 +134,7 @@ describe("Azure OpenAI streamed responses", () => {
     });
 
     const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.tools[0]).toEqual({ type: "web_search" });
+    expect(body.tools[0]).toMatchObject({ type: "web_search", user_location: { country: "TW" } });
     expect(body).toMatchObject({ max_tool_calls: 2, include: ["web_search_call.action.sources"] });
     expect(deltas.join("")).toBe("主燈是駿馬。我來畫。");
     expect(result.text).toBe("主燈是駿馬。我來畫。");
@@ -146,6 +146,23 @@ describe("Azure OpenAI streamed responses", () => {
     expect(result.searches[0].sources).toHaveLength(5);
     expect(result.searches[0].sources[0]).toEqual({ url: cited, title: "燈會官網" });
     expect(result.searches[0].sources.every(({ url }) => url.startsWith("https://"))).toBe(true);
+  });
+
+  it("drops Markdown citations split across deltas but keeps ordinary brackets", async () => {
+    const parts = ["無法確認(例如[本人])。([you", "tube.com](https://www.youtube.com/", "@x)) 請上傳", "參考圖[a](https://a.example)"];
+    fetch.mockResolvedValue(new Response(sseBody([
+      ...parts.map((delta) => sse({ type: "response.output_text.delta", delta })),
+      sse({ type: "response.completed" }),
+    ])));
+    const deltas = [];
+
+    const result = await streamResponseCompletion({
+      model: azureModel, systemMessage: "s", messages: [], tools, maxWebSearches: 2,
+      onTextDelta: (text) => deltas.push(text),
+    });
+
+    expect(result.text).toBe("無法確認(例如[本人])。 請上傳參考圖");
+    expect(deltas.join("")).toBe(result.text);
   });
 
   it("reports a search the stream never closed as failed", async () => {
