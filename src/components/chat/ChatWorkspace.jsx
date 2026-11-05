@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
-import { MoreHorizontal, Plus, SquarePen, Trash2, X } from "@/components/icons/lucideControls";
+import { MoreHorizontal, SquarePen, Trash2, X } from "@/components/icons/lucideControls";
 import { AlertCircle } from "@/components/icons/lucideStatus";
 import { Brain, Image as ImageIcon } from "@/components/icons/lucideContent";
 import {
@@ -24,11 +24,13 @@ import {
 import ImagePreview from "@/components/create/ImagePreview";
 import MobileResultView from "@/components/create/MobileResultView";
 import { getImageQualityError } from "@/lib/imageModel";
+import { cn } from "@/lib/utils";
 import { apiGetBlob } from "@/services/apiClient";
 import { getGenerationStatus } from "@/utils/generationProgress";
 import ChatComposer from "./ChatComposer";
 import ChatHistory from "./ChatHistory";
 import ChatMemoryDialog from "./ChatMemoryDialog";
+import ChatStartView from "./ChatStartView";
 import ChatThread from "./ChatThread";
 
 const SAVE_STATUS_LABELS = {
@@ -49,19 +51,22 @@ function useElapsedSeconds(startedAt) {
 }
 
 /**
- * Chat-to-image workspace: the conversation and composer on the left, the
- * selected image version on the right (a full-screen view on phones).
+ * Chat-to-image workspace. With no conversation it shows a centered composer
+ * above the user's recent images; otherwise the conversation sits in a narrow
+ * column beside a canvas with the selected version (full-screen on phones).
  */
 export default function ChatWorkspace({
   chat,
   savedStyles,
   templates,
+  historyItems,
   imageModelConfig,
   modelSetupError,
   user,
   isMobileLayout,
   mobileHeaderActions,
 }) {
+  const composerRef = useRef(null);
   const [showMobilePreview, setShowMobilePreview] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -128,9 +133,10 @@ export default function ChatWorkspace({
 
   const isBusy = Boolean(chat.sending);
   const hasImage = Boolean(generatedImage || pendingImage);
-  const history = (compact) => (
+  const isStart = !chat.chat && chat.messages.length === 0 && !chat.isLoadingChat;
+  const history = (triggerClassName) => (
     <ChatHistory
-      compact={compact}
+      triggerClassName={triggerClassName}
       chats={chat.chats}
       activeChatId={chat.chat?.id || null}
       hasMore={chat.hasMoreChats}
@@ -139,6 +145,10 @@ export default function ChatWorkspace({
       onLoadMore={chat.loadMoreChats}
     />
   );
+
+  const handleContinue = (item) => {
+    void composerRef.current?.attachImageUrl(item.imageUrl, `history-${item.id}`);
+  };
 
   const mobileActions = (
     <>
@@ -153,7 +163,7 @@ export default function ChatWorkspace({
           <ImageIcon className="icon-md" aria-hidden="true" />
         </Button>
       )}
-      {history(true)}
+      {history()}
       <Button
         variant="ghost"
         size="icon"
@@ -186,145 +196,166 @@ export default function ChatWorkspace({
     </>
   );
 
+  const iconButtonClass = "size-9 rounded-full text-muted-foreground hover:text-foreground";
+  const desktopActions = (
+    <>
+      <Button variant="ghost" size="icon" className={iconButtonClass} aria-label="偏好記憶" onClick={() => setIsMemoryOpen(true)}>
+        <Brain className="size-4" aria-hidden="true" />
+      </Button>
+      {history(iconButtonClass)}
+    </>
+  );
+
+  const errorBanner = errorMessage && (
+    <div
+      role="alert"
+      className="flex shrink-0 items-start gap-2 rounded-xl border border-destructive/50 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+    >
+      <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1">{errorMessage}</span>
+      <button
+        type="button"
+        onClick={clearError}
+        aria-label="關閉錯誤訊息"
+        className="relative flex size-6 shrink-0 items-center justify-center rounded text-destructive/80 after:absolute after:-inset-2.5 hover:bg-destructive/10 active:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <X className="size-3.5" aria-hidden="true" />
+      </button>
+    </div>
+  );
+
+  const composer = (
+    <ChatComposer
+      ref={composerRef}
+      className={isStart ? undefined : "shrink-0 px-3 pb-3 pt-1 lg:px-1 lg:pb-1"}
+      placeholder={isStart ? "描述想要的畫面，例如「把 Q3 營運報告做成一張資訊圖表」" : "告訴 AI 要怎麼修改…"}
+      draft={chat.draft}
+      onDraftChange={chat.setDraft}
+      onSend={chat.send}
+      sending={chat.sending}
+      onStop={chat.stopReply}
+      attachment={chat.attachment}
+      onAttachmentChange={chat.setAttachment}
+      style={chat.style}
+      onStyleChange={chat.setStyle}
+      selectedVersionLabel={selectedVersion ? chat.getVersionLabel(selectedVersion) : ""}
+      onClearSelectedVersion={() => chat.selectVersion(null)}
+      settings={settings}
+      onSettingsChange={chat.updateSettings}
+      quality={quality}
+      supportedQualities={imageModelConfig?.supportedQualities || []}
+      savedStyles={savedStyles}
+      templates={templates}
+      configurationError={configurationError}
+      disabled={chat.isLoadingChat}
+    />
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col lg:bg-muted/25 lg:px-8 lg:py-3">
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:grid lg:grid-cols-5 lg:gap-6">
-        <section
-          aria-label="對話創作"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden lg:col-span-3 lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-sm"
-        >
-          {isMobileLayout ? (
-            <>
-              {mobileHeaderActions && createPortal(mobileActions, mobileHeaderActions)}
-              {chat.saveStatus === "error" && (
-                <p role="alert" className="shrink-0 px-4 pt-2 text-xs text-destructive">
-                  {SAVE_STATUS_LABELS.error}
-                </p>
-              )}
-            </>
-          ) : (
-            <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-semibold">{chat.chat?.title || "新對話"}</h2>
-                {chat.chat && (
-                  <p
-                    className={
-                      chat.saveStatus === "error" ? "text-[11px] text-destructive" : "text-[11px] text-muted-foreground"
-                    }
-                    aria-live="polite"
-                  >
-                    {SAVE_STATUS_LABELS[chat.saveStatus]}
-                  </p>
-                )}
-              </div>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setIsMemoryOpen(true)}>
-                <Brain className="size-4" aria-hidden="true" />
-                <span className="whitespace-nowrap">偏好記憶</span>
-              </Button>
-              {history(false)}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5"
-                onClick={() => void chat.startNewChat()}
-                disabled={!chat.chat || isBusy}
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                <span className="whitespace-nowrap">新對話</span>
-              </Button>
-              {chat.chat && (
+    <div className="relative flex min-h-0 flex-1 flex-col lg:px-2 lg:pb-2">
+      {isMobileLayout ? (
+        <>
+          {mobileHeaderActions && createPortal(mobileActions, mobileHeaderActions)}
+          {chat.saveStatus === "error" && (
+            <p role="alert" className="shrink-0 px-4 pt-2 text-xs text-destructive">
+              {SAVE_STATUS_LABELS.error}
+            </p>
+          )}
+        </>
+      ) : (
+        isStart && <div className="absolute right-4 top-2 z-10 flex items-center gap-0.5">{desktopActions}</div>
+      )}
+
+      <ChatMemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
+      <AlertDialog open={isDeleteOpen && Boolean(chat.chat)} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除這段對話？</AlertDialogTitle>
+            <AlertDialogDescription>
+              對話內容會永久刪除；已產生的圖片仍保留在素材中心的歷史紀錄。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void chat.removeChat(chat.chat.id)}>刪除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {isStart ? (
+        <ChatStartView historyItems={historyItems} onContinue={handleContinue}>
+          {errorBanner && <div className="mb-3">{errorBanner}</div>}
+          {composer}
+        </ChatStartView>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[400px_minmax(0,1fr)] lg:gap-2">
+          <section aria-label="對話創作" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {!isMobileLayout && (
+              <header className="flex shrink-0 items-center gap-0.5 py-1 pl-3 pr-1">
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-sm font-semibold">{chat.chat?.title || "新對話"}</h2>
+                  {chat.chat && (
+                    <p
+                      className={cn("text-[11px]", chat.saveStatus === "error" ? "text-destructive" : "text-muted-foreground")}
+                      aria-live="polite"
+                    >
+                      {SAVE_STATUS_LABELS[chat.saveStatus]}
+                    </p>
+                  )}
+                </div>
+                {desktopActions}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-8"
-                  aria-label="刪除對話"
-                  disabled={isBusy}
-                  onClick={() => setIsDeleteOpen(true)}
+                  className={iconButtonClass}
+                  aria-label="新對話"
+                  onClick={() => void chat.startNewChat()}
+                  disabled={!chat.chat || isBusy}
                 >
-                  <Trash2 className="size-4" aria-hidden="true" />
+                  <SquarePen className="size-4" aria-hidden="true" />
                 </Button>
-              )}
-            </header>
-          )}
+                {chat.chat && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={iconButtonClass}
+                    aria-label="刪除對話"
+                    disabled={isBusy}
+                    onClick={() => setIsDeleteOpen(true)}
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </Button>
+                )}
+              </header>
+            )}
 
-          <ChatMemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
-          <AlertDialog open={isDeleteOpen && Boolean(chat.chat)} onOpenChange={setIsDeleteOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>刪除這段對話？</AlertDialogTitle>
-                <AlertDialogDescription>
-                  對話內容會永久刪除；已產生的圖片仍保留在素材中心的歷史紀錄。
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>取消</AlertDialogCancel>
-                <AlertDialogAction onClick={() => void chat.removeChat(chat.chat.id)}>刪除</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          {errorMessage && (
-            <div
-              role="alert"
-              className="mx-4 mt-3 flex shrink-0 items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <span className="min-w-0 flex-1">{errorMessage}</span>
-              <button
-                type="button"
-                onClick={clearError}
-                aria-label="關閉錯誤訊息"
-                className="relative flex size-6 shrink-0 items-center justify-center rounded text-destructive/80 after:absolute after:-inset-2.5 hover:bg-destructive/10 active:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            </div>
-          )}
+            {errorBanner && <div className="mx-3 mt-2 lg:mx-1">{errorBanner}</div>}
 
-          <ChatThread
-            className="flex-1"
-            messages={chat.messages}
-            hasOlderMessages={chat.hasOlderMessages}
-            onLoadOlder={chat.loadOlderMessages}
-            isLoading={chat.isLoadingChat}
-            selectedJobId={chat.selectedJobId}
-            onSelectVersion={handleSelectVersion}
-            getVersion={chat.getVersion}
-            getVersionLabel={chat.getVersionLabel}
-          />
+            <ChatThread
+              className="flex-1"
+              messages={chat.messages}
+              hasOlderMessages={chat.hasOlderMessages}
+              onLoadOlder={chat.loadOlderMessages}
+              isLoading={chat.isLoadingChat}
+              selectedJobId={chat.selectedJobId}
+              onSelectVersion={handleSelectVersion}
+              getVersion={chat.getVersion}
+              getVersionLabel={chat.getVersionLabel}
+            />
 
-          <ChatComposer
-            className="shrink-0 px-3 pb-3 pt-1 lg:border-t lg:border-border lg:p-3"
-            draft={chat.draft}
-            onDraftChange={chat.setDraft}
-            onSend={chat.send}
-            sending={chat.sending}
-            onStop={chat.stopReply}
-            attachment={chat.attachment}
-            onAttachmentChange={chat.setAttachment}
-            style={chat.style}
-            onStyleChange={chat.setStyle}
-            selectedVersionLabel={selectedVersion ? chat.getVersionLabel(selectedVersion) : ""}
-            onClearSelectedVersion={() => chat.selectVersion(null)}
-            settings={settings}
-            onSettingsChange={chat.updateSettings}
-            quality={quality}
-            supportedQualities={imageModelConfig?.supportedQualities || []}
-            savedStyles={savedStyles}
-            templates={templates}
-            configurationError={configurationError}
-            disabled={chat.isLoadingChat}
-          />
-        </section>
-
-        {!isMobileLayout && (
-          <section
-            aria-label="圖片預覽"
-            className="relative flex min-h-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40 lg:col-span-2"
-          >
-            <div className="relative z-10 max-h-full w-full max-w-2xl overflow-y-auto p-6">{preview}</div>
+            {composer}
           </section>
-        )}
-      </div>
+
+          {!isMobileLayout && (
+            <section
+              aria-label="圖片預覽"
+              className="relative flex min-h-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
+            >
+              <div className="max-h-full w-full max-w-4xl overflow-y-auto p-6 custom-scrollbar">{preview}</div>
+            </section>
+          )}
+        </div>
+      )}
 
       <AnimatePresence>
         {isMobileLayout && showMobilePreview && (generatedImage || pendingImage) && (

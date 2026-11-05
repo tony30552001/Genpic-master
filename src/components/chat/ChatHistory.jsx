@@ -1,4 +1,3 @@
-import { ChevronDown } from "@/components/icons/lucideControls";
 import { History } from "@/components/icons/lucideContent";
 import { Check } from "@/components/icons/lucideStatus";
 import {
@@ -10,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   month: "numeric",
@@ -18,22 +18,14 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit",
 });
 
-/** Dropdown listing the user's chats, newest first, with paging. `compact` renders an icon-only trigger for the phone header. */
-export default function ChatHistory({ chats, activeChatId, hasMore, isLoading, onOpen, onLoadMore, compact = false }) {
+/** Icon-triggered dropdown listing the user's chats, newest first, with paging. */
+export default function ChatHistory({ chats, activeChatId, hasMore, isLoading, onOpen, onLoadMore, triggerClassName }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {compact ? (
-          <Button variant="ghost" size="icon" className="size-10 rounded-full" aria-label="對話紀錄">
-            <History className="icon-md" aria-hidden="true" />
-          </Button>
-        ) : (
-          <Button variant="outline" size="sm" className="h-8 gap-1.5" aria-label="對話紀錄">
-            <History className="size-4" aria-hidden="true" />
-            <span className="whitespace-nowrap">對話紀錄</span>
-            <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
-          </Button>
-        )}
+        <Button variant="ghost" size="icon" className={cn("size-10 rounded-full", triggerClassName)} aria-label="對話紀錄">
+          <History className="icon-md" aria-hidden="true" />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-96 w-72 overflow-y-auto">
         <DropdownMenuLabel>最近的對話</DropdownMenuLabel>

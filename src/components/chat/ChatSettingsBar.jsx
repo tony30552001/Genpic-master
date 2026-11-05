@@ -12,13 +12,13 @@ const ASPECT_RATIO_OPTIONS = [
 ];
 
 const TRIGGER_CLASS =
-  "h-8 w-auto gap-1.5 rounded-full border-border/70 bg-background px-3 text-xs shadow-none focus-visible:ring-2 focus-visible:ring-ring";
+  "h-8 w-auto shrink-0 gap-1 rounded-full border-0 bg-transparent px-2.5 text-xs font-medium shadow-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 [&>svg]:hidden";
 
-function SettingSelect({ label, value, onChange, options, disabled }) {
+function SettingSelect({ label, showLabel = false, value, onChange, options, disabled }) {
   return (
     <Select value={value ?? undefined} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger aria-label={label} className={TRIGGER_CLASS}>
-        <span className="text-muted-foreground">{label}</span>
+        {showLabel && <span className="font-normal text-muted-foreground">{label}</span>}
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -32,10 +32,10 @@ function SettingSelect({ label, value, onChange, options, disabled }) {
   );
 }
 
-/** Aspect ratio, quality, in-image text and purpose as compact selects under the chat input. */
-export default function ChatSettingsBar({ id, settings, quality, supportedQualities, onChange, disabled, className }) {
+/** Aspect ratio, in-image text, purpose and quality as ghost selects in the chat input footer. */
+export default function ChatSettingsBar({ settings, quality, supportedQualities, onChange, disabled, className }) {
   return (
-    <div id={id} className={cn("flex flex-wrap items-center gap-2", className)}>
+    <div className={cn("flex items-center gap-0.5", className)}>
       <SettingSelect
         label="比例"
         value={settings.aspectRatio}
@@ -43,15 +43,6 @@ export default function ChatSettingsBar({ id, settings, quality, supportedQualit
         options={ASPECT_RATIO_OPTIONS}
         disabled={disabled}
       />
-      {supportedQualities.length > 0 && (
-        <SettingSelect
-          label="品質"
-          value={quality}
-          onChange={(nextQuality) => onChange({ quality: nextQuality })}
-          options={supportedQualities.map((id) => ({ id, label: IMAGE_QUALITY_LABELS[id] || id }))}
-          disabled={disabled}
-        />
-      )}
       <SettingSelect
         label="圖中文字"
         value={settings.imageLanguage}
@@ -66,6 +57,16 @@ export default function ChatSettingsBar({ id, settings, quality, supportedQualit
         options={IMAGE_PURPOSE_OPTIONS}
         disabled={disabled}
       />
+      {supportedQualities.length > 0 && (
+        <SettingSelect
+          label="品質"
+          showLabel
+          value={quality}
+          onChange={(nextQuality) => onChange({ quality: nextQuality })}
+          options={supportedQualities.map((id) => ({ id, label: IMAGE_QUALITY_LABELS[id] || id }))}
+          disabled={disabled}
+        />
+      )}
     </div>
   );
 }

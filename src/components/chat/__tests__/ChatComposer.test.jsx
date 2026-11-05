@@ -1,9 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/services/aiService", () => ({ analyzeStyle: vi.fn() }));
 vi.mock("@/services/storageService", () => ({ uploadFile: vi.fn() }));
 
+import { uploadFile } from "@/services/storageService";
 import ChatComposer from "../ChatComposer";
 
 const renderComposer = (props = {}) => {
@@ -94,5 +96,37 @@ describe("ChatComposer", () => {
     fireEvent.click(screen.getByRole("button", { name: "不以目前版本為基礎" }));
     expect(onStyleChange).toHaveBeenCalledWith(null);
     expect(onClearSelectedVersion).toHaveBeenCalled();
+  });
+
+  it("attaches an existing image by URL through the ref", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["x"], { type: "image/jpeg" }),
+    });
+    uploadFile.mockResolvedValue({ uploadId: "u1" });
+    const ref = createRef();
+    const { onAttachmentChange } = renderComposer({ ref });
+
+    await act(() => ref.current.attachImageUrl("data:image/jpeg;base64,eA==", "history-h1"));
+
+    expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({ name: "history-h1.jpeg" }), "image");
+    expect(onAttachmentChange).toHaveBeenCalledWith({
+      uploadId: "u1",
+      name: "history-h1.jpeg",
+      previewUrl: "data:image/jpeg;base64,eA==",
+    });
+    fetchMock.mockRestore();
+  });
+
+  it("shows the error when an image cannot be attached by URL", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: false });
+    const ref = createRef();
+    const { onAttachmentChange } = renderComposer({ ref });
+
+    await act(() => ref.current.attachImageUrl("https://example.com/a.png", "history-h1"));
+
+    expect(screen.getByRole("alert").textContent).toContain("無法取得目前的圖片");
+    expect(onAttachmentChange).not.toHaveBeenCalled();
+    fetchMock.mockRestore();
   });
 });

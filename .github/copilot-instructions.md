@@ -88,7 +88,7 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 
 - Use `cn()` from `src/lib/utils.js` for conditional Tailwind classes.
 - Use existing CSS color variables and shadcn/ui primitives.
-- Full-page creation panels use the existing 60/40 layout: controls at `lg:col-span-3`, preview at `lg:col-span-2`.
+- Full-page creation panels use the existing 60/40 layout: controls at `lg:col-span-3`, preview at `lg:col-span-2`. Exception: the chat workspace uses a 400px conversation column beside a fluid dotted canvas (`lg:grid-cols-[400px_minmax(0,1fr)]`), and a centered composer with recent images when no chat is open.
 - Do not use fixed-width panels for full-page layouts.
 - Web and phone are separate layouts split at `lg` (1024px, `MOBILE_LAYOUT_QUERY` in `src/hooks/useMediaQuery.js`):
   - `lg` and above: web layout with full header tabs and the inline result preview. Do not add tablet-only variants.

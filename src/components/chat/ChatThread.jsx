@@ -48,13 +48,10 @@ function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersi
   const isPending = image.status === "queued" || image.status === "processing";
 
   return (
-    <div className="flex w-40 flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">
-        {actionLabel(image, getVersion, getVersionLabel)}
-      </span>
+    <div className="flex w-44 flex-col gap-1.5">
       {isPending && (
         <div
-          className="flex aspect-square items-center justify-center gap-2 rounded-md border border-dashed border-border bg-background text-xs"
+          className="flex aspect-video items-center justify-center gap-2 rounded-xl bg-muted text-xs text-muted-foreground"
           role="status"
         >
           <Spinner aria-hidden="true" />
@@ -62,7 +59,7 @@ function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersi
         </div>
       )}
       {image.status === "failed" && (
-        <p className="flex items-start gap-1.5 rounded-md border border-destructive/40 p-2 text-xs text-destructive" role="alert">
+        <p className="flex items-start gap-1.5 rounded-xl border border-destructive/40 p-2 text-xs text-destructive" role="alert">
           <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           {image.error?.message || "圖片生成失敗"}
         </p>
@@ -74,16 +71,19 @@ function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersi
           aria-label={`檢視 ${getVersionLabel(version)}`}
           aria-pressed={selectedJobId === version.id}
           className={cn(
-            "group/thumb relative overflow-hidden rounded-md border border-border bg-background press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            selectedJobId === version.id && "ring-2 ring-primary ring-offset-2"
+            "group/thumb relative overflow-hidden rounded-xl bg-muted press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            selectedJobId === version.id && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
           )}
         >
           <img src={version.imageUrl} alt="" className="h-auto w-full object-contain" loading="lazy" />
-          <span className="absolute left-1.5 top-1.5 rounded bg-background/90 px-1.5 py-0.5 text-[11px] font-semibold shadow-sm">
+          <span className="absolute left-1.5 top-1.5 rounded-md bg-background/90 px-1.5 py-0.5 text-[11px] font-semibold shadow-sm">
             {getVersionLabel(version)}
           </span>
         </button>
       )}
+      <span className="text-xs text-muted-foreground">
+        {actionLabel(image, getVersion, getVersionLabel)}
+      </span>
     </div>
   );
 }
@@ -192,12 +192,8 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion,
         )}
 
         {message.images.length > 0 && (
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <ImageIcon className="size-4 text-primary" aria-hidden="true" />
-              <span>{message.images.length > 1 ? `${message.images.length} 張圖片` : "圖片"}</span>
-            </div>
-            <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {message.images.map((image) => (
                 <ImageTile
                   key={image.jobId}

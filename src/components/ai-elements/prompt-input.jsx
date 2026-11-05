@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { CornerDownLeft } from "@/components/icons/lucideControls";
+import { ArrowUp } from "@/components/icons/lucideControls";
 import { Square } from "@/components/icons/lucideContent";
 import {
   InputGroup,
@@ -99,7 +99,7 @@ export const PromptInputSubmit = ({ className, status, onStop, onClick, ...props
   return (
     <InputGroupButton
       aria-label={canStop ? "停止回覆" : "送出訊息"}
-      className={className}
+      className={cn("size-9 rounded-full bg-foreground text-background hover:bg-foreground/85 disabled:opacity-25", className)}
       onClick={handleClick}
       size="icon-sm"
       type={canStop ? "button" : "submit"}
@@ -111,7 +111,7 @@ export const PromptInputSubmit = ({ className, status, onStop, onClick, ...props
       ) : isBusy ? (
         <Spinner />
       ) : (
-        <CornerDownLeft className="size-4" aria-hidden="true" />
+        <ArrowUp className="size-4" aria-hidden="true" />
       )}
     </InputGroupButton>
   );

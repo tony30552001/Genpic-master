@@ -854,6 +854,7 @@ export default function InfographicGenerator({
                         chat={imageChat}
                         savedStyles={savedStyles}
                         templates={templates}
+                        historyItems={historyItems}
                         imageModelConfig={imageModelConfig}
                         modelSetupError={modelSetupError}
                         user={user}

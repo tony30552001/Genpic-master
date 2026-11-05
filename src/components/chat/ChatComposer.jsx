@@ -1,5 +1,5 @@
-import { useId, useRef, useState } from "react";
-import { Plus, SlidersHorizontal, Upload, X } from "@/components/icons/lucideControls";
+import { useImperativeHandle, useRef, useState } from "react";
+import { Plus, Upload, X } from "@/components/icons/lucideControls";
 import { Image as ImageIcon, LayoutTemplate, Palette, Wand2 } from "@/components/icons/lucideContent";
 import { AlertCircle } from "@/components/icons/lucideStatus";
 import {
@@ -20,7 +20,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { analyzeStyle } from "@/services/aiService";
 import { uploadFile } from "@/services/storageService";
-import { readFileAsDataUrl } from "@/lib/imageFile";
+import { imageUrlToFile, readFileAsDataUrl } from "@/lib/imageFile";
 import { cn } from "@/lib/utils";
 import ChatPickerDialog from "./ChatPickerDialog";
 import ChatSettingsBar from "./ChatSettingsBar";
@@ -57,8 +57,12 @@ function Chip({ icon, label, onRemove, removeLabel, busy }) {
   );
 }
 
-/** Message input with attachment, style and template pickers plus output settings. */
+/**
+ * Message input with attachment, style and template pickers and output
+ * settings in its footer. `ref` exposes `attachImageUrl(url, name)` and `focus()`.
+ */
 export default function ChatComposer({
+  ref,
   draft,
   onDraftChange,
   onSend,
@@ -78,15 +82,15 @@ export default function ChatComposer({
   templates,
   configurationError,
   disabled,
+  placeholder = "描述想要的畫面，或告訴 AI 要怎麼修改…",
   className,
 }) {
   const attachmentInputRef = useRef(null);
   const styleInputRef = useRef(null);
-  const settingsId = useId();
+  const textareaRef = useRef(null);
   const [picker, setPicker] = useState(null);
   const [busy, setBusy] = useState(null);
   const [localError, setLocalError] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
 
   const isReplying = Boolean(sending);
   const canSend = Boolean(draft.trim()) && !configurationError && !busy && !disabled;
@@ -116,6 +120,18 @@ export default function ChatComposer({
       onAttachmentChange({ uploadId, name: file.name, previewUrl: await readFileAsDataUrl(file) });
     });
 
+  useImperativeHandle(ref, () => ({
+    focus: () => textareaRef.current?.focus(),
+    attachImageUrl: (url, name) => {
+      textareaRef.current?.focus();
+      return runBusy("attachment", async () => {
+        const file = await imageUrlToFile(url, name);
+        const uploadId = await uploadImage(file);
+        onAttachmentChange({ uploadId, name: file.name, previewUrl: url });
+      });
+    },
+  }));
+
   const handleStyleFile = (file) =>
     runBusy("style", async () => {
       const result = await analyzeStyle({ referenceUploadId: await uploadImage(file) });
@@ -142,7 +158,7 @@ export default function ChatComposer({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <PromptInput
-        className="rounded-3xl lg:rounded-md"
+        className="rounded-3xl bg-card px-1 transition-shadow duration-(--motion-hover) ease-emphasized has-[textarea:focus-visible]:shadow-lg has-[textarea:focus-visible]:shadow-foreground/5"
         onSubmit={({ text }) => { if (canSend) void onSend(text); }}
       >
         {hasChips && (
@@ -178,15 +194,17 @@ export default function ChatComposer({
           </PromptInputHeader>
         )}
         <PromptInputTextarea
+          ref={textareaRef}
           aria-label="訊息"
-          placeholder="描述想要的畫面，或告訴 AI 要怎麼修改…"
+          placeholder={placeholder}
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
           maxLength={4000}
           disabled={disabled}
+          className="text-[15px] md:text-[15px]"
         />
-        <PromptInputFooter>
-          <PromptInputTools>
+        <PromptInputFooter className="gap-1 pb-2.5">
+          <PromptInputTools className="shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <PromptInputButton aria-label="加入附圖、風格或範本" disabled={disabled || Boolean(busy)}>
@@ -212,33 +230,23 @@ export default function ChatComposer({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <PromptInputButton
-              className="lg:hidden"
-              aria-label="輸出設定"
-              aria-expanded={showSettings}
-              aria-controls={settingsId}
-              onClick={() => setShowSettings((value) => !value)}
-            >
-              <SlidersHorizontal className="size-4" aria-hidden="true" />
-            </PromptInputButton>
           </PromptInputTools>
+          <ChatSettingsBar
+            className="min-w-0 flex-1 justify-end overflow-x-auto [scrollbar-width:none]"
+            settings={settings}
+            quality={quality}
+            supportedQualities={supportedQualities}
+            onChange={onSettingsChange}
+            disabled={disabled}
+          />
           <PromptInputSubmit
+            className="shrink-0"
             status={sending?.phase}
             onStop={sending?.chatId ? onStop : undefined}
             disabled={isReplying ? !sending?.chatId : !canSend}
           />
         </PromptInputFooter>
       </PromptInput>
-
-      <ChatSettingsBar
-        id={settingsId}
-        className={showSettings ? undefined : "hidden lg:flex"}
-        settings={settings}
-        quality={quality}
-        supportedQualities={supportedQualities}
-        onChange={onSettingsChange}
-        disabled={disabled}
-      />
 
       {shownError && (
         <p className="flex items-start gap-1.5 text-xs text-destructive" role="alert">
