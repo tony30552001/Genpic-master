@@ -42,6 +42,7 @@ import DocumentScenes from './components/create/DocumentScenes';
 import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
 import ExpandedCanvas from './components/create/ExpandedCanvas';
+import PreciseEditor from './components/edit/PreciseEditor';
 import MobileResultView from './components/create/MobileResultView';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import AttachmentPicker from './components/create/AttachmentPicker';
@@ -85,6 +86,7 @@ export default function InfographicGenerator({
     const [appliedStyleId, setAppliedStyleId] = useState(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [canvasOrigin, setCanvasOrigin] = useState(null);
+    const [isPreciseEditOpen, setIsPreciseEditOpen] = useState(false);
     const isMobileLayout = useMediaQuery(MOBILE_LAYOUT_QUERY);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
     const [imagePurpose, setImagePurpose] = useState('infographic');
@@ -440,8 +442,8 @@ export default function InfographicGenerator({
         document.body.removeChild(link);
     };
 
-    const handleRefine = (instruction) =>
-        refine(instruction, () => ({ imageQuality: requireGenerationQuality(), imageLanguage }));
+    const handleRefine = (instruction, options) =>
+        refine(instruction, () => ({ imageQuality: requireGenerationQuality(), imageLanguage }), options);
 
     const handleSelectVersion = (versionId) => {
         imageVersions.selectVersion(versionId);
@@ -459,6 +461,7 @@ export default function InfographicGenerator({
         isRefining,
         refineError,
         onRefine: handleRefine,
+        onPreciseEdit: () => setIsPreciseEditOpen(true),
         isCompressedPreview: Boolean(activeVersion?.fromHistory),
         versionRows: imageVersions.rows,
         activeVersionId: imageVersions.activeVersionId,
@@ -611,7 +614,7 @@ export default function InfographicGenerator({
 
     // --- Tab 定義 ---
     const tabs = [
-        { id: 'general', label: '一般創作', icon: ImagePlus },
+        { id: 'general', label: '快速創作', icon: ImagePlus },
         { id: 'chat', label: '對話創作', icon: MessageSquare },
         { id: 'document', label: '文件創作', icon: FileText },
         { id: 'library', label: '素材中心', icon: Library },
@@ -786,11 +789,9 @@ export default function InfographicGenerator({
                                     {!isMobileLayout && (
                                     <section
                                         aria-label="圖片預覽"
-                                        className="lg:col-span-2 relative flex min-h-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
+                                        className="lg:col-span-2 relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
                                     >
-                                        <div className="max-h-full w-full max-w-4xl overflow-y-auto p-6 custom-scrollbar">
-                                            <ImagePreview {...previewProps} />
-                                        </div>
+                                        <ImagePreview {...previewProps} />
                                     </section>
                                     )}
                                 </div>
@@ -930,6 +931,19 @@ export default function InfographicGenerator({
                     activeVersionId={imageVersions.activeVersionId}
                     onSelectVersion={handleSelectVersion}
                     getVersion={imageVersions.getVersion}
+                />
+            )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+            {isPreciseEditOpen && activeVersion && (
+                <PreciseEditor
+                    key="precise-editor"
+                    imageUrl={activeVersion.imageUrl}
+                    title={`精確編輯 · ${imageVersions.getVersionLabel(activeVersion)}`}
+                    subtitle={`結果會成為 ${imageVersions.getVersionLabel(activeVersion)} 的新版本`}
+                    onApply={({ instruction, mask }) => void handleRefine(instruction, { mask })}
+                    onClose={() => setIsPreciseEditOpen(false)}
                 />
             )}
             </AnimatePresence>

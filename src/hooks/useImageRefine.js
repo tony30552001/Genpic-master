@@ -8,6 +8,9 @@ import { imageUrlToFile, nearestAspectRatio, readImageSize } from "../lib/imageF
  * result as its child. Each version is uploaded at most once; its uploadId and
  * aspect ratio are cached on the version for later refinements and branches.
  *
+ * A precise edit passes `mask` (PNG blob, painted area transparent); it is uploaded and
+ * sent with the refine request so the model edits mainly that area.
+ *
  * Failures stay inline (`refineError`) so the current image and instruction remain.
  */
 export default function useImageRefine({ versions, transformImage, saveHistoryItem }) {
@@ -26,11 +29,18 @@ export default function useImageRefine({ versions, transformImage, saveHistoryIt
     return upload;
   };
 
+  const uploadMask = async (mask, version) => {
+    const file = new File([mask], `pixora-mask-${version.id}.png`, { type: "image/png" });
+    const uploadResult = await uploadFile(file, "image");
+    if (!uploadResult?.uploadId) throw new Error("無法上傳編輯遮罩，請確認已登入");
+    return uploadResult.uploadId;
+  };
+
   /**
    * `getSettings` is resolved inside the request so a model-setup error is shown
    * next to the instruction like any other refinement failure.
    */
-  const refine = async (instruction, getSettings) => {
+  const refine = async (instruction, getSettings, { mask = null } = {}) => {
     const trimmed = instruction.trim();
     const source = activeVersion;
     if (!trimmed || !source || isRefining) return false;
@@ -40,6 +50,7 @@ export default function useImageRefine({ versions, transformImage, saveHistoryIt
     try {
       const { imageQuality, imageLanguage } = getSettings();
       const { uploadId, aspectRatio } = await uploadVersion(source);
+      const maskUploadId = mask ? await uploadMask(mask, source) : undefined;
       const result = await transformImage({
         uploadId,
         mode: "refine",
@@ -47,6 +58,7 @@ export default function useImageRefine({ versions, transformImage, saveHistoryIt
         aspectRatio,
         imageQuality,
         imageLanguage,
+        maskUploadId,
         filenameSource: trimmed,
       });
       addVersion({

@@ -17,8 +17,13 @@ vi.mock("../../services/aiService", () => ({
   waitForImageJob: vi.fn(),
 }));
 
+vi.mock("../../services/storageService", () => ({
+  uploadFile: vi.fn(),
+}));
+
 import * as chatApi from "../../services/imageChatService";
 import { waitForImageJob } from "../../services/aiService";
+import { uploadFile } from "../../services/storageService";
 import useImageChat from "../useImageChat";
 
 const SETTINGS = { aspectRatio: "16:9", quality: null, imageLanguage: "zh-TW", purpose: "infographic" };
@@ -196,6 +201,38 @@ describe("useImageChat", () => {
     expect(result.current.draft).toBe("畫一隻貓");
     expect(result.current.error).toBe("已有進行中的回覆");
     expect(result.current.sending).toBeNull();
+  });
+
+  it("uploads a precise-edit mask and sends it with the selected version, keeping the draft", async () => {
+    chatApi.getChat.mockResolvedValue({
+      chat: chatRecord("c1", { selectedJobId: "job-0", draft: "下一步" }),
+      messages: [],
+      nextBefore: null,
+    });
+    uploadFile.mockResolvedValue({ uploadId: "mask-1" });
+    chatApi.sendChatMessage.mockImplementation(async ({ body, onEvent }) => {
+      onEvent({ type: "turn", data: serverMessages(body.clientMessageId) });
+    });
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.openChat("c1");
+    });
+
+    const mask = new Blob(["png"], { type: "image/png" });
+    await act(async () => {
+      await result.current.send("把天空改成夕陽", { mask });
+    });
+
+    const [file, kind] = uploadFile.mock.calls[0];
+    expect(file.type).toBe("image/png");
+    expect(kind).toBe("image");
+    expect(chatApi.sendChatMessage.mock.calls[0][0].body).toMatchObject({
+      content: "把天空改成夕陽",
+      attachmentUploadId: null,
+      sourceJobId: "job-0",
+      maskUploadId: "mask-1",
+    });
+    expect(result.current.draft).toBe("下一步");
   });
 
   it("keeps a reply for one chat out of another chat opened mid-stream", async () => {

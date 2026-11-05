@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ImagePreview from "@/components/create/ImagePreview";
 import MobileResultView from "@/components/create/MobileResultView";
+import PreciseEditor from "@/components/edit/PreciseEditor";
 import { getImageQualityError } from "@/lib/imageModel";
 import { cn } from "@/lib/utils";
 import { apiGetBlob } from "@/services/apiClient";
@@ -70,6 +71,7 @@ export default function ChatWorkspace({
   const [showMobilePreview, setShowMobilePreview] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isPreciseEditOpen, setIsPreciseEditOpen] = useState(false);
   const [downloadError, setDownloadError] = useState("");
   const { settings, selectedVersion, pendingImage } = chat;
 
@@ -128,6 +130,7 @@ export default function ChatWorkspace({
       onSelectVersion={chat.selectVersion}
       getVersionLabel={chat.getVersionLabel}
       getVersion={chat.getVersion}
+      onPreciseEdit={selectedVersion && !chat.sending ? () => setIsPreciseEditOpen(true) : undefined}
     />
   );
 
@@ -349,9 +352,9 @@ export default function ChatWorkspace({
           {!isMobileLayout && (
             <section
               aria-label="圖片預覽"
-              className="relative flex min-h-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
+              className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
             >
-              <div className="max-h-full w-full max-w-4xl overflow-y-auto p-6 custom-scrollbar">{preview}</div>
+              {preview}
             </section>
           )}
         </div>
@@ -362,6 +365,19 @@ export default function ChatWorkspace({
           <MobileResultView key="chat-mobile-result" onClose={() => setShowMobilePreview(false)}>
             <div className="p-3">{preview}</div>
           </MobileResultView>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isPreciseEditOpen && selectedVersion && (
+          <PreciseEditor
+            key="chat-precise-editor"
+            imageUrl={selectedVersion.imageUrl}
+            title={`精確編輯 · ${chat.getVersionLabel(selectedVersion)}`}
+            subtitle="會在對話中送出一則修改訊息"
+            onApply={({ instruction, mask }) => void chat.send(instruction, { mask })}
+            onClose={() => setIsPreciseEditOpen(false)}
+          />
         )}
       </AnimatePresence>
     </div>

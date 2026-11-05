@@ -1,18 +1,20 @@
 import React, { useId, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { ArrowUp } from "@/components/icons/lucideControls";
+import { Loader2 } from "@/components/icons/lucideStatus";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { cn } from "@/lib/utils";
 
 /**
- * The "修改這張" instruction row; the field is focusable via `[data-refine-input]`.
- * Enter submits and Shift+Enter breaks the line; touch keyboards break the line on Enter.
+ * The refine bar under the canvas; the field grows with its text and is focusable via
+ * `[data-refine-input]`. Enter submits and Shift+Enter breaks the line; touch keyboards
+ * break the line on Enter.
  */
-export default function RefineForm({ onRefine, isRefining, disabled, refineError }) {
-  const inputId = useId();
+export default function RefineForm({ onRefine, isRefining, disabled, refineError, className }) {
   const errorId = useId();
   const [instruction, setInstruction] = useState("");
   const isTouch = useMediaQuery("(pointer: coarse)");
   const canSubmit = Boolean(instruction.trim()) && !disabled;
+  const submitLabel = isRefining ? "修改中…" : "修改這張";
 
   const submit = async (event) => {
     event.preventDefault();
@@ -21,10 +23,14 @@ export default function RefineForm({ onRefine, isRefining, disabled, refineError
   };
 
   return (
-    <form onSubmit={submit} className="space-y-1.5">
-      <div className="flex items-end gap-2">
-        <Textarea
-          id={inputId}
+    <form onSubmit={submit} className={cn("space-y-1.5", className)}>
+      <div
+        className={cn(
+          "flex items-end gap-2 rounded-[20px] border border-border bg-card py-2 pl-4 pr-2 shadow-sm transition-colors duration-(--motion-hover) focus-within:border-ring/60",
+          refineError && "border-destructive/60"
+        )}
+      >
+        <textarea
           value={instruction}
           onChange={(event) => setInstruction(event.target.value)}
           onKeyDown={(event) => {
@@ -38,14 +44,24 @@ export default function RefineForm({ onRefine, isRefining, disabled, refineError
           aria-invalid={Boolean(refineError)}
           aria-describedby={refineError ? errorId : undefined}
           data-refine-input
-          className="field-sizing-content max-h-32 min-h-10 min-w-0 resize-none py-2"
+          className="field-sizing-content block max-h-[154px] min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground md:text-sm"
         />
-        <Button type="submit" disabled={!canSubmit} className="h-10 shrink-0 font-semibold">
-          {isRefining ? "修改中…" : "修改這張"}
-        </Button>
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          aria-label={submitLabel}
+          title={submitLabel}
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-background press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-30"
+        >
+          {isRefining ? (
+            <Loader2 className="icon-sm animate-spin" aria-hidden="true" />
+          ) : (
+            <ArrowUp className="icon-sm" aria-hidden="true" />
+          )}
+        </button>
       </div>
       {refineError && (
-        <p id={errorId} role="alert" className="text-xs text-destructive">
+        <p id={errorId} role="alert" className="px-2 text-xs text-destructive">
           {refineError}
         </p>
       )}

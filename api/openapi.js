@@ -489,6 +489,7 @@ addOperation("/api/image-chats/{id}/messages", "post", {
       },
       attachmentUploadId: { type: "string", format: "uuid", nullable: true },
       sourceJobId: { type: "string", format: "uuid", nullable: true, description: "Selected owned succeeded image version the assistant may refine." },
+      maskUploadId: { type: "string", format: "uuid", nullable: true, description: "Owned PNG brush mask for `sourceJobId`; transparent pixels mark the area to edit. Limits the reply to refining that version." },
     },
   },
 });
@@ -605,6 +606,7 @@ addOperation("/api/image-transform", "post", {
     properties: {
       uploadId: { type: "string", format: "uuid" },
       mode: { type: "string", enum: ["style_transfer", "element_extract", "bg_replace", "reference_gen", "refine"] },
+      maskUploadId: { type: "string", format: "uuid", description: "Owned PNG brush mask; transparent pixels mark the area to edit. Only for `refine`." },
       prompt: { type: "string" },
       aspectRatio: { type: "string" },
       imageSize: { type: "string" },

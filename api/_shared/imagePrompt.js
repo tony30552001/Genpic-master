@@ -133,6 +133,7 @@ const buildTransformPrompt = ({
   styleTags,
   imageLanguage,
   aspectRatio,
+  masked = false,
 }) => {
   const base = String(prompt || "").trim();
   const style = String(stylePrompt || "").trim();
@@ -162,8 +163,12 @@ const buildTransformPrompt = ({
       break;
 
     case "refine":
-      change = `Modify only what this request asks for: ${base || "a small requested adjustment"}.`;
-      preserve = "Keep everything else unchanged, including composition, subjects, colours, lighting, layout, and every existing text element and its position. Do not restyle, reframe, or regenerate the rest of the image.";
+      change = masked
+        ? `Modify only the masked area for this request: ${base || "a small requested adjustment"}.`
+        : `Modify only what this request asks for: ${base || "a small requested adjustment"}.`;
+      preserve = masked
+        ? "Keep everything outside the masked area unchanged, including composition, subjects, colours, lighting, layout, and every existing text element and its position. Blend the edited area seamlessly with its surroundings."
+        : "Keep everything else unchanged, including composition, subjects, colours, lighting, layout, and every existing text element and its position. Do not restyle, reframe, or regenerate the rest of the image.";
       textDirective = imageLanguage === "none"
         ? "Remove every visible text element, letter, number, label, and logo text, and fill those areas naturally."
         : ["Keep existing text exactly as shown unless the request changes it.", buildGenerationTextDirective(imageLanguage)]

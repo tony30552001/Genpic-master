@@ -5,7 +5,7 @@ import AppHeader from "../AppHeader";
 import { FileText, Library, ImagePlus, SlidersHorizontal } from "@/components/icons/lucideContent";
 
 const tabs = [
-  { id: "general", label: "一般創作", icon: ImagePlus },
+  { id: "general", label: "快速創作", icon: ImagePlus },
   { id: "document", label: "文件創作", icon: FileText },
   { id: "library", label: "素材中心", icon: Library },
   { id: "settings", label: "設定", icon: SlidersHorizontal },

@@ -67,7 +67,7 @@ describe("durable catalog-backed image jobs", () => {
     expect(imageModels.resolveImageModel).toHaveBeenCalledWith({ tenantId: input.tenantId, modelKey: config.modelKey, client });
     expect(client.query.mock.calls[0][0]).toContain("RETURNING id, status, model, operation");
     expect(client.query.mock.calls[0][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "generate", null, null,
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "generate", null, null, null,
     ]);
     expect(db.query).not.toHaveBeenCalled();
     expect(imageModels.resolveImageModel.mock.invocationCallOrder[0])
@@ -77,7 +77,7 @@ describe("durable catalog-backed image jobs", () => {
   it.each(config.supportedQualities)("persists Flare %s exactly with an owned edit source", async (quality) => {
     await createImageJob({ ...input, quality, operation: "edit", sourceUploadId: "upload-1" });
     expect(client.query.mock.calls[0][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, quality, "edit", "upload-1", null,
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, quality, "edit", "upload-1", null, null,
     ]);
   });
 
@@ -90,9 +90,19 @@ describe("durable catalog-backed image jobs", () => {
     expect(client.query.mock.calls[0][0]).toContain("status = 'succeeded'");
     expect(client.query.mock.calls[0][1]).toEqual(["source-job", input.tenantId, input.userId]);
     expect(client.query.mock.calls[1][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "edit", null, "source-job",
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "edit", null, "source-job", null,
     ]);
     expect(afterInsert).toHaveBeenCalledWith(client, expect.objectContaining({ id: "job-2" }));
+  });
+
+  it("persists a brush mask with an edit job", async () => {
+    await createImageJob({ ...input, operation: "edit", sourceUploadId: "upload-1", maskUploadId: "mask-1" });
+    expect(client.query.mock.calls[0][1].at(-1)).toBe("mask-1");
+  });
+
+  it("rejects a mask on a generate job before admission", async () => {
+    await expect(createImageJob({ ...input, maskUploadId: "mask-1" })).rejects.toMatchObject({ status: 400 });
+    expect(imageModels.withImageModelTransaction).not.toHaveBeenCalled();
   });
 
   it("rejects an edit of a job the user does not own before inserting", async () => {
@@ -210,6 +220,31 @@ describe("durable catalog-backed image jobs", () => {
     await processNextImageJob();
     expect(gptImage.editGptImage).not.toHaveBeenCalled();
     expect(db.query.mock.calls[1][1][1]).toBe("source_job_not_found");
+  });
+
+  it("rechecks mask ownership at execution and sends it with the source", async () => {
+    claim({ ...job, operation: "edit", source_upload_id: "upload-1", mask_upload_id: "mask-1" });
+    imageUploads.downloadOwnedImage
+      .mockResolvedValueOnce({ buffer: Buffer.from("source") })
+      .mockResolvedValueOnce({ buffer: Buffer.from("mask") });
+    await processNextImageJob();
+    expect(imageUploads.resolveOwnedImageUpload).toHaveBeenCalledWith({
+      uploadId: "mask-1", tenantId: job.tenant_id, userId: job.user_id,
+    });
+    expect(gptImage.editGptImage).toHaveBeenCalledWith(expect.objectContaining({
+      imageBase64: Buffer.from("source").toString("base64"),
+      maskBase64: Buffer.from("mask").toString("base64"),
+    }));
+  });
+
+  it("fails an edit whose mask is no longer owned without provider work", async () => {
+    claim({ ...job, operation: "edit", source_upload_id: "upload-1", mask_upload_id: "mask-1" });
+    imageUploads.resolveOwnedImageUpload
+      .mockResolvedValueOnce({ id: "upload-1" })
+      .mockResolvedValueOnce(null);
+    await processNextImageJob();
+    expect(gptImage.editGptImage).not.toHaveBeenCalled();
+    expect(db.query.mock.calls[0][1][1]).toBe("mask_not_found");
   });
 
   it("rechecks upload ownership at execution and fails missing sources without retry", async () => {

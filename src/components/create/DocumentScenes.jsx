@@ -1237,7 +1237,7 @@ export default function DocumentScenes({
                     <Palette className="mx-auto mb-2 icon-display opacity-30" aria-hidden="true" />
                     <p className="text-xs">尚無收藏的風格</p>
                     <p className="mt-1 text-[10px] text-muted-foreground/70">
-                      請在「一般創作」或「風格庫」中分析並收藏風格
+                      請在「快速創作」或「風格庫」中分析並收藏風格
                     </p>
                   </div>
                 ) : (

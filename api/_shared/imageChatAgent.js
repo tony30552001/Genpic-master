@@ -82,12 +82,13 @@ const REMEMBER_TOOL = Object.freeze({
   },
 });
 
-const describeSettings = ({ settings, style, hasAttachment, hasSelectedImage }) => [
+const describeSettings = ({ settings, style, hasAttachment, hasSelectedImage, hasMask }) => [
   `- 畫面用途：${describeImagePurpose(settings.purpose)}`,
   `- 畫布：${describeCanvas(settings.aspectRatio)}`,
   `- 套用風格：${style?.name || (style?.prompt ? "自訂風格" : "未指定")}`,
   `- 附圖：${hasAttachment ? "使用者附上一張參考圖，生成新圖時會作為內容參考" : "無"}`,
   `- 目前選取的圖片版本：${hasSelectedImage ? "有，可以修改" : "無"}`,
+  ...(hasMask ? ["- 精確編輯：使用者已在目前圖片上圈選要修改的區域，這一輪只能用 refine_image 修改圈選區域"] : []),
 ].join("\n");
 
 const buildSystemMessage = (turn) => `你是 Pixora 的對話式生圖助理，使用繁體中文（台灣用語）簡潔回覆。
@@ -159,7 +160,7 @@ const buildModelMessages = (history, content) => {
   return [...selected, { role: "user", content }];
 };
 
-const toolsFor = (turn) => [
+const toolsFor = (turn) => turn.hasMask ? [REFINE_TOOL] : [
   GENERATE_TOOL,
   ...(turn.hasSelectedImage ? [REFINE_TOOL] : []),
   REMEMBER_TOOL,
@@ -183,7 +184,7 @@ const resolveMemoryNote = (value) => {
 };
 
 const resolveImageCall = (call, turn) => {
-  if (call.name === GENERATE_TOOL.name) {
+  if (call.name === GENERATE_TOOL.name && !turn.hasMask) {
     const purpose = call.arguments.purpose;
     if (purpose !== undefined && !IMAGE_PURPOSES.includes(purpose)) {
       throw new ImageChatDecisionError("對話模型指定的畫面用途無效，未建立圖片工作");
@@ -210,7 +211,7 @@ const resolveDecision = (toolCalls, turn) => {
   const images = [];
   const notes = [];
   for (const call of toolCalls) {
-    if (call.name === REMEMBER_TOOL.name) {
+    if (call.name === REMEMBER_TOOL.name && !turn.hasMask) {
       notes.push(resolveMemoryNote(call.arguments.note));
     } else {
       images.push(resolveImageCall(call, turn));

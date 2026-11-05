@@ -30,10 +30,14 @@ const createImageJob = async ({
   operation = "generate",
   sourceUploadId = null,
   sourceJobId = null,
+  maskUploadId = null,
   afterInsert,
 }) => {
   if (!IMAGE_JOB_OPERATIONS.includes(operation)) {
     throw new ImageModelError("不支援的圖片工作類型");
+  }
+  if (maskUploadId && operation !== "edit") {
+    throw new ImageModelError("只有圖片修改可以使用遮罩");
   }
   const sourceCount = [sourceUploadId, sourceJobId].filter(Boolean).length;
   if (
@@ -69,8 +73,8 @@ const createImageJob = async ({
     const result = await client.query(
       `INSERT INTO image_generation_jobs
        (tenant_id, user_id, model, prompt, aspect_ratio, image_size, quality,
-        operation, source_upload_id, source_job_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        operation, source_upload_id, source_job_id, mask_upload_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id, status, model, operation, created_at`,
       [
         tenantId,
@@ -83,6 +87,7 @@ const createImageJob = async ({
         operation,
         sourceUploadId,
         sourceJobId,
+        maskUploadId,
       ]
     );
     const job = result.rows[0];
@@ -152,7 +157,7 @@ const claimNextImageJob = async () => {
        WHERE jobs.id = candidate.id
        RETURNING jobs.id, jobs.model, jobs.prompt, jobs.aspect_ratio,
                  jobs.image_size, jobs.quality, jobs.operation,
-                 jobs.source_upload_id, jobs.source_job_id,
+                 jobs.source_upload_id, jobs.source_job_id, jobs.mask_upload_id,
                  jobs.tenant_id, jobs.user_id,
                  jobs.attempts`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
@@ -260,6 +265,19 @@ const loadEditSource = async (job) => {
   return downloadOwnedImage(upload);
 };
 
+const loadEditMask = async (job) => {
+  if (!job.mask_upload_id) return null;
+  const upload = await resolveOwnedImageUpload({
+    uploadId: job.mask_upload_id,
+    tenantId: job.tenant_id,
+    userId: job.user_id,
+  });
+  if (!upload) {
+    throw new ImageModelError("找不到編輯遮罩", "mask_not_found", 404);
+  }
+  return downloadOwnedImage(upload);
+};
+
 const processNextImageJob = async () => {
   const job = await claimNextImageJob();
   if (!job) return false;
@@ -273,9 +291,11 @@ const processNextImageJob = async () => {
     let result;
     if (job.operation === "edit") {
       const source = await loadEditSource(job);
+      const mask = await loadEditMask(job);
       result = await editGptImage({
         config,
         imageBase64: source.buffer.toString("base64"),
+        maskBase64: mask?.buffer.toString("base64"),
         prompt: job.prompt,
         aspectRatio: job.aspect_ratio,
         quality: job.quality,

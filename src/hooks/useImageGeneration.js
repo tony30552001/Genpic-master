@@ -178,7 +178,7 @@ export default function useImageGeneration() {
   );
 
   const runTransform = useCallback(
-    async ({ uploadId, mode, prompt, stylePrompt, styleTags, aspectRatio, imageQuality, imageLanguage, filenameSource }) => {
+    async ({ uploadId, mode, prompt, stylePrompt, styleTags, aspectRatio, imageQuality, imageLanguage, maskUploadId, filenameSource }) => {
       if (!uploadId) {
         throw new Error("請先附上要轉換的圖片。");
       }
@@ -193,6 +193,7 @@ export default function useImageGeneration() {
           aspectRatio,
           imageQuality,
           imageLanguage,
+          maskUploadId,
           signal,
         }),
         operation: "edit",

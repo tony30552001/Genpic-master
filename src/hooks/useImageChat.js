@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as chatApi from "../services/imageChatService";
 import { waitForImageJob } from "../services/aiService";
+import { uploadFile } from "../services/storageService";
 import { buildVersionRows } from "./useImageVersions";
 
 const SAVE_DELAY_MS = 800;
@@ -380,17 +381,33 @@ export default function useImageChat({ enabled, initialSettings }) {
     }
   }, [updateChatMessages, watchJob, watchPendingImages]);
 
-  const send = useCallback(async (content) => {
+  /**
+   * Sends a turn. A precise edit passes `mask` (PNG blob, painted area transparent): it is
+   * uploaded and sent with the selected version, without the draft or attachment, and the
+   * server limits the turn to refining that version.
+   */
+  const send = useCallback(async (content, { mask = null } = {}) => {
     const text = content.trim();
     if (!text || sending) return false;
+    if (mask && !selectedJobId) {
+      setError("請先選擇要修改的圖片版本");
+      return false;
+    }
     setError("");
 
     let chatId = activeChatIdRef.current;
-    const snapshot = { settings, style, attachment, selectedJobId };
+    const snapshot = { settings, style, attachment: mask ? null : attachment, selectedJobId };
     const turnId = crypto.randomUUID();
     setSending({ chatId, turnId, phase: "submitted" });
 
+    let maskUploadId;
     try {
+      if (mask) {
+        const file = new File([mask], `pixora-mask-${selectedJobId}.png`, { type: "image/png" });
+        const uploaded = await uploadFile(file, "image");
+        if (!uploaded?.uploadId) throw new Error("無法上傳編輯遮罩，請確認已登入");
+        maskUploadId = uploaded.uploadId;
+      }
       if (!chatId) {
         const created = await chatApi.createChat({ settings });
         activeChatIdRef.current = created.id;
@@ -411,14 +428,17 @@ export default function useImageChat({ enabled, initialSettings }) {
       style: snapshot.style,
       attachmentUploadId: snapshot.attachment?.uploadId || null,
       sourceJobId: snapshot.selectedJobId,
+      ...(maskUploadId && { maskUploadId }),
     };
     setMessages((current) => [
       ...current,
       { id: `local-user-${turnId}`, turnId, role: "user", content: text, input: userInput, status: "completed", error: null },
       { id: `local-assistant-${turnId}`, turnId, role: "assistant", content: "", images: [], input: {}, status: "responding", error: null },
     ]);
-    setDraftState("");
-    markDirty();
+    if (!mask) {
+      setDraftState("");
+      markDirty();
+    }
 
     const controller = new AbortController();
     streamRef.current = controller;
@@ -434,11 +454,12 @@ export default function useImageChat({ enabled, initialSettings }) {
           style: snapshot.style,
           attachmentUploadId: userInput.attachmentUploadId,
           sourceJobId: snapshot.selectedJobId,
+          maskUploadId,
         },
         onEvent: (event) => {
           if (event.type === "turn") {
             admitted = true;
-            setAttachment(null);
+            if (!mask) setAttachment(null);
             setChats((current) => {
               const existing = current.find((item) => item.id === chatId);
               const summary = {
@@ -457,7 +478,7 @@ export default function useImageChat({ enabled, initialSettings }) {
       if (isAbort(err)) return false;
       if (!admitted) {
         updateChatMessages(chatId, (current) => current.filter((message) => message.turnId !== turnId));
-        if (activeChatIdRef.current === chatId) {
+        if (!mask && activeChatIdRef.current === chatId) {
           setDraftState(text);
           markDirty();
         }

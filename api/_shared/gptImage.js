@@ -173,16 +173,33 @@ const normalizeEditSource = async (imageBase64) => {
   }
 };
 
-const editGptImage = async ({ config, imageBase64, prompt, aspectRatio, quality }) => {
+// The provider requires the mask to match the source's exact dimensions; transparent
+// pixels mark the area to edit.
+const normalizeEditMask = async (maskBase64, source) => {
+  const { width, height } = await sharp(source).metadata();
+  try {
+    return await sharp(Buffer.from(maskBase64, "base64"))
+      .resize({ width, height, fit: "fill" })
+      .ensureAlpha()
+      .png()
+      .toBuffer();
+  } catch {
+    throw new ImageModelError("無法解析編輯遮罩，請重新塗抹", "invalid_mask_image", 400);
+  }
+};
+
+const editGptImage = async ({ config, imageBase64, maskBase64, prompt, aspectRatio, quality }) => {
   validateConfig(config);
   const selectedQuality = validateImageQuality(config, quality);
   if (typeof imageBase64 !== "string" || !imageBase64) {
     throw new ImageModelError("缺少圖片編輯來源");
   }
   const source = await normalizeEditSource(imageBase64);
+  const mask = maskBase64 ? await normalizeEditMask(maskBase64, source) : null;
   return requestImage(config, "edits", () => {
     const formData = new FormData();
     formData.append("image", new Blob([source], { type: "image/png" }), "source.png");
+    if (mask) formData.append("mask", new Blob([mask], { type: "image/png" }), "mask.png");
     formData.append("prompt", prompt || "");
     formData.append("model", config.deploymentName);
     formData.append("size", getSize(aspectRatio));

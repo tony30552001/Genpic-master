@@ -21,6 +21,26 @@ describe("image chat agent contract", () => {
     expect(agent.buildSystemMessage(turn)).toContain("目前沒有選取的圖片");
   });
 
+  it("limits a masked turn to refining the selected version", () => {
+    const masked = { ...turn, hasSelectedImage: true, hasMask: true };
+    expect(agent.toolsFor(masked).map((tool) => tool.name)).toEqual(["refine_image"]);
+    expect(agent.buildSystemMessage(masked)).toContain("圈選");
+    expect(() => agent.resolveDecision([{ name: "generate_image", arguments: { prompt: "貓" } }], masked))
+      .toThrow(agent.ImageChatDecisionError);
+    expect(() => agent.resolveDecision([{ name: "remember_preference", arguments: { note: "x" } }], masked))
+      .toThrow(agent.ImageChatDecisionError);
+  });
+
+  it("requires a selected version for a mask and rejects a mask with an attachment", () => {
+    const id = "123e4567-e89b-42d3-a456-426614174000";
+    const body = { clientMessageId: id, content: "加帽子", settings };
+    expect(chats.validateTurnRequest({ ...body, sourceJobId: id, maskUploadId: id }))
+      .toMatchObject({ sourceJobId: id, maskUploadId: id });
+    expect(() => chats.validateTurnRequest({ ...body, maskUploadId: id })).toThrow(chats.ImageChatRequestError);
+    expect(() => chats.validateTurnRequest({ ...body, sourceJobId: id, maskUploadId: id, attachmentUploadId: id }))
+      .toThrow(chats.ImageChatRequestError);
+  });
+
   it("puts the user's memory in the system message", () => {
     expect(agent.buildSystemMessage({ ...turn, memory: "- 不要人臉" })).toContain("- 不要人臉");
     expect(agent.buildSystemMessage(turn)).toContain("（目前沒有）");

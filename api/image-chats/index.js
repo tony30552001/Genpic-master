@@ -31,7 +31,7 @@ const isKnownError = (err) =>
   err instanceof ImageModelError ||
   err instanceof LlmConfigurationError;
 
-const queueImage = ({ identity, turn, upload, image, position, assistantMessage, text }) => {
+const queueImage = ({ identity, turn, upload, mask, image, position, assistantMessage, text }) => {
   const { settings, style } = turn;
   const generate = image.action === "generate";
   const prompt = generate
@@ -49,6 +49,7 @@ const queueImage = ({ identity, turn, upload, image, position, assistantMessage,
         prompt: image.prompt,
         imageLanguage: settings.imageLanguage,
         aspectRatio: settings.aspectRatio,
+        masked: Boolean(mask),
       });
   const sourceJobId = generate ? null : turn.sourceJobId;
 
@@ -61,6 +62,7 @@ const queueImage = ({ identity, turn, upload, image, position, assistantMessage,
     operation: generate && !upload ? "generate" : "edit",
     sourceUploadId: generate && upload ? upload.id : null,
     sourceJobId,
+    maskUploadId: generate ? null : mask?.id ?? null,
     afterInsert: (client, job) =>
       chats.attachImageJob(client, {
         messageId: assistantMessage.id,
@@ -119,6 +121,15 @@ const runTurn = async (context, { identity, owner, turn }) => {
   if (turn.sourceJobId) {
     await chats.requireOwnedSucceededJob({ ...identity, jobId: turn.sourceJobId });
   }
+  let mask = null;
+  if (turn.maskUploadId) {
+    mask = await resolveOwnedImageUpload({
+      uploadId: turn.maskUploadId,
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+    });
+    if (!mask) throw new ImageChatRequestError("找不到編輯遮罩", "mask_not_found", 404);
+  }
   const llm = await resolveRoleModel(identity.tenantId, "image_chat");
   const [history, memory] = await Promise.all([
     chats.listContextMessages({ chatId: owner.chatId, limit: CONTEXT_MESSAGE_LIMIT }),
@@ -135,6 +146,7 @@ const runTurn = async (context, { identity, owner, turn }) => {
     memory: memory.content,
     hasAttachment: Boolean(upload),
     hasSelectedImage: Boolean(turn.sourceJobId),
+    hasMask: Boolean(mask),
   };
   let text = "";
   const searches = new Map();
@@ -171,7 +183,7 @@ const runTurn = async (context, { identity, owner, turn }) => {
         await chats.completeReply(assistantMessage.id, text);
       }
       for (const [position, image] of images.entries()) {
-        const job = await queueImage({ identity, turn, upload, image, position, assistantMessage, text });
+        const job = await queueImage({ identity, turn, upload, mask, image, position, assistantMessage, text });
         stream.send("image", {
           action: image.action,
           jobId: job.id,

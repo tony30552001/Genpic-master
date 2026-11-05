@@ -75,6 +75,7 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 - Image quality is validated against the selected model's capabilities. Only an omitted quality may use its configured default; explicit invalid values must fail.
 - Generation, reference-image generation, and transforms return HTTP `202` with a `jobId`; the frontend polls through `aiService.waitForImageJob()`.
 - Image history requires an owned succeeded job; persist that job's model, not the current policy or a browser-provided model.
+- Precise edit (精確編輯) sends a brush mask as an owned `image` upload (PNG, painted area transparent) via `maskUploadId`. It is refine-only: `image-transform` accepts it only with `mode: "refine"`, and a chat turn with a mask requires `sourceJobId`, cannot carry an attachment, and limits the agent to `refine_image`. The worker resizes the mask to the source size. Masks guide the model; UI copy must not promise untouched pixels outside the area.
 - If the image-job contract changes, update the worker, endpoint, polling client, tests, and UI together. Current states are `queued`, `processing`, `succeeded`, and `failed`.
 
 ## Environment variables

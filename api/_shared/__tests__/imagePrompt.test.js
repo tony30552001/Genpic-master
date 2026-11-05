@@ -151,4 +151,11 @@ describe("buildTransformPrompt", () => {
     expect(prompt).toContain("Text: Remove every visible text element");
     expect(prompt).not.toContain("Keep existing text");
   });
+
+  it("confines a masked refine edit to the masked area", () => {
+    const prompt = buildTransformPrompt({ mode: "refine", prompt: "add a hat", masked: true });
+
+    expect(prompt).toMatch(/^Edit: Modify only the masked area for this request: add a hat\./);
+    expect(prompt).toContain("Keep everything outside the masked area unchanged");
+  });
 });

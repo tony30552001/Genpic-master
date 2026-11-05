@@ -113,6 +113,16 @@ describe("ImagePreview refinement", () => {
     expect(onExpand).toHaveBeenCalledWith(expect.objectContaining({ width: expect.any(Number), left: expect.any(Number) }));
   });
 
+  it("opens precise edit from the canvas header only when offered", () => {
+    const onPreciseEdit = vi.fn();
+    const { rerender } = render(<ImagePreview generatedImage="v2.png" onPreciseEdit={onPreciseEdit} />);
+    fireEvent.click(screen.getByRole("button", { name: "精確編輯" }));
+    expect(onPreciseEdit).toHaveBeenCalledTimes(1);
+
+    rerender(<ImagePreview generatedImage="v2.png" />);
+    expect(screen.queryByRole("button", { name: "精確編輯" })).not.toBeInTheDocument();
+  });
+
   it("hides the version strip for a single version and labels compressed history previews", () => {
     render(
       <ImagePreview

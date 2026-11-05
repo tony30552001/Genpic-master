@@ -82,6 +82,32 @@ describe("catalog-backed Azure Images v1 adapter", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("resizes the brush mask to the normalized source and keeps its alpha", async () => {
+    const jpeg = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: "#369" } })
+      .jpeg().toBuffer();
+    const mask = await sharp({ create: { width: 300, height: 200, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      .png().toBuffer();
+    await editGptImage({
+      config: flare, imageBase64: jpeg.toString("base64"), maskBase64: mask.toString("base64"), quality: "low",
+    });
+    const sent = fetchMock.mock.calls[0][1].body.get("mask");
+    expect(sent.type).toBe("image/png");
+    const meta = await sharp(Buffer.from(await sent.arrayBuffer())).metadata();
+    expect(meta).toMatchObject({ format: "png", width: 2048, height: 1365, hasAlpha: true });
+  });
+
+  it("omits the mask field for a plain edit", async () => {
+    await editGptImage({ config: flare, ...image, quality: "low" });
+    expect(fetchMock.mock.calls[0][1].body.has("mask")).toBe(false);
+  });
+
+  it("rejects an undecodable mask before calling the provider", async () => {
+    await expect(editGptImage({
+      config: flare, ...image, maskBase64: Buffer.from("nope").toString("base64"), quality: "low",
+    })).rejects.toMatchObject({ code: "invalid_mask_image", status: 400 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it.each(gpt2.supportedQualities)("preserves GPT Image 2 %s", async (quality) => {
     await generateGptImage({ config: gpt2, prompt: "cat", quality });
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).quality).toBe(quality);

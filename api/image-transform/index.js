@@ -39,6 +39,7 @@ module.exports = async function (context, req) {
     imageSize,
     quality,
     imageLanguage,
+    maskUploadId,
   } = body;
 
   if (
@@ -56,6 +57,14 @@ module.exports = async function (context, req) {
     context.res = error("圖片模型由租戶政策決定", "bad_request", 400);
     return;
   }
+  if (maskUploadId !== undefined && (typeof maskUploadId !== "string" || !maskUploadId.trim())) {
+    context.res = error("找不到編輯遮罩", "mask_not_found", 404);
+    return;
+  }
+  if (maskUploadId !== undefined && mode !== "refine") {
+    context.res = error("只有修改圖片可以使用遮罩", "bad_request", 400);
+    return;
+  }
 
   try {
     const upload = await resolveOwnedImageUpload({
@@ -67,6 +76,18 @@ module.exports = async function (context, req) {
       context.res = error("找不到可用的上傳圖片", "upload_not_found", 404);
       return;
     }
+    let mask = null;
+    if (maskUploadId !== undefined) {
+      mask = await resolveOwnedImageUpload({
+        uploadId: maskUploadId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+      });
+      if (!mask) {
+        context.res = error("找不到編輯遮罩", "mask_not_found", 404);
+        return;
+      }
+    }
 
     const textPrompt = buildTransformPrompt({
       mode,
@@ -75,6 +96,7 @@ module.exports = async function (context, req) {
       styleTags,
       imageLanguage,
       aspectRatio,
+      masked: Boolean(mask),
     });
 
     const job = await createImageJob({
@@ -86,6 +108,7 @@ module.exports = async function (context, req) {
       quality,
       operation: "edit",
       sourceUploadId: upload.id,
+      maskUploadId: mask?.id ?? null,
     });
     context.res = ok(
       {

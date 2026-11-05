@@ -142,9 +142,42 @@ describe("image-transform owner-scoped source uploads", () => {
       quality: "medium",
       operation: "edit",
       sourceUploadId: IMAGE_ID,
+      maskUploadId: null,
     });
     expect(imageUploads.downloadOwnedImage).not.toHaveBeenCalled();
     expect(modelPolicy.ensureModelPolicy).not.toHaveBeenCalled();
+  });
+
+  it("queues a masked refine against the owned mask upload", async () => {
+    const MASK_ID = "323e4567-e89b-42d3-a456-426614174000";
+    imageUploads.resolveOwnedImageUpload
+      .mockResolvedValueOnce(upload)
+      .mockResolvedValueOnce({ ...upload, id: MASK_ID });
+
+    const response = await invoke({ uploadId: IMAGE_ID, mode: "refine", prompt: "add a hat", maskUploadId: MASK_ID });
+
+    expect(response.status).toBe(202);
+    expect(imageUploads.resolveOwnedImageUpload).toHaveBeenLastCalledWith({
+      uploadId: MASK_ID, tenantId: OWNER.tenantId, userId: OWNER.userId,
+    });
+    expect(imageJobs.createImageJob).toHaveBeenCalledWith(expect.objectContaining({
+      maskUploadId: MASK_ID,
+      prompt: expect.stringContaining("masked area"),
+    }));
+  });
+
+  it("returns mask_not_found for a mask the user does not own", async () => {
+    imageUploads.resolveOwnedImageUpload.mockResolvedValueOnce(upload).mockResolvedValueOnce(null);
+    const response = await invoke({ uploadId: IMAGE_ID, mode: "refine", prompt: "x", maskUploadId: IMAGE_ID });
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe("mask_not_found");
+    expect(imageJobs.createImageJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a mask outside refine mode before any lookup", async () => {
+    const response = await invoke({ uploadId: IMAGE_ID, mode: "style_transfer", maskUploadId: IMAGE_ID });
+    expect(response.status).toBe(400);
+    expect(imageUploads.resolveOwnedImageUpload).not.toHaveBeenCalled();
   });
 
   it("rejects caller-selected models before creating a job", async () => {

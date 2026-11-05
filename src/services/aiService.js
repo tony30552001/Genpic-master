@@ -332,6 +332,7 @@ export const optimizeScene = async ({ scene_title, scene_description, visual_pro
  * @param {string} [params.aspectRatio] - 圖片比例
  * @param {string} [params.imageQuality] - 模型目錄支援的圖片品質
  * @param {string} [params.imageLanguage] - 圖片內文字語系
+ * @param {string} [params.maskUploadId] - 精確編輯遮罩的 upload ID（僅 refine；透明區域為要修改處）
  * @param {AbortSignal} [params.signal]
  * @returns {Promise<{jobId: string, status: 'queued', model: string, prompt: string}>}
  */
@@ -345,6 +346,7 @@ export const transformImage = async ({
   aspectRatio,
   imageQuality,
   imageLanguage,
+  maskUploadId,
   signal,
 }) => {
   return requireImageJobAdmission(await apiPost(
@@ -359,6 +361,7 @@ export const transformImage = async ({
       aspectRatio,
       quality: imageQuality,
       imageLanguage,
+      maskUploadId,
     },
     { signal }
   ));

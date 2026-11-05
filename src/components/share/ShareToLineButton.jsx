@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Share2,
 } from "@/components/icons/lucideControls";
@@ -88,56 +89,51 @@ export default function ShareToLineButton({ imageUrl, user, message, className =
     }, [imageUrl, isBound, message]);
 
     const isLoading = status === "loading";
-    const isSuccess = status === "success";
-    const isError = status === "error";
+    const label = {
+        loading: "處理中…",
+        success: "已分享！",
+        error: "發送失敗",
+    }[status] || "分享到 LINE";
+    const StatusIcon = {
+        loading: Loader2,
+        success: CheckCircle,
+        error: AlertCircle,
+    }[status] || Share2;
 
     return (
-        <div className={`flex flex-wrap items-center gap-1 ${className}`}>
+        <div className={cn("relative flex items-center", className)}>
             <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 disabled={!imageUrl || isLoading}
                 onClick={handleShare}
-                className="relative"
-                style={{
-                    backgroundColor: isSuccess ? undefined : LINE_GREEN,
-                    borderColor: isSuccess ? undefined : LINE_GREEN,
-                    color: "#fff",
-                }}
-                variant={isSuccess ? "secondary" : "default"}
+                aria-label={label}
+                title={label}
+                className="size-9 rounded-[10px] [&_svg]:size-[18px]"
+                style={{ color: status === "error" ? undefined : LINE_GREEN }}
             >
-                {isLoading ? (
-                    <Loader2 className="icon-sm mr-2 animate-spin" />
-                ) : isSuccess ? (
-                    <CheckCircle className="icon-sm mr-2 text-green-600" />
-                ) : isError ? (
-                    <AlertCircle className="icon-sm mr-2" />
-                ) : (
-                    <Share2 className="icon-sm mr-2" />
-                )}
-
-                {isLoading
-                    ? "處理中…"
-                    : isSuccess
-                        ? "已分享！"
-                        : isError
-                            ? "發送失敗"
-                            : "分享到 LINE"}
-
-
+                <StatusIcon className={cn(isLoading && "animate-spin", status === "error" && "text-destructive")} aria-hidden="true" />
             </Button>
 
             {isBound && (
                 <Button
-                    variant="outline"
+                    type="button"
+                    variant="ghost"
                     size="icon"
                     onClick={() => setIsBindingOpen(true)}
                     aria-label="管理 LINE 綁定"
+                    title="管理 LINE 綁定"
+                    className="size-9 rounded-[10px] text-muted-foreground"
                 >
                     <Settings2 className="icon-sm" aria-hidden="true" />
                 </Button>
             )}
 
-            {isError && errorMsg && (
-                <p className="basis-full text-xs text-destructive mt-0.5">{errorMsg}</p>
+            {status === "error" && errorMsg && (
+                <p role="alert" className="absolute right-0 top-full z-20 mt-1 w-60 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-destructive shadow-lg">
+                    {errorMsg}
+                </p>
             )}
 
             <Dialog open={isBindingOpen} onOpenChange={setIsBindingOpen}>
@@ -148,4 +144,3 @@ export default function ShareToLineButton({ imageUrl, user, message, className =
         </div>
     );
 }
-

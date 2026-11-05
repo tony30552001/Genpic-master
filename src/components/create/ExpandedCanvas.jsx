@@ -268,7 +268,7 @@ export default function ExpandedCanvas({
         )}
       </div>
 
-      <div className="mx-auto mb-[max(1rem,env(safe-area-inset-bottom))] w-[min(calc(100%-2rem),56rem)] space-y-3 rounded-2xl border border-border/60 bg-card/75 p-3 shadow-xl backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-card [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none">
+      <div className="mx-auto mb-[max(1rem,env(safe-area-inset-bottom))] w-[min(calc(100%-2rem),56rem)] space-y-3">
         <RefineForm onRefine={onRefine} isRefining={isRefining} disabled={refineDisabled} refineError={refineError} />
         <VersionStrip
           rows={versionRows}

@@ -92,13 +92,23 @@ const validateTurnRequest = (body) => {
   if (Object.prototype.hasOwnProperty.call(body, "model")) {
     throw new ImageChatRequestError("模型由租戶政策決定");
   }
+  const sourceJobId = optionalUuid(body.sourceJobId, "圖片版本 ID ");
+  const maskUploadId = optionalUuid(body.maskUploadId, "遮罩 ID ");
+  if (maskUploadId && !sourceJobId) {
+    throw new ImageChatRequestError("遮罩必須搭配要修改的圖片版本");
+  }
+  const attachmentUploadId = optionalUuid(body.attachmentUploadId, "附圖 ID ");
+  if (maskUploadId && attachmentUploadId) {
+    throw new ImageChatRequestError("精確編輯不能同時附圖");
+  }
   return {
     turnId: requireUuid(body.clientMessageId, "訊息 ID "),
     content: boundedString(body.content, "訊息", MAX_USER_MESSAGE_CHARS, { allowEmpty: false }),
     settings: validateSettings(body.settings),
     style: validateStyle(body.style),
-    attachmentUploadId: optionalUuid(body.attachmentUploadId, "附圖 ID "),
-    sourceJobId: optionalUuid(body.sourceJobId, "圖片版本 ID "),
+    attachmentUploadId,
+    sourceJobId,
+    maskUploadId,
   };
 };
 
@@ -364,6 +374,7 @@ const beginTurn = async (owner, turn) => {
       style: turn.style,
       attachmentUploadId: turn.attachmentUploadId,
       sourceJobId: turn.sourceJobId,
+      maskUploadId: turn.maskUploadId,
     };
     await client.query(
       `INSERT INTO image_chat_messages (chat_id, turn_id, role, content, input, status)

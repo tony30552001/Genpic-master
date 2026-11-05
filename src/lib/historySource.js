@@ -1,6 +1,6 @@
 /** History source labels, mirroring api/_shared/historySource.js. */
 export const HISTORY_SOURCE_LABELS = [
-  { id: "general", label: "一般創作" },
+  { id: "general", label: "快速創作" },
   { id: "document", label: "文件分鏡" },
   { id: "chat", label: "對話創作" },
   { id: "refine", label: "修改這張" },

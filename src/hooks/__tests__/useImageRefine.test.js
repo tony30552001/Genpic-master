@@ -60,6 +60,22 @@ describe("useImageRefine", () => {
     });
   });
 
+  it("uploads a precise-edit mask and sends it with the refine request", async () => {
+    const { result, transformImage } = setup();
+    mocks.uploadFile.mockResolvedValueOnce({ uploadId: "upload-v1" }).mockResolvedValueOnce({ uploadId: "upload-mask" });
+    const mask = new Blob(["mask"], { type: "image/png" });
+
+    await act(async () => { await result.current.refine.refine("把花換成向日葵", settings, { mask }); });
+
+    const [maskFile, purpose] = mocks.uploadFile.mock.calls[1];
+    expect(maskFile).toBeInstanceOf(File);
+    expect(maskFile.type).toBe("image/png");
+    expect(purpose).toBe("image");
+    expect(transformImage).toHaveBeenCalledWith(expect.objectContaining({
+      uploadId: "upload-v1", mode: "refine", maskUploadId: "upload-mask",
+    }));
+  });
+
   it("uploads each version only once, including when branching", async () => {
     const { result, transformImage } = setup();
     const rootId = result.current.versions.activeVersionId;
