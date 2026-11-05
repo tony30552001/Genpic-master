@@ -73,24 +73,24 @@
 }
 
 .dark {
-  --color-paper: oklch(15% 0.018 258);
-  --color-paper-2: oklch(18.5% 0.019 258);
-  --color-paper-3: oklch(22.5% 0.02 258);
-  --color-ink: oklch(94% 0.008 255);
-  --color-ink-2: oklch(76% 0.011 255);
-  --color-muted: oklch(68% 0.012 255);
-  --color-neutral: oklch(60% 0.013 255);
-  --color-rule: oklch(34% 0.018 258);
-  --color-rule-2: oklch(28% 0.018 258);
+  --color-paper: oklch(17% 0 0);
+  --color-paper-2: oklch(20% 0 0);
+  --color-paper-3: oklch(23.5% 0 0);
+  --color-ink: oklch(94% 0 0);
+  --color-ink-2: oklch(76% 0 0);
+  --color-muted: oklch(68% 0 0);
+  --color-neutral: oklch(60% 0 0);
+  --color-rule: oklch(30% 0 0);
+  --color-rule-2: oklch(26% 0 0);
   --color-accent: oklch(70% 0.15 255);
   --color-accent-hover: oklch(76% 0.13 255);
-  --color-accent-ink: oklch(16% 0.018 258);
+  --color-accent-ink: oklch(16% 0 0);
   --color-focus: oklch(76% 0.18 252);
   --color-error: oklch(70% 0.16 25);
   --color-error-soft: oklch(22% 0.04 25);
   --color-success: oklch(72% 0.12 150);
   --color-success-soft: oklch(22% 0.035 150);
-  --shadow-card: 0 1px 2px oklch(8% 0.012 258 / 0.2);
+  --shadow-card: 0 1px 2px oklch(8% 0 0 / 0.2);
 }
 
 .login-light-theme {
