@@ -68,25 +68,16 @@ export default function ImagePreview({
     <div className="flex w-full flex-col items-center gap-4 px-6 py-10 text-center">
       <div
         className={cn(
-          "relative overflow-hidden rounded-xl border border-dashed border-border bg-background shadow-md ring-1 ring-border/50",
+          "flex items-center justify-center rounded-xl border border-dashed border-muted-foreground/30 bg-card",
           getEmptyFrameClass(aspectRatio)
         )}
         aria-hidden="true"
       >
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: "linear-gradient(hsl(var(--muted-foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--muted-foreground)) 1px, transparent 1px)",
-            backgroundSize: "18px 18px",
-          }}
-        />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <ImageIcon className="h-10 w-10 text-primary/65" aria-hidden="true" />
-        </div>
+        <ImageIcon className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
       </div>
-      <div className="space-y-1.5">
-        <p className="text-base font-semibold text-foreground">預覽區已準備好</p>
-        <p className="text-xs text-muted-foreground">
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">預覽區已準備好</p>
+        <p className="text-xs text-balance text-muted-foreground">
           目前比例為 {aspectRatio}。完成內容與風格設定後，生成結果會出現在這裡。
         </p>
       </div>
