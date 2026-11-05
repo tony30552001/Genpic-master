@@ -784,19 +784,14 @@ export default function InfographicGenerator({
 
                                     {/* Right: Preview (takes 2/5 on large screens) */}
                                     {!isMobileLayout && (
-                                    <div className="lg:col-span-2 min-h-0 flex items-center justify-center relative overflow-hidden rounded-2xl border border-border bg-card shadow-md ring-1 ring-border/40">
-                                        {/* Decorative grid background */}
-                                        <div
-                                            className={`absolute inset-0 bg-muted/35 transition-opacity duration-300 ${isGenerating ? 'opacity-0' : 'opacity-100'}`}
-                                            style={{
-                                                backgroundImage: 'linear-gradient(hsl(var(--foreground) / 0.06) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground) / 0.06) 1px, transparent 1px)',
-                                                backgroundSize: '24px 24px'
-                                            }}
-                                        />
-                                        <div className="relative z-10 max-h-full w-full max-w-2xl overflow-y-auto p-6">
+                                    <section
+                                        aria-label="圖片預覽"
+                                        className="lg:col-span-2 relative flex min-h-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
+                                    >
+                                        <div className="max-h-full w-full max-w-4xl overflow-y-auto p-6 custom-scrollbar">
                                             <ImagePreview {...previewProps} />
                                         </div>
-                                    </div>
+                                    </section>
                                     )}
                                 </div>
                             </div>
