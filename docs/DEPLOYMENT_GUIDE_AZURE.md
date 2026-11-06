@@ -70,10 +70,10 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 5. 再登錄 `gpt-image-2.5-flare`，填寫它的實際 deployment name 與連線。
    支援品質為 `low/medium/high/xhigh/max/auto`，預設 `medium`。
    目錄新增不會自動變更原有開放清單或預設模型。
-6. 管理員可明確觸發「生成測試」；這會產生 Azure 費用且建立工作。
+6. 管理員可明確觸發「付費測試」；這會產生 Azure 費用且建立工作。
    另以受控方式確認參考圖編輯及要使用的品質。錯誤金鑰、缺少配額或不支援的參數
    不可透過自動改用另一模型掩蓋。
-7. 原模型連線可用後再開放創作流量；需要切至 Flare 時，在模型政策中明確選擇。
+7. 原模型連線可用後再開放創作流量；需要切至 Flare 時，在管理中心「AI 模型」的功能指派中明確選擇。
    新請求依新政策執行，已提交工作不會重新選模型。
 8. 移除 App Service 中已不用的 `GPT_IMAGE_*` 設定。後續新增相容 Azure Images v1
    部署只需管理中心登錄，不需重新建置或部署。
@@ -88,7 +88,7 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 不可只回滾單一前端或 API 執行個體；需要復原時使用事先準備的協調版本與資料庫備份。
 
 分析用的 LLM 不由環境變數設定。套用 `db/migrations/014_llm_models.sql` 後，
-管理員在管理中心「分析模型」新增 Azure OpenAI 模型（deployment 名稱、端點與 API 金鑰）並指派給七個用途：
+管理員在管理中心「AI 模型」新增文字模型（Azure OpenAI deployment 名稱、端點與 API 金鑰）並指派給七個用途：
 文件分鏡、Prompt 優化、設計簡報、風格分析、檔名生成、場景優化與對話創作。每個用途可另外指派
 一個備援模型。金鑰以 `SECRET_ENCRYPTION_KEY` 加密後存放於資料庫。
 `db/migrations/030_llm_models_drop_provider.sql` 移除了 `llm_models.provider` 欄位並要求端點必填；
