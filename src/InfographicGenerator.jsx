@@ -43,6 +43,7 @@ import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
 import ExpandedCanvas from './components/create/ExpandedCanvas';
 import PreciseEditor from './components/edit/PreciseEditor';
+import VersionStrip from './components/create/VersionStrip';
 import MobileResultView from './components/create/MobileResultView';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import AttachmentPicker from './components/create/AttachmentPicker';
@@ -942,6 +943,18 @@ export default function InfographicGenerator({
                     imageUrl={activeVersion.imageUrl}
                     title={`精確編輯 · ${imageVersions.getVersionLabel(activeVersion)}`}
                     subtitle={`結果會成為 ${imageVersions.getVersionLabel(activeVersion)} 的新版本`}
+                    isGenerating={isRefining}
+                    error={refineError}
+                    versionStrip={
+                        <VersionStrip
+                            rail
+                            rows={imageVersions.rows}
+                            activeVersionId={imageVersions.activeVersionId}
+                            onSelectVersion={handleSelectVersion}
+                            getVersionLabel={imageVersions.getVersionLabel}
+                            getVersion={imageVersions.getVersion}
+                        />
+                    }
                     onApply={({ instruction, mask }) => void handleRefine(instruction, { mask })}
                     onClose={() => setIsPreciseEditOpen(false)}
                 />

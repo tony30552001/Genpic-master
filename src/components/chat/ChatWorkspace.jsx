@@ -24,6 +24,7 @@ import {
 import ImagePreview from "@/components/create/ImagePreview";
 import MobileResultView from "@/components/create/MobileResultView";
 import PreciseEditor from "@/components/edit/PreciseEditor";
+import VersionStrip from "@/components/create/VersionStrip";
 import { getImageQualityError } from "@/lib/imageModel";
 import { cn } from "@/lib/utils";
 import { apiGetBlob } from "@/services/apiClient";
@@ -375,6 +376,18 @@ export default function ChatWorkspace({
             imageUrl={selectedVersion.imageUrl}
             title={`精確編輯 · ${chat.getVersionLabel(selectedVersion)}`}
             subtitle="會在對話中送出一則修改訊息"
+            isGenerating={Boolean(chat.sending || pendingImage)}
+            error={chat.error}
+            versionStrip={
+              <VersionStrip
+                rail
+                rows={chat.versionRows}
+                activeVersionId={chat.selectedJobId}
+                onSelectVersion={chat.selectVersion}
+                getVersionLabel={chat.getVersionLabel}
+                getVersion={chat.getVersion}
+              />
+            }
             onApply={({ instruction, mask }) => void chat.send(instruction, { mask })}
             onClose={() => setIsPreciseEditOpen(false)}
           />

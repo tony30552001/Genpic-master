@@ -10,6 +10,7 @@ import {
   Trash2,
   Undo2,
 } from "@/components/icons/lucideControls";
+import { Loader2 } from "@/components/icons/lucideStatus";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,10 +65,23 @@ function ActionButton({ icon: Icon, label, className, ...props }) {
 /**
  * Full-screen brush-mask editor. The user paints the area to change and describes
  * the change; `onApply({ instruction, mask })` receives the instruction and a PNG mask
- * blob (painted area transparent) at the image's natural size. The editor closes as
- * soon as the request is handed over; progress and errors surface where it was opened.
+ * blob (painted area transparent) at the image's natural size.
+ *
+ * The editor stays open while the parent generates (`isGenerating`): the image blurs
+ * and the tools lock. The parent then selects the new version, so `imageUrl` changes
+ * and the user can keep editing it; `error` keeps the instruction for a retry.
+ * `versionStrip` is the parent's version rail, shown left of the image.
  */
-export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onClose }) {
+export default function PreciseEditor({
+  imageUrl,
+  title,
+  subtitle,
+  isGenerating = false,
+  error = "",
+  versionStrip = null,
+  onApply,
+  onClose,
+}) {
   const titleId = useId();
   const closeButtonRef = useRef(null);
   const requestClose = useHistoryLayer(onClose, closeButtonRef);
@@ -99,10 +113,25 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [shownUrl, setShownUrl] = useState(imageUrl);
+  const [wasGenerating, setWasGenerating] = useState(isGenerating);
 
+  if (shownUrl !== imageUrl) {
+    setShownUrl(imageUrl);
+    setImageFailed(false);
+  }
+  // A finished generation starts the next edit from a clean instruction; a failed one
+  // keeps it so the user can retry.
+  if (wasGenerating !== isGenerating) {
+    setWasGenerating(isGenerating);
+    if (!isGenerating && !error) setInstruction("");
+  }
+
+  const busy = isApplying || isGenerating;
   const display = fitInside(natural, stageBox);
-  const dirty = hasPaint || Boolean(instruction.trim());
-  const canApply = hasPaint && Boolean(instruction.trim()) && !isApplying;
+  const dirty = !busy && (hasPaint || Boolean(instruction.trim()));
+  const canApply = hasPaint && Boolean(instruction.trim()) && !busy;
+  const shownError = applyError || error;
 
   useLayoutEffect(() => {
     const stage = stageRef.current;
@@ -139,14 +168,14 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
         }
         return;
       }
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || isTypingTarget(event.target)) return;
+      if (busy || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || isTypingTarget(event.target)) return;
       event.preventDefault();
       if (event.shiftKey) redo();
       else undo();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [dirty, confirmDiscard, undo, redo]);
+  }, [dirty, confirmDiscard, busy, undo, redo]);
 
   const toCanvasPoint = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -168,7 +197,7 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
 
   const paintHandlers = {
     onPointerDown: (event) => {
-      if (!display || event.button !== 0) return;
+      if (!display || busy || event.button !== 0) return;
       event.currentTarget.setPointerCapture?.(event.pointerId);
       paintingRef.current = true;
       beginStroke(toCanvasPoint(event), {
@@ -194,9 +223,9 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
     try {
       const blob = await exportMask();
       onApply({ instruction: instruction.trim(), mask: blob });
-      requestClose();
-    } catch (error) {
-      setApplyError(error.message || "無法產生遮罩，請再試一次");
+    } catch (err) {
+      setApplyError(err.message || "無法產生遮罩，請再試一次");
+    } finally {
       setIsApplying(false);
     }
   };
@@ -236,13 +265,26 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
           </div>
         </div>
 
-        <div ref={stageRef} className="flex min-h-0 flex-1 items-center justify-center px-3 pb-2 pt-1 lg:px-8 lg:pb-8 lg:pt-3">
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {versionStrip && (
+          <div
+            inert={busy}
+            className={cn(
+              "order-last shrink-0 px-3 pb-2 transition-opacity duration-(--motion-hover) lg:order-first lg:flex lg:px-0 lg:pb-0",
+              busy && "opacity-50"
+            )}
+          >
+            {versionStrip}
+          </div>
+        )}
+        <div ref={stageRef} className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-3 pb-2 pt-1 lg:px-8 lg:pb-8 lg:pt-3">
           {imageFailed ? (
             <p role="alert" className="text-sm text-destructive">圖片載入失敗，請關閉後再試一次。</p>
           ) : (
             <div
-              className={cn("relative touch-none select-none", !display && "invisible")}
+              className={cn("relative touch-none select-none overflow-hidden rounded-lg", !display && "invisible")}
               style={display ?? { width: 1, height: 1 }}
+              aria-busy={isGenerating || undefined}
               data-paint-surface
               {...paintHandlers}
             >
@@ -252,15 +294,39 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
                 draggable={false}
                 onLoad={(event) => setNatural({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
                 onError={() => setImageFailed(true)}
-                className="absolute inset-0 size-full rounded-lg object-fill"
+                className={cn(
+                  "absolute inset-0 size-full object-fill transition-[filter,transform] duration-(--motion-enter) ease-emphasized",
+                  isGenerating && "scale-105 blur-xl brightness-90"
+                )}
               />
               <canvas
                 ref={canvasRef}
                 role="img"
                 aria-label="塗抹要修改的區域"
-                className={cn("absolute inset-0 size-full rounded-lg opacity-45", cursor ? "cursor-none" : "cursor-crosshair")}
+                className={cn(
+                  "absolute inset-0 size-full opacity-45 transition-opacity duration-(--motion-hover)",
+                  isGenerating && "opacity-0",
+                  cursor ? "cursor-none" : "cursor-crosshair"
+                )}
               />
-              {cursor && (
+              {isGenerating && (
+                <>
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 bg-[radial-gradient(rgb(255_255_255/0.75)_1.2px,transparent_1.8px)] bg-size-[22px_22px] motion-safe:animate-pulse"
+                  />
+                  <div className="absolute inset-0 grid place-items-center">
+                    <p
+                      role="status"
+                      className="flex items-center gap-2 rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white backdrop-blur-md"
+                    >
+                      <Loader2 className="icon-sm motion-safe:animate-spin" aria-hidden="true" />
+                      正在產生新版本…
+                    </p>
+                  </div>
+                </>
+              )}
+              {cursor && !busy && (
                 <span
                   aria-hidden="true"
                   className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-white shadow-[0_0_0_1px_rgb(0_0_0/0.6)]"
@@ -271,13 +337,15 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
             </div>
           )}
         </div>
+        </div>
       </div>
 
       <form
         onSubmit={apply}
         aria-label="編輯工具"
-        className="flex min-h-0 flex-col gap-2.5 rounded-t-[20px] border-t border-border bg-card px-3.5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:gap-3 lg:rounded-none lg:border-l lg:border-t-0 lg:p-4"
+        className="flex min-h-0 flex-col rounded-t-[20px] border-t border-border bg-card px-3.5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:rounded-none lg:border-l lg:border-t-0 lg:p-4"
       >
+        <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5 lg:gap-3">
         <div className="flex gap-1 rounded-xl bg-muted p-1" role="group" aria-label="工具">
           {TOOLS.map(({ id, label, Icon }) => (
             <button
@@ -333,11 +401,11 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
             rows={2}
             placeholder="例如：把這朵花換成向日葵"
             aria-label="描述要修改的地方"
-            aria-invalid={Boolean(applyError)}
+            aria-invalid={Boolean(shownError)}
             className="field-sizing-content block max-h-[154px] min-h-11 w-full resize-none bg-transparent text-sm leading-[22px] text-foreground outline-none placeholder:text-muted-foreground lg:min-h-[66px]"
           />
         </div>
-        {applyError && <p role="alert" className="text-xs text-destructive">{applyError}</p>}
+        {shownError && <p role="alert" className="text-xs text-destructive">{shownError}</p>}
 
         <div className="grid grid-cols-[auto_1fr] gap-2 lg:grid-cols-2">
           <button
@@ -353,10 +421,11 @@ export default function PreciseEditor({ imageUrl, title, subtitle, onApply, onCl
             disabled={!canApply}
             className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-foreground text-sm font-bold text-background press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-35"
           >
-            <ArrowUp className="icon-sm" aria-hidden="true" />
-            {isApplying ? "套用中…" : "套用"}
+            {isGenerating ? <Loader2 className="icon-sm motion-safe:animate-spin" aria-hidden="true" /> : <ArrowUp className="icon-sm" aria-hidden="true" />}
+            {isGenerating ? "產生中…" : "套用"}
           </button>
         </div>
+        </fieldset>
       </form>
 
       <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
