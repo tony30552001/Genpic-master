@@ -29,7 +29,7 @@ describe("ChatStartView", () => {
     expect(screen.queryByRole("button", { name: /沒有圖片/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "接續修改：Q3 營收結構" }));
     expect(onContinue).toHaveBeenCalledWith(items[0]);
-    expect(screen.getByRole("link", { name: "在素材中心查看全部" }).getAttribute("href")).toBe("/library?section=history");
+    expect(screen.getByRole("link", { name: "在素材中心查看全部" }).getAttribute("href")).toBe("/library?section=images");
   });
 
   it("shows only the composer when there is no history", () => {

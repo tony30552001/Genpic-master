@@ -55,7 +55,7 @@ import { DEFAULT_IMAGE_PURPOSE } from './lib/imagePurposes';
 
 export default function InfographicGenerator({
     initialTab = 'general',
-    initialLibrarySection = 'overview',
+    initialLibrarySection = 'images',
     initialLibraryViewMode = 'table',
 }) {
     // --- State Management ---
@@ -141,6 +141,7 @@ export default function InfographicGenerator({
         setSort: setStyleSort,
         setSearchQuery: setStyleSearchQuery,
         saveStyle,
+        createStyle,
         deleteStyle,
         searchStyles,
         deleteStyles,
@@ -887,10 +888,12 @@ export default function InfographicGenerator({
                             onDeleteTemplate={handleDeleteTemplate}
                             onDeleteTemplates={removeTemplates}
                             onUpdateTemplate={updateTemplate}
+                            onCreateTemplate={saveTemplate}
                             onApplyStyle={applySavedStyle}
                             onDeleteStyle={deleteSavedStyle}
                             onDeleteStyles={deleteStyles}
                             onUpdateStyle={updateStyle}
+                            onCreateStyle={createStyle}
                             onPublishStyle={handlePublishStyle}
                             onUnpublishStyle={handleUnpublishStyle}
                             onCopyStyle={handleCopyStyle}

@@ -24,7 +24,7 @@ export default function ChatStartView({ children, historyItems, onContinue }) {
             <div className="mb-3.5 flex items-baseline justify-between gap-3 px-0.5">
               <h2 className="text-[15px] font-semibold">我的近期作品</h2>
               <Link
-                to="/library?section=history"
+                to="/library?section=images"
                 className="shrink-0 rounded-sm text-[13px] text-muted-foreground transition-colors duration-(--motion-hover) ease-emphasized hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 在素材中心查看全部

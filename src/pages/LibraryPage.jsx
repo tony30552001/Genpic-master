@@ -4,7 +4,7 @@ import InfographicGenerator from "../InfographicGenerator";
 
 export default function LibraryPage() {
   const [searchParams] = useSearchParams();
-  const section = searchParams.get("section") || "overview";
+  const section = searchParams.get("section") || "images";
   const viewMode = searchParams.get("view") || "table";
 
   return (

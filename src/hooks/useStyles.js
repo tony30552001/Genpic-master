@@ -135,6 +135,27 @@ export default function useStyles({ user }) {
     };
   }, [user, refreshStyles]);
 
+  // 直接以現成資料建立風格（例如從歷史圖片存成風格），不經過分析流程的表單狀態
+  const createStyle = useCallback(
+    async ({ name, tags, prompt, description, previewUrl }) => {
+      if (!user) return null;
+      if (!name?.trim()) throw new Error("請輸入風格名稱");
+      if (!prompt?.trim()) throw new Error("這張圖片沒有可用的風格設定");
+
+      const saved = await addStyle({
+        name: name.trim(),
+        tags: tags || [],
+        prompt,
+        description: description || "",
+        previewUrl: previewUrl || "",
+        category: DEFAULT_STYLE_CATEGORY,
+      });
+      await refreshStyles({ scope: DEFAULT_SCOPE, q: "" });
+      return saved;
+    },
+    [user, refreshStyles]
+  );
+
   const saveStyle = useCallback(
     async ({ analyzedStyle, analysisResultData, referencePreview }) => {
       if (!user || !analyzedStyle) return null;
@@ -256,6 +277,7 @@ export default function useStyles({ user }) {
     setSearchQuery,
     refreshStyles,
     saveStyle,
+    createStyle,
     deleteStyle: removeStyle,
     deleteStyles: removeStyles,
     updateStyle,

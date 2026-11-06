@@ -1,390 +1,28 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  ArrowRight,
-  Search,
-} from "@/components/icons/lucideControls";
-import {
-  Clock3,
-  FileText,
-  History,
-  Library,
-  Palette,
-} from "@/components/icons/lucideContent";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Search } from "@/components/icons/lucideControls";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TemplateLibrary from "@/components/templates/TemplateLibrary";
 import StyleLibrary from "@/components/styles/StyleLibrary";
-import HistoryPanel from "@/components/history/HistoryPanel";
-import AssetMetadataSheet from "./AssetMetadataSheet";
 import { AnimatePresence } from "motion/react";
+import AssetMetadataSheet from "./AssetMetadataSheet";
 import AssetViewModeToggle from "./AssetViewModeToggle";
+import ImageGallery from "./ImageGallery";
+import QuickApplyStrip from "./QuickApplyStrip";
 import { normalizeViewMode } from "./viewMode";
 
 const SECTIONS = [
-  { id: "overview", label: "全部資產" },
-  { id: "templates", label: "範本" },
-  { id: "styles", label: "風格庫" },
-  { id: "history", label: "紀錄" },
+  { id: "images", label: "圖片", searchLabel: "圖片" },
+  { id: "templates", label: "範本", searchLabel: "範本" },
+  { id: "styles", label: "風格", searchLabel: "風格" },
 ];
 
-const getSeconds = (value) => {
-  if (!value) return 0;
-  if (typeof value === "number") return value > 1e12 ? value / 1000 : value;
-  if (typeof value === "string") {
-    const milliseconds = Date.parse(value);
-    return Number.isNaN(milliseconds) ? 0 : milliseconds / 1000;
-  }
-  if (value instanceof Date) return value.getTime() / 1000;
-  return typeof value.seconds === "number" ? value.seconds : 0;
-};
-
-const getAssetDate = (asset) =>
-  asset.updatedAt || asset.publishedAt || asset.createdAt || null;
-
-const TYPE_META = {
-  template: {
-    label: "範本",
-    actionLabel: "套用範本",
-    badgeClass: "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300",
-    emptyHint: "把常用的腳本與風格組合存成範本，下次一鍵套用。",
-  },
-  style: {
-    label: "風格",
-    actionLabel: "套用風格",
-    badgeClass: "border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-300",
-    emptyHint: "分析參考圖後儲存風格，就能在這裡集中管理。",
-  },
-  history: {
-    label: "紀錄",
-    actionLabel: "載入設定",
-    badgeClass: "border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300",
-    emptyHint: "完成一次生成後，結果會自動保存在這裡。",
-  },
-};
-
-// 相對時間：7 天內顯示「N 天前」等，跨年補上年份
-const formatAssetDate = (value) => {
-  const seconds = getSeconds(value);
-  if (seconds <= 0) return "最近";
-  const date = new Date(seconds * 1000);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffMs < 0 || diffDays >= 7) {
-    const sameYear = date.getFullYear() === now.getFullYear();
-    return new Intl.DateTimeFormat("zh-TW", {
-      ...(sameYear ? {} : { year: "numeric" }),
-      month: "short",
-      day: "numeric",
-    }).format(date);
-  }
-  const formatter = new Intl.RelativeTimeFormat("zh-TW", { numeric: "auto" });
-  if (diffDays >= 1) return formatter.format(-diffDays, "day");
-  const diffHours = Math.floor(diffMs / 3600000);
-  if (diffHours >= 1) return formatter.format(-diffHours, "hour");
-  return "剛剛";
-};
-
-const normalizeAsset = (type, item) => ({
-  id: item.id,
-  type,
-  title: item.name || item.userScript || "未命名資產",
-  description: item.description || item.userScript || "",
-  previewUrl: item.previewUrl || item.imageUrl || "",
-  date: getAssetDate(item),
-  item,
-});
-
-function OverviewAssetCard({ asset, onOpen, onPrimaryAction, index = 0 }) {
-  const meta = TYPE_META[asset.type];
-
-  return (
-    <article
-      className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md motion-reduce:transform-none animate-in fade-in slide-in-from-bottom-2 fill-mode-both motion-reduce:animate-none"
-      style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
-    >
-      <button
-        type="button"
-        onClick={() => onOpen(asset)}
-        className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-        aria-label={`查看${asset.title}`}
-      >
-        {/* 媒體區：風格/紀錄用 16:9 預覽圖，範本用品牌色帶＋icon */}
-        {asset.previewUrl ? (
-          <div className="relative aspect-[16/9] overflow-hidden bg-muted">
-            <img
-              src={asset.previewUrl}
-              alt=""
-              width={640}
-              height={360}
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transform-none"
-            />
-            <Badge className={`absolute left-3 top-3 backdrop-blur-sm ${meta.badgeClass}`}>
-              {meta.label}
-            </Badge>
-          </div>
-        ) : (
-          <div className="relative">
-            <div className="h-1.5 bg-primary" />
-            <div className="flex h-16 items-center justify-center bg-muted/40">
-              {asset.type === "style" ? (
-                <Palette className="icon-lg text-primary/50" aria-hidden="true" />
-              ) : asset.type === "history" ? (
-                <History className="icon-lg text-primary/50" aria-hidden="true" />
-              ) : (
-                <FileText className="icon-lg text-primary/50" aria-hidden="true" />
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="min-w-0 px-4 pt-3">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-foreground">{asset.title}</h3>
-            {!asset.previewUrl && (
-              <Badge className={`shrink-0 text-[10px] ${meta.badgeClass}`}>
-                {meta.label}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {asset.description || "尚無描述"}
-          </p>
-        </div>
-      </button>
-
-      <div className="mt-auto flex items-center justify-between gap-2 px-4 pb-3 pt-3">
-        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock3 className="icon-xs" aria-hidden="true" />
-          {formatAssetDate(asset.date)}
-        </span>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => onPrimaryAction(asset.item)}
-          className="gap-1.5"
-          aria-label={`${meta.actionLabel} ${asset.title}`}
-        >
-          {meta.actionLabel}
-          <ArrowRight className="icon-sm" aria-hidden="true" />
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-function OverviewAssetVisual({ asset, className }) {
-  const Icon = asset.type === "style" ? Palette : asset.type === "history" ? History : FileText;
-
-  if (asset.previewUrl) {
-    return (
-      <img
-        src={asset.previewUrl}
-        alt=""
-        width={160}
-        height={96}
-        loading="lazy"
-        decoding="async"
-        className={`shrink-0 rounded-lg border border-border object-cover ${className}`}
-      />
-    );
-  }
-
-  return (
-    <span className={`flex shrink-0 items-center justify-center rounded-lg bg-muted text-primary/50 ${className}`}>
-      <Icon className="h-5 w-5" aria-hidden="true" />
-    </span>
-  );
-}
-
-function OverviewAssetListRow({ asset, onOpen, onPrimaryAction }) {
-  const meta = TYPE_META[asset.type];
-
-  return (
-    <article className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card p-3 transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-sm">
-      <button
-        type="button"
-        onClick={() => onOpen(asset)}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        aria-label={`查看${asset.title}`}
-      >
-        <OverviewAssetVisual asset={asset} className="h-16 w-24" />
-        <span className="min-w-0">
-          <span className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-foreground">{asset.title}</span>
-            <Badge className={`shrink-0 text-[10px] ${meta.badgeClass}`}>{meta.label}</Badge>
-          </span>
-          <span className="mt-1 block line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {asset.description || "尚無描述"}
-          </span>
-          <span className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Clock3 className="icon-xs" aria-hidden="true" />
-            {formatAssetDate(asset.date)}
-          </span>
-        </span>
-      </button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => onPrimaryAction(asset.item)}
-        className="shrink-0 gap-1.5"
-        aria-label={`${meta.actionLabel} ${asset.title}`}
-      >
-        <span className="hidden sm:inline">{meta.actionLabel}</span>
-        <ArrowRight className="icon-sm" aria-hidden="true" />
-      </Button>
-    </article>
-  );
-}
-
-function OverviewAssetTable({ assets, onOpen, onPrimaryAction }) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full min-w-[700px] text-sm">
-        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-          <tr>
-            <th scope="col" className="px-4 py-3 font-medium">資產</th>
-            <th scope="col" className="px-4 py-3 font-medium">類型</th>
-            <th scope="col" className="px-4 py-3 font-medium">描述</th>
-            <th scope="col" className="px-4 py-3 font-medium">更新時間</th>
-            <th scope="col" className="px-4 py-3 text-right font-medium">操作</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {assets.map((asset) => {
-            const meta = TYPE_META[asset.type];
-            return (
-              <tr key={`${asset.type}-${asset.id}`} className="align-middle transition-colors hover:bg-muted/30">
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onOpen(asset)}
-                    className="flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    aria-label={`查看${asset.title}`}
-                  >
-                    <OverviewAssetVisual asset={asset} className="h-10 w-14" />
-                    <span className="min-w-0 truncate font-medium text-foreground">{asset.title}</span>
-                  </button>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  <Badge className={`text-[10px] ${meta.badgeClass}`}>{meta.label}</Badge>
-                </td>
-                <td className="max-w-[320px] px-4 py-3">
-                  <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                    {asset.description || "尚無描述"}
-                  </p>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                  {formatAssetDate(asset.date)}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onPrimaryAction(asset.item)}
-                    className="gap-1.5"
-                    aria-label={`${meta.actionLabel} ${asset.title}`}
-                  >
-                    {meta.actionLabel}
-                    <ArrowRight className="icon-sm" aria-hidden="true" />
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function OverviewSection({
-  type,
-  title,
-  description,
-  icon: Icon,
-  assets,
-  viewMode,
-  onOpenSection,
-  onOpenAsset,
-  onPrimaryAction,
-  onGoCreate,
-}) {
-  return (
-    <section className="space-y-3" aria-labelledby={`overview-${type}-title`}>
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <Icon className="icon-md mt-0.5 text-primary" aria-hidden="true" />
-          <div className="min-w-0">
-            <h2 id={`overview-${type}-title`} className="text-sm font-semibold text-foreground">{title}</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-          </div>
-        </div>
-        <Button type="button" variant="ghost" size="sm" onClick={onOpenSection} className="shrink-0 gap-1.5 text-xs">
-          查看全部
-          <ArrowRight className="icon-sm" aria-hidden="true" />
-        </Button>
-      </div>
-
-      {assets.length > 0 ? (
-        viewMode === "table" ? (
-          <OverviewAssetTable
-            assets={assets}
-            onOpen={onOpenAsset}
-            onPrimaryAction={onPrimaryAction}
-          />
-        ) : viewMode === "list" ? (
-          <div className="space-y-2">
-            {assets.map((asset) => (
-              <OverviewAssetListRow
-                key={`${asset.type}-${asset.id}`}
-                asset={asset}
-                onOpen={onOpenAsset}
-                onPrimaryAction={onPrimaryAction}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-            {assets.map((asset, index) => (
-              <OverviewAssetCard
-                key={`${asset.type}-${asset.id}`}
-                asset={asset}
-                index={index}
-                onOpen={onOpenAsset}
-                onPrimaryAction={onPrimaryAction}
-              />
-            ))}
-          </div>
-        )
-      ) : (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
-          <Icon className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">目前還沒有{title}</p>
-            <p className="mt-1 text-xs text-muted-foreground/80">{TYPE_META[type].emptyHint}</p>
-          </div>
-          {onGoCreate && (
-            <Button type="button" size="sm" onClick={onGoCreate}>
-              開始創作
-            </Button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
+const normalizeSection = (value) =>
+  SECTIONS.some((item) => item.id === value) ? value : "images";
 
 export default function AssetCenter({
-  initialSection = "overview",
+  initialSection = "images",
   initialViewMode = "table",
   templates = [],
   savedStyles = [],
@@ -404,10 +42,12 @@ export default function AssetCenter({
   onDeleteTemplate,
   onDeleteTemplates,
   onUpdateTemplate,
+  onCreateTemplate,
   onApplyStyle,
   onDeleteStyle,
   onDeleteStyles,
   onUpdateStyle,
+  onCreateStyle,
   onPublishStyle,
   onUnpublishStyle,
   onCopyStyle,
@@ -416,8 +56,6 @@ export default function AssetCenter({
   onDeleteHistoryItems,
   onGoCreate,
 }) {
-  const normalizeSection = (value) =>
-    SECTIONS.some((item) => item.id === value) ? value : "overview";
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef(null);
   const section = normalizeSection(searchParams.get("section") || initialSection);
@@ -430,63 +68,31 @@ export default function AssetCenter({
     setSearchParams(nextParams, { replace: true });
   };
 
-  const setSection = (value) => {
-    updateLibraryQuery(normalizeSection(value), viewMode);
-  };
+  const setSection = (value) => updateLibraryQuery(normalizeSection(value), viewMode);
+  const setViewMode = (value) => updateLibraryQuery(section, normalizeViewMode(value));
 
-  const setViewMode = (value) => {
-    updateLibraryQuery(section, normalizeViewMode(value));
-  };
-  const [overviewSearchQuery, setOverviewSearchQuery] = useState("");
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [editingAsset, setEditingAsset] = useState(null);
   const [metadataError, setMetadataError] = useState("");
   const [isSavingMetadata, setIsSavingMetadata] = useState(false);
 
   const counts = {
+    images: historyItems.length,
     templates: templates.length,
     styles: savedStyles.length,
-    history: historyItems.length,
   };
 
-  const allAssets = useMemo(
-    () => [
-      ...templates.map((item) => normalizeAsset("template", item)),
-      ...savedStyles.map((item) => normalizeAsset("style", item)),
-      ...historyItems.map((item) => normalizeAsset("history", item)),
-    ]
-      .sort((a, b) => getSeconds(b.date) - getSeconds(a.date))
-      .filter((asset) => {
-        const query = overviewSearchQuery.trim().toLowerCase();
-        if (!query) return true;
-        return [asset.title, asset.description, asset.item.tags?.join(" "), asset.item.stylePrompt]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(query);
-      }),
-    [historyItems, overviewSearchQuery, savedStyles, templates]
-  );
-
-  const overviewByType = {
-    templates: allAssets.filter((asset) => asset.type === "template").slice(0, 3),
-    styles: allAssets.filter((asset) => asset.type === "style").slice(0, 3),
-    history: allAssets.filter((asset) => asset.type === "history").slice(0, 3),
-  };
-
-  const activeSearchQuery = section === "overview"
-    ? overviewSearchQuery
-    : section === "templates"
-      ? templateSearchQuery
-      : section === "styles"
-        ? styleSearchQuery
-        : historySearchQuery;
+  const activeSearchQuery =
+    section === "images"
+      ? historySearchQuery
+      : section === "templates"
+        ? templateSearchQuery
+        : styleSearchQuery;
 
   const handleSearchChange = (value) => {
-    if (section === "overview") setOverviewSearchQuery(value);
+    if (section === "images") onHistorySearchChange?.(value);
     if (section === "templates") setTemplateSearchQuery(value);
     if (section === "styles") onStyleSearchChange?.(value);
-    if (section === "history") onHistorySearchChange?.(value);
   };
 
   // 「/」快捷鍵聚焦搜尋（正在輸入時不觸發）
@@ -538,35 +144,10 @@ export default function AssetCenter({
     }
   };
 
-  const handleOpenOverviewAsset = (asset) => {
-    if (asset.type === "template") {
-      setSection("templates");
-      return;
-    }
-    if (asset.type === "style") {
-      setSection("styles");
-      return;
-    }
-    setSection("history");
-  };
-
   return (
     <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-4">
       {/* 分頁＋搜尋：sticky 吸頂，長列表操作不迷路 */}
       <div className="sticky top-0 z-20 -mx-1 space-y-2 bg-background/80 px-1 py-2 backdrop-blur-md">
-        <Tabs value={section} onValueChange={setSection}>
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:inline-flex lg:w-fit" aria-label="素材中心分類">
-            {SECTIONS.map(({ id, label }) => (
-              <TabsTrigger key={id} value={id} className="min-h-11 gap-1.5 lg:min-h-9 lg:px-4">
-                <span>{label}</span>
-                {id !== "overview" && (
-                  <span className="ml-0.5 text-[11px] tabular-nums text-muted-foreground">{counts[id]}</span>
-                )}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 icon-sm -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -574,7 +155,11 @@ export default function AssetCenter({
               ref={searchInputRef}
               value={activeSearchQuery}
               onChange={(event) => handleSearchChange(event.target.value)}
-              placeholder={section === "overview" ? "搜尋全部資產…" : `搜尋${SECTIONS.find((item) => item.id === section)?.label}…`}
+              placeholder={
+                section === "images"
+                  ? "搜尋提示詞、風格或日期…"
+                  : `搜尋${SECTIONS.find((item) => item.id === section)?.searchLabel}…`
+              }
               aria-label="搜尋素材"
               autoComplete="off"
               className="h-11 pl-10 pr-16"
@@ -583,69 +168,39 @@ export default function AssetCenter({
               /
             </kbd>
           </div>
-          <AssetViewModeToggle value={viewMode} onChange={setViewMode} />
+          <Tabs value={section} onValueChange={setSection}>
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:inline-flex sm:w-fit" aria-label="素材中心分類">
+              {SECTIONS.map(({ id, label }) => (
+                <TabsTrigger key={id} value={id} className="min-h-11 gap-1.5 lg:min-h-9 lg:px-4">
+                  <span>{label}</span>
+                  <span className="ml-0.5 text-[11px] tabular-nums text-muted-foreground">{counts[id]}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          {section !== "images" && <AssetViewModeToggle value={viewMode} onChange={setViewMode} />}
         </div>
+        {section === "images" && (
+          <QuickApplyStrip
+            templates={templates}
+            savedStyles={savedStyles}
+            onApplyTemplate={onApplyTemplate}
+            onApplyStyle={onApplyStyle}
+          />
+        )}
       </div>
 
-      {section === "overview" && (
-        <div className="space-y-8 animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="overview">
-          <section className="grid gap-3 sm:grid-cols-3" aria-label="素材摘要">
-            {[
-              { id: "templates", label: "可重複使用範本",               value: counts.templates, icon: Library },
-                            { id: "styles", label: "已儲存風格", value: counts.styles, icon: Palette },
-                            { id: "history", label: "生成紀錄", value: counts.history, icon: History },
-                          ].map(({ id, label, value, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setSection(id)}
-                className="group flex items-center gap-3 rounded-xl border border-border/70 bg-muted/20 p-4 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:bg-muted/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                aria-label={`查看${label}`}
-              >
-                <Icon className="icon-lg text-primary" aria-hidden="true" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs text-muted-foreground">{label}</span>
-                  <span className="mt-1 block text-2xl font-semibold tabular-nums text-foreground">{value}</span>
-                </span>
-                <ArrowRight className="icon-sm shrink-0 text-muted-foreground/40 transition-[transform,color] group-hover:translate-x-0.5 group-hover:text-primary motion-reduce:transform-none" aria-hidden="true" />
-              </button>
-            ))}
-          </section>
-
-          <OverviewSection
-            type="template"
-            title="範本"
-            description="快速套用常用的內容與風格組合"
-            icon={Library}
-            assets={overviewByType.templates}
-            viewMode={viewMode}
-            onOpenSection={() => setSection("templates")}
-            onOpenAsset={handleOpenOverviewAsset}
-            onPrimaryAction={onApplyTemplate}
-            onGoCreate={onGoCreate}
-          />
-          <OverviewSection
-            title="風格庫"
-            description="集中管理個人收藏與共享視覺風格"
-            icon={Palette}
-            type="style"
-            assets={overviewByType.styles}
-            viewMode={viewMode}
-            onOpenSection={() => setSection("styles")}
-            onOpenAsset={handleOpenOverviewAsset}
-            onPrimaryAction={onApplyStyle}
-            onGoCreate={onGoCreate}
-          />
-          <OverviewSection
-            title="紀錄"
-            description="回看最近生成結果，載入設定繼續編輯"
-            icon={History}
-            type="history"
-            assets={overviewByType.history}
-            viewMode={viewMode}
-            onOpenSection={() => setSection("history")}
-            onOpenAsset={handleOpenOverviewAsset}
-            onPrimaryAction={onLoadHistory}
+      {section === "images" && (
+        <div className="animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="images">
+          <ImageGallery
+            historyItems={historyItems}
+            savedStyles={savedStyles}
+            searchQuery={historySearchQuery}
+            onEdit={onLoadHistory}
+            onDelete={onDeleteHistory}
+            onDeleteItems={onDeleteHistoryItems}
+            onCreateStyle={onCreateStyle}
+            onCreateTemplate={onCreateTemplate}
             onGoCreate={onGoCreate}
           />
         </div>
@@ -691,23 +246,6 @@ export default function AssetCenter({
             onCopyStyle={onCopyStyle}
             onGoCreate={onGoCreate}
             onEditStyle={(style) => handleEdit("style", style)}
-          />
-        </div>
-      )}
-
-      {section === "history" && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="history">
-          <HistoryPanel
-            historyItems={historyItems}
-            viewMode={viewMode}
-            savedStyles={savedStyles}
-            searchQuery={historySearchQuery}
-            onSearchChange={onHistorySearchChange}
-            hideSearch
-            onLoad={onLoadHistory}
-            onDelete={onDeleteHistory}
-            onDeleteItems={onDeleteHistoryItems}
-            onGoCreate={onGoCreate}
           />
         </div>
       )}
