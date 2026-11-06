@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("job-backed image history", () => {
-  it.each(["general", "document", "refine", "bg_replace", "element_extract", "style_transfer"])("records the successful job model for %s", async (source) => {
+  it.each(["general", "refine", "bg_replace", "element_extract", "style_transfer"])("records the successful job model for %s", async (source) => {
     const res = await invoke({ ...payload, source, model: "forged-or-new-default" });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ jobId: JOB_ID, model: "gpt-image-2.5-flare" });

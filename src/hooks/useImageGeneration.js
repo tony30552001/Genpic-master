@@ -86,8 +86,8 @@ export default function useImageGeneration() {
   }, []);
 
   /**
-   * Shared lifecycle for every image job started from the creation workspace or
-   * the storyboard: one abort controller and one progress clock. The caller owns
+   * Shared lifecycle for every image job started from the creation workspace:
+   * one abort controller and one progress clock. The caller owns
    * where the resulting image is shown.
    */
   const runImageJob = useCallback(

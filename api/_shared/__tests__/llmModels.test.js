@@ -152,13 +152,13 @@ describe("createLlmModel", () => {
 
 describe("deleteLlmModel", () => {
   it("refuses to delete a model that is still assigned", async () => {
-    queryResults.push({ rows: [{ role: "document_analysis" }] });
+    queryResults.push({ rows: [{ role: "style_analysis" }] });
 
     await expect(
       deleteLlmModel({ tenantId: TENANT, id: "model-1" })
     ).rejects.toMatchObject({
       status: 409,
-      message: expect.stringContaining("文件分鏡"),
+      message: expect.stringContaining("風格分析"),
     });
   });
 });
@@ -168,7 +168,7 @@ describe("setRoleAssignment", () => {
     await expect(
       setRoleAssignment({
         tenantId: TENANT,
-        role: "document_analysis",
+        role: "style_analysis",
         modelId: "model-1",
         fallbackModelId: "model-1",
       })
@@ -182,7 +182,7 @@ describe("setRoleAssignment", () => {
     queryResults.push({
       rows: [
         {
-          role: "document_analysis",
+          role: "style_analysis",
           model_id: "model-1",
           fallback_model_id: "model-2",
           updated_at: new Date("2026-01-01T00:00:00Z"),
@@ -192,14 +192,14 @@ describe("setRoleAssignment", () => {
 
     const assignment = await setRoleAssignment({
       tenantId: TENANT,
-      role: "document_analysis",
+      role: "style_analysis",
       modelId: "model-1",
       fallbackModelId: "model-2",
       updatedBy: "user-1",
     });
 
     expect(assignment).toMatchObject({
-      role: "document_analysis",
+      role: "style_analysis",
       modelId: "model-1",
       fallbackModelId: "model-2",
     });
@@ -225,7 +225,7 @@ describe("resolveRoleModel", () => {
       ],
     });
 
-    const resolved = await resolveRoleModel(TENANT, "document_analysis");
+    const resolved = await resolveRoleModel(TENANT, "style_analysis");
 
     expect(resolved.model.apiKey).toBe("primary-key");
     expect(resolved.fallback.modelName).toBe("gpt-6-luna");

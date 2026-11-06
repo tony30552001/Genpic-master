@@ -43,7 +43,7 @@ const GENERATE_TOOL = Object.freeze({
       purpose: {
         type: "string",
         enum: [...IMAGE_PURPOSES],
-        description: "infographic, storyboard frame, or freeform image. Omit to keep the current setting.",
+        description: "infographic or freeform image. Omit to keep the current setting.",
       },
     },
     required: ["prompt"],

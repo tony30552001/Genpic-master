@@ -87,45 +87,6 @@ export const waitForImageJob = async ({
   throw new Error("圖片生成工作逾時，請稍後重試");
 };
 
-export const createDocumentAnalysisJob = async ({ uploadId, sceneCount, signal }) =>
-  apiPost(
-    `${API_BASE_URL}/document-analysis-jobs`,
-    { uploadId, sceneCount },
-    { signal }
-  );
-
-export const getDocumentAnalysisJob = async ({ jobId, signal }) =>
-  apiGet(`${API_BASE_URL}/document-analysis-jobs/${encodeURIComponent(jobId)}`, {
-    signal,
-  });
-
-export const waitForDocumentAnalysisJob = async ({
-  jobId,
-  signal,
-  onProgress,
-  pollIntervalMs = 2000,
-  timeoutMs = 20 * 60 * 1000,
-}) => {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt <= timeoutMs) {
-    const job = await getDocumentAnalysisJob({ jobId, signal });
-    onProgress?.(job);
-
-    if (job?.status === "succeeded") return job;
-    if (job?.status === "failed") {
-      const failure = new Error(job.error?.message || "文件分析失敗，請稍後重試");
-      failure.jobFailed = true;
-      failure.code = job.error?.code || "analysis_failed";
-      throw failure;
-    }
-
-    await abortableDelay(pollIntervalMs, signal);
-  }
-
-  throw new Error("文件分析工作逾時，請稍後重試");
-};
-
 export const embedText = async ({ text }) =>
   apiPost(`${API_BASE_URL}/embeddings`, { text });
 
@@ -149,52 +110,6 @@ export const optimizePrompt = async ({
 
 export const generateFilename = async ({ userScript }) =>
   apiPost(`${API_BASE_URL}/generate-filename`, { userScript });
-
-/**
- * 分析文件內容並提取分鏡腳本
- * @param {Object} params
- * @param {string} params.uploadId - 已完成且屬於目前使用者的文件上傳 ID
- * @param {string} params.fileName - 檔案名稱
- * @param {string} params.contentType - MIME 類型
- * @param {string} params.base64Content - Base64 編碼的文件內容（可選）
- * @param {number|'auto'} params.sceneCount - 分鏡數量
- * @param {AbortSignal} params.signal - 可選的取消訊號
- * @returns {Promise<Object>} 包含 scenes 的分析結果
- */
-export const analyzeDocument = async ({
-  uploadId,
-  fileName,
-  contentType,
-  base64Content,
-  sceneCount,
-  signal,
-}) => {
-  if (uploadId) {
-    return createDocumentAnalysisJob({ uploadId, sceneCount, signal }).then(
-      async (job) => {
-        if (!job?.jobId) {
-          throw new Error("文件分析工作建立失敗，請稍後重試");
-        }
-        const completed = await waitForDocumentAnalysisJob({
-          jobId: job.jobId,
-          signal,
-        });
-        return completed.result || {};
-      }
-    );
-  }
-
-  const body = {
-    uploadId,
-    fileName,
-    contentType,
-    base64Content,
-    sceneCount,
-  };
-  return signal
-    ? apiPost(`${API_BASE_URL}/analyze-document`, body, { signal })
-    : apiPost(`${API_BASE_URL}/analyze-document`, body);
-};
 
 export const listPptTemplates = async ({ signal } = {}) =>
   apiGet(`${API_BASE_URL}/ppt-templates`, { signal });
@@ -304,21 +219,6 @@ export const waitForDeckJob = async ({
 
   throw new Error("簡報生成工作逾時，請稍後重試");
 };
-
-/**
- * AI 優化單一場景的標題、描述和英文 Prompt
- * @param {Object} params
- * @param {string} params.scene_title - 場景標題
- * @param {string} params.scene_description - 場景描述
- * @param {string} params.visual_prompt - 英文 Prompt
- * @param {string} params.mood - 氛圍
- * @param {string[]} params.key_elements - 關鍵元素
- * @param {string} params.styleContext - 風格上下文（可選）
- * @param {string} params.imageLanguage - 圖片內文字語系（可選）
- * @returns {Promise<Object>} 優化後的場景資料
- */
-export const optimizeScene = async ({ scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage, aspectRatio }) =>
-  apiPost(`${API_BASE_URL}/optimize-scene`, { scene_title, scene_description, visual_prompt, mood, key_elements, styleContext, imageLanguage, aspectRatio });
 
 /**
  * AI 圖片轉換 — 透過後端影像工作佇列使用目前模型

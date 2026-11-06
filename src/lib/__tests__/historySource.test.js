@@ -15,4 +15,9 @@ describe("history source labels", () => {
     expect(getHistorySourceLabel(null)).toBe("未記錄");
     expect(HISTORY_SOURCE_LABELS.map(({ id }) => id)).toContain("general");
   });
+
+  it("labels retired document records without offering them as a filter", () => {
+    expect(getHistorySourceLabel("document")).toBe("文件分鏡");
+    expect(HISTORY_SOURCE_LABELS.map(({ id }) => id)).not.toContain("document");
+  });
 });

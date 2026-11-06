@@ -6,13 +6,11 @@ const mocks = vi.hoisted(() => ({
   profile: null,
   profileError: "",
   isProfileLoading: false,
-  document: null,
   generateImage: vi.fn(),
   transformImage: vi.fn(),
   uploadFile: vi.fn(),
   saveHistoryItem: vi.fn(),
   script: null,
-  scenes: null,
   bar: null,
   preview: null,
   imageUrlToFile: vi.fn(),
@@ -44,27 +42,17 @@ vi.mock("../lib/imageFile", async (importOriginal) => ({
   readImageSize: vi.fn(async () => ({ width: 1200, height: 900 })),
   imageUrlToFile: mocks.imageUrlToFile,
 }));
-vi.mock("../hooks/useDocumentAnalysis", () => ({
-  default: () => ({
-    documentResult: mocks.document, scenes: mocks.document?.scenes || [],
-    updateScene: vi.fn(),
-  }),
-}));
 vi.mock("../components/create/ScriptEditor", () => ({
   default: (props) => {
     mocks.script = props;
     return <input aria-label="Script" value={props.userScript} onChange={(event) => props.onUserScriptChange(event.target.value)} />;
   },
 }));
-vi.mock("../components/create/DocumentScenes", () => ({
-  default: (props) => { mocks.scenes = props; return <div>Document scenes</div>; },
-}));
 vi.mock("../components/create/GenerateBar", async (importOriginal) => {
   const { default: GenerateBar } = await importOriginal();
   return { default: (props) => { mocks.bar = props; return <GenerateBar {...props} />; } };
 });
 vi.mock("../components/create/ImagePreview", () => ({ default: (props) => { mocks.preview = props; return null; } }));
-vi.mock("../components/create/DocumentUploader", () => ({ default: () => null }));
 vi.mock("../components/create/PptMasterStudio", () => ({ default: () => null }));
 vi.mock("../components/library/AssetCenter", () => ({ default: () => null }));
 vi.mock("../hooks/useImageChat", () => ({
@@ -100,18 +88,9 @@ async function attach(purpose) {
 }
 
 async function mount(tab) {
-  if (tab === "document") {
-    mocks.document = {
-      title: "Document",
-      scenes: [
-        { scene_number: 1, scene_description: "First", visual_prompt: "first scene" },
-        { scene_number: 2, scene_description: "Second", visual_prompt: "second scene" },
-      ],
-    };
-  }
   const ui = <MemoryRouter><InfographicGenerator initialTab={tab === "refine" ? "general" : tab} /></MemoryRouter>;
   const rendered = render(ui);
-  if (tab !== "document") fireEvent.change(screen.getByRole("textbox", { name: "Script" }), { target: { value: "User scene" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Script" }), { target: { value: "User scene" } });
   if (tab === "refine") await attach("refine");
   return { ...rendered, changePolicy: (profile) => {
     mocks.profile = profile;
@@ -119,11 +98,9 @@ async function mount(tab) {
   } };
 }
 
-const invoke = (tab) => tab === "document"
-  ? mocks.scenes.onGenerateScene(0)
-  : mocks.script.onGenerate();
+const invoke = () => mocks.script.onGenerate();
 const requestFor = (tab) => tab === "refine" ? mocks.transformImage : mocks.generateImage;
-const buttonFor = (tab) => tab === "refine" ? "修改這張" : tab === "document" ? "批次生成所有圖片 (2)" : "開始生成圖片";
+const buttonFor = (tab) => tab === "refine" ? "修改這張" : "開始生成圖片";
 
 describe("creation orchestration", () => {
   beforeEach(() => {
@@ -132,7 +109,6 @@ describe("creation orchestration", () => {
     mocks.profile = profileFor(flare);
     mocks.profileError = "";
     mocks.isProfileLoading = false;
-    mocks.document = null;
     mocks.generateImage.mockResolvedValue(completed("default-job"));
     mocks.transformImage.mockResolvedValue(completed("default-transform-job"));
     mocks.uploadFile.mockResolvedValue({ uploadId: "upload-1" });
@@ -168,7 +144,7 @@ describe("creation orchestration", () => {
     expect(mocks.chatArgs.initialSettings.imageLanguage).toBe("zh-TW");
   });
 
-  it.each(["general", "document", "refine"])("saves %s history using the submitted job after policy changes", async (tab) => {
+  it.each(["general", "refine"])("saves %s history using the submitted job after policy changes", async (tab) => {
     let finish;
     const request = requestFor(tab);
     request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
@@ -186,22 +162,7 @@ describe("creation orchestration", () => {
     expect(mocks.saveHistoryItem.mock.calls[0][0]).not.toHaveProperty("model");
   });
 
-  it("keeps every storyboard scene's job independent across a policy switch", async () => {
-    const { changePolicy } = await mount("document");
-    let finishFirst;
-    mocks.generateImage
-      .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve; }))
-      .mockResolvedValueOnce({ ...completed("scene-2"), model: gpt.modelKey });
-    let pending;
-    await act(async () => { pending = mocks.bar.onGenerate(); });
-    changePolicy(profileFor(gpt));
-    await act(async () => { finishFirst(completed("scene-1")); await pending; });
-    expect(mocks.generateImage.mock.calls.map(([input]) => input.imageQuality)).toEqual(["auto", "medium"]);
-    expect(mocks.saveHistoryItem.mock.calls.map(([input]) => input.jobId)).toEqual(["scene-1", "scene-2"]);
-    expect(mocks.saveHistoryItem.mock.calls.map(([input]) => input.source)).toEqual(["document", "document"]);
-  });
-
-  it.each(["general", "document", "refine"])("guards programmatic %s callbacks and disabled controls when metadata is absent", async (tab) => {
+  it.each(["general", "refine"])("guards programmatic %s callbacks and disabled controls when metadata is absent", async (tab) => {
     mocks.profile = { modelPolicy: { defaultModel: null, allowedModels: [] }, imageModels: [gpt] };
     await mount(tab);
     expect(screen.getByRole("alert")).toHaveTextContent("請聯絡管理員");
@@ -210,10 +171,9 @@ describe("creation orchestration", () => {
     expect(mocks.generateImage).not.toHaveBeenCalled();
     expect(mocks.transformImage).not.toHaveBeenCalled();
     expect(mocks.saveHistoryItem).not.toHaveBeenCalled();
-    if (tab === "document") expect(mocks.scenes.generationDisabled).toBe(true);
   });
 
-  it.each(["general", "document", "refine"])("requires choosing again for explicit unsupported quality in %s", async (tab) => {
+  it.each(["general", "refine"])("requires choosing again for explicit unsupported quality in %s", async (tab) => {
     const { changePolicy } = await mount(tab);
     fireEvent.click(screen.getByRole("button", { name: "設定圖片品質為最高" }));
     changePolicy(profileFor(gpt));
@@ -227,7 +187,7 @@ describe("creation orchestration", () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ imageQuality: "high" }));
   });
 
-  it.each(["general", "document", "refine"])("blocks %s with retained stale metadata during and after a failed refresh", async (tab) => {
+  it.each(["general", "refine"])("blocks %s with retained stale metadata during and after a failed refresh", async (tab) => {
     const { changePolicy } = await mount(tab);
     mocks.isProfileLoading = true;
     changePolicy(mocks.profile);

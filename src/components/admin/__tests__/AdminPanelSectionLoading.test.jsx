@@ -102,7 +102,7 @@ describe("AdminPanel section loading", () => {
     listAdminLlmModels.mockResolvedValue({
       models: [],
       assignments: [],
-      roles: [{ id: "document_analysis", label: "文件分析", description: "上傳文件後拆解場景與重點" }],
+      roles: [{ id: "style_analysis", label: "風格分析", description: "從參考圖萃取風格描述與標籤" }],
     });
   });
 
@@ -155,7 +155,7 @@ describe("AdminPanel section loading", () => {
     expect(screen.queryByRole("button", { name: "分析模型" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
     expect(await screen.findByLabelText("圖片生成模型")).toHaveTextContent(model.label);
-    expect(screen.getByLabelText("文件分析主要模型")).toBeInTheDocument();
+    expect(screen.getByLabelText("風格分析主要模型")).toBeInTheDocument();
     expect(listAdminImageModels).toHaveBeenCalledTimes(1);
     expect(getAdminModelSettings).toHaveBeenCalledTimes(1);
     expect(listAdminLlmModels).toHaveBeenCalledTimes(1);
@@ -297,12 +297,12 @@ describe("AdminPanel section loading", () => {
     const table = await screen.findByRole("table");
     expect(within(table).getByText("圖片轉換")).toBeTruthy();
 
-    await chooseOption("依功能篩選生成紀錄", "文件分鏡");
+    await chooseOption("依功能篩選生成紀錄", "換背景");
 
     await waitFor(() => expect(listAdminHistory).toHaveBeenCalledTimes(2));
     expect(listAdminHistory).toHaveBeenLastCalledWith({
       userId: "",
-      source: "document",
+      source: "bg_replace",
       page: 1,
       pageSize: 10,
     });

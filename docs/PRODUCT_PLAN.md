@@ -35,7 +35,6 @@
 | 單張圖片生成 | ✅ 可用 | Firebase Vertex AI SDK → Imagen 3 |
 | Microsoft SSO 登入 | ✅ 可用 | Firebase Auth + OAuthProvider |
 | 生成歷史記錄 | ✅ 可用 | Firestore + Base64 圖片 (壓縮至 JPEG 0.6) |
-| 文件分鏡 | ✅ 可用 | AnyDoc 統一解析 Office／PDF／試算表 → Azure OpenAI GPT → 場景 JSON → AI 圖片生成 |
 
 ### 主要技術債
 

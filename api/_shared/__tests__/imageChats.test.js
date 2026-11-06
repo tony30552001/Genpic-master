@@ -51,8 +51,8 @@ describe("image chat agent contract", () => {
     expect(agent.resolveDecision([{ name: "generate_image", arguments: { prompt: " 貓 " } }], turn))
       .toEqual({ images: [{ action: "generate", prompt: "貓", purpose: "infographic" }], notes: [] });
     expect(agent.resolveDecision(
-      [{ name: "generate_image", arguments: { prompt: "貓", purpose: "storyboard" } }], turn
-    ).images[0]).toMatchObject({ purpose: "storyboard" });
+      [{ name: "generate_image", arguments: { prompt: "貓", purpose: "freeform" } }], turn
+    ).images[0]).toMatchObject({ purpose: "freeform" });
     expect(agent.resolveDecision(
       [{ name: "refine_image", arguments: { instruction: "改藍色" } }], { ...turn, hasSelectedImage: true }
     )).toEqual({ images: [{ action: "refine", prompt: "改藍色" }], notes: [] });

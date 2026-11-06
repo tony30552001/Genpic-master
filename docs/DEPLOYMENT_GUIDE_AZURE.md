@@ -32,7 +32,6 @@
 - `DATABASE_URL`、`DATABASE_SSL`
 - `AZURE_STORAGE_ACCOUNT`、`AZURE_STORAGE_KEY`、`BLOB_CONTAINER_DEFAULT`
 - `AZURE_EMBEDDING_ENDPOINT`、`AZURE_EMBEDDING_API_KEY`、`EMBEDDING_MODEL=embed-v-4-0`（風格向量；`AZURE_EMBEDDING_ENDPOINT` 必須指到 Foundry 模型推論路徑，例如 `https://<resource>.services.ai.azure.com/models`，或部署頁複製的完整 Target URI；只填資源根網域會回 404）
-- `DOCUMENT_ANALYSIS_MAX_CHARS=500000`（AnyDoc 解析後可交給同步 GPT 分析的最大字元數；超過時回傳 413，不會靜默截斷）
 - `SECRET_ENCRYPTION_KEY`（64 字元 hex，代表 32 bytes；加密圖片／分析模型 API 金鑰與 LINE token）
 - `BLOB_CONTAINER_GENERATED=generated`
 - `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`GOOGLE_CLIENT_ID`
@@ -88,14 +87,11 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 不可只回滾單一前端或 API 執行個體；需要復原時使用事先準備的協調版本與資料庫備份。
 
 分析用的 LLM 不由環境變數設定。套用 `db/migrations/014_llm_models.sql` 後，
-管理員在管理中心「AI 模型」新增文字模型（Azure OpenAI deployment 名稱、端點與 API 金鑰）並指派給七個用途：
-文件分鏡、Prompt 優化、設計簡報、風格分析、檔名生成、場景優化與對話創作。每個用途可另外指派
+管理員在管理中心「AI 模型」新增文字模型（Azure OpenAI deployment 名稱、端點與 API 金鑰）並指派給各用途：
+Prompt 優化、設計簡報、風格分析、檔名生成與對話創作。每個用途可另外指派
 一個備援模型。金鑰以 `SECRET_ENCRYPTION_KEY` 加密後存放於資料庫。
 `db/migrations/030_llm_models_drop_provider.sql` 移除了 `llm_models.provider` 欄位並要求端點必填；
 請先部署不再讀取該欄位的程式，再套用這個 migration。
-
-`POST /api/analyze-document` 的文字、圖片與掃描型 PDF 分析使用「文件分鏡」用途指派的模型，
-指派的 deployment 必須支援 Responses API、image input 與 PDF file input。
 
 PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）使用「設計簡報」用途指派的模型。
 這條路徑跑在背景 worker，可接受較長延遲以換取更嚴謹的 SVG 版面推理。
@@ -193,7 +189,6 @@ https://<swa-domain>/api/docs/
 - **API 404**：確認 App Service Startup command 為 `npm start`、deployment package 包含 `server.js`，且 SWA 已連結正確 App Service。
 - **JSON body 413**：一般文件會先上傳 Blob，App Service 透過 AnyDoc 解析，不應以提高 `API_BODY_LIMIT` 傳送大型 base64。base64 只保留給前端極小檔案的上傳失敗備援。
 - **AnyDoc native binding 載入失敗**：確認部署使用 Node.js 20+ 的 Linux x64／arm64 App Service，且以 `npm ci --prefix api` 安裝 optional native package；不要使用 `--omit=optional`。
-- **`document_text_too_large`**：文件已成功由 AnyDoc 解析，但 Markdown 超過 `DOCUMENT_ANALYSIS_MAX_CHARS`。第一版需縮小文件；300 MB 文件將由後續非同步 chunk pipeline 處理。
 - **API 401**：確認 session cookie 未被瀏覽器封鎖，並檢查 `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`ENTRA_REDIRECT_URI`、`AUTH_SESSION_SECRET`、`DATABASE_URL`。
 - **資料庫連線失敗**：確認 PostgreSQL firewall/private networking 允許 App Service outbound access。
 - **GPT Image 2 仍顯示 Backend call failure**：確認 migration 已執行、App Service log 有 `image-jobs` worker、以及 `generated` Blob container 可寫入。

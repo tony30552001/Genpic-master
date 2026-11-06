@@ -55,7 +55,6 @@ const DEFAULT_PLACEHOLDER = "描述你想要的畫面";
 
 const EXAMPLE_PROMPTS = {
   infographic: ["台灣手搖飲市場規模一覽", "新人到職五步驟流程", "節能減碳的三個小習慣"],
-  storyboard: ["雨夜霓虹街頭，偵探回頭", "清晨港口，漁船出航", "教室窗邊，女孩看著雪"],
   freeform: ["陽光灑落的咖啡廳，穿白洋裝的女性", "漂浮在雲上的小島", "柴犬太空人在月球散步"],
 };
 

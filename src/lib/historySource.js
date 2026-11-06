@@ -1,7 +1,6 @@
 /** History source labels, mirroring api/_shared/historySource.js. */
 export const HISTORY_SOURCE_LABELS = [
   { id: "general", label: "快速創作" },
-  { id: "document", label: "文件分鏡" },
   { id: "chat", label: "對話創作" },
   { id: "refine", label: "修改這張" },
   { id: "bg_replace", label: "換背景" },
@@ -11,5 +10,10 @@ export const HISTORY_SOURCE_LABELS = [
   { id: "unknown", label: "未記錄" },
 ];
 
+/** Sources of retired workflows: shown on existing records, never offered as a filter. */
+const RETIRED_HISTORY_SOURCE_LABELS = { document: "文件分鏡" };
+
 export const getHistorySourceLabel = (source) =>
-  HISTORY_SOURCE_LABELS.find((item) => item.id === (source || "unknown"))?.label || "—";
+  HISTORY_SOURCE_LABELS.find((item) => item.id === (source || "unknown"))?.label ||
+  RETIRED_HISTORY_SOURCE_LABELS[source] ||
+  "—";

@@ -1,7 +1,6 @@
 /** Creation workflows that can write a generated image into the history. */
 const HISTORY_SOURCES = [
   "general",
-  "document",
   "refine",
   "bg_replace",
   "element_extract",

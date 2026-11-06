@@ -9,7 +9,6 @@ import {
   FileText,
   Library,
   MessageSquare,
-  Presentation,
   ImagePlus,
   Wand2,
   WandSparkles,
@@ -18,7 +17,6 @@ import useAuth from './hooks/useAuth';
 import useStyles from './hooks/useStyles';
 import useHistory from './hooks/useHistory';
 import useImageGeneration from './hooks/useImageGeneration';
-import useDocumentAnalysis from './hooks/useDocumentAnalysis';
 import useTemplates from './hooks/useTemplates';
 import useCreateWorkspace from './hooks/useCreateWorkspace';
 import useImageVersions from './hooks/useImageVersions';
@@ -31,14 +29,11 @@ import { DEFAULT_IMAGE_LANGUAGE } from './config';
 import { getLanguageOption } from './lib/imageTextLanguage';
 import { getImageModelSetupError, getImageQualityError } from './lib/imageModel';
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 
 
 import ScriptEditor from './components/create/ScriptEditor';
 import ImagePreview from './components/create/ImagePreview';
-import DocumentUploader from './components/create/DocumentUploader';
-import DocumentScenes from './components/create/DocumentScenes';
 import PptMasterStudio from './components/create/PptMasterStudio';
 import GenerateBar from './components/create/GenerateBar';
 import ExpandedCanvas from './components/create/ExpandedCanvas';
@@ -60,7 +55,6 @@ export default function InfographicGenerator({
 }) {
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [documentAnalysisMode, setDocumentAnalysisMode] = useState('storyboard');
 
     // 風格參考圖（只用於風格分析，與內容附圖分開）
     const [referencePreview, setReferencePreview] = useState(null);
@@ -91,7 +85,6 @@ export default function InfographicGenerator({
     const isMobileLayout = useMediaQuery(MOBILE_LAYOUT_QUERY);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
     const [imagePurpose, setImagePurpose] = useState('infographic');
-    const [documentStyleOverride, setDocumentStyleOverride] = useState(null);
 
     const handlePaletteStyleChange = (tags) => {
         setPaletteStyleTags(tags);
@@ -114,7 +107,7 @@ export default function InfographicGenerator({
             ? '無法載入圖片模型設定，請重新載入設定。'
             : getImageModelSetupError(imageModelConfig);
     const generationConfigError = modelSetupError || getImageQualityError(imageModelConfig, imageQuality);
-    // A storyboard batch rechecks current settings between independently admitted jobs.
+    // Generation rechecks current settings between independently admitted jobs.
     const generationSettingsRef = useRef({ imageQuality, generationConfigError });
     useEffect(() => {
         generationSettingsRef.current = { imageQuality, generationConfigError };
@@ -169,18 +162,6 @@ export default function InfographicGenerator({
         removeTemplate,
         removeTemplates,
     } = useTemplates({ user });
-
-    const {
-        isAnalyzing: isAnalyzingDocument, analysisPhase: documentAnalysisPhase,
-        documentResult, analyzeDocument, clearDocument, updateScene, removeScene,
-        scenes,
-    } = useDocumentAnalysis();
-    const documentStyle =
-        documentAnalysisMode === "storyboard"
-            ? documentStyleOverride || documentResult?.recommended_style || null
-            : null;
-    const hasActiveDocumentResult =
-        documentAnalysisMode === "storyboard" && Boolean(documentResult);
 
     const {
         analyzedStyle, analysisResultData, generatedFilename,
@@ -489,131 +470,6 @@ export default function InfographicGenerator({
         input?.focus();
     };
 
-    const handleAnalyzeDocument = async (file, sceneCount) => {
-        try {
-            setErrorMsg('');
-            const result = await analyzeDocument(file, sceneCount);
-            setDocumentStyleOverride(null);
-            return result;
-        } catch (err) {
-            console.error("Document Analysis Failed:", err);
-            setErrorMsg(err.message || "文件分鏡失敗，請稍後重試。");
-            throw err;
-        }
-    };
-
-    const handleClearDocument = () => {
-        clearDocument();
-        setDocumentStyleOverride(null);
-    };
-
-    const handleApplyDocumentStyle = (styleData) => {
-        setDocumentStyleOverride(styleData);
-    };
-
-    const handleClearDocumentStyle = () => {
-        setDocumentStyleOverride(null);
-    };
-
-    const handleGenerateScene = async (sceneIndex) => {
-        const scene = scenes[sceneIndex];
-        if (!scene) return;
-        try {
-            setErrorMsg('');
-            const quality = requireGenerationQuality();
-            const styleForDocument = documentStyle;
-            const stylePrompt = styleForDocument?.prompt || '';
-            // 呼叫圖片生成（帶入語系設定）
-            // 使用英文的 visual_prompt 作為生成提示詞，若無則退回使用 scene_description
-            const promptToUse = scene.visual_prompt || scene.scene_description;
-
-            const result = await generateImage({
-                userScript: promptToUse,
-                analyzedStyle: stylePrompt,
-                purpose: 'storyboard',
-                aspectRatio,
-                imageQuality: quality,
-                imageLanguage,
-            });
-
-            // 1. 更新 DocumentAnalysis 的狀態 (顯示在卡片上)
-            updateScene(sceneIndex, {
-                generatedImage: result.imageUrl
-            });
-
-            // 取得檔名（背景非同步完成），並更新到場景中
-            if (result.filenamePromise) {
-                result.filenamePromise.then((aiFilename) => {
-                    updateScene(sceneIndex, {
-                        generatedFilename: aiFilename
-                    });
-                }).catch(() => { });
-            }
-
-            // 2. 寫入歷史紀錄
-            await saveHistoryItem({
-                jobId: result.jobId,
-                imageUrl: result.imageUrl,
-                userScript: scene.scene_description,
-                stylePrompt,
-                fullPrompt: result.finalPrompt,
-                styleId: styleForDocument?.id || null,
-                sceneNumber: scene.scene_number,
-                documentTitle: documentResult?.title,
-                source: 'document',
-            });
-            if (styleForDocument?.id) {
-                markStyleUsed(styleForDocument.id).catch((err) => {
-                    console.warn("Style usage tracking failed:", err);
-                });
-            }
-
-            setErrorMsg('');
-        } catch (err) {
-            console.error("Scene Generation Failed:", err);
-            setErrorMsg(`場景 ${sceneIndex + 1} 生成失敗: ${err.message}`);
-        }
-    };
-
-    const handleGenerateAllScenes = async () => {
-        if (!scenes || scenes.length === 0) return;
-        try {
-            setErrorMsg('');
-            requireGenerationQuality();
-            for (let i = 0; i < scenes.length; i++) await handleGenerateScene(i);
-        } catch (err) {
-            console.error("Batch Generation Failed:", err);
-            setErrorMsg(`批次生成失敗: ${err.message}`);
-        }
-    };
-
-    const activeDocumentPanel = hasActiveDocumentResult ? (
-        <DocumentScenes
-            documentResult={documentResult}
-            onUpdateScene={updateScene}
-            onRemoveScene={removeScene}
-            onGenerateScene={handleGenerateScene}
-            onGenerateAll={handleGenerateAllScenes}
-            onClear={handleClearDocument}
-            isGenerating={isGenerating}
-            generationDisabled={Boolean(generationConfigError)}
-            savedStyles={savedStyles}
-            documentStyle={documentStyle}
-            isDocumentStyleOverride={Boolean(documentStyleOverride)}
-            onApplyStyle={handleApplyDocumentStyle}
-            onClearStyle={handleClearDocumentStyle}
-            imageLanguage={imageLanguage}
-            aspectRatio={aspectRatio}
-        />
-    ) : (
-        <DocumentUploader
-            onAnalyze={handleAnalyzeDocument}
-            isAnalyzing={isAnalyzingDocument}
-            analysisPhase={documentAnalysisPhase}
-            disabled={isAnalyzingDocument}
-        />
-    );
-
     // --- Tab 定義 ---
     const tabs = [
         { id: 'general', label: '快速創作', icon: ImagePlus },
@@ -652,8 +508,7 @@ export default function InfographicGenerator({
                     </div>
                 )}
 
-                {/* ─── Create & Document Tabs Share Similar Container ─── */}
-                {(activeTab === 'general' || activeTab === 'document') && (
+                {activeTab === 'general' && (
                     <div className="flex-1 flex flex-col min-h-0">
 
                         {/* Error / Warning Messages */}
@@ -674,136 +529,91 @@ export default function InfographicGenerator({
                             </div>
                         )}
 
-                        {/* ─── Document Sub-Tab: Full-Width Layout ─── */}
-                        {activeTab === 'document' && (
-                            <div className="flex-1 min-h-0 px-4 lg:px-8 py-3">
-                                <Tabs
-                                    value={documentAnalysisMode}
-                                    onValueChange={setDocumentAnalysisMode}
-                                    className="flex h-full min-h-0 flex-col"
-                                >
-                                    <div className="shrink-0">
-                                        <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
-                                            <TabsTrigger value="storyboard" className="gap-2 text-xs sm:text-sm">
-                                                <FileText className="icon-sm" aria-hidden="true" />
-                                                文件分鏡
-                                            </TabsTrigger>
-                                            <TabsTrigger value="pptmaster" className="gap-2 text-xs sm:text-sm">
-                                                <Presentation className="icon-sm" aria-hidden="true" />
-                                                設計簡報
-                                            </TabsTrigger>
-                                        </TabsList>
-                                        <p className="mt-2 text-xs text-muted-foreground">
-                                            {documentAnalysisMode === "pptmaster"
-                                                ? "由 AI 逐頁設計版面，直接產出套用專業模板的 PowerPoint。"
-                                                : "分析文件內容並提取可生成圖片的分鏡腳本。"}
-                                        </p>
-                                    </div>
-                                    <TabsContent
-                                        value="storyboard"
-                                        className="mt-3 min-h-0 flex-1 overflow-y-auto custom-scrollbar"
-                                    >
-                                        {documentAnalysisMode === "storyboard" && activeDocumentPanel}
-                                    </TabsContent>
-                                    <TabsContent
-                                        value="pptmaster"
-                                        className="mt-3 min-h-0 flex-1 overflow-hidden"
-                                    >
-                                        {documentAnalysisMode === "pptmaster" && <PptMasterStudio />}
-                                    </TabsContent>
-                                </Tabs>
-                            </div>
-                        )}
+                        {/* ─── Two-Column Layout (Controls + Preview) ─── */}
+                        <div className="flex-1 min-h-0 flex flex-col gap-3 lg:bg-muted/25 px-4 py-3 lg:px-8 overflow-y-auto lg:overflow-hidden custom-scrollbar">
+                            <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-5 lg:gap-6">
+                                {/* Left: Controls (takes 3/5 on large screens) */}
+                                <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pl-px pr-1">
+                                    <ScriptEditor
+                                        userScript={userScript}
+                                        onUserScriptChange={setUserScript}
+                                        onOptimizedPromptEnChange={setOptimizedPromptEn}
+                                        imageLanguage={imageLanguage}
+                                        onImageLanguageChange={handleLanguageChange}
+                                        imagePurpose={imagePurpose}
+                                        aspectRatio={aspectRatio}
+                                        onImagePurposeChange={setImagePurpose}
+                                        onFocus={() => setIsInputFocused(true)}
+                                        onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
+                                        hideGenerate
+                                        savedStyles={savedStyles}
 
-                        {/* ─── Two-Column Layout (Controls + Preview) for other tabs ─── */}
-                        {activeTab === 'general' && (
-                            <div className="flex-1 min-h-0 flex flex-col gap-3 lg:bg-muted/25 px-4 py-3 lg:px-8 overflow-y-auto lg:overflow-hidden custom-scrollbar">
-                                <div className="flex-1 min-h-0 flex flex-col gap-4 lg:grid lg:grid-cols-5 lg:gap-6">
-                                    {/* Left: Controls (takes 3/5 on large screens) */}
-                                    <div className="lg:col-span-3 min-h-0 lg:overflow-y-auto lg:custom-scrollbar pl-px pr-1">
-                                        <ScriptEditor
-                                            userScript={userScript}
-                                            onUserScriptChange={setUserScript}
-                                            onOptimizedPromptEnChange={setOptimizedPromptEn}
-                                            imageLanguage={imageLanguage}
-                                            onImageLanguageChange={handleLanguageChange}
-                                            imagePurpose={imagePurpose}
-                                            aspectRatio={aspectRatio}
-                                            onImagePurposeChange={setImagePurpose}
-                                            onFocus={() => setIsInputFocused(true)}
-                                            onBlur={() => setTimeout(() => setIsInputFocused(false), 100)}
-                                            hideGenerate
-                                            savedStyles={savedStyles}
+                                        // 風格與內容整合
+                                        analyzedStyle={analyzedStyle}
+                                        onApplyStyle={applySavedStyle}
+                                        onClearStyle={handleClearStyle}
 
-                                            // 風格與內容整合
-                                            analyzedStyle={analyzedStyle}
-                                            onApplyStyle={applySavedStyle}
-                                            onClearStyle={handleClearStyle}
+                                        styleReferencePreview={referencePreview}
+                                        onStyleReferenceUpload={handleStyleReferenceUpload}
+                                        onClearStyleReference={handleClearStyleReference}
+                                        isUploadingStyleReference={isUploadingStyleReference}
 
-                                            styleReferencePreview={referencePreview}
-                                            onStyleReferenceUpload={handleStyleReferenceUpload}
-                                            onClearStyleReference={handleClearStyleReference}
-                                            isUploadingStyleReference={isUploadingStyleReference}
+                                        attachmentPurpose={workspace.attachment ? workspace.purpose : null}
+                                        onUseStyleTransfer={workspace.attachment ? handleUseStyleTransfer : undefined}
+                                        onAttachFile={handleAttachFile}
+                                        onAttachCurrentResult={handleAttachCurrentResult}
+                                        canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
+                                        isUploadingAttachment={workspace.isUploadingAttachment}
+                                        attachmentSlot={
+                                            <AttachmentPicker
+                                                className={workspace.attachment ? undefined : "max-lg:hidden"}
+                                                attachment={workspace.attachment}
+                                                isUploading={workspace.isUploadingAttachment}
+                                                purposeId={workspace.purpose.id}
+                                                onPurposeChange={handleAttachmentPurposeChange}
+                                                onAttachFile={handleAttachFile}
+                                                onAttachCurrentResult={handleAttachCurrentResult}
+                                                canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
+                                                onClear={handleClearAttachment}
+                                            />
+                                        }
 
-                                            attachmentPurpose={workspace.attachment ? workspace.purpose : null}
-                                            onUseStyleTransfer={workspace.attachment ? handleUseStyleTransfer : undefined}
-                                            onAttachFile={handleAttachFile}
-                                            onAttachCurrentResult={handleAttachCurrentResult}
-                                            canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
-                                            isUploadingAttachment={workspace.isUploadingAttachment}
-                                            attachmentSlot={
-                                                <AttachmentPicker
-                                                    className={workspace.attachment ? undefined : "max-lg:hidden"}
-                                                    attachment={workspace.attachment}
-                                                    isUploading={workspace.isUploadingAttachment}
-                                                    purposeId={workspace.purpose.id}
-                                                    onPurposeChange={handleAttachmentPurposeChange}
-                                                    onAttachFile={handleAttachFile}
-                                                    onAttachCurrentResult={handleAttachCurrentResult}
-                                                    canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
-                                                    onClear={handleClearAttachment}
-                                                />
-                                            }
+                                        // 風格分析 Props
+                                        isAnalyzing={isAnalyzing}
+                                        analysisPhase={analysisPhase}
+                                        analysisResultData={analysisResultData}
+                                        newStyleName={newStyleName}
+                                        newStyleTags={newStyleTags}
+                                        isSavingStyle={isSavingStyle}
+                                        onAnalyze={analyzeImageStyle}
+                                        onStyleNameChange={handleStyleNameChange}
+                                        onStyleTagsChange={handleStyleTagsChange}
+                                        onSaveStyle={saveCurrentStyle}
+                                        onSaveTemplate={saveTemplate}
+                                        analyzedStyleForTemplate={analyzedStyle}
 
-                                            // 風格分析 Props
-                                            isAnalyzing={isAnalyzing}
-                                            analysisPhase={analysisPhase}
-                                            analysisResultData={analysisResultData}
-                                            newStyleName={newStyleName}
-                                            newStyleTags={newStyleTags}
-                                            isSavingStyle={isSavingStyle}
-                                            onAnalyze={analyzeImageStyle}
-                                            onStyleNameChange={handleStyleNameChange}
-                                            onStyleTagsChange={handleStyleTagsChange}
-                                            onSaveStyle={saveCurrentStyle}
-                                            onSaveTemplate={saveTemplate}
-                                            analyzedStyleForTemplate={analyzedStyle}
+                                        // 調色盤與快捷鍵
+                                        onPaletteStyleChange={handlePaletteStyleChange}
+                                        onGenerate={generateInfographic}
+                                        paletteStyleTags={paletteStyleTags}
+                                    />
 
-                                            // 調色盤與快捷鍵
-                                            onPaletteStyleChange={handlePaletteStyleChange}
-                                            onGenerate={generateInfographic}
-                                            paletteStyleTags={paletteStyleTags}
-                                        />
-
-                                    </div>
-
-                                    {/* Right: Preview (takes 2/5 on large screens) */}
-                                    {!isMobileLayout && (
-                                    <section
-                                        aria-label="圖片預覽"
-                                        className="lg:col-span-2 relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
-                                    >
-                                        <ImagePreview {...previewProps} />
-                                    </section>
-                                    )}
                                 </div>
+
+                                {/* Right: Preview (takes 2/5 on large screens) */}
+                                {!isMobileLayout && (
+                                <section
+                                    aria-label="圖片預覽"
+                                    className="lg:col-span-2 relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
+                                >
+                                    <ImagePreview {...previewProps} />
+                                </section>
+                                )}
                             </div>
-                        )}
+                        </div>
 
                         {/* Fixed Bottom Generate Bar */}
-                        {(activeTab === 'general' ||
-                            (hasActiveDocumentResult && documentAnalysisMode === "storyboard")) && (
-                            <GenerateBar
+                        <GenerateBar
                                 aspectRatio={aspectRatio}
                                 onAspectRatioChange={handleAspectRatioChange}
                                 imageQuality={imageQuality}
@@ -814,35 +624,28 @@ export default function InfographicGenerator({
                                 configurationError={modelSetupError}
                                 isGenerating={isGenerating}
                                 generationStatus={generationStatus}
-                                onCancelGeneration={activeTab === 'general' ? cancelGeneration : undefined}
-                                onGenerate={
-                                    hasActiveDocumentResult
-                                        ? handleGenerateAllScenes
-                                        : generateInfographic
-                                }
-                                buttonText={
-                                    hasActiveDocumentResult
-                                        ? `批次生成所有圖片 (${scenes?.length || 0})`
-                                        : workspace.purpose.buttonText
-                                }
-                                isGeneratingText={
-                                    hasActiveDocumentResult
-                                        ? "批次生成中…"
-                                        : workspace.isTransform ? "AI 修改中…" : "AI 生成中…"
-                                }
-                                ActionIcon={hasActiveDocumentResult ? FileText : workspace.isTransform ? Wand2 : WandSparkles}
-                                aspectRatioLocked={!hasActiveDocumentResult && workspace.aspectRatioLocked}
-                                onSuggestRefine={!hasActiveDocumentResult && suggestsRefine ? focusRefineInput : undefined}
+                                onCancelGeneration={cancelGeneration}
+                                onGenerate={generateInfographic}
+                                buttonText={workspace.purpose.buttonText}
+                                isGeneratingText={workspace.isTransform ? "AI 修改中…" : "AI 生成中…"}
+                                ActionIcon={workspace.isTransform ? Wand2 : WandSparkles}
+                                aspectRatioLocked={workspace.aspectRatioLocked}
+                                onSuggestRefine={suggestsRefine ? focusRefineInput : undefined}
                                 compact={isMobileLayout}
-                                resultImage={hasActiveDocumentResult ? undefined : generatedImage}
+                                resultImage={generatedImage}
                                 onOpenResult={() => setShowMobilePreview(true)}
-                                disabled={
-                                    hasActiveDocumentResult
-                                        ? !scenes || scenes.length === 0
-                                        : !workspace.canSubmit(userScript)
-                                }
+                                disabled={!workspace.canSubmit(userScript)}
                             />
-                        )}
+                    </div>
+                )}
+
+                {/* ─── Document Tab: PPT Master ─── */}
+                {activeTab === 'document' && (
+                    <div className="flex-1 min-h-0 overflow-hidden px-4 py-3 lg:px-8">
+                        <p className="mb-3 text-xs text-muted-foreground">
+                            由 AI 逐頁設計版面，直接產出套用專業模板的 PowerPoint。
+                        </p>
+                        <PptMasterStudio />
                     </div>
                 )}
 

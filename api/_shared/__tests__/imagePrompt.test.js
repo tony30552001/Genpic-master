@@ -10,12 +10,13 @@ import {
 describe("normalizeImagePurpose", () => {
   it("accepts the supported purposes", () => {
     expect(normalizeImagePurpose("infographic")).toBe("infographic");
-    expect(normalizeImagePurpose("STORYBOARD")).toBe("storyboard");
+    expect(normalizeImagePurpose("INFOGRAPHIC")).toBe("infographic");
     expect(normalizeImagePurpose(" freeform ")).toBe("freeform");
   });
 
   it("falls back to the default for anything else", () => {
     expect(normalizeImagePurpose("poster")).toBe(DEFAULT_IMAGE_PURPOSE);
+    expect(normalizeImagePurpose("storyboard")).toBe(DEFAULT_IMAGE_PURPOSE);
     expect(normalizeImagePurpose(undefined)).toBe(DEFAULT_IMAGE_PURPOSE);
   });
 });
@@ -34,16 +35,6 @@ describe("buildImagePrompt", () => {
     );
     expect(prompt).toContain("Content: A calm harbour at dawn.");
     expect(prompt).toContain("Deliverable: Create one polished infographic or presentation visual.");
-  });
-
-  it("composes storyboard scenes as cinematic panels, not slides", () => {
-    const prompt = buildImagePrompt({
-      userScript: "A courier runs through neon rain",
-      purpose: "storyboard",
-    });
-
-    expect(prompt).toContain("cinematic storyboard frame");
-    expect(prompt).not.toContain("infographic");
   });
 
   it("keeps freeform content untouched while applying explicit canvas and text settings", () => {

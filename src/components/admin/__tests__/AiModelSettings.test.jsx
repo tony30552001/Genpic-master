@@ -56,14 +56,14 @@ const textModel = { id: "llm-1", label: "GPT 分析", modelName: "gpt-x", endpoi
 const llmSettings = {
   models: [textModel],
   assignments: [],
-  roles: [{ id: "document_analysis", label: "文件分析", description: "上傳文件後拆解場景與重點" }],
+  roles: [{ id: "style_analysis", label: "風格分析", description: "從參考圖萃取風格描述與標籤" }],
 };
 
 const renderPage = async () => {
   const user = userEvent.setup();
   render(<AiModelSettings />);
   await screen.findByLabelText("圖片生成模型");
-  await screen.findByLabelText("文件分析主要模型");
+  await screen.findByLabelText("風格分析主要模型");
   return user;
 };
 
@@ -230,12 +230,12 @@ describe("AiModelSettings", () => {
   });
 
   it("assigns a text model to a role and shows a failed connection test", async () => {
-    assignAdminLlmRole.mockResolvedValue({ ...llmSettings, assignments: [{ role: "document_analysis", modelId: "llm-1", fallbackModelId: null }] });
+    assignAdminLlmRole.mockResolvedValue({ ...llmSettings, assignments: [{ role: "style_analysis", modelId: "llm-1", fallbackModelId: null }] });
     testAdminLlmModel.mockResolvedValue({ success: false, message: "金鑰無效" });
     const user = await renderPage();
 
-    await chooseOption("文件分析主要模型", "GPT 分析（gpt-x）", user);
-    await waitFor(() => expect(assignAdminLlmRole).toHaveBeenCalledWith("document_analysis", { modelId: "llm-1", fallbackModelId: null }));
+    await chooseOption("風格分析主要模型", "GPT 分析（gpt-x）", user);
+    await waitFor(() => expect(assignAdminLlmRole).toHaveBeenCalledWith("style_analysis", { modelId: "llm-1", fallbackModelId: null }));
 
     await user.click(screen.getByRole("button", { name: "測試 GPT 分析" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("金鑰無效");

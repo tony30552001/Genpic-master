@@ -5,14 +5,11 @@ const { openEventStream } = require("./_shared/eventStream");
 const openapiDocument = require("./openapi");
 
 const admin = require("./admin");
-const analyzeDocument = require("./analyze-document");
 const analyzeStyle = require("./analyze-style");
 const auth = require("./auth");
 const blobSas = require("./blob-sas");
 const deckJobs = require("./deck-jobs");
 const { startDeckJobWorker } = require("./_shared/deckJobs");
-const documentAnalysisJobs = require("./document-analysis-jobs");
-const { startDocumentAnalysisWorker } = require("./_shared/documentAnalysisJobs");
 const { startUploadCleanupWorker } = require("./_shared/uploadCleanup");
 const embeddings = require("./embeddings");
 const generateFilename = require("./generate-filename");
@@ -27,7 +24,6 @@ const { startImageJobWorker } = require("./_shared/imageJobs");
 const lineConfig = require("./line-config");
 const me = require("./me");
 const optimizePrompt = require("./optimize-prompt");
-const optimizeScene = require("./optimize-scene");
 const pptTemplates = require("./ppt-templates");
 const sendLineImage = require("./send-line-image");
 const styles = require("./styles");
@@ -127,9 +123,6 @@ registerRoutes(["/api/auth/google"], ["POST", "OPTIONS"], auth);
 registerRoutes(["/api/auth/session"], ["GET", "OPTIONS"], auth);
 registerRoutes(["/api/auth/logout"], ["POST", "OPTIONS"], auth);
 registerRoutes(["/api/me"], ["GET", "OPTIONS"], me);
-registerRoutes(["/api/analyze-document"], ["POST", "OPTIONS"], analyzeDocument);
-registerRoutes(["/api/document-analysis-jobs"], ["POST", "OPTIONS"], documentAnalysisJobs);
-registerRoutes(["/api/document-analysis-jobs/:id"], ["GET", "OPTIONS"], documentAnalysisJobs);
 registerRoutes(["/api/analyze-style"], ["POST", "OPTIONS"], analyzeStyle);
 registerRoutes(["/api/blob-sas"], ["POST", "OPTIONS"], blobSas);
 registerRoutes(["/api/uploads"], ["POST", "OPTIONS"], uploads);
@@ -164,7 +157,6 @@ registerRoutes(["/api/image-jobs/:id", "/api/image-jobs/:id/:asset"], ["GET", "O
 registerRoutes(["/api/image-transform"], ["POST", "OPTIONS"], imageTransform);
 registerRoutes(["/api/line-config"], ["GET", "POST", "DELETE", "OPTIONS"], lineConfig);
 registerRoutes(["/api/optimize-prompt"], ["POST", "OPTIONS"], optimizePrompt);
-registerRoutes(["/api/optimize-scene"], ["POST", "OPTIONS"], optimizeScene);
 registerRoutes(["/api/send-line-image"], ["POST", "OPTIONS"], sendLineImage);
 registerRoutes(
   ["/api/history", "/api/history/:id"],
@@ -241,14 +233,6 @@ const start = () => {
   });
   startImageJobWorker();
   startDeckJobWorker();
-  startDocumentAnalysisWorker({
-    analyze: ({ uploadId, sceneCount, owner }) =>
-      analyzeDocument.runDocumentAnalysis({
-        requestBody: { uploadId, sceneCount },
-        owner,
-        context: { log: createLogger() },
-      }),
-  });
   const stopUploadCleanupWorker = startUploadCleanupWorker();
   server.once("close", stopUploadCleanupWorker);
   return server;

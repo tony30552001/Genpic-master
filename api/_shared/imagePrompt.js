@@ -3,7 +3,7 @@
  *
  * The browser sends the creative inputs (content, style, purpose, text
  * language); the backend owns how they become one prompt. Keeping the assembly
- * here is what lets the general editor, the storyboard scenes, and the image
+ * here is what lets the general editor and the image
  * transform surface share the same wording and the same language directive.
  *
  * The image models are instruction-following: the assembled prompt is prose,
@@ -19,11 +19,6 @@ const PURPOSE_PROMPT_SECTIONS = Object.freeze({
     deliverable: "Create one polished infographic or presentation visual.",
     composition:
       "Unless the content already specifies framing, use a clear visual hierarchy, readable grouping, and balanced negative space. Keep the primary message immediately scannable and avoid decorative clutter or generic stock-photo staging.",
-  }),
-  storyboard: Object.freeze({
-    deliverable: "Create one cinematic storyboard frame.",
-    composition:
-      "Unless the content already specifies framing, use a deliberate camera angle, clear spatial relationships, believable depth, and an action-focused composition that reads as one moment rather than a poster.",
   }),
   freeform: Object.freeze({ deliverable: "", composition: "" }),
 });

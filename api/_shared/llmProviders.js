@@ -16,11 +16,6 @@ const INVALID_TOOL_CALL = "invalid_tool_call";
 
 const LLM_ROLES = Object.freeze([
   {
-    id: "document_analysis",
-    label: "文件分鏡",
-    description: "上傳文件後拆解場景與重點",
-  },
-  {
     id: "prompt_optimization",
     label: "Prompt 優化",
     description: "把使用者輸入改寫為中英文生成 Prompt",
@@ -39,11 +34,6 @@ const LLM_ROLES = Object.freeze([
     id: "filename",
     label: "檔名生成",
     description: "依生成內容命名輸出檔案",
-  },
-  {
-    id: "scene_optimization",
-    label: "場景優化",
-    description: "改寫單一場景的描述與視覺 Prompt",
   },
   {
     id: "image_chat",

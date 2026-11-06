@@ -8,7 +8,6 @@ vi.mock("../apiClient", () => ({
 
 import { apiGet, apiPost } from "../apiClient";
 import {
-  analyzeDocument,
   analyzeStyle,
   createDeckJob,
   generateImage,
@@ -42,7 +41,7 @@ describe("aiService", () => {
       userScript: "a red fox",
       stylePrompt: "watercolor",
       styleTags: ["柔和"],
-      purpose: "storyboard",
+      purpose: "freeform",
       imageLanguage: "zh-TW",
       aspectRatio: "1:1",
     });
@@ -52,7 +51,7 @@ describe("aiService", () => {
         userScript: "a red fox",
         stylePrompt: "watercolor",
         styleTags: ["柔和"],
-        purpose: "storyboard",
+        purpose: "freeform",
         imageLanguage: "zh-TW",
         aspectRatio: "1:1",
         quality: undefined,
@@ -61,56 +60,6 @@ describe("aiService", () => {
       { signal: undefined }
     );
     expect(result).toEqual(admission);
-  });
-
-  it("sends an upload ID and no caller-selected document URL to document analysis", async () => {
-    apiPost.mockResolvedValueOnce({ jobId: "analysis-job-1", status: "queued" });
-    apiGet.mockResolvedValueOnce({
-      jobId: "analysis-job-1",
-      status: "succeeded",
-      result: { scenes: [{ scene_number: 1 }] },
-    });
-
-    const result = await analyzeDocument({
-      uploadId: "123e4567-e89b-42d3-a456-426614174000",
-      fileName: "report.docx",
-      contentType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      sceneCount: 6,
-      signal: undefined,
-    });
-
-    expect(result).toEqual({ scenes: [{ scene_number: 1 }] });
-    expect(apiPost).toHaveBeenCalledWith(
-      "/api/document-analysis-jobs",
-      {
-        uploadId: "123e4567-e89b-42d3-a456-426614174000",
-        sceneCount: 6,
-      },
-      { signal: undefined }
-    );
-    expect(apiGet).toHaveBeenCalledWith("/api/document-analysis-jobs/analysis-job-1", {
-      signal: undefined,
-    });
-  });
-
-  it("keeps the small Base64 compatibility path synchronous", async () => {
-    await analyzeDocument({
-      base64Content: "QUJD",
-      fileName: "report.docx",
-      contentType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      sceneCount: 6,
-    });
-
-    expect(apiPost).toHaveBeenCalledWith("/api/analyze-document", {
-      uploadId: undefined,
-      fileName: "report.docx",
-      contentType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      base64Content: "QUJD",
-      sceneCount: 6,
-    });
   });
 
   it("generateImage sends a reference upload ID instead of a reference URL", async () => {
