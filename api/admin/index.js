@@ -647,6 +647,7 @@ module.exports = async function (context, req) {
         tenantId: identity.tenantId,
         allowedModels: req.body?.allowedModels,
         defaultModel: req.body?.defaultModel,
+        defaultEditModel: req.body?.defaultEditModel,
         updatedBy: identity.userId,
       });
       context.res = ok(

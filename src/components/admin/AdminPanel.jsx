@@ -101,6 +101,7 @@ const formatDate = (value) => {
 const emptyPolicy = {
   allowedModels: [],
   defaultModel: null,
+  defaultEditModel: null,
 };
 
 const DEFAULT_USER_PAGE_SIZE = 10;
@@ -338,10 +339,12 @@ export default function AdminPanel() {
     models.find((model) => model.modelKey === modelKey)?.label || modelKey || "未紀錄";
   const allowedRegisteredModels = models.filter((model) => modelPolicy.allowedModels.includes(model.modelKey));
   const missingPolicyKeys = modelPolicy.allowedModels.filter((key) => !models.some((model) => model.modelKey === key));
+  const isAllowedRegistered = (modelKey) => allowedRegisteredModels.some((model) => model.modelKey === modelKey);
   const isPolicyValid = policyModels !== null
     && modelPolicy.allowedModels.length > 0
     && missingPolicyKeys.length === 0
-    && allowedRegisteredModels.some((model) => model.modelKey === modelPolicy.defaultModel);
+    && isAllowedRegistered(modelPolicy.defaultModel)
+    && isAllowedRegistered(modelPolicy.defaultEditModel);
 
   const loadUsersSection = useCallback(
     async ({ page = 1, pageSize = DEFAULT_USER_PAGE_SIZE, search = "" } = {}) => {
@@ -630,6 +633,9 @@ export default function AdminPanel() {
           defaultModel: nextAllowedModels.includes(previous.defaultModel)
             ? previous.defaultModel
             : null,
+          defaultEditModel: nextAllowedModels.includes(previous.defaultEditModel)
+            ? previous.defaultEditModel
+            : null,
         };
       }
       return {
@@ -641,7 +647,7 @@ export default function AdminPanel() {
 
   const handleSavePolicy = async () => {
     if (!isPolicyValid) {
-      setErrorMessage("請先登錄模型，並從開放清單選擇預設模型。");
+      setErrorMessage("請先登錄模型，並從開放清單選擇生成模型與編輯模型。");
       return;
     }
     setIsSavingPolicy(true);
@@ -651,6 +657,7 @@ export default function AdminPanel() {
       const result = await updateAdminModelSettings({
         allowedModels: modelPolicy.allowedModels,
         defaultModel: modelPolicy.defaultModel,
+        defaultEditModel: modelPolicy.defaultEditModel,
       });
       setModelPolicy(result.modelPolicy);
       setPolicyModels(result.models);
@@ -1070,7 +1077,7 @@ export default function AdminPanel() {
                       <div className="space-y-3">
                         <div>
                           <h3 className="text-sm font-semibold">開放模型</h3>
-                          <p className="text-xs text-muted-foreground">至少開放一個已登錄模型，並明確選擇預設模型後儲存。</p>
+                          <p className="text-xs text-muted-foreground">至少開放一個已登錄模型，並明確選擇生成模型與編輯模型後儲存。</p>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                           {(policyModels || []).map((model) => {
@@ -1110,17 +1117,32 @@ export default function AdminPanel() {
                           ))}
                         </div>
                       </div>
-                      <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-end sm:justify-between">
-                        <div className="w-full max-w-md space-y-2">
-                          <label htmlFor="admin-default-model" className="text-sm font-semibold">預設生成模型</label>
-                          <SelectField
-                            id="admin-default-model"
-                            value={allowedRegisteredModels.some((model) => model.modelKey === modelPolicy.defaultModel) ? modelPolicy.defaultModel : ""}
-                            disabled={isSavingPolicy || isRefreshing || policyModels === null}
-                            onValueChange={(defaultModel) => setModelPolicy((previous) => ({ ...previous, defaultModel }))}
-                            placeholder="請選擇已開放的模型"
-                            options={allowedRegisteredModels.map((model) => ({ value: model.modelKey, label: model.label }))}
-                          />
+                      <div className="flex flex-col gap-4 border-t border-border pt-5 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
+                          <div className="min-w-0 space-y-2">
+                            <label htmlFor="admin-default-model" className="text-sm font-semibold">生成模型</label>
+                            <SelectField
+                              id="admin-default-model"
+                              value={isAllowedRegistered(modelPolicy.defaultModel) ? modelPolicy.defaultModel : ""}
+                              disabled={isSavingPolicy || isRefreshing || policyModels === null}
+                              onValueChange={(defaultModel) => setModelPolicy((previous) => ({ ...previous, defaultModel }))}
+                              placeholder="請選擇已開放的模型"
+                              options={allowedRegisteredModels.map((model) => ({ value: model.modelKey, label: model.label }))}
+                            />
+                            <p className="text-xs text-muted-foreground">從文字產生新圖片。</p>
+                          </div>
+                          <div className="min-w-0 space-y-2">
+                            <label htmlFor="admin-default-edit-model" className="text-sm font-semibold">編輯模型</label>
+                            <SelectField
+                              id="admin-default-edit-model"
+                              value={isAllowedRegistered(modelPolicy.defaultEditModel) ? modelPolicy.defaultEditModel : ""}
+                              disabled={isSavingPolicy || isRefreshing || policyModels === null}
+                              onValueChange={(defaultEditModel) => setModelPolicy((previous) => ({ ...previous, defaultEditModel }))}
+                              placeholder="請選擇已開放的模型"
+                              options={allowedRegisteredModels.map((model) => ({ value: model.modelKey, label: model.label }))}
+                            />
+                            <p className="text-xs text-muted-foreground">修改、精確編輯與以圖轉圖；需支援使用者選的品質。</p>
+                          </div>
                         </div>
                         <Button type="button" onClick={handleSavePolicy} disabled={isSavingPolicy || !isPolicyValid || isRefreshing} className="shrink-0 gap-2">
                           {isSavingPolicy ? <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="icon-sm" aria-hidden="true" />}

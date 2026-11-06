@@ -51,10 +51,13 @@ const createImageJob = async ({
     let selectedModel = model;
     if (model === undefined) {
       const policy = await ensureModelPolicy(tenantId, client);
-      selectedModel = policy.defaultModel;
+      selectedModel = operation === "edit" ? policy.defaultEditModel : policy.defaultModel;
       if (!selectedModel || !policy.allowedModels.includes(selectedModel)) {
         throw new ImageModelError(
-          "尚未設定可用的圖片模型，請聯絡管理員", "image_model_not_configured", 503
+          operation === "edit"
+            ? "尚未設定可用的圖片編輯模型，請聯絡管理員"
+            : "尚未設定可用的圖片模型，請聯絡管理員",
+          "image_model_not_configured", 503
         );
       }
     }

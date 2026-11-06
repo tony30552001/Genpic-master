@@ -240,11 +240,12 @@ const deleteImageModel = async ({ tenantId, modelKey }) =>
   withImageModelTransaction(tenantId, async (client) => {
     const referenced = await client.query(
       `SELECT tenant_id FROM tenant_model_settings
-       WHERE tenant_id = $1 AND (default_model = $2 OR $2 = ANY(allowed_models))`,
+       WHERE tenant_id = $1
+         AND (default_model = $2 OR default_edit_model = $2 OR $2 = ANY(allowed_models))`,
       [tenantId, modelKey]
     );
     if (referenced.rows.length) {
-      throw new ImageModelError("請先從開放模型與預設模型政策移除此模型", "conflict", 409);
+      throw new ImageModelError("請先從開放模型、生成模型與編輯模型政策移除此模型", "conflict", 409);
     }
     await assertNoActiveImageWork(client, tenantId, modelKey);
     const result = await client.query(

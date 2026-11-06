@@ -763,7 +763,8 @@ const modelPolicySchema = {
   type: "object",
   properties: {
     allowedModels: { type: "array", items: { type: "string" } },
-    defaultModel: { type: "string", nullable: true },
+    defaultModel: { type: "string", nullable: true, description: "Model for generate jobs." },
+    defaultEditModel: { type: "string", nullable: true, description: "Model for edit jobs (refine, precise edit, transforms)." },
     updatedAt: { ...jsonObjectSchema, nullable: true },
   },
 };
@@ -815,14 +816,15 @@ addOperation("/api/management/image-model-tests", "post", {
 });
 for (const method of ["get", "put"]) {
   addOperation("/api/management/settings", method, {
-    summary: method === "get" ? "Read image model policy and public catalog" : "Set allowed and default tenant image models",
+    summary: method === "get" ? "Read image model policy and public catalog" : "Set allowed, generation and edit tenant image models",
     tags: ["Administration"],
     body: method === "put",
     bodySchema: {
-      type: "object", required: ["allowedModels", "defaultModel"],
+      type: "object", required: ["allowedModels", "defaultModel", "defaultEditModel"],
       properties: {
         allowedModels: { type: "array", minItems: 1, items: { type: "string" } },
         defaultModel: { type: "string" },
+        defaultEditModel: { type: "string" },
       },
     },
     csrf: method === "put",

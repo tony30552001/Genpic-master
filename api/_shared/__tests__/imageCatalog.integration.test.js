@@ -56,6 +56,7 @@ integration("image catalog on isolated PostgreSQL schema", () => {
     await pool.query("INSERT INTO users(id, tenant_id) VALUES ($1, $2)", [userId, tenantId]);
     await pool.query("INSERT INTO tenant_model_settings(tenant_id) VALUES ($1)", [tenantId]);
     await pool.query(readFileSync(resolve(process.cwd(), "db", "migrations", "026_image_model_catalog.sql"), "utf8"));
+    await pool.query(readFileSync(resolve(process.cwd(), "db", "migrations", "032_image_edit_model.sql"), "utf8"));
     process.env.SECRET_ENCRYPTION_KEY = "12".repeat(32);
     db.query = (text, params) => pool.query(text, params);
     db.getPool = () => pool;
@@ -86,10 +87,10 @@ integration("image catalog on isolated PostgreSQL schema", () => {
 
   it("keeps the existing policy and initializes new tenants unconfigured", async () => {
     expect(await policy.ensureModelPolicy(tenantId)).toMatchObject({
-      allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2",
+      allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2", defaultEditModel: "gpt-image-2",
     });
     expect(await policy.ensureModelPolicy(otherTenantId)).toMatchObject({
-      allowedModels: [], defaultModel: null,
+      allowedModels: [], defaultModel: null, defaultEditModel: null,
     });
   });
 

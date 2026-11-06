@@ -69,7 +69,7 @@ Azure Static Web Apps serves `dist/`. The linked App Service runs `api/server.js
 
 ## Image generation
 
-- Tenant policy in `api/_shared/modelPolicy.js` controls the model; do not add a client-side model selector.
+- Tenant policy in `api/_shared/modelPolicy.js` controls the model: `defaultModel` for generate jobs and `defaultEditModel` for edit jobs (refine, precise edit, transforms); both must be in `allowedModels`. Do not add a client-side model selector.
 - Image deployments are tenant-managed in `api/_shared/imageModels.js`. Azure OpenAI Images v1 is the supported protocol; do not hardcode an image-model name whitelist or restore global `GPT_IMAGE_*` runtime configuration.
 - API keys use `secretCrypto.js`; management responses expose `hasApiKey` only, and `/api/me` exposes only public image-model metadata.
 - Image quality is validated against the selected model's capabilities. Only an omitted quality may use its configured default; explicit invalid values must fail.

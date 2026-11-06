@@ -50,7 +50,7 @@ describe("durable catalog-backed image jobs", () => {
     db.getPool.mockReturnValue({ connect: vi.fn().mockResolvedValue(client) });
     db.query.mockResolvedValue({ rows: [], rowCount: 1 });
     imageModels.withImageModelTransaction.mockImplementation(async (_tenant, action) => action(client));
-    modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: config.modelKey, allowedModels: [config.modelKey] });
+    modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: config.modelKey, defaultEditModel: config.modelKey, allowedModels: [config.modelKey] });
     imageModels.resolveImageModel.mockResolvedValue(config);
     imageUploads.resolveOwnedImageUpload.mockResolvedValue({ id: "upload-1" });
     imageUploads.downloadOwnedImage.mockResolvedValue({ buffer: Buffer.from("source"), contentType: "image/png" });
@@ -138,6 +138,27 @@ describe("durable catalog-backed image jobs", () => {
     "rejects missing or disallowed policy before insertion", async (policy) => {
       modelPolicy.ensureModelPolicy.mockResolvedValue(policy);
       await expect(createImageJob(input)).rejects.toMatchObject({ status: 503, code: "image_model_not_configured" });
+      expect(client.query).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ["generate", {}, "generate-model"],
+    ["edit", { sourceUploadId: "upload-1" }, "edit-model"],
+  ])("selects the policy's %s model", async (operation, source, modelKey) => {
+    modelPolicy.ensureModelPolicy.mockResolvedValue({
+      defaultModel: "generate-model", defaultEditModel: "edit-model", allowedModels: ["generate-model", "edit-model"],
+    });
+    await createImageJob({ ...input, operation, ...source });
+    expect(imageModels.resolveImageModel).toHaveBeenCalledWith({ tenantId: input.tenantId, modelKey, client });
+    expect(client.query.mock.calls[0][1][2]).toBe(modelKey);
+  });
+
+  it.each([{ defaultEditModel: null }, { defaultEditModel: "removed" }])(
+    "rejects an edit when the edit model is missing or disallowed %j", async (edit) => {
+      modelPolicy.ensureModelPolicy.mockResolvedValue({ defaultModel: config.modelKey, allowedModels: [config.modelKey], ...edit });
+      await expect(createImageJob({ ...input, operation: "edit", sourceUploadId: "upload-1" }))
+        .rejects.toMatchObject({ status: 503, code: "image_model_not_configured", message: expect.stringContaining("編輯模型") });
       expect(client.query).not.toHaveBeenCalled();
     }
   );

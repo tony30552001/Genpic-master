@@ -12,6 +12,7 @@ const normalizeModels = (models) => {
 const mapPolicy = (row) => ({
   allowedModels: normalizeModels(row.allowed_models),
   defaultModel: row.default_model,
+  defaultEditModel: row.default_edit_model,
   updatedAt: row.updated_at
     ? { seconds: Math.floor(new Date(row.updated_at).getTime() / 1000) }
     : null,
@@ -27,7 +28,7 @@ const ensureModelPolicy = async (tenantId, client) => {
   );
 
   const result = await runQuery(
-    `SELECT allowed_models, default_model, updated_at
+    `SELECT allowed_models, default_model, default_edit_model, updated_at
      FROM tenant_model_settings
      WHERE tenant_id = $1
      LIMIT 1`,
@@ -41,16 +42,18 @@ const ensureModelPolicy = async (tenantId, client) => {
   return mapPolicy(result.rows[0]);
 };
 
-const validateModelPolicy = ({ allowedModels, defaultModel, models }) => {
+const validateModelPolicy = ({ allowedModels, defaultModel, defaultEditModel, models }) => {
   if (
     !Array.isArray(allowedModels) ||
     allowedModels.some((model) => typeof model !== "string") ||
-    typeof defaultModel !== "string"
+    typeof defaultModel !== "string" ||
+    typeof defaultEditModel !== "string"
   ) {
-    throw new ImageModelError("請提供有效的開放模型清單與預設模型");
+    throw new ImageModelError("請提供有效的開放模型清單、生成模型與編輯模型");
   }
   const normalizedAllowedModels = normalizeModels(allowedModels);
   const normalizedDefaultModel = defaultModel.trim();
+  const normalizedDefaultEditModel = defaultEditModel.trim();
   const available = new Set(models.map((model) => model.modelKey));
 
   if (normalizedAllowedModels.length === 0) {
@@ -72,9 +75,14 @@ const validateModelPolicy = ({ allowedModels, defaultModel, models }) => {
     throw new ImageModelError("預設模型必須包含在開放模型清單中");
   }
 
+  if (!normalizedAllowedModels.includes(normalizedDefaultEditModel)) {
+    throw new ImageModelError("編輯模型必須包含在開放模型清單中");
+  }
+
   return {
     allowedModels: normalizedAllowedModels,
     defaultModel: normalizedDefaultModel,
+    defaultEditModel: normalizedDefaultEditModel,
   };
 };
 
@@ -82,22 +90,25 @@ const updateModelPolicy = async ({
   tenantId,
   allowedModels,
   defaultModel,
+  defaultEditModel,
   updatedBy,
 }) => withImageModelTransaction(tenantId, async (client) => {
   await ensureModelPolicy(tenantId, client);
   const models = await listPublicImageModels(tenantId, client);
-  const normalized = validateModelPolicy({ allowedModels, defaultModel, models });
+  const normalized = validateModelPolicy({ allowedModels, defaultModel, defaultEditModel, models });
   const result = await client.query(
     `UPDATE tenant_model_settings
      SET allowed_models = $1,
          default_model = $2,
-         updated_by = $3,
+         default_edit_model = $3,
+         updated_by = $4,
          updated_at = now()
-     WHERE tenant_id = $4
-     RETURNING allowed_models, default_model, updated_at`,
+     WHERE tenant_id = $5
+     RETURNING allowed_models, default_model, default_edit_model, updated_at`,
     [
       normalized.allowedModels,
       normalized.defaultModel,
+      normalized.defaultEditModel,
       updatedBy || null,
       tenantId,
     ]

@@ -98,7 +98,7 @@ describe("AdminPanel section loading", () => {
     listAdminImageModels.mockResolvedValue(catalog);
     refreshProfile.mockResolvedValue(undefined);
     getAdminModelSettings.mockResolvedValue({
-      modelPolicy: { allowedModels: [model.modelKey], defaultModel: model.modelKey },
+      modelPolicy: { allowedModels: [model.modelKey], defaultModel: model.modelKey, defaultEditModel: model.modelKey },
       models: [model],
     });
   });
@@ -151,26 +151,28 @@ describe("AdminPanel section loading", () => {
     await screen.findByText("alice@example.com");
     fireEvent.click(screen.getByRole("button", { name: "模型政策" }));
     const allowed = await screen.findByRole("button", { name: /Custom Image custom-image/ });
-    const select = screen.getByLabelText("預設生成模型");
+    const select = screen.getByLabelText("生成模型");
     const save = screen.getByRole("button", { name: "儲存模型政策" });
     fireEvent.click(allowed);
     expect(select).toHaveTextContent("請選擇已開放的模型");
     expect(save).toBeDisabled();
-    expect(await listOptions("預設生成模型")).toEqual([]);
+    expect(await listOptions("生成模型")).toEqual([]);
     fireEvent.click(allowed);
     expect(save).toBeDisabled();
-    await chooseOption("預設生成模型", model.label);
+    await chooseOption("生成模型", model.label);
+    expect(save).toBeDisabled();
+    await chooseOption("編輯模型", model.label);
     updateAdminModelSettings.mockResolvedValue({
-      modelPolicy: { allowedModels: [model.modelKey], defaultModel: model.modelKey }, models: [model],
+      modelPolicy: { allowedModels: [model.modelKey], defaultModel: model.modelKey, defaultEditModel: model.modelKey }, models: [model],
     });
     fireEvent.click(save);
     await screen.findByText("模型政策已更新，下一次生成將套用新設定。");
-    expect(updateAdminModelSettings).toHaveBeenCalledWith({ allowedModels: [model.modelKey], defaultModel: model.modelKey });
+    expect(updateAdminModelSettings).toHaveBeenCalledWith({ allowedModels: [model.modelKey], defaultModel: model.modelKey, defaultEditModel: model.modelKey });
     expect(refreshProfile).toHaveBeenCalledTimes(1);
   });
 
   it("can register an existing bootstrap policy key without changing its default", async () => {
-    const policy = { allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2" };
+    const policy = { allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2", defaultEditModel: "gpt-image-2" };
     getAdminModelSettings.mockResolvedValue({ modelPolicy: policy, models: [] });
     listAdminImageModels.mockResolvedValue({ ...catalog, models: [] });
     renderPanel();
@@ -188,7 +190,7 @@ describe("AdminPanel section loading", () => {
     fireEvent.change(screen.getByLabelText("Azure HTTPS 端點"), { target: { value: registered.endpoint } });
     fireEvent.change(screen.getByLabelText("API 金鑰"), { target: { value: "test-secret" } });
     fireEvent.submit(screen.getByRole("form", { name: "新增圖片模型" }));
-    await waitFor(() => expect(screen.getByLabelText("預設生成模型")).toHaveTextContent(registered.label));
+    await waitFor(() => expect(screen.getByLabelText("生成模型")).toHaveTextContent(registered.label));
     expect(getAdminModelSettings).toHaveBeenCalledTimes(2);
     expect(updateAdminModelSettings).not.toHaveBeenCalled();
   });
@@ -208,7 +210,7 @@ describe("AdminPanel section loading", () => {
   });
 
   it.each([null, "profile", "policy"])("refreshes profile capabilities after a catalog update, including %s refresh failures", async (failure) => {
-    const policy = { allowedModels: [model.modelKey], defaultModel: model.modelKey };
+    const policy = { allowedModels: [model.modelKey], defaultModel: model.modelKey, defaultEditModel: model.modelKey };
     const updatedModel = { ...catalog.models[0], supportedQualities: catalog.qualities, defaultQuality: "max" };
     updateAdminImageModel.mockResolvedValue({ ...catalog, models: [updatedModel] });
     renderPanel();
@@ -232,14 +234,14 @@ describe("AdminPanel section loading", () => {
       expect(await screen.findByText(/目錄已儲存，但政策或使用者資料重新載入失敗/)).toHaveTextContent(`${failure} unavailable`);
       expect(screen.getByText("圖片模型已更新。")).toBeInTheDocument();
     } else {
-      expect(screen.getByLabelText("預設生成模型")).toHaveTextContent(model.label);
+      expect(screen.getByLabelText("生成模型")).toHaveTextContent(model.label);
     }
   });
 
   it("allows long dynamic policy labels and keys to wrap within the grid", async () => {
     const longModel = { ...model, modelKey: "k".repeat(128), label: "L".repeat(128) };
     getAdminModelSettings.mockResolvedValue({
-      modelPolicy: { allowedModels: [longModel.modelKey], defaultModel: longModel.modelKey },
+      modelPolicy: { allowedModels: [longModel.modelKey], defaultModel: longModel.modelKey, defaultEditModel: longModel.modelKey },
       models: [longModel],
     });
     renderPanel();

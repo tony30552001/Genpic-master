@@ -230,25 +230,32 @@ describe("encrypted tenant catalog", () => {
 
 describe("catalog-backed policy", () => {
   const models = [{ modelKey: "gpt-image-2" }, { modelKey: input.modelKey }];
-  it("accepts any registered tenant model and keeps an explicitly selected default", () => {
+  it("accepts any registered tenant model and keeps explicitly selected generation and edit models", () => {
     expect(validateModelPolicy({
-      models, allowedModels: ["gpt-image-2", input.modelKey], defaultModel: "gpt-image-2",
-    })).toEqual({ allowedModels: ["gpt-image-2", input.modelKey], defaultModel: "gpt-image-2" });
+      models, allowedModels: ["gpt-image-2", input.modelKey], defaultModel: "gpt-image-2", defaultEditModel: input.modelKey,
+    })).toEqual({ allowedModels: ["gpt-image-2", input.modelKey], defaultModel: "gpt-image-2", defaultEditModel: input.modelKey });
   });
   it("rejects foreign/unregistered or disallowed defaults", () => {
-    expect(() => validateModelPolicy({ models, allowedModels: ["foreign"], defaultModel: "foreign" })).toThrow();
-    expect(() => validateModelPolicy({ models, allowedModels: ["gpt-image-2"], defaultModel: input.modelKey })).toThrow();
+    expect(() => validateModelPolicy({ models, allowedModels: ["foreign"], defaultModel: "foreign", defaultEditModel: "foreign" })).toThrow();
+    expect(() => validateModelPolicy({ models, allowedModels: ["gpt-image-2"], defaultModel: input.modelKey, defaultEditModel: "gpt-image-2" })).toThrow();
+  });
+  it("requires an allowed edit model", () => {
+    expect(() => validateModelPolicy({ models, allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2" })).toThrow();
+    expect(() => validateModelPolicy({
+      models, allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2", defaultEditModel: input.modelKey,
+    })).toThrow("編輯模型必須包含在開放模型清單中");
   });
   it("updates policy under the same tenant admission lock", async () => {
-    const policy = { allowed_models: ["gpt-image-2"], default_model: "gpt-image-2" };
+    const policy = { allowed_models: ["gpt-image-2"], default_model: "gpt-image-2", default_edit_model: "gpt-image-2" };
     results.push(
       { rows: [] }, { rows: [policy] }, { rows: [row] },
-      { rows: [{ allowed_models: [input.modelKey], default_model: input.modelKey }] }
+      { rows: [{ allowed_models: [input.modelKey], default_model: input.modelKey, default_edit_model: input.modelKey }] }
     );
     const saved = await updateModelPolicy({
-      tenantId: TENANT, allowedModels: [input.modelKey], defaultModel: input.modelKey,
+      tenantId: TENANT, allowedModels: [input.modelKey], defaultModel: input.modelKey, defaultEditModel: input.modelKey,
     });
-    expect(saved.defaultModel).toBe(input.modelKey);
+    expect(saved).toMatchObject({ defaultModel: input.modelKey, defaultEditModel: input.modelKey });
+    expect(client.query.mock.calls.at(-2)[1]).toEqual([[input.modelKey], input.modelKey, input.modelKey, null, TENANT]);
     expect(client.query.mock.calls[1][0]).toContain("FOR UPDATE");
     expect(client.query).toHaveBeenCalledWith("COMMIT");
   });
