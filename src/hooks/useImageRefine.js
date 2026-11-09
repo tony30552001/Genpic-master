@@ -51,7 +51,7 @@ export default function useImageRefine({ versions, transformImage, saveHistoryIt
       const { imageQuality, imageLanguage } = getSettings();
       const { uploadId, aspectRatio } = await uploadVersion(source);
       const maskUploadId = mask ? await uploadMask(mask, source) : undefined;
-      const result = await transformImage({
+      const { images: [result] } = await transformImage({
         uploadId,
         mode: "refine",
         prompt: trimmed,

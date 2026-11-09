@@ -53,6 +53,8 @@ export default function GenerateBar({
     imageModelConfig,
     imageLanguage,
     onImageLanguageChange,
+    variantCount,
+    onVariantCountChange,
     configurationError,
     isGenerating,
     onGenerate,
@@ -91,6 +93,8 @@ export default function GenerateBar({
             onImageQualityChange={onImageQualityChange}
             imageLanguage={imageLanguage}
             onImageLanguageChange={onImageLanguageChange}
+            variantCount={variantCount}
+            onVariantCountChange={onVariantCountChange}
         />
     );
 
@@ -155,6 +159,7 @@ export default function GenerateBar({
             aspectRatioLocked ? "原圖比例" : aspectRatio,
             IMAGE_QUALITY_LABELS[quality] || quality,
             onImageLanguageChange && getImageTextModeLabel(imageLanguage),
+            onVariantCountChange && variantCount > 1 && `×${variantCount}`,
         ].filter(Boolean).join(" · ");
 
         return (

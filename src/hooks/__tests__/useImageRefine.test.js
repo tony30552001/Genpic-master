@@ -22,7 +22,7 @@ function setup() {
   let jobCount = 0;
   const transformImage = vi.fn(async () => {
     jobCount += 1;
-    return { jobId: `job-r${jobCount}`, imageUrl: `refined-${jobCount}.png`, finalPrompt: "assembled" };
+    return { images: [{ jobId: `job-r${jobCount}`, imageUrl: `refined-${jobCount}.png`, finalPrompt: "assembled" }], failures: [] };
   });
   const saveHistoryItem = vi.fn().mockResolvedValue(undefined);
   const hook = renderHook(() => {

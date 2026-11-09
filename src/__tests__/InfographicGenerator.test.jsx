@@ -77,8 +77,11 @@ const profileFor = (model) => ({
   imageModels: [gpt, flare],
 });
 const completed = (jobId) => ({
-  jobId, model: flare.modelKey, imageUrl: `data:image/png;base64,${jobId}`,
-  finalPrompt: "assembled generation", mergedPrompt: "assembled transform",
+  images: [{
+    jobId, model: flare.modelKey, imageUrl: `data:image/png;base64,${jobId}`,
+    finalPrompt: "assembled generation",
+  }],
+  failures: [],
 });
 
 async function attach(purpose) {
@@ -220,6 +223,18 @@ describe("creation orchestration", () => {
     expect(mocks.generateImage).toHaveBeenCalledWith(expect.objectContaining({ imageLanguage: "none" }));
     act(() => { mocks.script.onImageLanguageChange("zh-TW"); });
     expect(screen.getByRole("button", { name: "繁中" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("generates the chosen number of variants and reports the ones that failed", async () => {
+    await mount("general");
+    expect(mocks.bar.variantCount).toBe(1);
+    act(() => { mocks.bar.onVariantCountChange(3); });
+    mocks.generateImage.mockResolvedValueOnce({
+      ...completed("variant-1"), failures: [new Error("quota"), new Error("quota")],
+    });
+    await act(async () => { await invoke("general"); });
+    expect(mocks.generateImage).toHaveBeenCalledWith(expect.objectContaining({ count: 3 }));
+    expect(screen.getByText("3 張中有 2 張生成失敗，已顯示其餘成功的圖片。")).toBeInTheDocument();
   });
 
   it("requires choosing again when catalog capabilities change without a policy switch", async () => {

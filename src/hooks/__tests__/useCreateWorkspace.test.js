@@ -16,7 +16,8 @@ vi.mock("../../lib/imageFile", async (importOriginal) => ({
 
 import useCreateWorkspace from "../useCreateWorkspace";
 
-const job = { jobId: "job-1", imageUrl: "https://blob/result.png", finalPrompt: "assembled" };
+const image = { jobId: "job-1", imageUrl: "https://blob/result.png", finalPrompt: "assembled" };
+const job = { images: [image], failures: [] };
 const file = (size = 10) => new File(["x".repeat(size)], "photo.png", { type: "image/png" });
 
 function setup() {
@@ -56,7 +57,7 @@ describe("useCreateWorkspace", () => {
     }));
     expect(transformImage).not.toHaveBeenCalled();
     expect(saveHistoryItem).toHaveBeenCalledWith({
-      jobId: "job-1", imageUrl: job.imageUrl, userScript: "使用者描述",
+      jobId: "job-1", imageUrl: image.imageUrl, userScript: "使用者描述",
       stylePrompt: "watercolor，柔和", fullPrompt: "assembled", styleId: "style-1", source: "general",
     });
     expect(output.styleId).toBe("style-1");
@@ -68,7 +69,32 @@ describe("useCreateWorkspace", () => {
     await act(async () => {
       await expect(result.current.submit(submitInput)).rejects.toThrow("db down");
     });
-    expect(onImageCreated).toHaveBeenCalledWith({ jobId: "job-1", imageUrl: job.imageUrl, instruction: "使用者描述" });
+    expect(onImageCreated).toHaveBeenCalledWith({ jobId: "job-1", imageUrl: image.imageUrl, instruction: "使用者描述" });
+  });
+
+  it("shows every variant as its own version and saves each one to history", async () => {
+    const { result, generateImage, saveHistoryItem, onImageCreated } = setup();
+    const second = { jobId: "job-2", imageUrl: "https://blob/two.png", finalPrompt: "assembled" };
+    generateImage.mockResolvedValue({ images: [image, second], failures: [new Error("quota")] });
+    let output;
+    await act(async () => { output = await result.current.submit({ ...submitInput, count: 3 }); });
+    expect(generateImage).toHaveBeenCalledWith(expect.objectContaining({ count: 3 }));
+    expect(onImageCreated).toHaveBeenCalledWith(
+      { jobId: "job-1", imageUrl: image.imageUrl, instruction: "使用者描述" },
+      { jobId: "job-2", imageUrl: second.imageUrl, instruction: "使用者描述" }
+    );
+    expect(saveHistoryItem.mock.calls.map(([item]) => item.jobId)).toEqual(["job-1", "job-2"]);
+    expect(output.failedCount).toBe(1);
+  });
+
+  it("saves the remaining variants when one history write fails", async () => {
+    const { result, generateImage, saveHistoryItem } = setup();
+    generateImage.mockResolvedValue({ images: [image, { ...image, jobId: "job-2" }], failures: [] });
+    saveHistoryItem.mockRejectedValueOnce(new Error("db down"));
+    await act(async () => {
+      await expect(result.current.submit({ ...submitInput, count: 2 })).rejects.toThrow("db down");
+    });
+    expect(saveHistoryItem).toHaveBeenCalledTimes(2);
   });
 
   it("uses an attachment as content reference by default", async () => {

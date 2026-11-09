@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { IMAGE_QUALITY_LABELS } from "@/config";
 import { LANGUAGE_OPTIONS, NO_TEXT_LANGUAGE } from "@/lib/imageTextLanguage";
+import { VARIANT_COUNTS } from "@/lib/imageVariants";
+import { Copy } from "@/components/icons/lucideControls";
 import {
   Select,
   SelectContent,
@@ -84,6 +86,28 @@ function TextModeControl({ imageLanguage, onImageLanguageChange, compact = false
   );
 }
 
+function VariantCountControl({ count, onCountChange, className }) {
+  return (
+    <Select value={String(count)} onValueChange={(value) => onCountChange(Number(value))}>
+      <SelectTrigger
+        aria-label="一次生成張數"
+        title="一次生成幾張變體"
+        className={cn("h-11 min-h-11 w-auto justify-start gap-2 rounded-lg bg-muted/70 px-3 text-xs font-semibold shadow-inner", className)}
+      >
+        <Copy className="icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="tabular-nums">×{count}</span>
+      </SelectTrigger>
+      <SelectContent>
+        {VARIANT_COUNTS.map((option) => (
+          <SelectItem key={option} value={String(option)} className="tabular-nums">
+            ×{option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function Field({ label, children }) {
   return (
     <div className="space-y-1.5">
@@ -108,6 +132,8 @@ export default function OutputSettings({
   onImageQualityChange,
   imageLanguage,
   onImageLanguageChange,
+  variantCount,
+  onVariantCountChange,
 }) {
   const stacked = layout === "stack";
 
@@ -170,6 +196,11 @@ export default function OutputSettings({
         <Field label={aspectRatioLocked ? "比例（沿用原圖）" : "比例"}>{ratioGroup}</Field>
         <Field label="品質">{qualityGroup}</Field>
         {textGroup && <Field label="圖中文字">{textGroup}</Field>}
+        {onVariantCountChange && (
+          <Field label="張數">
+            <VariantCountControl count={variantCount} onCountChange={onVariantCountChange} className="w-full" />
+          </Field>
+        )}
       </div>
     );
   }
@@ -183,6 +214,12 @@ export default function OutputSettings({
         <>
           <Separator orientation="vertical" className="h-6" />
           {textGroup}
+        </>
+      )}
+      {onVariantCountChange && (
+        <>
+          <Separator orientation="vertical" className="h-6" />
+          <VariantCountControl count={variantCount} onCountChange={onVariantCountChange} />
         </>
       )}
     </div>

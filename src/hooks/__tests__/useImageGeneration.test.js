@@ -34,11 +34,44 @@ describe("useImageGeneration", () => {
     expect(generateImage.mock.calls[0][0]).toMatchObject({ imageQuality, userScript: "scene", imageLanguage: "zh-TW" });
     expect(generateImage.mock.calls[0][0]).not.toHaveProperty("model");
     expect(waitForImageJob).toHaveBeenCalledWith({ jobId: "job-original", signal: expect.any(AbortSignal) });
-    expect(generated).toMatchObject({
+    expect(generated.images).toEqual([{
       jobId: "job-original", model: "custom-model", imageUrl: completed.imageUrl, finalPrompt: "server prompt",
-    });
+    }]);
+    expect(generated.failures).toEqual([]);
     expect(await generated.filenamePromise).toBe("scene-title");
     expect(result.current.isGenerating).toBe(false);
+  });
+
+  it("runs count jobs in parallel and keeps the images that succeeded", async () => {
+    generateImage
+      .mockResolvedValueOnce({ ...admission, jobId: "job-a" })
+      .mockResolvedValueOnce({ ...admission, jobId: "job-b" })
+      .mockRejectedValueOnce(new Error("quota"));
+    waitForImageJob.mockImplementation(async ({ jobId }) => ({ ...completed, jobId }));
+    const { result } = renderHook(() => useImageGeneration());
+    let generated;
+    await act(async () => { generated = await result.current.generateImage({ userScript: "scene", count: 3 }); });
+    expect(generateImage).toHaveBeenCalledTimes(3);
+    expect(generated.images.map((image) => image.jobId)).toEqual(["job-a", "job-b"]);
+    expect(generated.failures).toHaveLength(1);
+    expect(generateFilename).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects with the first error when every variant fails", async () => {
+    generateImage.mockRejectedValue(new Error("quota"));
+    const { result } = renderHook(() => useImageGeneration());
+    await act(async () => {
+      await expect(result.current.generateImage({ userScript: "scene", count: 2 })).rejects.toThrow("quota");
+    });
+    expect(result.current.isGenerating).toBe(false);
+  });
+
+  it.each([0, 5, 1.5])("rejects an unsupported count %s", async (count) => {
+    const { result } = renderHook(() => useImageGeneration());
+    await act(async () => {
+      await expect(result.current.generateImage({ userScript: "scene", count })).rejects.toThrow("最多");
+    });
+    expect(generateImage).not.toHaveBeenCalled();
   });
 
   it("uses the same asynchronous path for a reference", async () => {
@@ -51,7 +84,7 @@ describe("useImageGeneration", () => {
       });
     });
     expect(generateImage.mock.calls[0][0].referenceUploadId).toBe("upload-1");
-    expect(generated.jobId).toBe("job-original");
+    expect(generated.images[0].jobId).toBe("job-original");
   });
 
   it.each([
@@ -114,7 +147,7 @@ describe("useImageGeneration", () => {
       aspectRatio: "3:2", imageQuality: "high", imageLanguage: "none", signal: expect.any(AbortSignal),
     });
     expect(generateFilename).toHaveBeenCalledWith({ userScript: "make it yellow" });
-    expect(transformed).toMatchObject({ jobId: "job-original", imageUrl: completed.imageUrl, finalPrompt: "server prompt" });
+    expect(transformed.images[0]).toMatchObject({ jobId: "job-original", imageUrl: completed.imageUrl, finalPrompt: "server prompt" });
     expect(result.current.isGenerating).toBe(false);
   });
 

@@ -41,9 +41,9 @@ export default function useImageVersions() {
   const [versions, setVersions] = useState([]);
   const [activeVersionId, setActiveVersionId] = useState(null);
 
-  /** `fromHistory` marks the history's compressed preview as the chain's source. */
-  const startChain = useCallback(({ jobId = null, imageUrl, instruction = "", fromHistory = false }) => {
-    const version = {
+  /** Starts a new creation: one version per image; several images are alternatives, not a chain. */
+  const startChain = useCallback((...items) => {
+    const created = items.map(({ jobId = null, imageUrl, instruction = "", fromHistory = false }) => ({
       id: nextVersionId(),
       jobId,
       imageUrl,
@@ -52,10 +52,10 @@ export default function useImageVersions() {
       createdAt: Date.now(),
       upload: null,
       fromHistory,
-    };
-    setVersions([version]);
-    setActiveVersionId(version.id);
-    return version;
+    }));
+    setVersions(created);
+    setActiveVersionId(created[0].id);
+    return created[0];
   }, []);
 
   const addVersion = useCallback(({ jobId, imageUrl, instruction, parentId }) => {

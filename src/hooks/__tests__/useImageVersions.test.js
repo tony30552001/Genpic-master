@@ -42,6 +42,13 @@ describe("useImageVersions", () => {
     expect(result.current.versions).toHaveLength(1);
     expect(result.current.activeVersion).toMatchObject({ imageUrl: "h.jpg", fromHistory: true });
   });
+  it("starts several independent roots for variants and selects the first", () => {
+    const { result } = renderHook(() => useImageVersions());
+    act(() => { result.current.startChain({ imageUrl: "a.png" }, { imageUrl: "b.png" }); });
+    expect(result.current.versions.map((version) => version.parentId)).toEqual([null, null]);
+    expect(result.current.activeVersion.imageUrl).toBe("a.png");
+    expect(result.current.rows).toHaveLength(2);
+  });
 });
 
 describe("buildVersionRows", () => {

@@ -29,25 +29,29 @@ export default function VersionStrip({ rows, activeVersionId, onSelectVersion, r
 
   if (hidden) return null;
 
+  const rootRows = rows.filter((row) => !row.fromId);
+
   return (
     <div
       ref={containerRef}
       className={cn(
-        "space-y-1.5",
-        rail && "lg:w-[76px] lg:shrink-0 lg:space-y-0 lg:overflow-y-auto lg:border-r lg:border-border lg:bg-card/60 lg:px-2.5 lg:py-3 custom-scrollbar",
+        "flex flex-wrap gap-x-3 gap-y-1.5",
+        rail && "lg:w-[76px] lg:shrink-0 lg:flex-col lg:flex-nowrap lg:gap-0 lg:overflow-y-auto lg:border-r lg:border-border lg:bg-card/60 lg:px-2.5 lg:py-3 custom-scrollbar",
         className
       )}
       aria-label="版本"
       role="group"
     >
-      {rows.map((row) => (
+      {rows.map((row, rowIndex) => {
+        const rootIndex = rootRows.indexOf(row);
+        return (
         <ul
           key={row.items[0].id}
           className={cn(
-            "flex items-center gap-1.5 overflow-x-auto pb-0.5",
-            row.fromId && "pl-4",
+            "flex max-w-full items-center gap-1.5 overflow-x-auto pb-0.5",
+            row.fromId && "basis-full pl-4",
             rail && "lg:flex-col lg:gap-2 lg:overflow-visible lg:pb-2",
-            rail && row.fromId && "lg:mt-0.5 lg:border-t lg:border-dashed lg:border-border lg:pl-0 lg:pt-2"
+            rail && rowIndex > 0 && "lg:mt-0.5 lg:border-t lg:border-dashed lg:border-border lg:pl-0 lg:pt-2"
           )}
         >
           {row.fromId && (
@@ -57,7 +61,9 @@ export default function VersionStrip({ rows, activeVersionId, onSelectVersion, r
           )}
           {row.items.map((version) => {
             const isActive = version.id === activeVersionId;
-            const description = version.parentId ? version.instruction : "原始";
+            const description = version.parentId
+              ? version.instruction
+              : rootRows.length > 1 ? `變體 ${rootIndex + 1}` : "原始";
             return (
               <li
                 key={version.id}
@@ -95,7 +101,8 @@ export default function VersionStrip({ rows, activeVersionId, onSelectVersion, r
             );
           })}
         </ul>
-      ))}
+        );
+      })}
     </div>
   );
 }

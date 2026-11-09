@@ -9,6 +9,7 @@ import {
 } from "../services/aiService";
 import { getGenerationStatus } from "../utils/generationProgress";
 import { requireImageJobAdmission, requireCompletedImageJob } from "../lib/imageJob";
+import { MAX_VARIANTS } from "../lib/imageVariants";
 
 const normalizeTags = (raw) => {
   if (Array.isArray(raw)) return raw.map((t) => String(t).trim()).filter(Boolean);
@@ -87,11 +88,17 @@ export default function useImageGeneration() {
 
   /**
    * Shared lifecycle for every image job started from the creation workspace:
-   * one abort controller and one progress clock. The caller owns
-   * where the resulting image is shown.
+   * one abort controller and one progress clock. `count` jobs run in parallel and
+   * share them; the caller owns where the resulting images are shown. Resolves with
+   * the images that succeeded and the errors of those that did not, and rejects only
+   * when none succeeded.
    */
   const runImageJob = useCallback(
-    async ({ admit, operation, filenameSource }) => {
+    async ({ admit, operation, filenameSource, count = 1 }) => {
+      if (!Number.isInteger(count) || count < 1 || count > MAX_VARIANTS) {
+        throw new Error(`一次最多生成 ${MAX_VARIANTS} 張圖片。`);
+      }
+
       abortControllerRef.current?.abort();
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
@@ -117,22 +124,32 @@ export default function useImageGeneration() {
             return fallbackFilename;
           });
 
-        const admission = requireImageJobAdmission(await admit(abortController.signal));
-        const result = requireCompletedImageJob(
-          await waitForImageJob({
-            jobId: admission.jobId,
-            signal: abortController.signal,
-          }),
-          { jobId: admission.jobId, model: admission.model, operation }
-        );
-
-        return {
-          jobId: result.jobId,
-          imageUrl: result.imageUrl,
-          finalPrompt: admission.prompt || "",
-          filenamePromise,
-          model: result.model,
+        const runOne = async () => {
+          const admission = requireImageJobAdmission(await admit(abortController.signal));
+          const result = requireCompletedImageJob(
+            await waitForImageJob({
+              jobId: admission.jobId,
+              signal: abortController.signal,
+            }),
+            { jobId: admission.jobId, model: admission.model, operation }
+          );
+          return {
+            jobId: result.jobId,
+            imageUrl: result.imageUrl,
+            finalPrompt: admission.prompt || "",
+            model: result.model,
+          };
         };
+
+        const settled = await Promise.allSettled(Array.from({ length: count }, runOne));
+        const images = settled.filter((item) => item.status === "fulfilled").map((item) => item.value);
+        const failures = settled.filter((item) => item.status === "rejected").map((item) => item.reason);
+        if (abortController.signal.aborted) {
+          throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+        }
+        if (images.length === 0) throw failures[0];
+
+        return { images, failures, filenamePromise };
       } catch (err) {
         if (isAbortError(err)) {
           const abortError = new Error("已取消本次生成等待。若服務端已開始處理，可能仍會消耗請求。");
@@ -152,7 +169,7 @@ export default function useImageGeneration() {
   );
 
   const runGeneration = useCallback(
-    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageQuality, imageLanguage, referenceUploadId }) => {
+    async ({ userScript, analyzedStyle: stylePrompt, styleTags, purpose, aspectRatio, imageQuality, imageLanguage, referenceUploadId, count }) => {
       if (!userScript) {
         throw new Error("請輸入您想要生成的內容或劇情。");
       }
@@ -172,13 +189,14 @@ export default function useImageGeneration() {
         }),
         operation: referenceUploadId ? "edit" : "generate",
         filenameSource: userScript,
+        count,
       });
     },
     [runImageJob]
   );
 
   const runTransform = useCallback(
-    async ({ uploadId, mode, prompt, stylePrompt, styleTags, aspectRatio, imageQuality, imageLanguage, maskUploadId, filenameSource }) => {
+    async ({ uploadId, mode, prompt, stylePrompt, styleTags, aspectRatio, imageQuality, imageLanguage, maskUploadId, filenameSource, count }) => {
       if (!uploadId) {
         throw new Error("請先附上要轉換的圖片。");
       }
@@ -198,6 +216,7 @@ export default function useImageGeneration() {
         }),
         operation: "edit",
         filenameSource: filenameSource || prompt,
+        count,
       });
     },
     [runImageJob]

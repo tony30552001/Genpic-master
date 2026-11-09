@@ -92,12 +92,13 @@ export default function useCreateWorkspace({ generateImage, transformImage, save
     aspectRatio,
     imageQuality,
     imageLanguage,
+    count,
   }) => {
     const appliedStylePrompt = purpose.usesStyle ? stylePrompt : "";
     const appliedStyleTags = purpose.usesStyle ? styleTags : [];
     const historyStylePrompt = [appliedStylePrompt, appliedStyleTags.join("，")].filter(Boolean).join("，");
 
-    const result = isTransform
+    const { images, failures } = isTransform
       ? await transformImage({
         uploadId: attachment.uploadId,
         mode: purpose.id,
@@ -108,6 +109,7 @@ export default function useCreateWorkspace({ generateImage, transformImage, save
         imageQuality,
         imageLanguage,
         filenameSource: userScript || purpose.label,
+        count,
       })
       : await generateImage({
         userScript: prompt,
@@ -118,21 +120,33 @@ export default function useCreateWorkspace({ generateImage, transformImage, save
         imageQuality,
         imageLanguage,
         referenceUploadId: attachment?.uploadId || null,
+        count,
       });
 
-    onImageCreated({ jobId: result.jobId, imageUrl: result.imageUrl, instruction: userScript || purpose.label });
+    const instruction = userScript || purpose.label;
+    onImageCreated(...images.map(({ jobId, imageUrl }) => ({ jobId, imageUrl, instruction })));
 
-    await saveHistoryItem({
-      jobId: result.jobId,
-      imageUrl: result.imageUrl,
-      userScript: userScript || purpose.label,
-      stylePrompt: historyStylePrompt,
-      fullPrompt: result.finalPrompt,
-      styleId: purpose.usesStyle ? styleId : null,
-      source: isTransform ? purpose.id : "general",
-    });
+    // History is written one at a time because each write reloads the list; every image is
+    // attempted before the first write failure is reported.
+    let saveError = null;
+    for (const image of images) {
+      try {
+        await saveHistoryItem({
+          jobId: image.jobId,
+          imageUrl: image.imageUrl,
+          userScript: instruction,
+          stylePrompt: historyStylePrompt,
+          fullPrompt: image.finalPrompt,
+          styleId: purpose.usesStyle ? styleId : null,
+          source: isTransform ? purpose.id : "general",
+        });
+      } catch (err) {
+        saveError ??= err;
+      }
+    }
+    if (saveError) throw saveError;
 
-    return { ...result, styleId: purpose.usesStyle ? styleId : null };
+    return { failedCount: failures.length, styleId: purpose.usesStyle ? styleId : null };
   };
 
   return {

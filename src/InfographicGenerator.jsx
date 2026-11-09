@@ -72,6 +72,7 @@ export default function InfographicGenerator({
     // 風格設定相關
     const [aspectRatio, setAspectRatio] = useState('16:9');
     const [selectedImageQuality, setImageQuality] = useState();
+    const [variantCount, setVariantCount] = useState(1);
     const [errorMsg, setErrorMsg] = useState('');
     const [warningMsg, setWarningMsg] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -368,7 +369,7 @@ export default function InfographicGenerator({
         if (!workspace.canSubmit(userScript)) return;
         try {
             const quality = requireGenerationQuality();
-            const { styleId } = await workspace.submit({
+            const { styleId, failedCount } = await workspace.submit({
                 // 若有 AI 智能優化後的英文 prompt 就優先使用，否則使用畫面上的 userScript
                 prompt: optimizedPromptEn || userScript,
                 userScript,
@@ -379,6 +380,7 @@ export default function InfographicGenerator({
                 aspectRatio,
                 imageQuality: quality,
                 imageLanguage,
+                count: variantCount,
             });
             if (styleId) {
                 markStyleUsed(styleId).catch((err) => {
@@ -386,6 +388,7 @@ export default function InfographicGenerator({
                 });
             }
             setErrorMsg('');
+            setWarningMsg(failedCount ? `${variantCount} 張中有 ${failedCount} 張生成失敗，已顯示其餘成功的圖片。` : '');
             clearRefineError();
             if (isMobileLayout) setShowMobilePreview(true);
         } catch (err) {
@@ -621,6 +624,8 @@ export default function InfographicGenerator({
                                 imageModelConfig={imageModelConfig}
                                 imageLanguage={imageLanguage}
                                 onImageLanguageChange={handleLanguageChange}
+                                variantCount={variantCount}
+                                onVariantCountChange={setVariantCount}
                                 configurationError={modelSetupError}
                                 isGenerating={isGenerating}
                                 generationStatus={generationStatus}
