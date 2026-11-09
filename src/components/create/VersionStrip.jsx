@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * With `rail`, the strip becomes a vertical column at `lg` (branches separated by a dashed
  * rule). Renders nothing for a single version.
  */
-export default function VersionStrip({ rows, activeVersionId, onSelectVersion, getVersionLabel, getVersion, rail = false, className }) {
+export default function VersionStrip({ rows, activeVersionId, onSelectVersion, rail = false, className }) {
   const containerRef = useRef(null);
   const reduceMotion = useReducedMotion();
   const ids = rows.flatMap((row) => row.items.map((version) => version.id));
@@ -52,11 +52,10 @@ export default function VersionStrip({ rows, activeVersionId, onSelectVersion, g
         >
           {row.fromId && (
             <li className={cn("shrink-0 text-[11px] text-muted-foreground", rail && "lg:text-[10px]")} aria-hidden="true">
-              ↳ 從 {getVersionLabel(getVersion(row.fromId))}
+              ↳ 分支
             </li>
           )}
           {row.items.map((version) => {
-            const label = getVersionLabel(version);
             const isActive = version.id === activeVersionId;
             const description = version.parentId ? version.instruction : "原始";
             return (
@@ -72,7 +71,7 @@ export default function VersionStrip({ rows, activeVersionId, onSelectVersion, g
                 <button
                   type="button"
                   aria-current={isActive ? "true" : undefined}
-                  aria-label={`${label}：${description}`}
+                  aria-label={description}
                   onClick={() => onSelectVersion(version.id)}
                   className={cn(
                     "w-20 rounded-md border-2 p-0.5 text-left transition-colors duration-(--motion-hover) ease-emphasized active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -86,11 +85,10 @@ export default function VersionStrip({ rows, activeVersionId, onSelectVersion, g
                     className={cn(
                       "block truncate px-0.5 text-[10px]",
                       isActive ? "font-semibold text-primary" : "text-muted-foreground",
-                      rail && isActive && "lg:text-foreground"
+                      rail && "lg:hidden"
                     )}
                   >
-                    {label}
-                    <span className={cn(rail && "lg:hidden")}> {description}</span>
+                    {description}
                   </span>
                 </button>
               </li>

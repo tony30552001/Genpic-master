@@ -464,6 +464,15 @@ const recordSearches = (messageId, searches) =>
     [messageId, { searches }]
   );
 
+/** The summary was shown while streaming, so it is kept even if the reply later failed or was stopped. */
+const recordReasoning = (messageId, reasoning) =>
+  query(
+    `UPDATE image_chat_messages
+     SET input = input || $2, updated_at = now()
+     WHERE id = $1`,
+    [messageId, { reasoning }]
+  );
+
 const stopTurn = async (owner, turnId) => {
   await requireChat(owner);
   const result = await query(
@@ -492,6 +501,7 @@ module.exports = {
   listMessages,
   parseBefore,
   recordMemoryNotes,
+  recordReasoning,
   recordSearches,
   requireChat,
   requireOwnedSucceededJob,

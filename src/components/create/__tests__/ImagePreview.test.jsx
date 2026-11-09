@@ -100,9 +100,9 @@ describe("ImagePreview refinement", () => {
   it("lists versions with branches and selects one", () => {
     const onSelectVersion = vi.fn();
     render(<ImagePreview generatedImage="v2.png" onSelectVersion={onSelectVersion} {...versionProps} />);
-    expect(screen.getByRole("button", { name: "v2：改黃色" })).toHaveAttribute("aria-current", "true");
-    expect(screen.getByText("↳ 從 v1")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "v1：原始" }));
+    expect(screen.getByRole("button", { name: "改黃色" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByText("↳ 分支")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "原始" }));
     expect(onSelectVersion).toHaveBeenCalledWith("a");
   });
 
@@ -132,7 +132,7 @@ describe("ImagePreview refinement", () => {
         versionRows={[{ fromId: null, items: [v1] }]}
       />
     );
-    expect(screen.queryByRole("button", { name: "v1：原始" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "原始" })).toBeNull();
     expect(screen.getByText("此為壓縮預覽")).toBeInTheDocument();
   });
 
@@ -142,8 +142,8 @@ describe("ImagePreview refinement", () => {
     rerender(<ImagePreview {...props} versionRows={[{ fromId: null, items: [v1, v2] }]} />);
 
     const item = (name) => screen.getByRole("button", { name }).closest("li");
-    expect(item("v1：原始")).not.toHaveClass("animate-in");
-    expect(item("v2：改黃色")).toHaveClass("animate-in", "zoom-in-95");
+    expect(item("原始")).not.toHaveClass("animate-in");
+    expect(item("改黃色")).toHaveClass("animate-in", "zoom-in-95");
   });
 });
 

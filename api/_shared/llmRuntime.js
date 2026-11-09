@@ -141,10 +141,10 @@ class LlmStreamError extends Error {
 }
 
 /**
- * Streams one reply that may carry tool calls, as `{ text, toolCalls, searches }`.
+ * Streams one reply that may carry tool calls, as `{ text, reasoning, toolCalls, searches }`.
  *
  * Retries and the fallback model are only used before anything reached the
- * user through `onTextDelta` or `onSearch`: once the user has seen part of an
+ * user through `onTextDelta`, `onReasoningDelta` or `onSearch`: once the user has seen part of an
  * answer, it is never replaced by another model's answer. `signal` aborts the
  * call; the deadline aborts it with a `llm_timeout` error.
  *
@@ -154,6 +154,7 @@ class LlmStreamError extends Error {
  * @param {{ role: "user"|"assistant", content: string }[]} params.messages
  * @param {{ name: string, description: string, parameters: object }[]} params.tools
  * @param {(text: string) => void} params.onTextDelta
+ * @param {(text: string) => void} [params.onReasoningDelta] Receives each reasoning-summary fragment.
  * @param {number} [params.maxWebSearches] Hosted web searches allowed in this reply; 0 disables the tool.
  * @param {(search: object) => void} [params.onSearch] Receives each web-search progress update.
  * @param {AbortSignal} [params.signal]
@@ -166,6 +167,7 @@ const streamResponse = async ({
   messages,
   tools,
   onTextDelta,
+  onReasoningDelta,
   maxWebSearches = 0,
   onSearch,
   signal,
@@ -191,6 +193,10 @@ const streamResponse = async ({
     onSearch: (search) => {
       emitted = true;
       onSearch?.(search);
+    },
+    onReasoningDelta: (text) => {
+      emitted = true;
+      onReasoningDelta?.(text);
     },
   };
 

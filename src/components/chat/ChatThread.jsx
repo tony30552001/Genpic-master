@@ -38,10 +38,8 @@ function UserMessage({ message }) {
   );
 }
 
-function actionLabel(image, getVersion, getVersionLabel) {
-  if (image.action === "generate") return "產生新圖";
-  const source = getVersion(image.sourceJobId);
-  return source ? `修改 ${getVersionLabel(source)}` : "修改圖片";
+function actionLabel(image) {
+  return image.action === "generate" ? "產生新圖" : "修改圖片";
 }
 
 // 載入前沿用「生成中」的 16:9 佔位，載入後淡入，避免扁框再跳高。
@@ -69,7 +67,7 @@ function ThumbImage({ src }) {
   );
 }
 
-function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersionLabel }) {
+function ImageTile({ image, selectedJobId, onSelectVersion, getVersion }) {
   const version = image.status === "succeeded" ? getVersion(image.jobId) : null;
   const isPending = image.status === "queued" || image.status === "processing";
 
@@ -94,7 +92,7 @@ function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersi
         <button
           type="button"
           onClick={() => onSelectVersion(version.id)}
-          aria-label={`檢視 ${getVersionLabel(version)}`}
+          aria-label="檢視圖片"
           aria-pressed={selectedJobId === version.id}
           className={cn(
             "group/thumb relative overflow-hidden rounded-xl bg-muted press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -102,14 +100,9 @@ function ImageTile({ image, selectedJobId, onSelectVersion, getVersion, getVersi
           )}
         >
           <ThumbImage src={version.imageUrl} />
-          <span className="absolute left-1.5 top-1.5 rounded-md bg-background/90 px-1.5 py-0.5 text-[11px] font-semibold shadow-sm">
-            {getVersionLabel(version)}
-          </span>
         </button>
       )}
-      <span className="text-xs text-muted-foreground">
-        {actionLabel(image, getVersion, getVersionLabel)}
-      </span>
+      <span className="text-xs text-muted-foreground">{actionLabel(image)}</span>
     </div>
   );
 }
@@ -181,16 +174,49 @@ function WebSearch({ search }) {
   );
 }
 
-function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion, getVersionLabel }) {
+function Reasoning({ text, isThinking }) {
+  const label = <span className="truncate">{isThinking ? <Shimmer>思考中…</Shimmer> : "已思考"}</span>;
+
+  if (!text) {
+    return isThinking ? (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+        {label}
+      </div>
+    ) : null;
+  }
+
+  return (
+    <details className="group/reasoning text-xs text-muted-foreground">
+      <summary className="flex min-w-0 cursor-pointer list-none items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <Brain className="size-3.5 shrink-0" aria-hidden="true" />
+        {label}
+        <ChevronDown
+          className="size-3.5 shrink-0 transition-transform duration-150 group-open/reasoning:rotate-180 motion-reduce:transition-none"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="mt-1.5 border-l border-border pl-3">
+        <MessageResponse className="text-xs leading-relaxed" isAnimating={isThinking}>
+          {text}
+        </MessageResponse>
+      </div>
+    </details>
+  );
+}
+
+function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion }) {
   const isResponding = message.status === "responding";
   const searches = message.input?.searches ?? [];
   const memoryNotes = message.input?.memoryNotes ?? [];
   const hasPendingImage = message.images.some((image) => image.status === "queued" || image.status === "processing");
   const isSearching = searches.some((search) => search.status === "searching");
+  const isThinking = isResponding && !message.content && !isSearching;
 
   return (
     <Message from="assistant">
       <MessageContent className="w-full">
+        <Reasoning text={message.input?.reasoning ?? ""} isThinking={isThinking} />
+
         {searches.length > 0 && (
           <div className="flex flex-col gap-1">
             {searches.map((search) => (
@@ -199,11 +225,7 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion,
           </div>
         )}
 
-        {message.content ? (
-          <MessageResponse isAnimating={isResponding}>{message.content}</MessageResponse>
-        ) : isResponding && !isSearching ? (
-          <Shimmer>思考中…</Shimmer>
-        ) : null}
+        {message.content && <MessageResponse isAnimating={isResponding}>{message.content}</MessageResponse>}
 
         {memoryNotes.length > 0 && (
           <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
@@ -227,7 +249,6 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion,
                   selectedJobId={selectedJobId}
                   onSelectVersion={onSelectVersion}
                   getVersion={getVersion}
-                  getVersionLabel={getVersionLabel}
                 />
               ))}
             </div>
@@ -260,7 +281,6 @@ export default function ChatThread({
   selectedJobId,
   onSelectVersion,
   getVersion,
-  getVersionLabel,
   className,
 }) {
   if (isLoading) {
@@ -306,7 +326,6 @@ export default function ChatThread({
                   selectedJobId={selectedJobId}
                   onSelectVersion={onSelectVersion}
                   getVersion={getVersion}
-                  getVersionLabel={getVersionLabel}
                 />
               )
             )}

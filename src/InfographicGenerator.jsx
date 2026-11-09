@@ -737,7 +737,6 @@ export default function InfographicGenerator({
                     versionRows={imageVersions.rows}
                     activeVersionId={imageVersions.activeVersionId}
                     onSelectVersion={handleSelectVersion}
-                    getVersion={imageVersions.getVersion}
                 />
             )}
             </AnimatePresence>
@@ -757,8 +756,6 @@ export default function InfographicGenerator({
                             rows={imageVersions.rows}
                             activeVersionId={imageVersions.activeVersionId}
                             onSelectVersion={handleSelectVersion}
-                            getVersionLabel={imageVersions.getVersionLabel}
-                            getVersion={imageVersions.getVersion}
                         />
                     }
                     onApply={({ instruction, mask }) => void handleRefine(instruction, { mask })}

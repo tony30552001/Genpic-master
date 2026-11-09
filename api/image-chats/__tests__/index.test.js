@@ -22,7 +22,7 @@ llmRuntime.streamResponse = vi.fn();
 [
   "attachImageJob", "beginTurn", "completeReply", "createChat", "deleteChat", "endReply",
   "getMessage", "getTurnMessages", "listChats", "listContextMessages", "listMessages",
-  "recordMemoryNotes", "recordSearches", "requireChat", "requireOwnedSucceededJob", "saveChatState", "stopTurn",
+  "recordMemoryNotes", "recordReasoning", "recordSearches", "requireChat", "requireOwnedSucceededJob", "saveChatState", "stopTurn",
 ].forEach((name) => { chats[name] = vi.fn(); });
 ["appendMemoryNotes", "getMemory", "saveMemory"].forEach((name) => { chatMemory[name] = vi.fn(); });
 
@@ -187,6 +187,32 @@ describe("image chat turns", () => {
     llmRuntime.streamResponse.mockResolvedValue({ searches: [], text: "hi", toolCalls: [] });
     await sendTurn();
     expect(chats.recordSearches).not.toHaveBeenCalled();
+    expect(chats.recordReasoning).not.toHaveBeenCalled();
+  });
+
+  it("streams the reasoning summary and stores it on the reply", async () => {
+    llmRuntime.streamResponse.mockImplementation(async ({ onReasoningDelta }) => {
+      onReasoningDelta("先確認");
+      onReasoningDelta("風格");
+      return { searches: [], reasoning: "先確認風格", text: "想要什麼風格？", toolCalls: [] };
+    });
+
+    const { events } = await sendTurn();
+
+    expect(events.filter(({ event }) => event === "reasoning").map(({ data }) => data.text)).toEqual(["先確認", "風格"]);
+    expect(chats.recordReasoning).toHaveBeenCalledWith("m-assistant", "先確認風格");
+  });
+
+  it("keeps the reasoning of a failed reply", async () => {
+    llmRuntime.streamResponse.mockImplementation(async ({ onReasoningDelta }) => {
+      onReasoningDelta("想到一半");
+      throw new LlmStreamError("對話模型逾時", "llm_timeout", { partial: true });
+    });
+
+    await sendTurn();
+
+    expect(chats.recordReasoning).toHaveBeenCalledWith("m-assistant", "想到一半");
+    expect(chats.endReply).toHaveBeenCalled();
   });
 
   it("queues one image per generate call, in order", async () => {

@@ -322,6 +322,17 @@ export default function useImageChat({ enabled, initialSettings }) {
             : message
         )
       );
+    } else if (type === "reasoning") {
+      updateChatMessages(chatId, (current) =>
+        current.map((message) =>
+          message.turnId === turnId && message.role === "assistant"
+            ? {
+                ...message,
+                input: { ...message.input, reasoning: `${message.input?.reasoning ?? ""}${data.text}` },
+              }
+            : message
+        )
+      );
     } else if (type === "search") {
       updateChatMessages(chatId, (current) =>
         current.map((message) => {

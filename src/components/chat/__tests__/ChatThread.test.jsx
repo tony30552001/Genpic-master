@@ -25,11 +25,48 @@ const renderThread = (message) =>
       selectedJobId={null}
       onSelectVersion={vi.fn()}
       getVersion={() => null}
-      getVersionLabel={() => ""}
     />
   );
 
 afterEach(cleanup);
+
+describe("ChatThread reasoning", () => {
+  it("shows a plain thinking placeholder until a summary arrives, then expands it on click", () => {
+    const { rerender } = renderThread(assistant());
+    expect(screen.getByText("思考中…")).toBeInTheDocument();
+    expect(screen.queryByRole("group")).not.toBeInTheDocument();
+
+    rerender(
+      <ChatThread
+        messages={[assistant({ input: { reasoning: "**確認需求**\n\n資訊足夠，直接畫。" } })]}
+        hasOlderMessages={false}
+        onLoadOlder={vi.fn()}
+        isLoading={false}
+        selectedJobId={null}
+        onSelectVersion={vi.fn()}
+        getVersion={() => null}
+      />
+    );
+    const details = screen.getByText("思考中…").closest("details");
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("思考中…"));
+    expect(details).toHaveAttribute("open");
+    expect(screen.getByText("資訊足夠，直接畫。")).toBeInTheDocument();
+  });
+
+  it("keeps a finished reply's reasoning behind a collapsed 已思考 label", () => {
+    renderThread(assistant({ status: "completed", content: "好的。", input: { reasoning: "先確認" } }));
+
+    expect(screen.queryByText("思考中…")).not.toBeInTheDocument();
+    expect(screen.getByText("已思考").closest("details")).not.toHaveAttribute("open");
+  });
+
+  it("shows nothing for a finished reply without a summary", () => {
+    renderThread(assistant({ status: "completed", content: "好的。" }));
+
+    expect(screen.queryByText("已思考")).not.toBeInTheDocument();
+  });
+});
 
 describe("ChatThread web searches", () => {
   it("shows a running search instead of the thinking placeholder", () => {

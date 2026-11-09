@@ -82,13 +82,40 @@ describe("Azure OpenAI streamed responses", () => {
     expect(deltas.join("")).toBe("好的，畫一張圖");
     expect(result).toEqual({
       text: "好的，畫一張圖",
+      reasoning: "",
       toolCalls: [{ name: "generate_image", arguments: { prompt: "一隻貓" } }],
       searches: [],
     });
     const body = JSON.parse(fetch.mock.calls[0][1].body);
     expect(body).toMatchObject({ stream: true, parallel_tool_calls: true, instructions: "system" });
+    expect(body.reasoning).toEqual({ summary: "auto" });
     expect(body.tools[0]).toMatchObject({ type: "function", name: "generate_image" });
     expect(body).not.toHaveProperty("max_tool_calls");
+  });
+
+  it("streams reasoning summary parts as separate paragraphs", async () => {
+    fetch.mockResolvedValue(new Response(sseBody([
+      sse({ type: "response.reasoning_summary_part.added", summary_index: 0 }),
+      sse({ type: "response.reasoning_summary_text.delta", summary_index: 0, delta: "**確認需求**" }),
+      sse({ type: "response.reasoning_summary_part.added", summary_index: 1 }),
+      sse({ type: "response.reasoning_summary_text.delta", summary_index: 1, delta: "資訊足夠，直接畫。" }),
+      sse({ type: "response.output_text.delta", delta: "好。" }),
+      sse({ type: "response.completed" }),
+    ])));
+    const deltas = [];
+
+    const result = await streamResponseCompletion({
+      model: azureModel,
+      systemMessage: "s",
+      messages: [],
+      tools,
+      onTextDelta: () => {},
+      onReasoningDelta: (text) => deltas.push(text),
+    });
+
+    expect(result.reasoning).toBe("**確認需求**\n\n資訊足夠，直接畫。");
+    expect(deltas.join("")).toBe(result.reasoning);
+    expect(result.text).toBe("好。");
   });
 
   it("enables capped web search, reports each search and strips citation markers", async () => {

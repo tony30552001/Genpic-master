@@ -328,6 +328,9 @@ const toSources = (urls, citedTitles) =>
  * Each search is reported to `onSearch` when it starts (`searching`, no query
  * yet) and when it ends (`completed` or `failed`, with its query and sources).
  * The returned `searches` also carry the titles the reply cited.
+ *
+ * The model is asked for reasoning summaries, which go to `onReasoningDelta`
+ * and come back joined as `reasoning`. A reply without any has `reasoning: ""`.
  */
 const streamResponseCompletion = async ({
   model,
@@ -338,6 +341,7 @@ const streamResponseCompletion = async ({
   maxOutputTokens,
   signal,
   onTextDelta,
+  onReasoningDelta = () => {},
   onSearch = () => {},
 }) => {
   const webSearch = maxWebSearches > 0;
@@ -370,6 +374,7 @@ const streamResponseCompletion = async ({
         : {}),
       tool_choice: "auto",
       parallel_tool_calls: true,
+      reasoning: { summary: "auto" },
       stream: true,
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
     }),
@@ -381,6 +386,7 @@ const streamResponseCompletion = async ({
   }
 
   let text = "";
+  let reasoning = "";
   const toolCalls = [];
   const searches = [];
   const citedTitles = new Map();
@@ -399,6 +405,19 @@ const streamResponseCompletion = async ({
         return;
       }
       switch (event.type) {
+        case "response.reasoning_summary_part.added":
+          // Each summary part is its own paragraph.
+          if (reasoning) {
+            reasoning += "\n\n";
+            onReasoningDelta("\n\n");
+          }
+          break;
+        case "response.reasoning_summary_text.delta":
+          if (event.delta) {
+            reasoning += event.delta;
+            onReasoningDelta(event.delta);
+          }
+          break;
         case "response.output_text.delta": {
           const delta = event.delta ? citations.push(event.delta) : "";
           if (delta) {
@@ -484,6 +503,7 @@ const streamResponseCompletion = async ({
 
   return {
     text,
+    reasoning,
     toolCalls,
     searches: searches.map(({ id, status, query, urls }) => ({
       id,

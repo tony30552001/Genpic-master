@@ -149,6 +149,7 @@ const runTurn = async (context, { identity, owner, turn }) => {
     hasMask: Boolean(mask),
   };
   let text = "";
+  let reasoning = "";
   const searches = new Map();
 
   try {
@@ -166,6 +167,10 @@ const runTurn = async (context, { identity, owner, turn }) => {
           text += delta;
           stream.send("delta", { text: delta });
         },
+        onReasoningDelta: (delta) => {
+          reasoning += delta;
+          stream.send("reasoning", { text: delta });
+        },
         onSearch: (search) => {
           searches.set(search.id, search);
           stream.send("search", search);
@@ -173,6 +178,8 @@ const runTurn = async (context, { identity, owner, turn }) => {
       });
       searches.clear();
       if (reply.searches.length > 0) await chats.recordSearches(assistantMessage.id, reply.searches);
+      if (reply.reasoning) await chats.recordReasoning(assistantMessage.id, reply.reasoning);
+      reasoning = "";
       const { images, notes } = resolveDecision(reply.toolCalls, agentTurn);
       if (notes.length > 0) {
         await chatMemory.appendMemoryNotes({ ...identity, notes });
@@ -193,6 +200,7 @@ const runTurn = async (context, { identity, owner, turn }) => {
         });
       }
     } catch (err) {
+      if (reasoning) await chats.recordReasoning(assistantMessage.id, reasoning);
       if (searches.size > 0) {
         await chats.recordSearches(
           assistantMessage.id,

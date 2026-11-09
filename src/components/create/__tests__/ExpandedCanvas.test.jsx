@@ -23,7 +23,6 @@ const renderCanvas = (props = {}) => {
       versionRows={[{ fromId: null, items: [root, child] }]}
       activeVersionId="b"
       onSelectVersion={vi.fn()}
-      getVersion={(id) => ({ a: root, b: child })[id]}
       {...props}
     />
   );

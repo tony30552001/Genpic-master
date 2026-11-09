@@ -435,7 +435,7 @@ addOperation("/api/image-chats/{id}/messages", "post", {
   summary: "Send a message and stream the assistant reply",
   description: [
     "Validation and admission errors return JSON. Once accepted, the reply streams as `text/event-stream` events:",
-    "`turn` (recorded user and assistant messages), `delta` ({ text }), optional `memory` ({ notes } appended to the user's chat memory),",
+    "`turn` (recorded user and assistant messages), `delta` ({ text }), optional `reasoning` ({ text } reasoning-summary fragment), optional `memory` ({ notes } appended to the user's chat memory),",
     "one optional `image` ({ action, jobId, sourceJobId, prompt, status }) per queued image (up to 4 per reply),",
     "optional `error` ({ code, message }), and a final `done` ({ message }). A resent `clientMessageId` replays the accepted turn without calling the model.",
     "Queued images complete in the background; poll `/api/image-jobs/{jobId}`.",

@@ -185,6 +185,24 @@ describe("useImageChat", () => {
     });
   });
 
+  it("appends streamed reasoning summary fragments to the reply", async () => {
+    chatApi.createChat.mockResolvedValue(chatRecord("c1"));
+    chatApi.sendChatMessage.mockImplementation(async ({ body, onEvent }) => {
+      onEvent({ type: "turn", data: serverMessages(body.clientMessageId) });
+      onEvent({ type: "reasoning", data: { text: "先確認" } });
+      onEvent({ type: "reasoning", data: { text: "風格" } });
+    });
+    const { result } = renderChat();
+    await waitFor(() => expect(chatApi.listChats).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.send("畫燈會");
+    });
+
+    const assistant = result.current.messages.find((message) => message.role === "assistant");
+    expect(assistant.input.reasoning).toBe("先確認風格");
+  });
+
   it("restores the draft and removes the optimistic turn when the message is not admitted", async () => {
     chatApi.createChat.mockResolvedValue(chatRecord("c1"));
     chatApi.sendChatMessage.mockRejectedValue(Object.assign(new Error("已有進行中的回覆"), { code: "turn_in_progress" }));

@@ -160,8 +160,6 @@ export default function ImagePreview({
           rows={versionRows}
           activeVersionId={activeVersionId}
           onSelectVersion={onSelectVersion}
-          getVersionLabel={getVersionLabel}
-          getVersion={getVersion}
         />
         {imageError ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-destructive">

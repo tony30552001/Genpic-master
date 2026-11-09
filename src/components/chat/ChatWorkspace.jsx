@@ -344,7 +344,6 @@ export default function ChatWorkspace({
               selectedJobId={chat.selectedJobId}
               onSelectVersion={handleSelectVersion}
               getVersion={chat.getVersion}
-              getVersionLabel={chat.getVersionLabel}
             />
 
             {composer}
@@ -384,8 +383,6 @@ export default function ChatWorkspace({
                 rows={chat.versionRows}
                 activeVersionId={chat.selectedJobId}
                 onSelectVersion={chat.selectVersion}
-                getVersionLabel={chat.getVersionLabel}
-                getVersion={chat.getVersion}
               />
             }
             onApply={({ instruction, mask }) => void chat.send(instruction, { mask })}

@@ -181,7 +181,6 @@ export default function ExpandedCanvas({
   versionRows,
   activeVersionId,
   onSelectVersion,
-  getVersion,
 }) {
   const titleId = useId();
   const closeButtonRef = useRef(null);
@@ -274,8 +273,6 @@ export default function ExpandedCanvas({
           rows={versionRows}
           activeVersionId={activeVersionId}
           onSelectVersion={onSelectVersion}
-          getVersionLabel={getVersionLabel}
-          getVersion={getVersion}
         />
       </div>
     </M.div>
