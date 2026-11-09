@@ -6,8 +6,8 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 export const Conversation = ({ className, ...props }) => (
   <StickToBottom
     className={cn("relative flex-1 overflow-y-hidden", className)}
-    initial="smooth"
-    resize="smooth"
+    initial="instant"
+    resize="instant"
     role="log"
     {...props}
   />

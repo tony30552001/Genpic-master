@@ -2,10 +2,10 @@ import { cn } from "@/lib/utils";
 import GenerationShader from "./GenerationShader";
 
 const PREVIEW_LAYOUT_CLASSES = {
-  "16:9": "w-[88%] max-w-[760px]",
-  "4:3": "w-[82%] max-w-[640px]",
-  "1:1": "w-[72%] max-w-[500px]",
-  "9:16": "w-[46%] min-w-36 max-w-[240px]",
+  "16:9": "w-[88%] max-w-[480px]",
+  "4:3": "w-[82%] max-w-[400px]",
+  "1:1": "w-[72%] max-w-[320px]",
+  "9:16": "w-[46%] min-w-36 max-w-[220px]",
 };
 
 const PREVIEW_ASPECT_CLASSES = {

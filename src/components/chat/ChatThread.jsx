@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { AlertCircle } from "@/components/icons/lucideStatus";
 import { Brain, Globe, Image as ImageIcon, MessageSquare, Palette } from "@/components/icons/lucideContent";
 import { ChevronDown } from "@/components/icons/lucideControls";
@@ -42,31 +41,6 @@ function actionLabel(image) {
   return image.action === "generate" ? "產生新圖" : "修改圖片";
 }
 
-// 載入前沿用「生成中」的 16:9 佔位，載入後淡入，避免扁框再跳高。
-function ThumbImage({ src }) {
-  const [loaded, setLoaded] = useState(false);
-  const imgRef = useRef(null);
-
-  useEffect(() => {
-    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) setLoaded(true);
-  }, []);
-
-  return (
-    <span className={cn("block", !loaded && "relative aspect-video")}>
-      <img
-        ref={imgRef}
-        src={src}
-        alt=""
-        onLoad={() => setLoaded(true)}
-        className={cn(
-          "w-full object-contain transition-opacity duration-(--motion-enter) ease-emphasized motion-reduce:transition-none",
-          loaded ? "h-auto opacity-100" : "absolute inset-0 h-full opacity-0"
-        )}
-      />
-    </span>
-  );
-}
-
 function ImageTile({ image, selectedJobId, onSelectVersion, getVersion }) {
   const version = image.status === "succeeded" ? getVersion(image.jobId) : null;
   const isPending = image.status === "queued" || image.status === "processing";
@@ -99,7 +73,7 @@ function ImageTile({ image, selectedJobId, onSelectVersion, getVersion }) {
             selectedJobId === version.id && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
           )}
         >
-          <ThumbImage src={version.imageUrl} />
+          <img src={version.imageUrl} alt="" className="block h-auto w-full object-contain" />
         </button>
       )}
       <span className="text-xs text-muted-foreground">{actionLabel(image)}</span>

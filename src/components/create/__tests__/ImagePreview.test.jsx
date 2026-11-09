@@ -148,27 +148,14 @@ describe("ImagePreview refinement", () => {
 });
 
 describe("ImagePreview image swap", () => {
-  it("crossfades a refined image over the outgoing one once it has loaded", () => {
+  it("swaps the image in place without entrance or crossfade motion", () => {
     const { container, rerender } = render(<ImagePreview generatedImage="v1.png" onRefine={vi.fn()} />);
-    expect(screen.getByAltText("AI 產生的圖片")).toHaveClass("zoom-in-95");
-
     rerender(<ImagePreview generatedImage="v2.png" onRefine={vi.fn()} />);
-    const incoming = screen.getByAltText("AI 產生的圖片");
-    expect(container.querySelector("[data-outgoing-image]")).toHaveAttribute("src", "v1.png");
-    expect(incoming).toHaveClass("opacity-0");
-    expect(incoming).not.toHaveClass("zoom-in-95");
 
-    fireEvent.load(incoming);
-    expect(incoming).not.toHaveClass("opacity-0");
-    fireEvent.transitionEnd(incoming, { propertyName: "opacity" });
+    const image = screen.getByAltText("AI 產生的圖片");
+    expect(image).toHaveAttribute("src", "v2.png");
+    expect(image).not.toHaveClass("animate-in");
+    expect(container.querySelectorAll("img[data-preview-image]")).toHaveLength(1);
     expect(container.querySelector("[data-outgoing-image]")).toBeNull();
-  });
-
-  it("does not crossfade a new generation out of the generating state", () => {
-    const { container, rerender } = render(<ImagePreview generatedImage="v1.png" />);
-    rerender(<ImagePreview generatedImage="v1.png" isGenerating />);
-    rerender(<ImagePreview generatedImage="v2.png" />);
-    expect(container.querySelector("[data-outgoing-image]")).toBeNull();
-    expect(screen.getByAltText("AI 產生的圖片")).toHaveClass("zoom-in-95");
   });
 });

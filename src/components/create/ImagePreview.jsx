@@ -23,7 +23,6 @@ const EMPTY_FRAME_CLASSES = {
 };
 
 const ICON_BUTTON_CLASS = "size-9 rounded-[10px] text-muted-foreground [&_svg]:size-[18px]";
-// Both images share one grid cell, so the outgoing image sits exactly under the incoming one.
 const STAGE_IMAGE_CLASS = "col-start-1 row-start-1 max-h-[60svh] max-w-full rounded-lg object-contain lg:max-h-full";
 
 const getEmptyFrameClass = (aspectRatio) =>
@@ -51,14 +50,6 @@ export default function ImagePreview({
 }) {
   const [failedImage, setFailedImage] = useState(null);
   const imageError = Boolean(generatedImage) && failedImage === generatedImage;
-  const shownImage = generatedImage && !(isGenerating && !isRefining) ? generatedImage : null;
-  // A refine or version switch swaps the image in place: keep the outgoing one underneath and
-  // fade the new one in once it has loaded, so only the edited area appears to change.
-  const [swap, setSwap] = useState({ image: shownImage, under: null, loaded: false });
-  if (swap.image !== shownImage) {
-    setSwap({ image: shownImage, under: shownImage && swap.image, loaded: false });
-  }
-  const crossfading = Boolean(swap.under);
   const activeVersion = activeVersionId && getVersion ? getVersion(activeVersionId) : null;
 
   // 狀態 1：生成中畫面（修改中則保留目前圖片）
@@ -171,9 +162,6 @@ export default function ImagePreview({
             className="grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] place-items-center p-3 lg:p-6"
             aria-busy={isRefining}
           >
-            {crossfading && (
-              <img src={swap.under} alt="" aria-hidden="true" className={STAGE_IMAGE_CLASS} data-outgoing-image />
-            )}
             <img
               key={generatedImage}
               src={generatedImage}
@@ -184,16 +172,9 @@ export default function ImagePreview({
               className={cn(
                 STAGE_IMAGE_CLASS,
                 "relative h-auto w-auto shadow-xl transition-opacity duration-(--motion-enter) ease-emphasized",
-                crossfading
-                  ? !swap.loaded && "opacity-0"
-                  : "animate-in fade-in zoom-in-95 motion-reduce:zoom-in-100",
                 isRefining && "opacity-40"
               )}
               onError={() => setFailedImage(generatedImage)}
-              onLoad={() => setSwap((current) => (current.image === generatedImage ? { ...current, loaded: true } : current))}
-              onTransitionEnd={(event) => {
-                if (event.propertyName === "opacity" && swap.loaded) setSwap((current) => ({ ...current, under: null }));
-              }}
               decoding="async"
             />
             {isRefining && (
