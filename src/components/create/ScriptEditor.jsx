@@ -1,33 +1,21 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   X,
   ChevronDown,
-  Plus,
-  Save,
-  Upload,
 } from "@/components/icons/lucideControls";
 import {
   Loader2,
 } from "@/components/icons/lucideStatus";
 import {
   PenLine,
-  Image,
   Wand2,
   LayoutTemplate,
 } from "@/components/icons/lucideContent";
 import * as M from "motion/react-m";
 import { AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
 import { optimizePrompt } from "../../services/aiService";
@@ -60,8 +48,8 @@ const EXAMPLE_PROMPTS = {
 };
 
 /**
- * ScriptEditor — 內容描述、附圖與進階風格
- * 附圖用途決定欄位文字、AI 優化模式與是否套用風格；風格參考圖與附圖彼此獨立。
+ * ScriptEditor — 內容描述、圖片輸入插槽與進階風格
+ * 內容圖用途決定欄位文字、AI 優化模式與是否套用風格；風格參考圖與內容圖彼此獨立。
  */
 export default function ScriptEditor({
   userScript,
@@ -70,30 +58,15 @@ export default function ScriptEditor({
   onBlur,
 
   attachmentPurpose = null,
-  attachmentSlot = null,
+  imageInputsSlot = null,
   onAttachFile,
-  onAttachCurrentResult,
-  canAttachCurrentResult = false,
   isUploadingAttachment = false,
   onUseStyleTransfer,
   savedStyles = [],
   analyzedStyle,
   onApplyStyle,
   onClearStyle,
-  styleReferencePreview,
-  onStyleReferenceUpload,
-  onClearStyleReference,
-  isUploadingStyleReference,
-  isAnalyzing,
-  analysisPhase,
   analysisResultData,
-  newStyleName,
-  newStyleTags,
-  isSavingStyle,
-  onAnalyze,
-  onStyleNameChange,
-  onStyleTagsChange,
-  onSaveStyle,
   onSaveTemplate,
   analyzedStyleForTemplate,
   onOptimizedPromptEnChange,
@@ -106,10 +79,6 @@ export default function ScriptEditor({
   aspectRatio = "1:1",
   onImagePurposeChange,
 }) {
-  const [isDraging, setIsDraging] = useState(false);
-  const fileInputRef = useRef(null);
-  const attachInputRef = useRef(null);
-
   const [selectedStyleId, setSelectedStyleId] = useState(null);
   const [selectedStyleInfo, setSelectedStyleInfo] = useState(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -177,7 +146,7 @@ export default function ScriptEditor({
     (paletteStyleTags.length ? `${paletteStyleTags.length} 個風格標籤` : "");
   const hasAppliedStyle = Boolean(appliedStyleName);
   const advancedSummary = purposeId === STYLE_TRANSFER_PURPOSE
-    ? `套用風格到附圖${appliedStyleName ? `：${appliedStyleName}` : ""}`
+    ? `套用風格到內容圖${appliedStyleName ? `：${appliedStyleName}` : ""}`
     : appliedStyleName || "未套用";
 
   const handleChange = useCallback((e) => {
@@ -275,8 +244,8 @@ export default function ScriptEditor({
               </label>
               <p id={contentHelpId} className="hidden text-xs leading-relaxed text-muted-foreground lg:block">
                 {isTransform
-                  ? "描述這次要對附圖做的事，未提到的部分會盡量保持不變。"
-                  : "先描述主角、場景、動作與氛圍，需要時再附圖或設定風格。"}
+                  ? "描述這次要對內容圖做的事，未提到的部分會盡量保持不變。"
+                  : "先描述主角、場景、動作與氛圍，需要時再加圖片或設定風格。"}
               </p>
             </div>
 
@@ -381,64 +350,8 @@ export default function ScriptEditor({
 
           <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-3">
-              {onAttachFile && !attachmentPurpose && (
-                <span className="-ml-1 lg:hidden">
-                  <input
-                    ref={attachInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    aria-label="選擇附圖檔案"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file?.type.startsWith("image/")) onAttachFile(file);
-                      event.target.value = "";
-                    }}
-                  />
-                  {canAttachCurrentResult ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="ghost" size="sm" className="h-9 gap-1.5 px-2 text-xs" disabled={isUploadingAttachment}>
-                          {isUploadingAttachment ? (
-                            <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                          ) : (
-                            <Plus className="icon-sm" aria-hidden="true" />
-                          )}
-                          附圖
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-40">
-                        <DropdownMenuItem onSelect={() => attachInputRef.current?.click()}>
-                          <Upload className="icon-sm" aria-hidden="true" />
-                          上傳圖片
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onAttachCurrentResult}>
-                          <Image className="icon-sm" aria-hidden="true" />
-                          用目前結果
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-9 gap-1.5 px-2 text-xs"
-                      disabled={isUploadingAttachment}
-                      onClick={() => attachInputRef.current?.click()}
-                    >
-                      {isUploadingAttachment ? (
-                        <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                      ) : (
-                        <Plus className="icon-sm" aria-hidden="true" />
-                      )}
-                      附圖
-                    </Button>
-                  )}
-                </span>
-              )}
               <span className={cn(!isTransform && "hidden lg:inline")}>
-                {isTransform ? "結果會沿用附圖比例。" : "建議先完成內容，再用附圖或風格補強。"}
+                {isTransform ? "結果會沿用內容圖比例。" : "建議先完成內容，再用圖片或風格補強。"}
               </span>
               {onGenerate && (
                 <span className="hidden items-center gap-1 sm:flex">
@@ -493,7 +406,7 @@ export default function ScriptEditor({
         </CardContent>
       </Card>
 
-      {attachmentSlot}
+      {imageInputsSlot}
 
       <Card className="rounded-none border-0 bg-transparent shadow-none lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-sm">
         <div className="flex items-center gap-2 lg:pr-2">
@@ -561,8 +474,8 @@ export default function ScriptEditor({
               {onUseStyleTransfer && (
                 <section className="flex flex-wrap items-center justify-between gap-2 lg:rounded-xl lg:border lg:border-border/80 lg:bg-muted/35 lg:p-3" aria-labelledby="style-transfer-title">
                   <div className="min-w-0 space-y-0.5">
-                    <h3 id="style-transfer-title" className="text-xs font-semibold text-foreground">套用風格到附圖</h3>
-                    <p className="hidden text-xs text-muted-foreground lg:block">保留附圖內容與構圖，只改變畫風。</p>
+                    <h3 id="style-transfer-title" className="text-xs font-semibold text-foreground">套用風格到內容圖</h3>
+                    <p className="hidden text-xs text-muted-foreground lg:block">保留內容圖內容與構圖，只改變畫風。</p>
                   </div>
                   <Button
                     type="button"
@@ -576,181 +489,6 @@ export default function ScriptEditor({
                   </Button>
                 </section>
               )}
-
-              <section className="space-y-3 lg:rounded-xl lg:border lg:border-border/80 lg:bg-muted/35 lg:p-3 lg:shadow-inner" aria-labelledby="reference-style-title">
-                <div className="space-y-0.5">
-                  <h3 id="reference-style-title" className="text-xs font-semibold text-foreground">
-                    風格參考圖
-                  </h3>
-                  <p className="hidden text-xs text-muted-foreground lg:block">
-                    上傳一張圖分析畫風，套用後可保存成可重複使用的風格。
-                  </p>
-                </div>
-
-              {styleReferencePreview ? (
-                <div className="relative overflow-hidden rounded-xl border border-border bg-background shadow-sm">
-                  <img
-                    src={styleReferencePreview}
-                    alt="風格參考圖"
-                    width={640}
-                    height={192}
-                    className="h-48 w-full object-contain bg-muted/40"
-                  />
-                  <div className="absolute inset-0 flex items-start justify-end p-2 lg:bg-black/0 lg:opacity-0 lg:transition-[opacity,background-color] lg:duration-(--motion-hover) lg:hover:bg-black/10 lg:hover:opacity-100 lg:focus-within:opacity-100">
-                    <button
-                      type="button"
-                      onClick={onClearStyleReference}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-card text-muted-foreground shadow-sm transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      aria-label="移除風格參考圖"
-                    >
-                      <X className="icon-sm" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    aria-label="選擇風格參考圖檔案"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) onStyleReferenceUpload?.(file);
-                      e.target.value = "";
-                    }}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={(e) => { e.preventDefault(); setIsDraging(true); }}
-                    onDragLeave={() => setIsDraging(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setIsDraging(false);
-                      const file = e.dataTransfer.files[0];
-                      if (file?.type.startsWith("image/")) onStyleReferenceUpload?.(file);
-                    }}
-                    disabled={isUploadingStyleReference}
-                    className={cn(
-                      "group flex w-full items-center gap-3 rounded-xl border-2 border-dashed bg-background px-4 py-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                      isDraging
-                        ? "border-primary bg-primary/10"
-                        : "border-border hover:border-primary/50 hover:bg-primary/5"
-                    )}
-                    aria-label="上傳風格參考圖"
-                  >
-                    <span
-                      className={cn(
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
-                        isUploadingStyleReference ? "bg-muted" : "bg-primary/10 text-primary group-hover:bg-primary/15"
-                      )}
-                    >
-                      {isUploadingStyleReference ? (
-                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary motion-reduce:animate-none" aria-hidden="true" />
-                      ) : (
-                        <Image className="icon-md" aria-hidden="true" />
-                      )}
-                    </span>
-                    <span className="flex-1 text-left">
-                      <span className="block text-sm font-medium text-foreground transition-colors group-hover:text-primary">
-                        上傳風格參考圖
-                      </span>
-                      <span className="hidden text-xs text-muted-foreground lg:block">
-                        只用來分析畫風，不會當成內容參考。
-                      </span>
-                    </span>
-                  </button>
-                </>
-              )}
-              {styleReferencePreview && (
-                <div className="space-y-2">
-                  {!analyzedStyle && !analysisResultData && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={onAnalyze}
-                      disabled={isAnalyzing || isUploadingStyleReference}
-                      className="h-9 w-full gap-2 rounded-lg border-primary/15 text-xs font-medium text-primary hover:bg-primary/10"
-                    >
-                      {isAnalyzing ? (
-                        <>
-                          <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                          {analysisPhase || "正在分析風格…"}
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="icon-sm" aria-hidden="true" />
-                          分析此圖片風格
-                        </>
-                      )}
-                    </Button>
-                  )}
-
-                  {(analyzedStyle || analysisResultData) && (
-                    <div className="space-y-3 rounded-xl border border-border bg-background p-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none">
-                      <div className="space-y-1">
-                        <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                          <Wand2 className="icon-sm text-primary" aria-hidden="true" />
-                          {String(analysisResultData?.style_name || "風格分析結果")}
-                        </h3>
-                        <p className="rounded-lg border border-border/80 bg-muted/40 p-2 text-xs leading-relaxed text-muted-foreground">
-                          {String(analysisResultData?.style_description_zh || analyzedStyle || "")}
-                        </p>
-                      </div>
-
-                      {Array.isArray(analysisResultData?.suggested_tags) && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {analysisResultData.suggested_tags.map((tag, i) => (
-                            <Badge key={i} variant="outline" className="border-primary/15 bg-background text-primary/80">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="space-y-2 border-t border-border pt-3">
-                        <div className="flex gap-2">
-                          <Input
-                            type="text"
-                            value={newStyleName || ""}
-                            onChange={(e) => onStyleNameChange && onStyleNameChange(e.target.value)}
-                            placeholder="為此風格命名…"
-                            aria-label="風格名稱"
-                            className="h-9 flex-1 text-xs"
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={onSaveStyle}
-                            disabled={isSavingStyle}
-                            className="h-9 shrink-0 gap-1.5 px-3 text-xs"
-                          >
-                            {isSavingStyle ? (
-                              <Loader2 className="icon-sm animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                            ) : (
-                              <Save className="icon-sm" aria-hidden="true" />
-                            )}
-                            收藏
-                          </Button>
-                        </div>
-                        <Input
-                          type="text"
-                          value={newStyleTags || ""}
-                          onChange={(e) => onStyleTagsChange && onStyleTagsChange(e.target.value)}
-                          placeholder="標籤，以逗號分隔…"
-                          aria-label="風格標籤"
-                          className="h-9 w-full text-xs"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-            </section>
 
             <StyleSourceTabs
               open={showStyleSource}

@@ -86,8 +86,8 @@ const completed = (jobId) => ({
 
 async function attach(purpose) {
   const file = new File(["image"], "photo.png", { type: "image/png" });
-  await act(async () => { await mocks.script.attachmentSlot.props.onAttachFile(file); });
-  if (purpose) act(() => { mocks.script.attachmentSlot.props.onPurposeChange(purpose); });
+  await act(async () => { await mocks.script.imageInputsSlot.props.onAttachFile(file); });
+  if (purpose) act(() => { mocks.script.imageInputsSlot.props.onPurposeChange(purpose); });
 }
 
 async function mount(tab) {
@@ -274,7 +274,7 @@ describe("creation orchestration", () => {
     await mount("general");
     await attach("refine");
     expect(mocks.script.attachmentPurpose.id).toBe("refine");
-    act(() => { mocks.script.attachmentSlot.props.onClear(); });
+    act(() => { mocks.script.imageInputsSlot.props.onClearAttachment(); });
     expect(mocks.script.attachmentPurpose).toBeNull();
     await act(async () => { await invoke("general"); });
     expect(mocks.generateImage).toHaveBeenCalledWith(expect.objectContaining({ referenceUploadId: null }));
@@ -283,8 +283,8 @@ describe("creation orchestration", () => {
   it("keeps the style reference image out of the content reference", async () => {
     await mount("general");
     const file = new File(["style"], "style.png", { type: "image/png" });
-    await act(async () => { await mocks.script.onStyleReferenceUpload(file); });
-    expect(mocks.script.styleReferencePreview).toBe("data:image/png;base64,attached");
+    await act(async () => { await mocks.script.imageInputsSlot.props.onStyleReferenceUpload(file); });
+    expect(mocks.script.imageInputsSlot.props.styleReferencePreview).toBe("data:image/png;base64,attached");
     await act(async () => { await invoke("general"); });
     expect(mocks.generateImage).toHaveBeenCalledWith(expect.objectContaining({ referenceUploadId: null }));
   });

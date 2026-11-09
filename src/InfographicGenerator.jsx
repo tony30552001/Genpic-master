@@ -23,7 +23,7 @@ import useImageVersions from './hooks/useImageVersions';
 import useImageRefine from './hooks/useImageRefine';
 import { uploadFile } from './services/storageService';
 import { STYLE_TRANSFER_PURPOSE, REFERENCE_PURPOSE } from './lib/attachmentPurposes';
-import { readFileAsDataUrl } from './lib/imageFile';
+import { imageUrlToFile, readFileAsDataUrl } from './lib/imageFile';
 import { isNearDuplicatePrompt } from './lib/promptHints';
 import { DEFAULT_IMAGE_LANGUAGE } from './config';
 import { getLanguageOption } from './lib/imageTextLanguage';
@@ -41,7 +41,8 @@ import PreciseEditor from './components/edit/PreciseEditor';
 import VersionStrip from './components/create/VersionStrip';
 import MobileResultView from './components/create/MobileResultView';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
-import AttachmentPicker from './components/create/AttachmentPicker';
+import ImageInputs from './components/create/ImageInputs';
+import StyleAnalysisPanel from './components/create/StyleAnalysisPanel';
 import AssetCenter from './components/library/AssetCenter';
 import AppHeader from './components/common/AppHeader';
 import ChatWorkspace from './components/chat/ChatWorkspace';
@@ -56,7 +57,7 @@ export default function InfographicGenerator({
     // --- State Management ---
     const [activeTab, setActiveTab] = useState(initialTab);
 
-    // 風格參考圖（只用於風格分析，與內容附圖分開）
+    // 風格參考圖（只用於風格分析，與內容圖分開）
     const [referencePreview, setReferencePreview] = useState(null);
     const [referenceUploadId, setReferenceUploadId] = useState(null);
     const [isUploadingStyleReference, setIsUploadingStyleReference] = useState(false);
@@ -195,7 +196,7 @@ export default function InfographicGenerator({
             setErrorMsg('');
         } catch (err) {
             console.error('Attachment upload failed:', err);
-            setErrorMsg(`附圖上傳失敗：${err.message || '請稍後再試'}`);
+            setErrorMsg(`內容圖上傳失敗：${err.message || '請稍後再試'}`);
         }
     };
 
@@ -241,6 +242,15 @@ export default function InfographicGenerator({
             setErrorMsg(`風格參考圖上傳失敗：${err.message || "請稍後再試"}`);
         } finally {
             setIsUploadingStyleReference(false);
+        }
+    };
+
+    const handleStyleReferenceCurrentResult = async () => {
+        try {
+            await handleStyleReferenceUpload(await imageUrlToFile(generatedImage, `pixora-style-${Date.now()}`));
+        } catch (err) {
+            console.error('Using current result as style reference failed:', err);
+            setErrorMsg(`無法使用目前結果：${err.message || '請下載後再上傳'}`);
         }
     };
 
@@ -555,43 +565,46 @@ export default function InfographicGenerator({
                                         analyzedStyle={analyzedStyle}
                                         onApplyStyle={applySavedStyle}
                                         onClearStyle={handleClearStyle}
-
-                                        styleReferencePreview={referencePreview}
-                                        onStyleReferenceUpload={handleStyleReferenceUpload}
-                                        onClearStyleReference={handleClearStyleReference}
-                                        isUploadingStyleReference={isUploadingStyleReference}
+                                        analysisResultData={analysisResultData}
 
                                         attachmentPurpose={workspace.attachment ? workspace.purpose : null}
                                         onUseStyleTransfer={workspace.attachment ? handleUseStyleTransfer : undefined}
                                         onAttachFile={handleAttachFile}
-                                        onAttachCurrentResult={handleAttachCurrentResult}
-                                        canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
                                         isUploadingAttachment={workspace.isUploadingAttachment}
-                                        attachmentSlot={
-                                            <AttachmentPicker
-                                                className={workspace.attachment ? undefined : "max-lg:hidden"}
+                                        imageInputsSlot={
+                                            <ImageInputs
                                                 attachment={workspace.attachment}
-                                                isUploading={workspace.isUploadingAttachment}
+                                                isUploadingAttachment={workspace.isUploadingAttachment}
                                                 purposeId={workspace.purpose.id}
                                                 onPurposeChange={handleAttachmentPurposeChange}
                                                 onAttachFile={handleAttachFile}
                                                 onAttachCurrentResult={handleAttachCurrentResult}
-                                                canAttachCurrentResult={Boolean(generatedImage) && !isGenerating}
-                                                onClear={handleClearAttachment}
+                                                onClearAttachment={handleClearAttachment}
+                                                styleReferencePreview={referencePreview}
+                                                isUploadingStyleReference={isUploadingStyleReference}
+                                                onStyleReferenceUpload={handleStyleReferenceUpload}
+                                                onStyleReferenceCurrentResult={handleStyleReferenceCurrentResult}
+                                                onClearStyleReference={handleClearStyleReference}
+                                                canUseCurrentResult={Boolean(generatedImage) && !isGenerating}
+                                                styleAnalysis={
+                                                    <StyleAnalysisPanel
+                                                        analyzedStyle={analyzedStyle}
+                                                        analysisResultData={analysisResultData}
+                                                        analysisPhase={analysisPhase}
+                                                        isAnalyzing={isAnalyzing}
+                                                        isUploading={isUploadingStyleReference}
+                                                        newStyleName={newStyleName}
+                                                        newStyleTags={newStyleTags}
+                                                        isSavingStyle={isSavingStyle}
+                                                        onAnalyze={analyzeImageStyle}
+                                                        onStyleNameChange={handleStyleNameChange}
+                                                        onStyleTagsChange={handleStyleTagsChange}
+                                                        onSaveStyle={saveCurrentStyle}
+                                                    />
+                                                }
                                             />
                                         }
 
-                                        // 風格分析 Props
-                                        isAnalyzing={isAnalyzing}
-                                        analysisPhase={analysisPhase}
-                                        analysisResultData={analysisResultData}
-                                        newStyleName={newStyleName}
-                                        newStyleTags={newStyleTags}
-                                        isSavingStyle={isSavingStyle}
-                                        onAnalyze={analyzeImageStyle}
-                                        onStyleNameChange={handleStyleNameChange}
-                                        onStyleTagsChange={handleStyleTagsChange}
-                                        onSaveStyle={saveCurrentStyle}
                                         onSaveTemplate={saveTemplate}
                                         analyzedStyleForTemplate={analyzedStyle}
 

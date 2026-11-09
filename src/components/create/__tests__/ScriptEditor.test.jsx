@@ -157,7 +157,7 @@ describe("ScriptEditor attachment purposes", () => {
   it("offers style transfer only with an attachment", () => {
     const onUseStyleTransfer = vi.fn();
     const { unmount } = render(<Harness />);
-    expect(screen.queryByRole("heading", { name: "套用風格到附圖" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "套用風格到內容圖" })).not.toBeInTheDocument();
     unmount();
     render(
       <Harness
@@ -168,13 +168,5 @@ describe("ScriptEditor attachment purposes", () => {
     fireEvent.click(screen.getByRole("button", { name: /進階：風格/ }));
     fireEvent.click(screen.getByRole("button", { name: "使用" }));
     expect(onUseStyleTransfer).toHaveBeenCalled();
-  });
-
-  it("passes style reference files without treating them as content", () => {
-    const onStyleReferenceUpload = vi.fn();
-    render(<Harness onStyleReferenceUpload={onStyleReferenceUpload} />);
-    const file = new File(["x"], "style.png", { type: "image/png" });
-    fireEvent.change(screen.getByLabelText("選擇風格參考圖檔案"), { target: { files: [file] } });
-    expect(onStyleReferenceUpload).toHaveBeenCalledWith(file);
   });
 });

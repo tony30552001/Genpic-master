@@ -13,7 +13,7 @@ export const ATTACHMENT_PURPOSES = [
     id: REFERENCE_PURPOSE,
     label: "參考內容",
     fieldLabel: "內容描述",
-    placeholder: "描述要生成的畫面，附圖作為參考\n例如：同一瓶飲料放在大理石桌上",
+    placeholder: "描述要生成的畫面，內容圖作為參考\n例如：同一瓶飲料放在大理石桌上",
     buttonText: "開始生成圖片",
     requiresPrompt: true,
     keepsSourceAspectRatio: false,
@@ -51,7 +51,7 @@ export const ATTACHMENT_PURPOSES = [
   },
   {
     id: STYLE_TRANSFER_PURPOSE,
-    label: "套用風格到附圖",
+    label: "套用風格到內容圖",
     fieldLabel: "想要的畫風",
     placeholder: "描述想要的畫風\n例如：日式水彩，柔和色調",
     buttonText: "套用風格",
