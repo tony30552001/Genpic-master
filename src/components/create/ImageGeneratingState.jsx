@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import GenerationShader from "./GenerationShader";
 
 const PREVIEW_LAYOUT_CLASSES = {
   "16:9": "w-[88%] max-w-[480px]",
@@ -44,26 +43,20 @@ export default function ImageGeneratingState({
       )}
       data-image-generation-placeholder
     >
-      <GenerationShader
-        fallback={
-          <>
-            <div
-              className="image-generation-dots pointer-events-none absolute inset-0"
-              data-generation-dots
-              aria-hidden="true"
-            />
-            <div
-              className="image-generation-glow pointer-events-none absolute -inset-[18%]"
-              data-generation-glow
-              aria-hidden="true"
-            />
-            <div
-              className="image-generation-glow image-generation-glow-secondary pointer-events-none absolute -inset-[18%]"
-              data-generation-glow
-              aria-hidden="true"
-            />
-          </>
-        }
+      <div
+        className="image-generation-dots pointer-events-none absolute inset-0"
+        data-generation-dots
+        aria-hidden="true"
+      />
+      <div
+        className="image-generation-glow pointer-events-none absolute -inset-[18%]"
+        data-generation-glow
+        aria-hidden="true"
+      />
+      <div
+        className="image-generation-glow image-generation-glow-secondary pointer-events-none absolute -inset-[18%]"
+        data-generation-glow
+        aria-hidden="true"
       />
 
       {resolutionLabel && (
