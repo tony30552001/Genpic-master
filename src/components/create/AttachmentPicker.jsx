@@ -82,7 +82,7 @@ export default function AttachmentPicker({
             </h2>
             {!attachment && (
               <p className="hidden text-xs text-muted-foreground lg:block">
-                上傳圖片或用目前結果，就能參考內容、修改、換背景或取出元素。
+                上傳或貼上圖片，或用目前結果，就能參考內容、修改、換背景或取出元素。
               </p>
             )}
           </div>

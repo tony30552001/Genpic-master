@@ -37,6 +37,19 @@ export const imageUrlToFile = async (url, name) => {
   return new File([blob], `${name}.${extension}`, { type });
 };
 
+/**
+ * The image a paste event carries, or null. Clipboards that also hold text (spreadsheet
+ * cells, rich text) are left to the normal text paste.
+ */
+export const pastedImageFile = (event) => {
+  const clipboard = event.clipboardData;
+  if (!clipboard || clipboard.getData("text/plain")) return null;
+  for (const item of clipboard.items ?? []) {
+    if (item.kind === "file" && item.type.startsWith("image/")) return item.getAsFile();
+  }
+  return null;
+};
+
 export const readFileAsDataUrl = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();

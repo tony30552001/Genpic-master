@@ -20,7 +20,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { analyzeStyle } from "@/services/aiService";
 import { uploadFile } from "@/services/storageService";
-import { imageUrlToFile, readFileAsDataUrl } from "@/lib/imageFile";
+import { imageUrlToFile, pastedImageFile, readFileAsDataUrl } from "@/lib/imageFile";
 import { cn } from "@/lib/utils";
 import ChatPickerDialog from "./ChatPickerDialog";
 import ChatSettingsBar from "./ChatSettingsBar";
@@ -145,6 +145,13 @@ export default function ChatComposer({
     if (file) void handler(file);
   };
 
+  const handlePaste = (event) => {
+    const file = pastedImageFile(event);
+    if (!file) return;
+    event.preventDefault();
+    if (!busy) void handleAttachmentFile(file);
+  };
+
   const applyTemplate = (template) => {
     onDraftChange(template.userScript || "");
     if (template.stylePrompt) {
@@ -199,6 +206,7 @@ export default function ChatComposer({
           placeholder={placeholder}
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
+          onPaste={handlePaste}
           maxLength={4000}
           disabled={disabled}
           className="text-[15px] md:text-[15px]"

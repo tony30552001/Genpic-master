@@ -98,6 +98,26 @@ describe("ChatComposer", () => {
     expect(onClearSelectedVersion).toHaveBeenCalled();
   });
 
+  it("attaches an image pasted into the message box and keeps text pastes", async () => {
+    uploadFile.mockResolvedValue({ uploadId: "u2" });
+    const { onAttachmentChange } = renderComposer();
+    const textarea = screen.getByRole("textbox", { name: "訊息" });
+    const image = new File(["png"], "image.png", { type: "image/png" });
+
+    const textPaste = { getData: () => "一段文字", items: [] };
+    expect(fireEvent.paste(textarea, { clipboardData: textPaste })).toBe(true);
+    expect(uploadFile).not.toHaveBeenCalled();
+
+    const imagePaste = { getData: () => "", items: [{ kind: "file", type: "image/png", getAsFile: () => image }] };
+    await act(async () => {
+      expect(fireEvent.paste(textarea, { clipboardData: imagePaste })).toBe(false);
+    });
+    expect(uploadFile).toHaveBeenCalledWith(image, "image");
+    await vi.waitFor(() =>
+      expect(onAttachmentChange).toHaveBeenCalledWith(expect.objectContaining({ uploadId: "u2", name: "image.png" }))
+    );
+  });
+
   it("attaches an existing image by URL through the ref", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,

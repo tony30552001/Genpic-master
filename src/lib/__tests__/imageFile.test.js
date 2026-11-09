@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { imageUrlToFile, nearestAspectRatio } from "../imageFile";
+import { imageUrlToFile, nearestAspectRatio, pastedImageFile } from "../imageFile";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -19,6 +19,25 @@ describe("nearestAspectRatio", () => {
   it("falls back to square for unknown sizes", () => {
     expect(nearestAspectRatio(0, 100)).toBe("1:1");
     expect(nearestAspectRatio(undefined, undefined)).toBe("1:1");
+  });
+});
+
+describe("pastedImageFile", () => {
+  const image = new File(["png"], "image.png", { type: "image/png" });
+  const clipboard = (text, items) => ({
+    clipboardData: {
+      getData: () => text,
+      items: items.map((file) => ({ kind: "file", type: file.type, getAsFile: () => file })),
+    },
+  });
+
+  it("returns the pasted image", () => {
+    expect(pastedImageFile(clipboard("", [image]))).toBe(image);
+  });
+
+  it("leaves text pastes and non-image files alone", () => {
+    expect(pastedImageFile(clipboard("儲存格文字", [image]))).toBeNull();
+    expect(pastedImageFile(clipboard("", [new File(["x"], "a.pdf", { type: "application/pdf" })]))).toBeNull();
   });
 });
 

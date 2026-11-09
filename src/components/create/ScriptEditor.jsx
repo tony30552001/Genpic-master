@@ -38,6 +38,7 @@ import StyleSourceTabs from "./StyleSourceTabs";
 import PromptHints from "./PromptHints";
 import { detectNoTextIntent } from "@/lib/promptHints";
 import { NO_TEXT_LANGUAGE } from "@/lib/imageTextLanguage";
+import { pastedImageFile } from "@/lib/imageFile";
 import { REFERENCE_PURPOSE, STYLE_TRANSFER_PURPOSE } from "@/lib/attachmentPurposes";
 import { IMAGE_PURPOSE_OPTIONS } from "@/lib/imagePurposes";
 
@@ -334,6 +335,12 @@ export default function ScriptEditor({
                 e.preventDefault();
                 onGenerate?.();
               }
+            }}
+            onPaste={(event) => {
+              const file = onAttachFile && pastedImageFile(event);
+              if (!file) return;
+              event.preventDefault();
+              if (!isUploadingAttachment) onAttachFile(file);
             }}
             aria-describedby={contentHelpId}
             placeholder={placeholder}

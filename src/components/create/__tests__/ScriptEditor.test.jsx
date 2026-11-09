@@ -48,6 +48,23 @@ describe("ScriptEditor no-text hint", () => {
   });
 });
 
+describe("ScriptEditor image paste", () => {
+  const image = new File(["png"], "image.png", { type: "image/png" });
+
+  it("attaches a pasted image instead of pasting into the text", () => {
+    const onAttachFile = vi.fn();
+    render(<Harness onAttachFile={onAttachFile} />);
+    const textbox = screen.getByRole("textbox", { name: "內容描述" });
+
+    expect(fireEvent.paste(textbox, { clipboardData: { getData: () => "貼上文字", items: [] } })).toBe(true);
+    expect(onAttachFile).not.toHaveBeenCalled();
+
+    const items = [{ kind: "file", type: "image/png", getAsFile: () => image }];
+    expect(fireEvent.paste(textbox, { clipboardData: { getData: () => "", items } })).toBe(false);
+    expect(onAttachFile).toHaveBeenCalledWith(image);
+  });
+});
+
 describe("ScriptEditor attachment purposes", () => {
   beforeEach(() => {
     localStorage.clear();
