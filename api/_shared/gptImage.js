@@ -149,6 +149,7 @@ const generateGptImage = async ({ config, prompt, aspectRatio, quality }) => {
       size: getSize(aspectRatio),
       quality: selectedQuality,
       output_format: "png",
+      moderation: "low",
       n: 1,
     }),
   }));
@@ -205,6 +206,7 @@ const editGptImage = async ({ config, imageBase64, maskBase64, prompt, aspectRat
     formData.append("size", getSize(aspectRatio));
     formData.append("quality", selectedQuality);
     formData.append("output_format", "png");
+    formData.append("moderation", "low");
     formData.append("n", "1");
     return { headers: { "api-key": config.apiKey }, body: formData };
   });
