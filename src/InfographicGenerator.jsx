@@ -462,7 +462,6 @@ export default function InfographicGenerator({
         versionRows: imageVersions.rows,
         activeVersionId: imageVersions.activeVersionId,
         onSelectVersion: handleSelectVersion,
-        getVersionLabel: imageVersions.getVersionLabel,
         getVersion: imageVersions.getVersion,
         onExpand: (rect) => setCanvasOrigin({
             x: rect.left + rect.width / 2,

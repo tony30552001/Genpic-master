@@ -32,11 +32,9 @@ describe("ImagePreview generation state", () => {
 const v1 = { id: "a", parentId: null, imageUrl: "v1.png", instruction: "城市" };
 const v2 = { id: "b", parentId: "a", imageUrl: "v2.png", instruction: "改黃色" };
 const v3 = { id: "c", parentId: "a", imageUrl: "v3.png", instruction: "夜景" };
-const labels = { a: "v1", b: "v2", c: "v3" };
 const versionProps = {
   versionRows: [{ fromId: null, items: [v1, v2] }, { fromId: "a", items: [v3] }],
   activeVersionId: "b",
-  getVersionLabel: (version) => labels[version.id],
   getVersion: (id) => [v1, v2, v3].find((version) => version.id === id),
 };
 
@@ -137,7 +135,7 @@ describe("ImagePreview refinement", () => {
   });
 
   it("animates only versions added after the strip was shown, starting from a lone version", () => {
-    const props = { generatedImage: "v1.png", getVersionLabel: versionProps.getVersionLabel, getVersion: versionProps.getVersion };
+    const props = { generatedImage: "v1.png", getVersion: versionProps.getVersion };
     const { rerender } = render(<ImagePreview {...props} versionRows={[{ fromId: null, items: [v1] }]} />);
     rerender(<ImagePreview {...props} versionRows={[{ fromId: null, items: [v1, v2] }]} />);
 

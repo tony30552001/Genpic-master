@@ -111,7 +111,6 @@ describe("useImageChat", () => {
     expect(result.current.pendingImage).toBeNull();
     expect(result.current.selectedJobId).toBe("job-1");
     expect(result.current.selectedVersion).toMatchObject({ id: "job-1", imageUrl: "/api/image-jobs/job-1/image" });
-    expect(result.current.getVersionLabel(result.current.selectedVersion)).toBe("v1");
   });
 
   it("tracks several images in one reply and settles when each is terminal", async () => {

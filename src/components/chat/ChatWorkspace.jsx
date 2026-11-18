@@ -91,7 +91,7 @@ export default function ChatWorkspace({
       const href = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = href;
-      link.download = `chat-image-${chat.getVersionLabel(selectedVersion)}-${Date.now()}.png`;
+      link.download = `chat-image-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -120,8 +120,8 @@ export default function ChatWorkspace({
       versionRows={chat.versionRows}
       activeVersionId={chat.selectedJobId}
       onSelectVersion={chat.selectVersion}
-      getVersionLabel={chat.getVersionLabel}
       getVersion={chat.getVersion}
+      floatingVersions
       onPreciseEdit={selectedVersion && !chat.sending ? () => setIsPreciseEditOpen(true) : undefined}
     />
   );
@@ -233,7 +233,7 @@ export default function ChatWorkspace({
       onAttachmentChange={chat.setAttachment}
       style={chat.style}
       onStyleChange={chat.setStyle}
-      selectedVersionLabel={selectedVersion ? chat.getVersionLabel(selectedVersion) : ""}
+      hasSelectedVersion={Boolean(selectedVersion)}
       onClearSelectedVersion={() => chat.selectVersion(null)}
       settings={settings}
       onSettingsChange={chat.updateSettings}
@@ -343,7 +343,7 @@ export default function ChatWorkspace({
           {!isMobileLayout && (
             <section
               aria-label="圖片預覽"
-              className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px]"
+              className="relative flex min-h-0 flex-col border-l border-border bg-dot-grid bg-size-[20px_20px] lg:-mb-2 lg:-ml-2 lg:-mr-2"
             >
               {preview}
             </section>
@@ -364,7 +364,7 @@ export default function ChatWorkspace({
           <PreciseEditor
             key="chat-precise-editor"
             imageUrl={selectedVersion.imageUrl}
-            title={`精確編輯 · ${chat.getVersionLabel(selectedVersion)}`}
+            title="精確編輯"
             subtitle="會在對話中送出一則修改訊息"
             isGenerating={Boolean(chat.sending || pendingImage)}
             error={chat.error}

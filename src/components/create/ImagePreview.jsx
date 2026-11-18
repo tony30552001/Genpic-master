@@ -44,9 +44,9 @@ export default function ImagePreview({
   versionRows = [],
   activeVersionId = null,
   onSelectVersion,
-  getVersionLabel,
   getVersion,
   onExpand,
+  floatingVersions = false,
 }) {
   const [failedImage, setFailedImage] = useState(null);
   const imageError = Boolean(generatedImage) && failedImage === generatedImage;
@@ -86,15 +86,15 @@ export default function ImagePreview({
   );
 
   const renderHeader = () => (
-    <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-card pl-4 pr-2.5">
-      <div className="mr-auto min-w-0 leading-tight">
-        <p className="text-sm font-bold text-foreground">
-          {activeVersion && getVersionLabel ? getVersionLabel(activeVersion) : "生成結果"}
-        </p>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {activeVersion?.parentId ? activeVersion.instruction : "原始生成"}
-        </p>
-      </div>
+    <header
+      className={cn(
+        "flex shrink-0 items-center gap-1 border-b border-border pl-4 pr-2.5",
+        floatingVersions ? "h-14 bg-card lg:h-11 lg:bg-background/80 lg:backdrop-blur-md" : "h-14 bg-card"
+      )}
+    >
+      <p className="mr-auto min-w-0 truncate text-sm font-semibold text-foreground">
+        {activeVersion ? (activeVersion.parentId ? activeVersion.instruction : "原始生成") : "生成結果"}
+      </p>
       {onPreciseEdit && !imageError && (
         <Button
           type="button"
@@ -144,10 +144,14 @@ export default function ImagePreview({
   const renderImageState = () => (
     <>
       {renderHeader()}
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         <VersionStrip
           rail
-          className="order-last px-3 pb-2 lg:order-first"
+          className={cn(
+            "order-last px-3 pb-2 lg:order-first",
+            floatingVersions &&
+              "lg:absolute lg:left-3 lg:top-1/2 lg:z-10 lg:max-h-[calc(100%-1.5rem)] lg:-translate-y-1/2 lg:rounded-3xl lg:border lg:border-border/60 lg:bg-card/80 lg:shadow-sm lg:backdrop-blur-md"
+          )}
           rows={versionRows}
           activeVersionId={activeVersionId}
           onSelectVersion={onSelectVersion}
@@ -159,7 +163,10 @@ export default function ImagePreview({
           </div>
         ) : (
           <div
-            className="grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] place-items-center p-3 lg:p-6"
+            className={cn(
+              "grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] place-items-center p-3 lg:p-6",
+              floatingVersions && "lg:px-24 lg:py-8"
+            )}
             aria-busy={isRefining}
           >
             <img

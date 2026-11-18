@@ -24,7 +24,7 @@ const renderComposer = (props = {}) => {
       sending={null}
       attachment={null}
       style={null}
-      selectedVersionLabel=""
+      hasSelectedVersion={false}
       settings={{ aspectRatio: "16:9", quality: null, imageLanguage: "zh-TW", purpose: "infographic" }}
       quality="medium"
       supportedQualities={["low", "medium", "high"]}
@@ -88,10 +88,10 @@ describe("ChatComposer", () => {
   it("shows the style and base version as removable chips", () => {
     const { onStyleChange, onClearSelectedVersion } = renderComposer({
       style: { name: "水彩", prompt: "watercolor", tags: [] },
-      selectedVersionLabel: "v2",
+      hasSelectedVersion: true,
     });
 
-    expect(screen.getByText("以 v2 為基礎")).toBeTruthy();
+    expect(screen.getByText("以所選圖片為基礎")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "移除風格" }));
     fireEvent.click(screen.getByRole("button", { name: "不以目前版本為基礎" }));
     expect(onStyleChange).toHaveBeenCalledWith(null);

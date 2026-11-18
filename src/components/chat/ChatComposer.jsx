@@ -72,7 +72,7 @@ export default function ChatComposer({
   onAttachmentChange,
   style,
   onStyleChange,
-  selectedVersionLabel,
+  hasSelectedVersion,
   onClearSelectedVersion,
   settings,
   onSettingsChange,
@@ -160,7 +160,7 @@ export default function ChatComposer({
   };
 
   const shownError = configurationError || localError;
-  const hasChips = attachment || style || selectedVersionLabel || busy;
+  const hasChips = attachment || style || hasSelectedVersion || busy;
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -190,10 +190,10 @@ export default function ChatComposer({
                 removeLabel="移除風格"
               />
             )}
-            {selectedVersionLabel && (
+            {hasSelectedVersion && (
               <Chip
                 icon={<ImageIcon className="size-3.5 text-primary" aria-hidden="true" />}
-                label={`以 ${selectedVersionLabel} 為基礎`}
+                label="以所選圖片為基礎"
                 onRemove={onClearSelectedVersion}
                 removeLabel="不以目前版本為基礎"
               />

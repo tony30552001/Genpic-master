@@ -542,10 +542,6 @@ export default function useImageChat({ enabled, initialSettings }) {
   }, [messages]);
   const versionRows = useMemo(() => buildVersionRows(versions), [versions]);
   const getVersion = useCallback((id) => versions.find((version) => version.id === id) || null, [versions]);
-  const getVersionLabel = useCallback(
-    (version) => `v${versions.findIndex((item) => item.id === version?.id) + 1}`,
-    [versions]
-  );
   const selectedVersion = getVersion(selectedJobId);
   const pendingImage = messages.findLast((message) => message.status === "image_pending") || null;
 
@@ -579,7 +575,6 @@ export default function useImageChat({ enabled, initialSettings }) {
     versions,
     versionRows,
     getVersion,
-    getVersionLabel,
     selectedJobId,
     selectedVersion,
     selectVersion,

@@ -80,12 +80,17 @@ function ImageTile({ image, startedAt, selectedJobId, onSelectVersion, getVersio
           onClick={() => onSelectVersion(version.id)}
           aria-label="檢視圖片"
           aria-pressed={selectedJobId === version.id}
-          className={cn(
-            "group/thumb relative overflow-hidden rounded-xl bg-muted press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            selectedJobId === version.id && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
-          )}
+          className="group/thumb relative overflow-hidden rounded-xl bg-muted press-feedback focus-visible:outline-none"
         >
           <img src={version.imageUrl} alt="" className="block h-auto w-full object-contain" />
+          {/* Drawn inside the tile: an outside ring is clipped by the thread's scroll container */}
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-0 rounded-xl opacity-0 ring-2 ring-inset ring-ring transition-opacity duration-(--motion-hover) group-focus-visible/thumb:opacity-100",
+              selectedJobId === version.id && "opacity-100 ring-foreground"
+            )}
+          />
         </button>
       )}
       <span className="text-xs text-muted-foreground">{actionLabel(image)}</span>
