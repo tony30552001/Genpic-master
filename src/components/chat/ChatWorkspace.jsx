@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
 import { MoreHorizontal, SquarePen, Trash2, X } from "@/components/icons/lucideControls";
@@ -27,6 +27,7 @@ import PreciseEditor from "@/components/edit/PreciseEditor";
 import VersionStrip from "@/components/create/VersionStrip";
 import { getImageQualityError } from "@/lib/imageModel";
 import { cn } from "@/lib/utils";
+import useElapsedSeconds from "@/hooks/useElapsedSeconds";
 import { apiGetBlob } from "@/services/apiClient";
 import { getGenerationStatus } from "@/utils/generationProgress";
 import ChatComposer from "./ChatComposer";
@@ -41,16 +42,6 @@ const SAVE_STATUS_LABELS = {
   saved: "已儲存",
   error: "儲存失敗",
 };
-
-function useElapsedSeconds(startedAt) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!startedAt) return undefined;
-    const timerId = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timerId);
-  }, [startedAt]);
-  return startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
-}
 
 /**
  * Chat-to-image workspace. With no conversation it shows a centered composer

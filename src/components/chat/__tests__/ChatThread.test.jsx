@@ -68,6 +68,18 @@ describe("ChatThread reasoning", () => {
   });
 });
 
+describe("ChatThread pending images", () => {
+  it("tags a running image with its phase, progress and elapsed time", () => {
+    renderThread(assistant({
+      createdAt: new Date(Date.now() - 12_000).toISOString(),
+      images: [{ jobId: "j-1", action: "generate", status: "processing" }],
+    }));
+
+    const tag = screen.getByText("建立構圖中").closest("[role=status]");
+    expect(tag).toHaveTextContent(/\d+%・1[23]s/);
+  });
+});
+
 describe("ChatThread web searches", () => {
   it("shows a running search instead of the thinking placeholder", () => {
     renderThread(assistant({ input: { searches: [{ id: "ws_1", status: "searching", query: "", sources: [] }] } }));

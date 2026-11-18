@@ -11,6 +11,8 @@ import {
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { cn } from "@/lib/utils";
+import useElapsedSeconds from "@/hooks/useElapsedSeconds";
+import { getGenerationStatus } from "@/utils/generationProgress";
 
 function UserMessage({ message }) {
   const { style, attachmentUploadId } = message.input || {};
@@ -41,21 +43,31 @@ function actionLabel(image) {
   return image.action === "generate" ? "產生新圖" : "修改圖片";
 }
 
-function ImageTile({ image, selectedJobId, onSelectVersion, getVersion }) {
+function PendingTag({ startedAt }) {
+  const { shortLabel, progress, elapsedLabel } = getGenerationStatus({
+    elapsedSeconds: useElapsedSeconds(startedAt),
+  });
+  return (
+    <div
+      className="flex aspect-video flex-col items-center justify-center gap-1.5 rounded-xl bg-muted px-2 text-xs text-muted-foreground"
+      role="status"
+    >
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Spinner aria-hidden="true" />
+        <span className="truncate">{shortLabel}</span>
+      </span>
+      <span className="tabular-nums">{progress}%・{elapsedLabel}</span>
+    </div>
+  );
+}
+
+function ImageTile({ image, startedAt, selectedJobId, onSelectVersion, getVersion }) {
   const version = image.status === "succeeded" ? getVersion(image.jobId) : null;
   const isPending = image.status === "queued" || image.status === "processing";
 
   return (
     <div className="flex w-44 flex-col gap-1.5">
-      {isPending && (
-        <div
-          className="flex aspect-video items-center justify-center gap-2 rounded-xl bg-muted text-xs text-muted-foreground"
-          role="status"
-        >
-          <Spinner aria-hidden="true" />
-          生成中…
-        </div>
-      )}
+      {isPending && <PendingTag startedAt={startedAt} />}
       {image.status === "failed" && (
         <p className="flex items-start gap-1.5 rounded-xl border border-destructive/40 p-2 text-xs text-destructive" role="alert">
           <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -220,6 +232,7 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion 
                 <ImageTile
                   key={image.jobId}
                   image={image}
+                  startedAt={Date.parse(message.createdAt) || null}
                   selectedJobId={selectedJobId}
                   onSelectVersion={onSelectVersion}
                   getVersion={getVersion}
