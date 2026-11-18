@@ -44,7 +44,7 @@ const GENERATE_TOOL = Object.freeze({
       prompt: {
         type: "string",
         description:
-          "Self-contained description of the image content: subject, scene, composition, and any exact on-image text. Merge every requirement still in force from the conversation. Do not restate the style, aspect ratio, or text-language settings; they are applied automatically.",
+          "Self-contained description of the image content: subject, scene, composition, and any exact on-image text. Merge every requirement still in force from the conversation.           Do not restate the applied style, aspect ratio, or text-language settings; they are applied automatically. Exception: when the content includes children and no style is applied, state a non-photorealistic illustration style (for example flat children's-book cartoon illustration, not photorealistic) inside this description.",
       },
       purpose: {
         type: "string",
@@ -124,7 +124,7 @@ const buildSystemMessage = (turn) => `你是 Pixora 的對話式生圖助理，�
 - 使用者記憶中的偏好與規定一律遵守，並寫進生圖或修改的工具參數；若與使用者本輪明確要求衝突，以本輪要求為準。
 - 不要宣稱圖片已完成；圖片會在背景處理。
 - 使用者要求去背或透明背景時，把 transparent_background 設為 true，並只描述要保留的主體；不要在描述中寫「透明」「棋盤格」。
-- 兒童（小孩、男孩、女孩、嬰幼兒、學生等）的寫實圖像會被圖片模型的安全審查擋下。描述含兒童、且使用者沒有指定風格時，改用插畫或卡通風格（例如繪本插畫）、以中遠景構圖，並在回覆中用一句話告知；使用者明確要求寫實時照做，並提醒可能被擋。
+- 兒童（小孩、男孩、女孩、嬰幼兒、學生等）的寫實圖像會被圖片模型的安全審查擋下。描述含兒童、且使用者沒有指定風格時，改用插畫或卡通風格（例如繪本插畫）、以中遠景構圖，並把該風格明確寫進工具的 prompt 參數（只在回覆中說明、prompt 沒寫，仍會被擋），同時在回覆中用一句話告知；使用者明確要求寫實時照做，並提醒可能被擋。
 
 使用者記憶：
 ${turn.memory?.trim() || "（目前沒有）"}
