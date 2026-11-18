@@ -1,16 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <!-- Pixora Favicon — Geometric "P" with pixel accent -->
-  <!-- Background: transparent -->
-  
-  <!-- Main rounded square base -->
-  <rect x="48" y="48" width="416" height="416" rx="96" fill="#3B82F6"/>
-  
-  <!-- Stylized "P" letter -->
-  <path d="M176 144h112c52.8 0 96 43.2 96 96s-43.2 96-96 96H248v80c0 13.2-10.8 24-24 24h-24c-13.2 0-24-10.8-24-24V168c0-13.2 10.8-24 24-24z" fill="white"/>
-  <path d="M248 272h40c26.4 0 48-21.6 48-48s-21.6-48-48-48h-40v96z" fill="#3B82F6"/>
-  
-  <!-- Pixel accent dots (brand identity) -->
-  <rect x="336" y="336" width="40" height="40" rx="8" fill="white" opacity="0.9"/>
-  <rect x="384" y="336" width="40" height="40" rx="8" fill="white" opacity="0.5"/>
-  <rect x="336" y="384" width="40" height="40" rx="8" fill="white" opacity="0.3"/>
+  <!-- Pixora favicon: the wordmark's "p" (Inter ExtraBold) and brand pixel, on a dark tile -->
+  <rect width="512" height="512" rx="112" fill="#020817"/>
+  <g transform="translate(144.1 352.9) scale(3.4)">
+    <path fill="#fff" d="M22.66 20.41L5.62 20.41L5.62-54.59L22.46-54.59L22.46-45.21L23.05-45.21Q24.07-47.71 26.05-50Q28.03-52.29 31.08-53.78Q34.13-55.27 38.48-55.27Q44.24-55.27 49.19-52.27Q54.15-49.27 57.20-43.04Q60.25-36.82 60.25-27.25Q60.25-17.97 57.32-11.74Q54.39-5.52 49.41-2.37Q44.43 0.78 38.38 0.78Q34.23 0.78 31.18-0.61Q28.13-2.00 26.12-4.20Q24.12-6.40 23.05-8.84L22.66-8.84L22.66 20.41ZM32.57-12.50Q35.84-12.50 38.11-14.33Q40.38-16.16 41.55-19.51Q42.72-22.85 42.72-27.25Q42.72-31.69 41.55-34.99Q40.38-38.28 38.13-40.11Q35.89-41.94 32.57-41.94Q29.30-41.94 27.00-40.16Q24.71-38.38 23.49-35.08Q22.27-31.79 22.27-27.25Q22.27-22.80 23.49-19.48Q24.71-16.16 27.03-14.33Q29.35-12.50 32.57-12.50Z"/>
+    <rect x="43.2" y="-77.4" width="17.05" height="17.05" rx="2.6" fill="#2563EB"/>
+  </g>
 </svg>
