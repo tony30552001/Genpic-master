@@ -63,6 +63,7 @@ const queueImage = ({ identity, turn, upload, mask, image, position, assistantMe
     sourceUploadId: generate && upload ? upload.id : null,
     sourceJobId,
     maskUploadId: generate ? null : mask?.id ?? null,
+    transparentBackground: image.transparentBackground,
     afterInsert: (client, job) =>
       chats.attachImageJob(client, {
         messageId: assistantMessage.id,

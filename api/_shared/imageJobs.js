@@ -31,6 +31,7 @@ const createImageJob = async ({
   sourceUploadId = null,
   sourceJobId = null,
   maskUploadId = null,
+  transparentBackground = false,
   afterInsert,
 }) => {
   if (!IMAGE_JOB_OPERATIONS.includes(operation)) {
@@ -76,8 +77,8 @@ const createImageJob = async ({
     const result = await client.query(
       `INSERT INTO image_generation_jobs
        (tenant_id, user_id, model, prompt, aspect_ratio, image_size, quality,
-        operation, source_upload_id, source_job_id, mask_upload_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        operation, source_upload_id, source_job_id, mask_upload_id, transparent_background)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id, status, model, operation, created_at`,
       [
         tenantId,
@@ -91,6 +92,7 @@ const createImageJob = async ({
         sourceUploadId,
         sourceJobId,
         maskUploadId,
+        transparentBackground,
       ]
     );
     const job = result.rows[0];
@@ -161,7 +163,7 @@ const claimNextImageJob = async () => {
        RETURNING jobs.id, jobs.model, jobs.prompt, jobs.aspect_ratio,
                  jobs.image_size, jobs.quality, jobs.operation,
                  jobs.source_upload_id, jobs.source_job_id, jobs.mask_upload_id,
-                 jobs.tenant_id, jobs.user_id,
+                                  jobs.transparent_background, jobs.tenant_id, jobs.user_id,
                  jobs.attempts`,
       [LOCK_TIMEOUT_MINUTES, MAX_ATTEMPTS]
     );
@@ -302,6 +304,7 @@ const processNextImageJob = async () => {
         prompt: job.prompt,
         aspectRatio: job.aspect_ratio,
         quality: job.quality,
+        transparentBackground: job.transparent_background,
       });
     } else if (job.operation === "generate") {
       result = await generateGptImage({
@@ -309,6 +312,7 @@ const processNextImageJob = async () => {
         prompt: job.prompt,
         aspectRatio: job.aspect_ratio,
         quality: job.quality,
+        transparentBackground: job.transparent_background,
       });
     } else {
       throw new ImageModelError("不支援的圖片工作類型");

@@ -61,6 +61,15 @@ describe("catalog-backed Azure Images v1 adapter", () => {
     expect(editRequest.body.get("output_format")).toBe("png");
   });
 
+  it("requests a real alpha channel only when asked", async () => {
+    await generateGptImage({ config: flare, prompt: "logo", transparentBackground: true });
+    await editGptImage({ config: flare, ...image, prompt: "去背", transparentBackground: true });
+    await editGptImage({ config: flare, ...image, prompt: "blue" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).background).toBe("transparent");
+    expect(fetchMock.mock.calls[1][1].body.get("background")).toBe("transparent");
+    expect(fetchMock.mock.calls[2][1].body.has("background")).toBe(false);
+  });
+
   it("re-encodes the edit source as a metadata-free PNG bounded to 2048px", async () => {
     const jpeg = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: "#369" } })
       .jpeg()

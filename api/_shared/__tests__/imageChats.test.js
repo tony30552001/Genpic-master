@@ -49,21 +49,25 @@ describe("image chat agent contract", () => {
   it("resolves images and memory notes from the tool calls", () => {
     expect(agent.resolveDecision([], turn)).toEqual({ images: [], notes: [] });
     expect(agent.resolveDecision([{ name: "generate_image", arguments: { prompt: " 貓 " } }], turn))
-      .toEqual({ images: [{ action: "generate", prompt: "貓", purpose: "infographic" }], notes: [] });
+      .toEqual({ images: [{ action: "generate", prompt: "貓", purpose: "infographic", transparentBackground: false }], notes: [] });
     expect(agent.resolveDecision(
       [{ name: "generate_image", arguments: { prompt: "貓", purpose: "freeform" } }], turn
     ).images[0]).toMatchObject({ purpose: "freeform" });
     expect(agent.resolveDecision(
       [{ name: "refine_image", arguments: { instruction: "改藍色" } }], { ...turn, hasSelectedImage: true }
-    )).toEqual({ images: [{ action: "refine", prompt: "改藍色" }], notes: [] });
+    )).toEqual({ images: [{ action: "refine", prompt: "改藍色", transparentBackground: false }], notes: [] });
+    expect(agent.resolveDecision(
+      [{ name: "refine_image", arguments: { instruction: "去背", transparent_background: true } }],
+      { ...turn, hasSelectedImage: true }
+    ).images[0]).toMatchObject({ transparentBackground: true });
     expect(agent.resolveDecision([
       { name: "generate_image", arguments: { prompt: "春" } },
       { name: "remember_preference", arguments: { note: " - 一律\n  16:9 " } },
       { name: "generate_image", arguments: { prompt: "秋" } },
     ], turn)).toEqual({
       images: [
-        { action: "generate", prompt: "春", purpose: "infographic" },
-        { action: "generate", prompt: "秋", purpose: "infographic" },
+        { action: "generate", prompt: "春", purpose: "infographic", transparentBackground: false },
+        { action: "generate", prompt: "秋", purpose: "infographic", transparentBackground: false },
       ],
       notes: ["一律 16:9"],
     });

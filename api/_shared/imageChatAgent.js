@@ -28,6 +28,12 @@ class ImageChatDecisionError extends Error {
   }
 }
 
+const TRANSPARENT_BACKGROUND_PARAM = Object.freeze({
+  type: "boolean",
+  description:
+    "Set true only when the user asks for a transparent background or to remove/cut out the background (去背). The result is then a real transparent PNG; never describe a checkerboard or transparency in the prompt text.",
+});
+
 const GENERATE_TOOL = Object.freeze({
   name: "generate_image",
   description:
@@ -45,6 +51,7 @@ const GENERATE_TOOL = Object.freeze({
         enum: [...IMAGE_PURPOSES],
         description: "infographic or freeform image. Omit to keep the current setting.",
       },
+      transparent_background: TRANSPARENT_BACKGROUND_PARAM,
     },
     required: ["prompt"],
   },
@@ -61,6 +68,7 @@ const REFINE_TOOL = Object.freeze({
         type: "string",
         description: "Exactly what to change in the selected image, stated as an edit instruction.",
       },
+      transparent_background: TRANSPARENT_BACKGROUND_PARAM,
     },
     required: ["instruction"],
   },
@@ -115,6 +123,7 @@ const buildSystemMessage = (turn) => `你是 Pixora 的對話式生圖助理，�
 - 工具參數要完整自足，合併對話中仍有效的要求；不要寫入風格、比例或圖中文字語言設定，系統會自動套用。
 - 使用者記憶中的偏好與規定一律遵守，並寫進生圖或修改的工具參數；若與使用者本輪明確要求衝突，以本輪要求為準。
 - 不要宣稱圖片已完成；圖片會在背景處理。
+- 使用者要求去背或透明背景時，把 transparent_background 設為 true，並只描述要保留的主體；不要在描述中寫「透明」「棋盤格」。
 
 使用者記憶：
 ${turn.memory?.trim() || "（目前沒有）"}
@@ -183,6 +192,13 @@ const resolveMemoryNote = (value) => {
   return text;
 };
 
+const resolveTransparentBackground = (value) => {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new ImageChatDecisionError("對話模型指定的透明背景設定無效，未建立圖片工作");
+  }
+  return value === true;
+};
+
 const resolveImageCall = (call, turn) => {
   if (call.name === GENERATE_TOOL.name && !turn.hasMask) {
     const purpose = call.arguments.purpose;
@@ -193,10 +209,15 @@ const resolveImageCall = (call, turn) => {
       action: "generate",
       prompt: requireToolText(call.arguments.prompt, "生圖描述"),
       purpose: purpose || turn.settings.purpose,
+      transparentBackground: resolveTransparentBackground(call.arguments.transparent_background),
     };
   }
   if (call.name === REFINE_TOOL.name && turn.hasSelectedImage) {
-    return { action: "refine", prompt: requireToolText(call.arguments.instruction, "修改指示") };
+    return {
+      action: "refine",
+      prompt: requireToolText(call.arguments.instruction, "修改指示"),
+      transparentBackground: resolveTransparentBackground(call.arguments.transparent_background),
+    };
   }
   throw new ImageChatDecisionError("對話模型要求了不支援的動作，未建立圖片工作");
 };

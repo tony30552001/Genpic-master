@@ -67,7 +67,7 @@ describe("durable catalog-backed image jobs", () => {
     expect(imageModels.resolveImageModel).toHaveBeenCalledWith({ tenantId: input.tenantId, modelKey: config.modelKey, client });
     expect(client.query.mock.calls[0][0]).toContain("RETURNING id, status, model, operation");
     expect(client.query.mock.calls[0][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "generate", null, null, null,
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "generate", null, null, null, false,
     ]);
     expect(db.query).not.toHaveBeenCalled();
     expect(imageModels.resolveImageModel.mock.invocationCallOrder[0])
@@ -77,7 +77,7 @@ describe("durable catalog-backed image jobs", () => {
   it.each(config.supportedQualities)("persists Flare %s exactly with an owned edit source", async (quality) => {
     await createImageJob({ ...input, quality, operation: "edit", sourceUploadId: "upload-1" });
     expect(client.query.mock.calls[0][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, quality, "edit", "upload-1", null, null,
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, quality, "edit", "upload-1", null, null, false,
     ]);
   });
 
@@ -90,14 +90,19 @@ describe("durable catalog-backed image jobs", () => {
     expect(client.query.mock.calls[0][0]).toContain("status = 'succeeded'");
     expect(client.query.mock.calls[0][1]).toEqual(["source-job", input.tenantId, input.userId]);
     expect(client.query.mock.calls[1][1]).toEqual([
-      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "edit", null, "source-job", null,
+      input.tenantId, input.userId, config.modelKey, input.prompt, null, null, "medium", "edit", null, "source-job", null, false,
     ]);
     expect(afterInsert).toHaveBeenCalledWith(client, expect.objectContaining({ id: "job-2" }));
   });
 
   it("persists a brush mask with an edit job", async () => {
     await createImageJob({ ...input, operation: "edit", sourceUploadId: "upload-1", maskUploadId: "mask-1" });
-    expect(client.query.mock.calls[0][1].at(-1)).toBe("mask-1");
+    expect(client.query.mock.calls[0][1].at(-2)).toBe("mask-1");
+  });
+
+  it("persists the transparent background request", async () => {
+    await createImageJob({ ...input, operation: "edit", sourceUploadId: "upload-1", transparentBackground: true });
+    expect(client.query.mock.calls[0][1].at(-1)).toBe(true);
   });
 
   it("rejects a mask on a generate job before admission", async () => {
