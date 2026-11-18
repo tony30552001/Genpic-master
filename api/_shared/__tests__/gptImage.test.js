@@ -226,7 +226,7 @@ describe("catalog-backed Azure Images v1 adapter", () => {
     const exhausted = generateGptImage({ config: flare, prompt: "friends" }).catch((e) => e);
     await vi.advanceTimersByTimeAsync(6000);
     expect(await exhausted).toMatchObject({
-      code: "image_moderation_blocked", message: "生成結果被安全審查擋下，請調整描述後再試", retryable: false,
+      code: "image_moderation_blocked", message: "生成結果被安全審查擋下。含兒童的寫實畫面常被擋，可改成插畫或卡通風格、拉遠景再試", retryable: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });

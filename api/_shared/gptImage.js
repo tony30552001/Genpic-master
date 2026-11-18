@@ -62,7 +62,9 @@ const readProviderError = async (response) => {
 const providerFailure = ({ code, stage }, status) => {
   if (code === "moderation_blocked") {
     const failure = new ImageProviderError(
-      stage === "output" ? "生成結果被安全審查擋下，請調整描述後再試" : "描述內容被安全審查擋下，請調整描述後再試",
+      stage === "output"
+        ? "生成結果被安全審查擋下。含兒童的寫實畫面常被擋，可改成插畫或卡通風格、拉遠景再試"
+        : "描述內容被安全審查擋下，請調整描述後再試",
       "image_moderation_blocked", status, false
     );
     failure.moderationStage = stage;

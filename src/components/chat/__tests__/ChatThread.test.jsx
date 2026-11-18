@@ -78,6 +78,16 @@ describe("ChatThread pending images", () => {
     const tag = screen.getByText("建立構圖中").closest("[role=status]");
     expect(tag).toHaveTextContent(/\d+%・1[23]s/);
   });
+  it("shows a failed image's error once, in its tile", () => {
+    const error = { code: "image_failed", message: "生成結果被安全審查擋下" };
+    renderThread(assistant({
+      status: "failed",
+      error,
+      images: [{ jobId: "j-1", action: "generate", status: "failed", error }],
+    }));
+
+    expect(screen.getAllByText("生成結果被安全審查擋下")).toHaveLength(1);
+  });
 });
 
 describe("ChatThread web searches", () => {

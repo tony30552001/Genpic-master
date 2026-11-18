@@ -195,6 +195,7 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion 
   const searches = message.input?.searches ?? [];
   const memoryNotes = message.input?.memoryNotes ?? [];
   const hasPendingImage = message.images.some((image) => image.status === "queued" || image.status === "processing");
+  const hasFailedImage = message.images.some((image) => image.status === "failed");
   const isSearching = searches.some((search) => search.status === "searching");
   const isThinking = isResponding && !message.content && !isSearching;
 
@@ -248,7 +249,7 @@ function AssistantMessage({ message, selectedJobId, onSelectVersion, getVersion 
         {message.status === "interrupted" && !message.error && (
           <span className="text-xs text-muted-foreground">已停止回覆</span>
         )}
-        {message.error && (
+        {message.error && !hasFailedImage && (
           <p className="flex items-start gap-1.5 text-xs text-destructive" role="alert">
             <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             {message.error.message}
