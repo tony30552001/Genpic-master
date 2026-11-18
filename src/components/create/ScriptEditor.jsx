@@ -42,11 +42,6 @@ const readAdvancedStyleOpen = () => {
 
 const DEFAULT_PLACEHOLDER = "描述你想要的畫面";
 
-const EXAMPLE_PROMPTS = {
-  infographic: ["台灣手搖飲市場規模一覽", "新人到職五步驟流程", "節能減碳的三個小習慣"],
-  freeform: ["陽光灑落的咖啡廳，穿白洋裝的女性", "漂浮在雲上的小島", "柴犬太空人在月球散步"],
-};
-
 /**
  * ScriptEditor — 內容描述、圖片輸入插槽與進階風格
  * 內容圖用途決定欄位文字、AI 優化模式與是否套用風格；風格參考圖與內容圖彼此獨立。
@@ -329,24 +324,6 @@ export default function ScriptEditor({
           </div>
 
           <PromptHints hints={promptHints} />
-
-          {!attachmentPurpose && !userScript?.trim() && (
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5 max-lg:-mx-4 max-lg:px-4 lg:flex-wrap" role="group" aria-label="範例">
-              {(EXAMPLE_PROMPTS[imagePurpose] || EXAMPLE_PROMPTS.freeform).map((example) => (
-                <button
-                  key={example}
-                  type="button"
-                  onClick={() => {
-                    onUserScriptChange(example);
-                    onOptimizedPromptEnChange?.("");
-                  }}
-                  className="min-h-9 shrink-0 rounded-full border border-border/70 bg-background px-3 text-xs text-muted-foreground press-feedback hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-          )}
 
           <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-3">

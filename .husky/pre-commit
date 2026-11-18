@@ -16,7 +16,7 @@ for f in $BLOCKED_FILES; do
 done
 
 # 2. 掃描 staged 內容中是否包含高風險 pattern
-STAGED_DIFF=$(git diff --cached --unified=0 2>/dev/null | grep "^+[^+]")
+STAGED_DIFF=$(git diff --cached --unified=0 2>/dev/null | grep "^+[^+]" || true)
 
 # Google API Key pattern (AIza...)
 if echo "$STAGED_DIFF" | grep -qE 'AIza[0-9A-Za-z_-]{35}'; then
