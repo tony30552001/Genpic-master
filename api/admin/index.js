@@ -1,4 +1,4 @@
-const { ok, error, options } = require("../_shared/http");
+const { ok, error, options, corsHeaders } = require("../_shared/http");
 const { requireAdmin } = require("../_shared/admin");
 const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
@@ -9,6 +9,9 @@ const {
 const { listPublicImageModels } = require("../_shared/imageModels");
 const { ImageModelError } = require("../_shared/imageModelConfig");
 const { handleImageModels, handleImageModelTest } = require("./imageModels");
+const { handleVideoModelTest, handleVideoModels } = require("./videoModels");
+const { ensureVideoSettings, updateVideoSettings } = require("../_shared/videoPolicy");
+const { listPublicVideoModels } = require("../_shared/videoModels");
 const {
   LLM_ROLES,
   createLlmModel,
@@ -22,6 +25,7 @@ const {
   updateLlmModel,
 } = require("../_shared/llmModels");
 const { normalizeHistorySourceFilter } = require("../_shared/historySource");
+const { getGeneratedBlobDownload } = require("../_shared/blobStorage");
 
 const timestamp = (value) =>
   value ? { seconds: Math.floor(new Date(value).getTime() / 1000) } : null;
@@ -41,6 +45,7 @@ const mapUser = (row) => ({
   displayName: row.display_name || row.email,
   role: row.role,
   isActive: row.is_active !== false,
+  videoEnabled: Boolean(row.video_enabled),
   authProvider: row.auth_provider || null,
   createdAt: timestamp(row.created_at),
   generationCount: Number(row.generation_count || 0),
@@ -59,11 +64,13 @@ const mapUserOption = (row) => ({
 const mapHistory = (row) => ({
   id: row.id,
   hasImage: Boolean(row.has_image),
+  hasVideo: Boolean(row.has_video),
   fullPrompt: row.prompt,
   userScript: row.user_script,
   stylePrompt: row.style_prompt,
   model: row.model,
   jobId: row.image_job_id || null,
+  videoJobId: row.video_job_id || null,
   styleId: row.style_id,
   styleName: row.style_name,
   source: row.source || null,
@@ -149,6 +156,7 @@ const listUsers = async (context, identity, req) => {
        u.role,
        u.is_active,
        u.auth_provider,
+       u.video_enabled,
        u.created_at,
        (SELECT COUNT(*) FROM history h
         WHERE h.user_id = u.id AND h.tenant_id = u.tenant_id) AS generation_count,
@@ -224,11 +232,13 @@ const listHistory = async (context, identity, req) => {
     `SELECT
        h.id,
        (h.image_url IS NOT NULL AND h.image_url <> '') AS has_image,
+       (h.video_job_id IS NOT NULL) AS has_video,
        h.prompt,
        h.user_script,
        h.style_prompt,
        h.model,
        h.image_job_id,
+       h.video_job_id,
        h.style_id,
        h.source,
        h.created_at,
@@ -332,13 +342,14 @@ const updateUser = async (context, identity, req, targetId) => {
   const payload = req.body || {};
   const hasRole = payload.role !== undefined;
   const hasStatus = payload.isActive !== undefined;
-  if (!hasRole && !hasStatus) {
+  const hasVideo = payload.videoEnabled !== undefined;
+  if (!hasRole && !hasStatus && !hasVideo) {
     context.res = error("缺少使用者更新內容", "bad_request", 400, req);
     return;
   }
 
   const current = await query(
-    "SELECT id, role, is_active FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    "SELECT id, role, is_active, video_enabled FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
     [targetId, identity.tenantId]
   );
   if (current.rows.length === 0) {
@@ -349,6 +360,7 @@ const updateUser = async (context, identity, req, targetId) => {
   const currentUser = current.rows[0];
   const role = hasRole ? String(payload.role || "").trim() : currentUser.role;
   const isActive = hasStatus ? payload.isActive : currentUser.is_active;
+  const videoEnabled = hasVideo ? payload.videoEnabled : currentUser.video_enabled;
 
   if (hasRole && !["admin", "editor", "viewer"].includes(role)) {
     context.res = error("不支援的使用者角色", "bad_request", 400, req);
@@ -357,6 +369,10 @@ const updateUser = async (context, identity, req, targetId) => {
 
   if (hasStatus && typeof isActive !== "boolean") {
     context.res = error("使用者啟用狀態格式錯誤", "bad_request", 400, req);
+    return;
+  }
+  if (hasVideo && typeof videoEnabled !== "boolean") {
+    context.res = error("影片開放狀態格式錯誤", "bad_request", 400, req);
     return;
   }
 
@@ -383,9 +399,9 @@ const updateUser = async (context, identity, req, targetId) => {
   const result = await query(
     `WITH updated_user AS (
        UPDATE users
-       SET role = $1, is_active = $2
-       WHERE id = $3 AND tenant_id = $4
-       RETURNING id, email, display_name, role, is_active, auth_provider, created_at, tenant_id
+       SET role = $1, is_active = $2, video_enabled = $3
+       WHERE id = $4 AND tenant_id = $5
+       RETURNING id, email, display_name, role, is_active, video_enabled, auth_provider, created_at, tenant_id
      )
      SELECT
        u.id,
@@ -393,6 +409,7 @@ const updateUser = async (context, identity, req, targetId) => {
        u.display_name,
        u.role,
        u.is_active,
+       u.video_enabled,
        u.auth_provider,
        u.created_at,
        (SELECT COUNT(*) FROM history h
@@ -400,7 +417,7 @@ const updateUser = async (context, identity, req, targetId) => {
        (SELECT COUNT(*) FROM styles s
         WHERE s.created_by = u.id AND s.tenant_id = u.tenant_id) AS style_count
      FROM updated_user u`,
-    [role, isActive, targetId, identity.tenantId]
+    [role, isActive, videoEnabled, targetId, identity.tenantId]
   );
   context.res = ok(mapUser(result.rows[0]), 200, req);
 };
@@ -449,6 +466,36 @@ const getStylePreview = async (context, identity, req, targetId) => {
     return;
   }
   context.res = okImage(imageUrl, req);
+};
+
+const getHistoryVideo = async (context, identity, req, targetId) => {
+  if (!targetId) {
+    context.res = error("缺少 history id", "bad_request", 400, req);
+    return;
+  }
+  const result = await query(
+    `SELECT jobs.result_blob_name, jobs.result_mime_type, jobs.result_size_bytes
+     FROM history h
+     JOIN video_generation_jobs jobs ON jobs.id = h.video_job_id
+     WHERE h.id = $1 AND h.tenant_id = $2 AND jobs.status = 'succeeded'`,
+    [targetId, identity.tenantId]
+  );
+  const job = result.rows[0];
+  if (!job) {
+    context.res = error("找不到生成影片", "not_found", 404, req);
+    return;
+  }
+  const blob = await getGeneratedBlobDownload({ blobName: job.result_blob_name });
+  context.res = {
+    status: 200,
+    headers: {
+      ...corsHeaders(req),
+      "Content-Type": job.result_mime_type || "video/mp4",
+      "Content-Length": job.result_size_bytes || undefined,
+      "Cache-Control": "private, max-age=3600",
+    },
+    body: blob.readableStreamBody,
+  };
 };
 
 const deleteStyle = async (context, identity, req, targetId) => {
@@ -615,6 +662,11 @@ module.exports = async function (context, req) {
     return;
   }
 
+  if (method === "GET" && resource === "history-videos") {
+    await getHistoryVideo(context, identity, req, targetId);
+    return;
+  }
+
   if (method === "GET" && resource === "styles") {
     await listStyles(context, identity, req);
     return;
@@ -626,18 +678,39 @@ module.exports = async function (context, req) {
   }
 
   if (method === "GET" && resource === "settings") {
-    const [modelPolicy, models] = await Promise.all([
+    const [modelPolicy, models, videoSettings, videoModels] = await Promise.all([
       ensureModelPolicy(identity.tenantId),
       listPublicImageModels(identity.tenantId),
+      ensureVideoSettings(identity.tenantId),
+      listPublicVideoModels(identity.tenantId),
     ]);
     context.res = ok(
       {
         modelPolicy,
         models,
+        videoSettings,
+        videoModels,
       },
       200,
       req
     );
+    return;
+  }
+
+  if (method === "PUT" && resource === "video-settings") {
+    try {
+      const settings = await updateVideoSettings({
+        tenantId: identity.tenantId,
+        allowedModels: req.body?.allowedModels,
+        dailyQuotaPerUser: req.body?.dailyQuotaPerUser,
+        submitsPerMinute: req.body?.submitsPerMinute,
+        updatedBy: identity.userId,
+      });
+      context.res = ok(settings, 200, req);
+    } catch (err) {
+      if (!(err instanceof Error) || !err.status) throw err;
+      context.res = error(err.message, err.code, err.status, req);
+    }
     return;
   }
 
@@ -672,6 +745,16 @@ module.exports = async function (context, req) {
 
   if (resource === "image-model-tests" && method === "POST") {
     await handleImageModelTest(context, req, identity);
+    return;
+  }
+
+  if (resource === "video-models" && ["GET", "POST", "PUT", "DELETE"].includes(method)) {
+    await handleVideoModels(context, req, identity, method, targetId);
+    return;
+  }
+
+  if (resource === "video-model-tests" && method === "POST") {
+    await handleVideoModelTest(context, req, identity);
     return;
   }
 

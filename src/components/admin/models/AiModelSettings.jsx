@@ -15,10 +15,12 @@ import { cn } from "@/lib/utils";
 import useAuth from "@/hooks/useAuth";
 import useImageModelAdmin from "@/hooks/useImageModelAdmin";
 import useLlmModelAdmin from "@/hooks/useLlmModelAdmin";
+import useVideoModelAdmin from "@/hooks/useVideoModelAdmin";
 import ImageModelForm from "./ImageModelForm";
 import LlmModelForm from "./LlmModelForm";
 import ModelAssignments from "./ModelAssignments";
 import ModelConnections from "./ModelConnections";
+import VideoModelForm from "./VideoModelForm";
 
 const SAVED_FLASH_MS = 1800;
 const CARD_CLASS = "flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground lg:max-h-full";
@@ -34,7 +36,9 @@ const confirmCopy = ({ action, kind, model }) => {
   return {
     title: `刪除「${model.label}」？`,
     description: kind === "image"
-      ? "需先從功能指派與開放清單移除，並等待在途工作完成。刪除後無法復原。"
+    ? "需先從功能指派與開放清單移除，並等待在途工作完成。刪除後無法復原。"
+    : kind === "video"
+      ? "需先從開放清單移除，並等待在途影片工作完成。刪除後無法復原。"
       : "需先解除所有功能指派。刪除後無法復原。",
     confirm: "刪除",
     destructive: true,
@@ -62,6 +66,7 @@ export default function AiModelSettings() {
 
   const image = useImageModelAdmin({ notify, refreshProfile });
   const llm = useLlmModelAdmin({ notify });
+  const video = useVideoModelAdmin({ notify, refreshProfile });
 
   const openDialog = (kind, model = null) =>
     setDialog((previous) => ({ open: true, kind, model, seq: previous.seq + 1 }));
@@ -75,8 +80,12 @@ export default function AiModelSettings() {
   const handleConfirm = () => {
     const { action, kind, model } = pendingConfirm;
     setPendingConfirm(null);
-    if (action === "test") void image.runTest(model);
+    if (action === "test") {
+      if (kind === "video") void video.runTest(model);
+      else void image.runTest(model);
+    }
     else if (kind === "image") void image.deleteModel(model);
+    else if (kind === "video") void video.deleteModel(model);
     else void llm.deleteModel(model);
   };
 
@@ -101,15 +110,17 @@ export default function AiModelSettings() {
       </div>
 
       <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:items-start">
-        <ModelAssignments image={image} llm={llm} savedRow={savedRow} className={CARD_CLASS} />
+        <ModelAssignments image={image} llm={llm} video={video} savedRow={savedRow} className={CARD_CLASS} />
         <ModelConnections
           image={image}
           llm={llm}
+          video={video}
           className={CARD_CLASS}
           onAdd={(kind) => openDialog(kind)}
           onEdit={(kind, model) => openDialog(kind, model)}
           onDelete={(kind, model) => askConfirm({ action: "delete", kind, model })}
           onTestImage={(model) => askConfirm({ action: "test", kind: "image", model })}
+          onTestVideo={(model) => askConfirm({ action: "test", kind: "video", model })}
         />
       </div>
 
@@ -135,6 +146,18 @@ export default function AiModelSettings() {
               onTestDraft={llm.testDraft}
               onSubmit={async (form) => {
                 await llm.saveModel(form, dialog.model?.id ?? null);
+                closeDialog();
+              }}
+            />
+          )}
+          {dialog.kind === "video" && video.catalog && (
+            <VideoModelForm
+              key={dialog.seq}
+              model={dialog.model}
+              catalog={video.catalog}
+              onCancel={closeDialog}
+              onSubmit={async (form) => {
+                await video.saveModel(form, dialog.model?.modelKey ?? null);
                 closeDialog();
               }}
             />

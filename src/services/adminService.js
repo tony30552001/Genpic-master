@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import { apiDelete, apiGet, apiPost, apiPut } from "./apiClient";
+import { apiDelete, apiGet, apiGetBlob, apiPost, apiPut } from "./apiClient";
 
 const ADMIN_API_BASE = `${API_BASE_URL}/management`;
 
@@ -38,6 +38,9 @@ export const listAdminHistory = async (params = {}) => {
 export const getAdminHistoryImage = async (historyId) =>
   apiGet(`${ADMIN_API_BASE}/history-images/${historyId}`);
 
+export const getAdminHistoryVideo = async (historyId) =>
+  apiGetBlob(`${ADMIN_API_BASE}/history-videos/${historyId}`);
+
 export const getAdminStylePreview = async (styleId) =>
   apiGet(`${ADMIN_API_BASE}/style-previews/${styleId}`);
 
@@ -71,6 +74,27 @@ export const deleteAdminImageModel = async (modelKey) =>
 
 export const testAdminImageModel = async (payload, { signal } = {}) =>
   apiPost(`${ADMIN_API_BASE}/image-model-tests`, payload, { signal });
+
+export const listAdminVideoModels = async () =>
+  apiGet(`${ADMIN_API_BASE}/video-models`);
+
+export const createAdminVideoModel = async (model) =>
+  apiPost(`${ADMIN_API_BASE}/video-models`, model);
+
+export const updateAdminVideoModel = async (modelKey, model) =>
+  apiPut(`${ADMIN_API_BASE}/video-models/${encodeURIComponent(modelKey)}`, model);
+
+export const deleteAdminVideoModel = async (modelKey) =>
+  apiDelete(`${ADMIN_API_BASE}/video-models/${encodeURIComponent(modelKey)}`);
+
+export const testAdminVideoModel = async (payload, { signal } = {}) =>
+  apiPost(`${ADMIN_API_BASE}/video-model-tests`, payload, { signal });
+
+export const updateAdminVideoSettings = async (settings) =>
+  apiPut(`${ADMIN_API_BASE}/video-settings`, settings);
+
+export const updateAdminUserVideoStatus = async (userId, videoEnabled) =>
+  apiPut(`${ADMIN_API_BASE}/users/${userId}`, { videoEnabled });
 
 export const deleteAdminStyle = async (styleId) =>
   apiDelete(`${ADMIN_API_BASE}/styles/${styleId}`);

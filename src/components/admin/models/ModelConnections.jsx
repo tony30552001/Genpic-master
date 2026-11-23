@@ -15,6 +15,7 @@ import { CardHead, CardLoadState } from "./modelCardParts";
 const FILTERS = [
   { id: "all", label: "全部" },
   { id: "image", label: "圖片" },
+  { id: "video", label: "影片" },
   { id: "text", label: "文字" },
 ];
 
@@ -25,11 +26,11 @@ function KindBadge({ kind }) {
     <span
       className={cn(
         "flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-medium",
-        kind === "image" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+        kind === "image" ? "bg-primary/10 text-primary" : kind === "video" ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
       )}
       aria-hidden="true"
     >
-      {kind === "image" ? "圖" : "文"}
+      {kind === "image" ? "圖" : kind === "video" ? "影" : "文"}
     </span>
   );
 }
@@ -88,16 +89,18 @@ function ConnectionRow({ kind, label, detail, status, children, onEdit, onDelete
   );
 }
 
-export default function ModelConnections({ image, llm, onAdd, onEdit, onDelete, onTestImage, className }) {
+export default function ModelConnections({ image, llm, video, onAdd, onEdit, onDelete, onTestImage, onTestVideo, className }) {
   const [filter, setFilter] = useState("all");
   const imageModels = image.catalog?.models ?? [];
   const llmModels = llm.settings?.models ?? [];
+  const videoModels = video.catalog?.models ?? [];
   const policy = image.policy;
   const llmRoles = llm.settings?.roles ?? [];
   const assignments = llm.settings?.assignments ?? [];
-  const showImage = filter !== "text";
-  const showText = filter !== "image";
-  const isEmpty = !image.isLoading && !llm.isLoading && imageModels.length === 0 && llmModels.length === 0;
+  const showImage = filter === "all" || filter === "image";
+  const showVideo = filter === "all" || filter === "video";
+  const showText = filter === "all" || filter === "text";
+  const isEmpty = !image.isLoading && !llm.isLoading && !video.isLoading && imageModels.length === 0 && llmModels.length === 0 && videoModels.length === 0;
 
   return (
     <section aria-labelledby="model-connections-title" className={className}>
@@ -128,6 +131,7 @@ export default function ModelConnections({ image, llm, onAdd, onEdit, onDelete, 
             <DropdownMenuContent align="end">
               <DropdownMenuItem disabled={!image.catalog} onSelect={() => onAdd("image")}>圖片模型</DropdownMenuItem>
               <DropdownMenuItem disabled={!llm.settings} onSelect={() => onAdd("text")}>文字模型</DropdownMenuItem>
+              <DropdownMenuItem disabled={!video.catalog} onSelect={() => onAdd("video")}>影片模型</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -226,6 +230,42 @@ export default function ModelConnections({ image, llm, onAdd, onEdit, onDelete, 
                       {isTesting && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
                       測試
                     </Button>
+                  </ConnectionRow>
+                );
+              })}
+            </CardLoadState>
+          )}
+          {showVideo && (
+            <CardLoadState state={video} retryLabel="重新載入影片模型設定">
+              {videoModels.map((model) => {
+                const isAllowed = video.settings?.allowedModels.includes(model.modelKey);
+                const isTesting = video.testingKey === model.modelKey;
+                return (
+                  <ConnectionRow
+                    key={`video-${model.modelKey}`}
+                    kind="video"
+                    label={model.label}
+                    detail={`${model.deploymentName} · ${model.maxDurationSeconds} 秒以下`}
+                    disabled={Boolean(video.testingKey)}
+                    onEdit={() => onEdit("video", model)}
+                    onDelete={() => onDelete("video", model)}
+                  >
+                    <AllowSwitch
+                      id={`allow-video-${model.modelKey}`}
+                      checked={Boolean(isAllowed)}
+                      label={model.label}
+                      disabled={video.isSavingPolicy}
+                      onToggle={() => video.toggleAllowed(model.modelKey)}
+                    />
+                    {isTesting ? (
+                      <Button type="button" size="xs" variant="outline" onClick={video.stopTest}>
+                        <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />停止等待
+                      </Button>
+                    ) : (
+                      <Button type="button" size="xs" variant="outline" disabled={Boolean(video.testingKey)} onClick={() => onTestVideo(model)}>
+                        付費測試
+                      </Button>
+                    )}
                   </ConnectionRow>
                 );
               })}

@@ -12,6 +12,7 @@ import {
   ImagePlus,
   Wand2,
   WandSparkles,
+  Clapperboard,
 } from "@/components/icons/lucideContent";
 import useAuth from './hooks/useAuth';
 import useStyles from './hooks/useStyles';
@@ -46,6 +47,7 @@ import StyleAnalysisPanel from './components/create/StyleAnalysisPanel';
 import AssetCenter from './components/library/AssetCenter';
 import AppHeader from './components/common/AppHeader';
 import ChatWorkspace from './components/chat/ChatWorkspace';
+import VideoWorkspace from './components/video/VideoWorkspace';
 import useImageChat from './hooks/useImageChat';
 import { DEFAULT_IMAGE_PURPOSE } from './lib/imagePurposes';
 
@@ -87,6 +89,7 @@ export default function InfographicGenerator({
     const isMobileLayout = useMediaQuery(MOBILE_LAYOUT_QUERY);
     const [paletteStyleTags, setPaletteStyleTags] = useState([]);
     const [imagePurpose, setImagePurpose] = useState('infographic');
+    const [videoSource, setVideoSource] = useState(null);
 
     const handlePaletteStyleChange = (tags) => {
         setPaletteStyleTags(tags);
@@ -146,7 +149,7 @@ export default function InfographicGenerator({
         markStyleUsed,
         updateStyle,
     } = useStyles({ user });
-    const { historyItems, saveHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
+    const { historyItems, saveHistoryItem, saveVideoHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
     const [mobileHeaderActions, setMobileHeaderActions] = useState(null);
     const imageChat = useImageChat({
         enabled: activeTab === 'chat',
@@ -468,6 +471,16 @@ export default function InfographicGenerator({
             y: rect.top + rect.height / 2,
             scale: Math.min(1, Math.max(0.2, Math.min(rect.width / window.innerWidth, rect.height / window.innerHeight))),
         }),
+        onConvertToVideo: profile?.videoEnabled && activeVersion?.jobId
+            ? () => {
+                setVideoSource({
+                    sourceImageJobId: activeVersion.jobId,
+                    previewUrl: generatedImage,
+                    name: activeVersion.instruction || "目前圖片",
+                });
+                setActiveTab('video');
+            }
+            : undefined,
     };
 
     const chainPrompt = imageVersions.versions[0]?.instruction;
@@ -486,6 +499,7 @@ export default function InfographicGenerator({
     const tabs = [
         { id: 'general', label: '快速創作', icon: ImagePlus },
         { id: 'chat', label: '對話創作', icon: MessageSquare },
+        ...(profile?.videoEnabled ? [{ id: 'video', label: '影片創作', icon: Clapperboard }] : []),
         { id: 'document', label: '文件創作', icon: FileText },
         { id: 'library', label: '素材中心', icon: Library },
     ];
@@ -681,6 +695,18 @@ export default function InfographicGenerator({
                     />
                 )}
 
+                {activeTab === 'video' && profile?.videoEnabled && (
+                    <div className="flex min-h-0 flex-1 p-3 lg:px-8 lg:py-4">
+                        <VideoWorkspace
+                            models={profile.videoModels || []}
+                            settings={profile.videoSettings}
+                            historyItems={historyItems}
+                            initialSource={videoSource}
+                            onSaveHistory={saveVideoHistoryItem}
+                        />
+                    </div>
+                )}
+
                 {/* ─── Unified Asset Center ─── */}
                 {activeTab === 'library' && (
                     <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar lg:px-8 2xl:px-12">
@@ -720,7 +746,16 @@ export default function InfographicGenerator({
                             onLoadHistory={loadFromHistory}
                             onDeleteHistory={deleteHistoryItem}
                             onDeleteHistoryItems={deleteHistoryItems}
-                            onGoCreate={() => setActiveTab('general')}
+                            onGoCreate={(target) => setActiveTab(target === 'video' && profile?.videoEnabled ? 'video' : 'general')}
+                            onConvertToVideo={(item) => {
+                                if (!profile?.videoEnabled || !item.jobId) return;
+                                setVideoSource({
+                                    sourceImageJobId: item.jobId,
+                                    previewUrl: item.imageUrl,
+                                    name: item.userScript || "素材圖片",
+                                });
+                                setActiveTab('video');
+                            }}
                         />
                     </div>
                 )}

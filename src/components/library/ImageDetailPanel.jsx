@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import * as M from "motion/react-m";
 import { ArrowRight, Save, Trash2, X } from "@/components/icons/lucideControls";
 import { Loader2 } from "@/components/icons/lucideStatus";
-import { FileText, Image as ImageIcon, Palette } from "@/components/icons/lucideContent";
+import { FileText, Image as ImageIcon, ImagePlay, Palette } from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
@@ -113,6 +113,7 @@ export default function ImageDetailPanel({
   onDelete,
   onCreateStyle,
   onCreateTemplate,
+  onConvertToVideo,
 }) {
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const [form, setForm] = useState(null);
@@ -237,6 +238,12 @@ export default function ImageDetailPanel({
               以此為基礎繼續編輯
               <ArrowRight className="icon-sm" aria-hidden="true" />
             </Button>
+            {onConvertToVideo && (
+              <Button type="button" variant="outline" className="w-full gap-1.5" onClick={() => onConvertToVideo(item)}>
+                <ImagePlay className="icon-sm" aria-hidden="true" />
+                轉成影片
+              </Button>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"

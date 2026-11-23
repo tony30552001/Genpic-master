@@ -53,6 +53,16 @@ export const addHistoryItem = async ({
   });
 };
 
+export const addVideoHistoryItem = async ({
+  videoJobId, userScript, fullPrompt,
+}) =>
+  apiPost(`${API_BASE_URL}/history`, {
+    videoJobId,
+    userScript,
+    fullPrompt,
+    source: "video",
+  });
+
 export const deleteHistoryItem = async (itemId) =>
   apiDelete(`${API_BASE_URL}/history/${itemId}`);
 

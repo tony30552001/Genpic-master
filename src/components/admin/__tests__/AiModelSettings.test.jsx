@@ -15,6 +15,8 @@ import {
   testAdminLlmModel,
   updateAdminImageModel,
   updateAdminModelSettings,
+  listAdminVideoModels,
+  updateAdminVideoSettings,
 } from "../../../services/adminService";
 import { waitForImageJob } from "../../../services/aiService";
 
@@ -32,8 +34,14 @@ vi.mock("../../../services/adminService", () => ({
   updateAdminImageModel: vi.fn(),
   updateAdminLlmModel: vi.fn(),
   updateAdminModelSettings: vi.fn(),
+  listAdminVideoModels: vi.fn(),
+  createAdminVideoModel: vi.fn(),
+  updateAdminVideoModel: vi.fn(),
+  deleteAdminVideoModel: vi.fn(),
+  testAdminVideoModel: vi.fn(),
+  updateAdminVideoSettings: vi.fn(),
 }));
-vi.mock("../../../services/aiService", () => ({ waitForImageJob: vi.fn() }));
+vi.mock("../../../services/aiService", () => ({ waitForImageJob: vi.fn(), waitForVideoJob: vi.fn() }));
 
 const { refreshProfile } = vi.hoisted(() => ({ refreshProfile: vi.fn() }));
 vi.mock("../../../hooks/useAuth", () => ({ default: () => ({ refreshProfile }) }));
@@ -50,7 +58,8 @@ const catalogOf = (models) => ({
   apiTypes: [{ id: "azure-openai-images-v1", label: "Azure OpenAI Images v1" }],
   qualities: ["low", "medium", "high", "auto"],
 });
-const policyOf = (modelPolicy) => ({ modelPolicy });
+const videoSettings = { allowedModels: [], dailyQuotaPerUser: 5, submitsPerMinute: 2 };
+const policyOf = (modelPolicy) => ({ modelPolicy, videoSettings });
 
 const textModel = { id: "llm-1", label: "GPT 分析", modelName: "gpt-x", endpoint: "https://llm.example.com", hasApiKey: true };
 const llmSettings = {
@@ -77,6 +86,8 @@ describe("AiModelSettings", () => {
     getAdminModelSettings.mockResolvedValue(policyOf({ allowedModels: ["alpha", "beta"], defaultModel: "alpha", defaultEditModel: "alpha" }));
     updateAdminModelSettings.mockImplementation(async (policy) => policyOf(policy));
     listAdminLlmModels.mockResolvedValue(llmSettings);
+    listAdminVideoModels.mockResolvedValue({ models: [], families: [] });
+    updateAdminVideoSettings.mockImplementation(async (settings) => settings);
   });
 
   it("saves an image role assignment immediately and refreshes the profile", async () => {

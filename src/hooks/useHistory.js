@@ -3,6 +3,7 @@ import { requireImageJobId } from "../lib/imageJob";
 
 import {
   addHistoryItem,
+  addVideoHistoryItem,
   deleteHistoryItem as removeHistoryItem,
   listHistory,
 } from "../services/storageService";
@@ -73,6 +74,16 @@ export default function useHistory({ user }) {
     [user]
   );
 
+  const saveVideoHistoryItem = useCallback(
+    async ({ videoJobId, userScript, fullPrompt }) => {
+      if (!user) return;
+      await addVideoHistoryItem({ videoJobId, userScript, fullPrompt });
+      const items = await listHistory();
+      setHistoryItems(items || []);
+    },
+    [user]
+  );
+
   const deleteHistory = useCallback(
     async (itemId) => {
       if (!user) return;
@@ -126,6 +137,7 @@ export default function useHistory({ user }) {
   return {
     historyItems,
     saveHistoryItem,
+    saveVideoHistoryItem,
     deleteHistoryItem: deleteHistory,
     deleteHistoryItems,
   };

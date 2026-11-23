@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { Check, Loader2 } from "@/components/icons/lucideStatus";
 import { SelectField } from "@/components/ui/select-field";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { IMAGE_ROLES } from "@/hooks/useImageModelAdmin";
 import { CardHead, CardLoadState, ROW_GRID } from "./modelCardParts";
@@ -42,11 +44,48 @@ function GroupLabel({ children }) {
   );
 }
 
-export default function ModelAssignments({ image, llm, savedRow, className }) {
+function VideoPolicyForm({ video, saved }) {
+  const [videoQuota, setVideoQuota] = useState(String(video.settings.dailyQuotaPerUser));
+  const [submitsPerMinute, setSubmitsPerMinute] = useState(String(video.settings.submitsPerMinute));
+
+  return (
+    <li className="space-y-3 px-4 py-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5 text-xs text-muted-foreground">
+          每人每日生成額度
+          <Input type="number" min="1" max="100" value={videoQuota} onChange={(event) => setVideoQuota(event.target.value)} />
+        </label>
+        <label className="grid gap-1.5 text-xs text-muted-foreground">
+          每個模型每分鐘送出上限
+          <Input type="number" min="1" max="40" value={submitsPerMinute} onChange={(event) => setSubmitsPerMinute(event.target.value)} />
+        </label>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {video.settings.allowedModels.length} 個模型開放；模型清單於右側切換。
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          disabled={video.isSavingPolicy}
+          onClick={() => void video.saveSettings({
+            allowedModels: video.settings.allowedModels,
+            dailyQuotaPerUser: Number(videoQuota),
+            submitsPerMinute: Number(submitsPerMinute),
+          }).catch(() => {})}
+        >
+          {saved ? <Check aria-hidden="true" /> : null}
+          儲存影片政策
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+export default function ModelAssignments({ image, llm, video, savedRow, className }) {
   const imageModels = image.catalog?.models ?? [];
   const llmModels = llm.settings?.models ?? [];
   const assignmentByRole = Object.fromEntries((llm.settings?.assignments ?? []).map((item) => [item.role, item]));
-
   return (
     <section aria-labelledby="model-assignments-title" className={className}>
       <CardHead id="model-assignments-title" title="功能指派" />
@@ -118,6 +157,16 @@ export default function ModelAssignments({ image, llm, savedRow, className }) {
                 </RoleRow>
               );
             })}
+          </CardLoadState>
+          <GroupLabel>影片</GroupLabel>
+          <CardLoadState state={video} retryLabel="重新載入影片政策">
+            {video.settings && (
+              <VideoPolicyForm
+                key={`${video.settings.dailyQuotaPerUser}:${video.settings.submitsPerMinute}`}
+                video={video}
+                saved={savedRow === "video-policy"}
+              />
+            )}
           </CardLoadState>
         </ul>
       </div>

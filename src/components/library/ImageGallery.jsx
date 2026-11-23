@@ -83,6 +83,7 @@ export default function ImageGallery({
   onCreateStyle,
   onCreateTemplate,
   onGoCreate,
+  onConvertToVideo,
 }) {
   const [tileSize, setTileSize] = useState(TILE_DEFAULT);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -272,6 +273,7 @@ export default function ImageGallery({
             onDelete={(item) => setPendingDeleteIds([item.id])}
             onCreateStyle={onCreateStyle}
             onCreateTemplate={onCreateTemplate}
+            onConvertToVideo={onConvertToVideo}
           />
         )}
       </AnimatePresence>

@@ -86,6 +86,31 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 不能靠舊環境變數 fallback。此升級涉及 schema 與 async-only API 合約，
 不可只回滾單一前端或 API 執行個體；需要復原時使用事先準備的協調版本與資料庫備份。
 
+### 影片模型目錄與 fal 公開預覽
+
+影片生成使用 Microsoft Foundry 的 fal MiniMax H3 Max 或 Kling V3 Pro 公開預覽。
+這不是既有圖片模型目錄的延伸：先在 Foundry 註冊 `Fal.EnableDeploy`，部署所需模型，
+再於管理中心「AI 模型」新增影片模型。端點固定使用
+`https://<resource>.services.ai.azure.com/providers/falai/v1`，金鑰以 `SECRET_ENCRYPTION_KEY`
+加密保存，不得放進 App Service 的 `VITE_*` 或原始碼。
+
+正式部署前必須手動套用 `035_video_generation.sql`：
+
+```powershell
+node api\scripts\migrate.cjs 035_video_generation.sql
+```
+
+接著在管理中心設定：
+
+1. 新增 `minimax-h3-max` 或 `kling-v3-pro` 家族的部署名稱、資源金鑰、秒數與畫質上限。
+2. 在影片政策開放模型，並設定每人每日額度與每分鐘送出上限；預設為 5 次／日、2 次／分。
+3. 逐一開放需要使用影片創作的使用者；未開放使用者不會看到影片分頁。
+4. 以「付費測試」確認部署與金鑰。Kling 較慢且部署在 US Data Zone；測試與實際生成都可能產生費用。
+
+Fal 的資料處理不適用 Microsoft Product Terms／DPA，因此上線前必須確認組織法遵已接受資料出境。
+Pixora 只會把供應商金鑰送到與模型端點完全相同的 Foundry 主機，並且只允許
+`/providers/falai/v1/assets/` 成品網址；完成後 MP4 立即轉存到 `BLOB_CONTAINER_GENERATED`。
+
 分析用的 LLM 不由環境變數設定。套用 `db/migrations/014_llm_models.sql` 後，
 管理員在管理中心「AI 模型」新增文字模型（Azure OpenAI deployment 名稱、端點與 API 金鑰）並指派給各用途：
 Prompt 優化、設計簡報、風格分析、檔名生成與對話創作。每個用途可另外指派

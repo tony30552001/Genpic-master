@@ -18,6 +18,7 @@ import {
 } from "@/components/icons/lucideStatus";
 import {
   Cpu,
+  Clapperboard,
   Image,
   Palette,
   ShieldCheck,
@@ -50,6 +51,7 @@ import useAuth from "../../hooks/useAuth";
 import {
   deleteAdminStyle,
   getAdminHistoryImage,
+  getAdminHistoryVideo,
   getAdminStylePreview,
   listAdminHistory,
   listAdminStyles,
@@ -57,6 +59,7 @@ import {
   listAdminUserOptions,
   updateAdminUserRole,
   updateAdminUserStatus,
+  updateAdminUserVideoStatus,
 } from "../../services/adminService";
 
 const SECTIONS = [
@@ -309,6 +312,7 @@ export default function AdminPanel() {
   const [historySource, setHistorySource] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [previewSource, setPreviewSource] = useState("");
+  const [previewVideo, setPreviewVideo] = useState(null);
   const [loadingSection, setLoadingSection] = useState("users");
   const [isLoadingUserOptions, setIsLoadingUserOptions] = useState(false);
   const [hasLoadedUserOptions, setHasLoadedUserOptions] = useState(false);
@@ -319,7 +323,10 @@ export default function AdminPanel() {
   const requestedSectionsRef = useRef(new Set());
   const appliedUserSearchRef = useRef("");
   const modelLabel = (modelKey) =>
-    profile?.imageModels?.find((model) => model.modelKey === modelKey)?.label || modelKey || "未紀錄";
+    profile?.imageModels?.find((model) => model.modelKey === modelKey)?.label
+    || profile?.videoModels?.find((model) => model.modelKey === modelKey)?.label
+    || modelKey
+    || "未紀錄";
 
   const loadUsersSection = useCallback(
     async ({ page = 1, pageSize = DEFAULT_USER_PAGE_SIZE, search = "" } = {}) => {
@@ -584,6 +591,19 @@ export default function AdminPanel() {
     void applyUserStatusChange(item);
   };
 
+  const handleVideoAccessChange = async (item) => {
+    setErrorMessage("");
+    try {
+      const updated = await updateAdminUserVideoStatus(item.id, !item.videoEnabled);
+      setUsers((previous) =>
+        previous.map((entry) => (entry.id === item.id ? { ...entry, ...updated } : entry))
+      );
+      setSuccessMessage(`${item.displayName} 的影片創作已${updated.videoEnabled ? "開放" : "關閉"}。`);
+    } catch (error) {
+      setErrorMessage(error.message || "影片開放狀態更新失敗");
+    }
+  };
+
   const applyDeleteStyle = async (style) => {
     setErrorMessage("");
     setSuccessMessage("");
@@ -623,6 +643,21 @@ export default function AdminPanel() {
   const openHistoryPreview = (historyId) => {
     setPreviewHistoryId(historyId);
     setPreviewSource(adminImageCache.get(historyId) || "");
+  };
+
+  const openVideoPreview = async (item) => {
+    setErrorMessage("");
+    try {
+      const blob = await getAdminHistoryVideo(item.id);
+      setPreviewVideo({ ...item, url: URL.createObjectURL(blob) });
+    } catch (error) {
+      setErrorMessage(error.message || "生成影片載入失敗");
+    }
+  };
+
+  const closeVideoPreview = () => {
+    if (previewVideo?.url) URL.revokeObjectURL(previewVideo.url);
+    setPreviewVideo(null);
   };
 
   useEffect(() => {
@@ -828,7 +863,7 @@ export default function AdminPanel() {
               {activeSection === "users" && (
                 <AdminTable
                   minWidth="min-w-[980px]"
-                  columns={["使用者", "登入方式", "角色", "狀態", "生成圖片", "儲存風格", "加入時間", { label: "操作", align: "right" }]}
+                  columns={["使用者", "登入方式", "角色", "狀態", "影片創作", "生成紀錄", "儲存風格", "加入時間", { label: "操作", align: "right" }]}
                   isEmpty={users.length === 0}
                   emptyMessage={userSearch.trim() ? "找不到符合搜尋條件的使用者。" : "目前沒有使用者資料。"}
                   footer={
@@ -872,6 +907,22 @@ export default function AdminPanel() {
                             {item.isActive ? "啟用" : "已停用"}
                           </span>
                         </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={Boolean(item.videoEnabled)}
+                            aria-label={`${item.videoEnabled ? "關閉" : "開放"} ${item.displayName} 影片創作`}
+                            disabled={!item.isActive}
+                            onClick={() => void handleVideoAccessChange(item)}
+                            className={cn(
+                              "relative inline-flex h-5 w-9 items-center rounded-full border border-transparent transition-colors disabled:opacity-40",
+                              item.videoEnabled ? "bg-primary" : "bg-input"
+                            )}
+                          >
+                            <span className={cn("size-4 rounded-full bg-background shadow-sm transition-transform", item.videoEnabled ? "translate-x-4" : "translate-x-0.5")} />
+                          </button>
+                        </td>
                         <td className="px-4 py-3 tabular-nums">{item.generationCount}</td>
                         <td className="px-4 py-3 tabular-nums">{item.styleCount}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDate(item.createdAt)}</td>
@@ -908,7 +959,7 @@ export default function AdminPanel() {
               {activeSection === "history" && (
                 <AdminTable
                   minWidth="min-w-[960px]"
-                  columns={["圖片", "使用者", "功能", "模型", "Prompt", "時間"]}
+                  columns={["內容", "使用者", "功能", "模型", "Prompt", "時間"]}
                   isEmpty={historyItems.length === 0}
                   emptyMessage="目前沒有生成紀錄。"
                   footer={
@@ -942,6 +993,15 @@ export default function AdminPanel() {
                             <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity duration-(--motion-hover) ease-emphasized group-hover:opacity-100 group-focus-visible:opacity-100">
                               <ZoomIn className="icon-sm text-white" aria-hidden="true" />
                             </span>
+                          </button>
+                        ) : item.hasVideo ? (
+                          <button
+                            type="button"
+                            onClick={() => void openVideoPreview(item)}
+                            aria-label={`播放 ${item.userDisplayName} 的生成影片`}
+                            className="flex h-14 w-20 items-center justify-center rounded-lg border border-border bg-muted text-primary press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <Clapperboard aria-hidden="true" />
                           </button>
                         ) : (
                           <span className="flex h-14 w-20 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">無預覽</span>
@@ -1044,6 +1104,17 @@ export default function AdminPanel() {
           )}
         </div>
       </main>
+
+      {previewVideo && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/95 p-3" role="dialog" aria-modal="true" aria-label="管理員影片預覽">
+          <div className="flex justify-end">
+            <Button type="button" variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={closeVideoPreview} aria-label="關閉影片">
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+          <video src={previewVideo.url} controls autoPlay playsInline className="mx-auto my-auto max-h-[calc(100dvh-5rem)] w-full max-w-5xl object-contain" />
+        </div>
+      )}
 
       <AlertDialog open={Boolean(pendingAction)} onOpenChange={(open) => { if (!open) setPendingAction(null); }}>
         <AlertDialogContent>

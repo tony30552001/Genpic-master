@@ -4,6 +4,10 @@ const { rateLimit } = require("../_shared/rateLimit");
 const { resolveIdentity } = require("../_shared/identity");
 const { ensureModelPolicy } = require("../_shared/modelPolicy");
 const { listPublicImageModels } = require("../_shared/imageModels");
+const { listPublicVideoModels } = require("../_shared/videoModels");
+const { getRemainingQuota } = require("../_shared/videoJobs");
+const { ensureVideoSettings } = require("../_shared/videoPolicy");
+const { query } = require("../_shared/db");
 
 module.exports = async function (context, req) {
   if ((req.method || "").toUpperCase() === "OPTIONS") {
@@ -26,10 +30,23 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const [modelPolicy, imageModels] = await Promise.all([
+  const [modelPolicy, imageModels, userResult, videoSettings, allVideoModels] = await Promise.all([
     ensureModelPolicy(identity.tenantId),
     listPublicImageModels(identity.tenantId),
+    query(
+      "SELECT video_enabled FROM users WHERE id = $1 AND tenant_id = $2",
+      [identity.userId, identity.tenantId]
+    ),
+    ensureVideoSettings(identity.tenantId),
+    listPublicVideoModels(identity.tenantId),
   ]);
+  const videoEnabled = Boolean(userResult.rows[0]?.video_enabled);
+  const videoModels = allVideoModels.filter((model) =>
+    videoSettings.allowedModels.includes(model.modelKey)
+  );
+  const remainingVideoQuota = videoEnabled
+    ? await getRemainingQuota({ tenantId: identity.tenantId, userId: identity.userId })
+    : 0;
   context.res = ok(
     {
       user: {
@@ -37,9 +54,15 @@ module.exports = async function (context, req) {
         email: identity.email,
         displayName: identity.displayName,
         role: identity.role,
+        videoEnabled,
       },
       modelPolicy,
       imageModels,
+      videoModels,
+      videoSettings: {
+        dailyQuotaPerUser: videoSettings.dailyQuotaPerUser,
+        remainingQuota: remainingVideoQuota,
+      },
     },
     200,
     req

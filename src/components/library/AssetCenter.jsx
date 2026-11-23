@@ -9,11 +9,13 @@ import { AnimatePresence } from "motion/react";
 import AssetMetadataSheet from "./AssetMetadataSheet";
 import AssetViewModeToggle from "./AssetViewModeToggle";
 import ImageGallery from "./ImageGallery";
+import VideoGallery from "./VideoGallery";
 import QuickApplyStrip from "./QuickApplyStrip";
 import { normalizeViewMode } from "./viewMode";
 
 const SECTIONS = [
   { id: "images", label: "圖片", searchLabel: "圖片" },
+  { id: "videos", label: "影片", searchLabel: "影片" },
   { id: "templates", label: "範本", searchLabel: "範本" },
   { id: "styles", label: "風格", searchLabel: "風格" },
 ];
@@ -55,6 +57,7 @@ export default function AssetCenter({
   onDeleteHistory,
   onDeleteHistoryItems,
   onGoCreate,
+  onConvertToVideo,
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef(null);
@@ -77,20 +80,21 @@ export default function AssetCenter({
   const [isSavingMetadata, setIsSavingMetadata] = useState(false);
 
   const counts = {
-    images: historyItems.length,
+    images: historyItems.filter((item) => !item.videoJobId).length,
+    videos: historyItems.filter((item) => item.videoJobId).length,
     templates: templates.length,
     styles: savedStyles.length,
   };
 
   const activeSearchQuery =
-    section === "images"
+    section === "images" || section === "videos"
       ? historySearchQuery
       : section === "templates"
         ? templateSearchQuery
         : styleSearchQuery;
 
   const handleSearchChange = (value) => {
-    if (section === "images") onHistorySearchChange?.(value);
+    if (section === "images" || section === "videos") onHistorySearchChange?.(value);
     if (section === "templates") setTemplateSearchQuery(value);
     if (section === "styles") onStyleSearchChange?.(value);
   };
@@ -169,7 +173,7 @@ export default function AssetCenter({
             </kbd>
           </div>
           <Tabs value={section} onValueChange={setSection}>
-            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:inline-flex sm:w-fit" aria-label="素材中心分類">
+            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 sm:inline-flex sm:w-fit" aria-label="素材中心分類">
               {SECTIONS.map(({ id, label }) => (
                 <TabsTrigger key={id} value={id} className="min-h-11 gap-1.5 lg:min-h-9 lg:px-4">
                   <span>{label}</span>
@@ -193,7 +197,7 @@ export default function AssetCenter({
       {section === "images" && (
         <div className="animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="images">
           <ImageGallery
-            historyItems={historyItems}
+            historyItems={historyItems.filter((item) => !item.videoJobId)}
             savedStyles={savedStyles}
             searchQuery={historySearchQuery}
             onEdit={onLoadHistory}
@@ -202,6 +206,18 @@ export default function AssetCenter({
             onCreateStyle={onCreateStyle}
             onCreateTemplate={onCreateTemplate}
             onGoCreate={onGoCreate}
+            onConvertToVideo={onConvertToVideo}
+          />
+        </div>
+      )}
+
+      {section === "videos" && (
+        <div className="animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="videos">
+          <VideoGallery
+            historyItems={historyItems.filter((item) => item.videoJobId)}
+            searchQuery={historySearchQuery}
+            onDelete={onDeleteHistory}
+            onGoCreate={() => onGoCreate?.("video")}
           />
         </div>
       )}

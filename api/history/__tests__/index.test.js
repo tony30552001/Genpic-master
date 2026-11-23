@@ -46,7 +46,7 @@ describe("job-backed image history", () => {
     expect(imageJobs.getImageJobForUser).toHaveBeenCalledWith({ jobId: JOB_ID, ...owner });
     expect(db.query.mock.calls[0][1]).toEqual([
       owner.tenantId, owner.userId, null, payload.imageUrl, null, null,
-      "gpt-image-2.5-flare", null, source, JOB_ID,
+      "gpt-image-2.5-flare", null, source, JOB_ID, null,
     ]);
     expect(db.query.mock.calls[0][0]).not.toContain("tenant_model_settings");
   });

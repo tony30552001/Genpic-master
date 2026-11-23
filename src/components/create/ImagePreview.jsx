@@ -9,6 +9,7 @@ import {
 } from "@/components/icons/lucideContent";
 import { Button } from "@/components/ui/button";
 import { getImageOutputLabel } from "@/lib/imageOutput";
+import { ImagePlay } from "@/components/icons/lucideContent";
 import { cn } from "@/lib/utils";
 import ShareToLineButton from "../share/ShareToLineButton";
 import ImageGeneratingState from "./ImageGeneratingState";
@@ -46,6 +47,7 @@ export default function ImagePreview({
   onSelectVersion,
   getVersion,
   onExpand,
+  onConvertToVideo,
   floatingVersions = false,
 }) {
   const [failedImage, setFailedImage] = useState(null);
@@ -123,6 +125,17 @@ export default function ImagePreview({
           className={ICON_BUTTON_CLASS}
         >
           <Maximize2 aria-hidden="true" />
+        </Button>
+      )}
+      {onConvertToVideo && !imageError && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onConvertToVideo}
+          className="mr-1 h-[34px] shrink-0 gap-1.5 rounded-full px-3 text-[13px] font-semibold"
+        >
+          <ImagePlay aria-hidden="true" />
+          <span className="hidden sm:inline">轉成影片</span>
         </Button>
       )}
       {!imageError && <ShareToLineButton imageUrl={generatedImage} user={user} />}

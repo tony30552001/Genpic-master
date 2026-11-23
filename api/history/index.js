@@ -4,6 +4,7 @@ const { rateLimit } = require("../_shared/rateLimit");
 const { query } = require("../_shared/db");
 const { resolveIdentity } = require("../_shared/identity");
 const { getImageJobForUser } = require("../_shared/imageJobs");
+const { getVideoJobForUser } = require("../_shared/videoJobs");
 const { normalizeHistorySource } = require("../_shared/historySource");
 
 module.exports = async function (context, req) {
@@ -31,7 +32,7 @@ module.exports = async function (context, req) {
 
   if (method === "GET") {
     const result = await query(
-      "SELECT id, image_url, prompt, user_script, style_prompt, model, image_job_id, style_id, source, created_at FROM history WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC",
+      "SELECT id, image_url, prompt, user_script, style_prompt, model, image_job_id, video_job_id, style_id, source, created_at FROM history WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC",
       [identity.tenantId, identity.userId]
     );
     const items = result.rows.map((row) => ({
@@ -42,6 +43,7 @@ module.exports = async function (context, req) {
       stylePrompt: row.style_prompt,
       model: row.model,
       jobId: row.image_job_id,
+      videoJobId: row.video_job_id,
       styleId: row.style_id,
       source: row.source,
       createdAt: { seconds: Math.floor(new Date(row.created_at).getTime() / 1000) },
@@ -52,43 +54,51 @@ module.exports = async function (context, req) {
 
   if (method === "POST") {
     const payload = req.body || {};
-    if (
-      typeof payload.jobId !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.jobId)
-    ) {
-      context.res = error("請提供有效的圖片工作識別碼", "bad_request", 400, req);
+    const isImage = typeof payload.jobId === "string";
+    const isVideo = typeof payload.videoJobId === "string";
+    if (isImage === isVideo) {
+      context.res = error("歷史紀錄必須指定單一圖片或影片工作", "bad_request", 400, req);
       return;
     }
-    if (typeof payload.imageUrl !== "string" || !payload.imageUrl.trim()) {
+    const selectedJobId = isImage ? payload.jobId : payload.videoJobId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(selectedJobId)) {
+      context.res = error("請提供有效的生成工作識別碼", "bad_request", 400, req);
+      return;
+    }
+    if (isImage && (typeof payload.imageUrl !== "string" || !payload.imageUrl.trim())) {
       context.res = error("缺少歷史圖片", "bad_request", 400, req);
       return;
     }
-    const job = await getImageJobForUser({
-      jobId: payload.jobId,
-      tenantId: identity.tenantId,
-      userId: identity.userId,
-    });
+    const job = isImage
+      ? await getImageJobForUser({ jobId: selectedJobId, tenantId: identity.tenantId, userId: identity.userId })
+      : await getVideoJobForUser({ jobId: selectedJobId, tenantId: identity.tenantId, userId: identity.userId });
     if (!job) {
-      context.res = error("找不到圖片生成工作", "not_found", 404, req);
+      context.res = error("找不到生成工作", "not_found", 404, req);
       return;
     }
     if (job.status !== "succeeded") {
-      context.res = error("圖片生成工作尚未成功完成", "not_ready", 409, req);
+      context.res = error("生成工作尚未成功完成", "not_ready", 409, req);
       return;
     }
     const result = await query(
-      "INSERT INTO history (tenant_id, user_id, prompt, image_url, user_script, style_prompt, model, style_id, source, image_job_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, image_url, prompt, user_script, style_prompt, model, style_id, source, image_job_id, created_at",
+      `INSERT INTO history
+       (tenant_id, user_id, prompt, image_url, user_script, style_prompt, model,
+        style_id, source, image_job_id, video_job_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING id, image_url, prompt, user_script, style_prompt, model, style_id,
+                 source, image_job_id, video_job_id, created_at`,
       [
         identity.tenantId,
         identity.userId,
         payload.fullPrompt || null,
-        payload.imageUrl,
+        isImage ? payload.imageUrl : null,
         payload.userScript || null,
         payload.stylePrompt || null,
-        job.model,
+        isImage ? job.model : job.model_key,
         payload.styleId || null,
         normalizeHistorySource(payload.source),
-        job.id,
+        isImage ? job.id : null,
+        isVideo ? job.id : null,
       ]
     );
     const row = result.rows[0];
@@ -101,6 +111,7 @@ module.exports = async function (context, req) {
         stylePrompt: row.style_prompt,
         model: row.model,
         jobId: row.image_job_id,
+        videoJobId: row.video_job_id,
         styleId: row.style_id,
         source: row.source,
         createdAt: { seconds: Math.floor(new Date(row.created_at).getTime() / 1000) },

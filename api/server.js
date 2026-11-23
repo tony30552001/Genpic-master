@@ -19,8 +19,11 @@ const history = require("./history");
 const imageChats = require("./image-chats");
 const imageChatMemory = require("./image-chat-memory");
 const imageJobs = require("./image-jobs");
+const videoJobs = require("./video-jobs");
+const videoPrompt = require("./video-prompt");
 const imageTransform = require("./image-transform");
 const { startImageJobWorker } = require("./_shared/imageJobs");
+const { startVideoJobWorker } = require("./_shared/videoJobs");
 const lineConfig = require("./line-config");
 const me = require("./me");
 const optimizePrompt = require("./optimize-prompt");
@@ -77,6 +80,15 @@ const sendFunctionResponse = (res, response = {}) => {
 
   if (Buffer.isBuffer(response.body) || typeof response.body === "string") {
     res.status(status).send(response.body);
+    return;
+  }
+
+  if (typeof response.body?.pipe === "function") {
+    response.body.once("error", (streamError) => {
+      console.error("[api] Response stream failed:", streamError);
+      res.destroy(streamError);
+    });
+    response.body.pipe(res.status(status));
     return;
   }
 
@@ -154,6 +166,8 @@ registerRoutes(
 );
 registerRoutes(["/api/image-chat-memory"], ["GET", "PUT", "OPTIONS"], imageChatMemory);
 registerRoutes(["/api/image-jobs/:id", "/api/image-jobs/:id/:asset"], ["GET", "OPTIONS"], imageJobs);
+registerRoutes(["/api/video-jobs", "/api/video-jobs/:id", "/api/video-jobs/:id/:asset"], ["GET", "POST", "OPTIONS"], videoJobs);
+registerRoutes(["/api/video-prompt"], ["POST", "OPTIONS"], videoPrompt);
 registerRoutes(["/api/image-transform"], ["POST", "OPTIONS"], imageTransform);
 registerRoutes(["/api/line-config"], ["GET", "POST", "DELETE", "OPTIONS"], lineConfig);
 registerRoutes(["/api/optimize-prompt"], ["POST", "OPTIONS"], optimizePrompt);
@@ -232,6 +246,7 @@ const start = () => {
     console.log(`[api] App Service server listening on port ${port}`);
   });
   startImageJobWorker();
+  startVideoJobWorker();
   startDeckJobWorker();
   const stopUploadCleanupWorker = startUploadCleanupWorker();
   server.once("close", stopUploadCleanupWorker);

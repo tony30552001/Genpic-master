@@ -266,3 +266,35 @@ export const transformImage = async ({
     { signal }
   ));
 };
+
+export const optimizeVideoPrompt = async ({ prompt, signal }) =>
+  apiPost(`${API_BASE_URL}/video-prompt`, { prompt }, { signal });
+
+export const createVideoJob = async (payload) =>
+  apiPost(`${API_BASE_URL}/video-jobs`, payload);
+
+export const getVideoJob = async ({ jobId, signal }) =>
+  apiGet(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}`, { signal });
+
+export const waitForVideoJob = async ({
+  jobId,
+  signal,
+  onProgress,
+  pollIntervalMs = 4000,
+  timeoutMs = 30 * 60 * 1000,
+}) => {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt <= timeoutMs) {
+    const job = await getVideoJob({ jobId, signal });
+    onProgress?.(job);
+    if (job?.status === "succeeded") return job;
+    if (job?.status === "failed") {
+      throw new Error(job.error?.message || "影片生成失敗，請稍後重試");
+    }
+    await abortableDelay(pollIntervalMs, signal);
+  }
+  throw new Error("影片生成工作逾時，請稍後重試");
+};
+
+export const downloadVideo = async ({ jobId, signal }) =>
+  apiGetBlob(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/video`, { signal });

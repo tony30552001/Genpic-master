@@ -71,6 +71,33 @@ const downloadGeneratedBlob = async ({ blobName }) => {
   return blobClient.downloadToBuffer();
 };
 
+const uploadGeneratedStream = async ({ blobName, stream, contentType, contentLength }) => {
+  const containerName = process.env.BLOB_CONTAINER_GENERATED || "generated";
+  const containerClient = await getContainerClient(containerName);
+  const blobClient = containerClient.getBlockBlobClient(blobName);
+  const readable = typeof stream.getReader === "function"
+    ? require("node:stream").Readable.fromWeb(stream)
+    : stream;
+  await blobClient.uploadStream(readable, 4 * 1024 * 1024, 5, {
+    blobHTTPHeaders: {
+      blobContentType: contentType,
+      blobCacheControl: "private, max-age=300",
+    },
+  });
+  const properties = await blobClient.getProperties();
+  return {
+    blobName,
+    contentType,
+    size: Number(properties.contentLength) || contentLength || 0,
+  };
+};
+
+const getGeneratedBlobDownload = async ({ blobName }) => {
+  const containerName = process.env.BLOB_CONTAINER_GENERATED || "generated";
+  const containerClient = await getContainerClient(containerName);
+  return containerClient.getBlockBlobClient(blobName).download();
+};
+
 const uploadGeneratedImage = async ({ blobName, source }) => {
   const { buffer, contentType } = await fetchImageSource(source);
   return uploadGeneratedBlob({ blobName, buffer, contentType });
@@ -82,6 +109,8 @@ module.exports = {
   downloadGeneratedBlob,
   downloadGeneratedImage,
   fetchImageSource,
+  getGeneratedBlobDownload,
   uploadGeneratedBlob,
   uploadGeneratedImage,
+  uploadGeneratedStream,
 };

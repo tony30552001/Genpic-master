@@ -5,6 +5,7 @@ const HISTORY_SOURCES = [
   "bg_replace",
   "element_extract",
   "style_transfer",
+  "video",
 ];
 
 /** Written only by the image-job worker when a chat turn's image succeeds. */

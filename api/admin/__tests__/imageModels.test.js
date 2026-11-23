@@ -7,6 +7,8 @@ const limiter = require("../../_shared/rateLimit");
 const models = require("../../_shared/imageModels");
 const policy = require("../../_shared/modelPolicy");
 const jobs = require("../../_shared/imageJobs");
+const videoModels = require("../../_shared/videoModels");
+const videoPolicy = require("../../_shared/videoPolicy");
 const { ImageModelError } = require("../../_shared/imageModelConfig");
 admin.requireAdmin = vi.fn();
 limiter.rateLimit = vi.fn();
@@ -15,6 +17,8 @@ for (const name of ["createImageModel", "updateImageModel", "deleteImageModel", 
 }
 policy.ensureModelPolicy = vi.fn();
 policy.updateModelPolicy = vi.fn();
+videoModels.listPublicVideoModels = vi.fn();
+videoPolicy.ensureVideoSettings = vi.fn();
 jobs.createImageJob = vi.fn();
 const handler = require("../index");
 const identity = { tenantId: "tenant-1", userId: "admin-1" };
@@ -39,6 +43,10 @@ beforeEach(() => {
     modelKey: model.modelKey, label: model.label, supportedQualities: model.supportedQualities,
   }]);
   policy.ensureModelPolicy.mockResolvedValue({ allowedModels: ["gpt-image-2"], defaultModel: "gpt-image-2" });
+  videoModels.listPublicVideoModels.mockResolvedValue([]);
+  videoPolicy.ensureVideoSettings.mockResolvedValue({
+    allowedModels: [], dailyQuotaPerUser: 5, submitsPerMinute: 2,
+  });
 });
 
 describe("image model management", () => {

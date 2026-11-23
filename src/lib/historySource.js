@@ -2,6 +2,7 @@
 export const HISTORY_SOURCE_LABELS = [
   { id: "general", label: "快速創作" },
   { id: "chat", label: "對話創作" },
+  { id: "video", label: "影片創作" },
   { id: "refine", label: "修改這張" },
   { id: "bg_replace", label: "換背景" },
   { id: "element_extract", label: "取出元素" },

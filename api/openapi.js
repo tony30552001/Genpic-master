@@ -381,6 +381,47 @@ addOperation("/api/image-jobs/{id}/image", "get", {
   successSchema: { type: "string", format: "binary" },
 });
 
+addOperation("/api/video-jobs", "post", {
+  summary: "Queue a text-to-video or image-to-video job",
+  description: "Uses an allowed tenant video model and enforces the user's daily quota. Image sources must be owned by the caller.",
+  tags: ["Video"],
+  body: true,
+  csrf: true,
+  successStatuses: [202],
+  bodySchema: {
+    type: "object",
+    required: ["modelKey", "prompt", "mode", "durationSeconds"],
+    properties: {
+      modelKey: { type: "string" },
+      prompt: { type: "string", maxLength: 20000 },
+      originalPrompt: { type: "string", maxLength: 20000 },
+      mode: { type: "string", enum: ["t2v", "i2v"] },
+      durationSeconds: { type: "integer", minimum: 1, maximum: 15 },
+      resolution: { type: "string", enum: ["480P", "768P", "1080P"] },
+      aspectRatio: { type: "string" },
+      generateAudio: { type: "boolean" },
+      sourceUploadId: { type: "string", format: "uuid" },
+      sourceImageJobId: { type: "string", format: "uuid" },
+      endSourceUploadId: { type: "string", format: "uuid" },
+      endSourceImageJobId: { type: "string", format: "uuid" },
+    },
+  },
+});
+
+addOperation("/api/video-jobs/{id}", "get", {
+  summary: "Get the status of an owned video generation job",
+  tags: ["Video"],
+  parameters: pathParameters("id"),
+});
+
+addOperation("/api/video-jobs/{id}/video", "get", {
+  summary: "Download the immutable MP4 result of an owned succeeded video job",
+  tags: ["Video"],
+  parameters: pathParameters("id"),
+  successContentType: "video/mp4",
+  successSchema: { type: "string", format: "binary" },
+});
+
 const imageChatSettingsSchema = {
   type: "object",
   required: ["aspectRatio", "imageLanguage", "purpose"],
@@ -608,6 +649,13 @@ for (const method of ["get", "post", "delete"]) {
 addOperation("/api/optimize-prompt", "post", {
   summary: "Optimize an image prompt",
   tags: ["AI"],
+  body: true,
+  csrf: true,
+});
+
+addOperation("/api/video-prompt", "post", {
+  summary: "Optimize a video prompt while preserving explicitly quoted text",
+  tags: ["Video"],
   body: true,
   csrf: true,
 });

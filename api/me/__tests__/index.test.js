@@ -7,11 +7,19 @@ const identity = require("../../_shared/identity");
 const limiter = require("../../_shared/rateLimit");
 const policy = require("../../_shared/modelPolicy");
 const models = require("../../_shared/imageModels");
+const videoModels = require("../../_shared/videoModels");
+const videoPolicy = require("../../_shared/videoPolicy");
+const videoJobs = require("../../_shared/videoJobs");
+const db = require("../../_shared/db");
 auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
 limiter.rateLimit = vi.fn();
 policy.ensureModelPolicy = vi.fn();
 models.listPublicImageModels = vi.fn();
+videoModels.listPublicVideoModels = vi.fn();
+videoPolicy.ensureVideoSettings = vi.fn();
+videoJobs.getRemainingQuota = vi.fn();
+db.query = vi.fn();
 const handler = require("../index");
 
 beforeEach(() => {
@@ -19,6 +27,12 @@ beforeEach(() => {
   auth.requireAuth.mockResolvedValue({ user: { sub: "admin" } });
   identity.resolveIdentity.mockResolvedValue({ tenantId: "tenant-1", userId: "admin", role: "admin" });
   limiter.rateLimit.mockReturnValue({ limited: false });
+  videoModels.listPublicVideoModels.mockResolvedValue([]);
+  videoPolicy.ensureVideoSettings.mockResolvedValue({
+    allowedModels: [], dailyQuotaPerUser: 5, submitsPerMinute: 2,
+  });
+  videoJobs.getRemainingQuota.mockResolvedValue(5);
+  db.query.mockResolvedValue({ rows: [{ video_enabled: false }] });
 });
 
 describe("profile image catalog", () => {

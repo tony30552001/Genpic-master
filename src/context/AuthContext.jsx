@@ -154,6 +154,8 @@ export const AuthProvider = ({ children }) => {
         ...data.user,
         modelPolicy: data.modelPolicy || null,
         imageModels: Array.isArray(data.imageModels) ? data.imageModels : [],
+        videoModels: Array.isArray(data.videoModels) ? data.videoModels : [],
+        videoSettings: data.videoSettings || null,
       };
       setProfile(nextProfile);
       return nextProfile;
