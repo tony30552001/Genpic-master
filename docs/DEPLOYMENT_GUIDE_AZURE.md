@@ -94,17 +94,19 @@ App Service 會提供 `PORT`，不要在程式碼或設定中硬編固定 produc
 `https://<resource>.services.ai.azure.com/providers/falai/v1`，金鑰以 `SECRET_ENCRYPTION_KEY`
 加密保存，不得放進 App Service 的 `VITE_*` 或原始碼。
 
-正式部署前必須手動套用 `035_video_generation.sql`：
+正式部署前必須依序手動套用 `035_video_generation.sql` 與 `036_video_storyboard.sql`。
+`036` 會刪除預覽階段的影片任務與影片歷史紀錄（舊任務沒有分鏡），並新增使用者的不限額欄位：
 
 ```powershell
 node api\scripts\migrate.cjs 035_video_generation.sql
+node api\scripts\migrate.cjs 036_video_storyboard.sql
 ```
 
 接著在管理中心設定：
 
 1. 新增 `minimax-h3-max` 或 `kling-v3-pro` 家族的部署名稱、資源金鑰、秒數與畫質上限。
 2. 在影片政策開放模型，並設定每人每日額度與每分鐘送出上限；預設為 5 次／日、2 次／分。
-3. 逐一開放需要使用影片創作的使用者；未開放使用者不會看到影片分頁。
+3. 逐一開放需要使用影片創作的使用者；未開放使用者不會看到影片分頁。需要大量製作的使用者可另外開啟「不限額」，只取消每日額度，每分鐘送出上限照常套用。
 4. 以「付費測試」確認部署與金鑰。Kling 較慢且部署在 US Data Zone；測試與實際生成都可能產生費用。
 
 Fal 的資料處理不適用 Microsoft Product Terms／DPA，因此上線前必須確認組織法遵已接受資料出境。

@@ -89,6 +89,7 @@ const publicVideoModel = (row) => ({
     aspectRatios: getVideoModelFamily(row.family).aspectRatios,
     supportsAudioToggle: getVideoModelFamily(row.family).supportsAudioToggle,
     fixedAudio: getVideoModelFamily(row.family).fixedAudio,
+    multiShot: getVideoModelFamily(row.family).multiShot,
     estimatedSeconds: getVideoModelFamily(row.family).estimatedSeconds,
   },
 });

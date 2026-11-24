@@ -46,6 +46,7 @@ const mapUser = (row) => ({
   role: row.role,
   isActive: row.is_active !== false,
   videoEnabled: Boolean(row.video_enabled),
+  videoUnlimited: Boolean(row.video_unlimited),
   authProvider: row.auth_provider || null,
   createdAt: timestamp(row.created_at),
   generationCount: Number(row.generation_count || 0),
@@ -157,6 +158,7 @@ const listUsers = async (context, identity, req) => {
        u.is_active,
        u.auth_provider,
        u.video_enabled,
+       u.video_unlimited,
        u.created_at,
        (SELECT COUNT(*) FROM history h
         WHERE h.user_id = u.id AND h.tenant_id = u.tenant_id) AS generation_count,
@@ -343,13 +345,14 @@ const updateUser = async (context, identity, req, targetId) => {
   const hasRole = payload.role !== undefined;
   const hasStatus = payload.isActive !== undefined;
   const hasVideo = payload.videoEnabled !== undefined;
-  if (!hasRole && !hasStatus && !hasVideo) {
+  const hasUnlimited = payload.videoUnlimited !== undefined;
+  if (!hasRole && !hasStatus && !hasVideo && !hasUnlimited) {
     context.res = error("缺少使用者更新內容", "bad_request", 400, req);
     return;
   }
 
   const current = await query(
-    "SELECT id, role, is_active, video_enabled FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    "SELECT id, role, is_active, video_enabled, video_unlimited FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
     [targetId, identity.tenantId]
   );
   if (current.rows.length === 0) {
@@ -361,6 +364,7 @@ const updateUser = async (context, identity, req, targetId) => {
   const role = hasRole ? String(payload.role || "").trim() : currentUser.role;
   const isActive = hasStatus ? payload.isActive : currentUser.is_active;
   const videoEnabled = hasVideo ? payload.videoEnabled : currentUser.video_enabled;
+  const videoUnlimited = hasUnlimited ? payload.videoUnlimited : currentUser.video_unlimited;
 
   if (hasRole && !["admin", "editor", "viewer"].includes(role)) {
     context.res = error("不支援的使用者角色", "bad_request", 400, req);
@@ -373,6 +377,10 @@ const updateUser = async (context, identity, req, targetId) => {
   }
   if (hasVideo && typeof videoEnabled !== "boolean") {
     context.res = error("影片開放狀態格式錯誤", "bad_request", 400, req);
+    return;
+  }
+  if (hasUnlimited && typeof videoUnlimited !== "boolean") {
+    context.res = error("影片不限額狀態格式錯誤", "bad_request", 400, req);
     return;
   }
 
@@ -399,9 +407,9 @@ const updateUser = async (context, identity, req, targetId) => {
   const result = await query(
     `WITH updated_user AS (
        UPDATE users
-       SET role = $1, is_active = $2, video_enabled = $3
-       WHERE id = $4 AND tenant_id = $5
-       RETURNING id, email, display_name, role, is_active, video_enabled, auth_provider, created_at, tenant_id
+       SET role = $1, is_active = $2, video_enabled = $3, video_unlimited = $4
+       WHERE id = $5 AND tenant_id = $6
+       RETURNING id, email, display_name, role, is_active, video_enabled, video_unlimited, auth_provider, created_at, tenant_id
      )
      SELECT
        u.id,
@@ -410,6 +418,7 @@ const updateUser = async (context, identity, req, targetId) => {
        u.role,
        u.is_active,
        u.video_enabled,
+       u.video_unlimited,
        u.auth_provider,
        u.created_at,
        (SELECT COUNT(*) FROM history h
@@ -417,7 +426,7 @@ const updateUser = async (context, identity, req, targetId) => {
        (SELECT COUNT(*) FROM styles s
         WHERE s.created_by = u.id AND s.tenant_id = u.tenant_id) AS style_count
      FROM updated_user u`,
-    [role, isActive, videoEnabled, targetId, identity.tenantId]
+    [role, isActive, videoEnabled, videoUnlimited, targetId, identity.tenantId]
   );
   context.res = ok(mapUser(result.rows[0]), 200, req);
 };

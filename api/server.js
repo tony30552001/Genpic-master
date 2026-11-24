@@ -20,7 +20,7 @@ const imageChats = require("./image-chats");
 const imageChatMemory = require("./image-chat-memory");
 const imageJobs = require("./image-jobs");
 const videoJobs = require("./video-jobs");
-const videoPrompt = require("./video-prompt");
+const videoStoryboard = require("./video-storyboard");
 const imageTransform = require("./image-transform");
 const { startImageJobWorker } = require("./_shared/imageJobs");
 const { startVideoJobWorker } = require("./_shared/videoJobs");
@@ -167,7 +167,7 @@ registerRoutes(
 registerRoutes(["/api/image-chat-memory"], ["GET", "PUT", "OPTIONS"], imageChatMemory);
 registerRoutes(["/api/image-jobs/:id", "/api/image-jobs/:id/:asset"], ["GET", "OPTIONS"], imageJobs);
 registerRoutes(["/api/video-jobs", "/api/video-jobs/:id", "/api/video-jobs/:id/:asset"], ["GET", "POST", "OPTIONS"], videoJobs);
-registerRoutes(["/api/video-prompt"], ["POST", "OPTIONS"], videoPrompt);
+registerRoutes(["/api/video-storyboard"], ["POST", "OPTIONS"], videoStoryboard);
 registerRoutes(["/api/image-transform"], ["POST", "OPTIONS"], imageTransform);
 registerRoutes(["/api/line-config"], ["GET", "POST", "DELETE", "OPTIONS"], lineConfig);
 registerRoutes(["/api/optimize-prompt"], ["POST", "OPTIONS"], optimizePrompt);

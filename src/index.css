@@ -558,3 +558,67 @@ input[type="number"] {
     transform: none;
   }
 }
+
+/* Storyboard board: cards rise in with a 40ms stagger; an AI-changed card
+   flashes once on a separate layer so the entrance does not replay. */
+@keyframes storyboard-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes storyboard-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes storyboard-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes storyboard-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.storyboard-enter {
+  animation: storyboard-in 320ms var(--ease-emphasized) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.storyboard-flash {
+  background-color: hsl(var(--primary) / 0.12);
+  animation: storyboard-flash 600ms var(--ease-exit) both;
+}
+
+.storyboard-skeleton {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--muted)),
+    hsl(var(--primary) / 0.1),
+    hsl(var(--muted))
+  );
+  background-size: 200% 100%;
+  animation:
+    storyboard-in 320ms var(--ease-emphasized) both,
+    storyboard-shimmer 1.4s linear infinite;
+  animation-delay: calc(var(--i, 0) * 40ms), 0ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storyboard-enter {
+    animation: storyboard-fade 200ms ease both;
+  }
+
+  .storyboard-skeleton {
+    animation: storyboard-fade 200ms ease both;
+  }
+}

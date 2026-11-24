@@ -34,19 +34,22 @@ module.exports = async function (context, req) {
     ensureModelPolicy(identity.tenantId),
     listPublicImageModels(identity.tenantId),
     query(
-      "SELECT video_enabled FROM users WHERE id = $1 AND tenant_id = $2",
+      "SELECT video_enabled, video_unlimited FROM users WHERE id = $1 AND tenant_id = $2",
       [identity.userId, identity.tenantId]
     ),
     ensureVideoSettings(identity.tenantId),
     listPublicVideoModels(identity.tenantId),
   ]);
   const videoEnabled = Boolean(userResult.rows[0]?.video_enabled);
+  const videoUnlimited = videoEnabled && Boolean(userResult.rows[0]?.video_unlimited);
   const videoModels = allVideoModels.filter((model) =>
     videoSettings.allowedModels.includes(model.modelKey)
   );
-  const remainingVideoQuota = videoEnabled
-    ? await getRemainingQuota({ tenantId: identity.tenantId, userId: identity.userId })
-    : 0;
+  const remainingVideoQuota = !videoEnabled
+    ? 0
+    : videoUnlimited
+    ? null
+    : await getRemainingQuota({ tenantId: identity.tenantId, userId: identity.userId });
   context.res = ok(
     {
       user: {
@@ -55,6 +58,7 @@ module.exports = async function (context, req) {
         displayName: identity.displayName,
         role: identity.role,
         videoEnabled,
+        videoUnlimited,
       },
       modelPolicy,
       imageModels,

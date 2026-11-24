@@ -1,34 +1,31 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Download,
-  Plus,
-  RotateCcw,
-  X,
-} from "@/components/icons/lucideControls";
-import {
-  Clapperboard,
-  ImagePlus,
-  ImagePlay,
-  Sparkles,
-} from "@/components/icons/lucideContent";
+import { AnimatePresence } from "motion/react";
+import { ChevronDown, Download, Plus, RotateCcw, X } from "@/components/icons/lucideControls";
+import { Clapperboard, FileText, ImagePlay, ImagePlus } from "@/components/icons/lucideContent";
 import { AlertCircle, Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SelectField } from "@/components/ui/select-field";
 import { Textarea } from "@/components/ui/textarea";
+import { MOBILE_LAYOUT_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import useVideoGeneration from "@/hooks/useVideoGeneration";
+import useVideoStoryboard from "@/hooks/useVideoStoryboard";
 import { downloadVideo } from "@/services/aiService";
 import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
+import { storyboardSeconds } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
-
-const RATE_USD = {
-  "480P": 0.05,
-  "768P": 0.08,
-  "1080P": 0.16,
-};
+import StoryboardBoard from "./storyboard/StoryboardBoard";
+import StoryboardSheet from "./storyboard/StoryboardSheet";
+import StoryboardSummaryCard from "./storyboard/StoryboardSummaryCard";
 
 const STATUS_LABELS = {
-  optimizing: "AI 正在優化描述",
+  drafting: "AI 正在整理鏡頭",
   queued: "排隊中",
   submitting: "送出中",
   polling: "生成中",
@@ -36,6 +33,8 @@ const STATUS_LABELS = {
   succeeded: "生成完成",
   failed: "生成失敗",
 };
+
+const SUGGESTIONS = ["晨光穿過森林的慢鏡頭", "珍珠奶茶在夜市燈光下緩慢旋轉", "以城市為背景的品牌開場"];
 
 const imageSource = (source) => {
   if (!source) return null;
@@ -56,63 +55,129 @@ const initialResolution = (model) => {
 
 const statusLabel = (turn) => STATUS_LABELS[turn.phase] || STATUS_LABELS[turn.status] || "準備中";
 
-function VideoTurn({ turn, onOpen, onRegenerate, onStop, onContinue, isActive }) {
+const turnTitle = (turn) => turn.storyboard?.title || turn.brief;
+
+const summaryOf = (storyboard) => ({
+  title: storyboard.title,
+  seconds: storyboardSeconds(storyboard),
+  shots: storyboard.shots.map((shot) => ({ id: shot.id, warned: false })),
+});
+
+function ElapsedTime() {
+  const [startedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(startedAt);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const seconds = Math.floor((now - startedAt) / 1000);
+  return (
+    <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground" aria-hidden="true">
+      {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
+    </span>
+  );
+}
+
+function UserBubble({ text, attachment }) {
+  return (
+    <div className="storyboard-enter flex justify-end">
+      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary/10 px-3.5 py-2.5 text-sm leading-relaxed">
+        {attachment && (
+          <span className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <img src={attachment.previewUrl} alt="" className="size-8 rounded-md object-cover" />
+            <span className="truncate">{attachment.name}</span>
+          </span>
+        )}
+        <p className="line-clamp-6 whitespace-pre-wrap">{text}</p>
+      </div>
+    </div>
+  );
+}
+
+function AgentMessage({ message, isLatest, onOpen, onQuestion }) {
+  if (message.kind === "error") {
+    return (
+      <p className="storyboard-enter flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive" role="alert">
+        <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        {message.text}
+      </p>
+    );
+  }
+  const changed = message.changedShotIds.length
+    ? `已修改 ${message.changedShotIds.length} 幕 · 點擊查看`
+    : isLatest ? "點擊查看與編輯" : "點擊開啟這個版本";
+  return (
+    <div className="storyboard-enter flex flex-col gap-2">
+      {message.text && <p className="text-sm leading-relaxed text-foreground">{message.text}</p>}
+      <StoryboardSummaryCard summary={message.summary} subtitle={changed} onOpen={() => onOpen(message, isLatest)} />
+      {isLatest && message.questions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {message.questions.map((question) => (
+            <button
+              key={question}
+              type="button"
+              className="rounded-full border border-border bg-card px-3 py-1.5 text-left text-xs text-muted-foreground press-feedback hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => onQuestion(question)}
+            >
+              {question}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, onEditStoryboard }) {
   const busy = !["succeeded", "failed"].includes(turn.status);
   return (
     <article
       className={cn(
-        "space-y-3 rounded-2xl border border-border bg-card p-4 animate-in fade-in slide-in-from-bottom-2 duration-(--motion-enter) ease-emphasized motion-reduce:animate-none",
+        "storyboard-enter space-y-3 rounded-2xl border border-border bg-card p-3",
         isActive && "ring-1 ring-primary/35"
       )}
     >
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-          你
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{turn.prompt}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-            <span className="rounded-full bg-muted px-2 py-1">{turn.options?.durationSeconds} 秒</span>
-            {turn.options?.resolution && (
-              <span className="rounded-full bg-muted px-2 py-1">{turn.options.resolution}</span>
-            )}
-            {turn.options?.aspectRatio && (
-              <span className="rounded-full bg-muted px-2 py-1">{turn.options.aspectRatio}</span>
-            )}
-            {turn.options?.generateAudio && (
-              <span className="rounded-full bg-muted px-2 py-1">含音訊</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {turn.explanation && (
-        <div className="flex gap-2 rounded-xl bg-primary/5 px-3 py-2.5 text-xs text-muted-foreground">
-          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
-          <div>
-            <p className="font-medium text-foreground">AI 優化</p>
-            <p className="mt-0.5 leading-relaxed">{turn.explanation}</p>
-          </div>
-        </div>
+      {turn.storyboard ? (
+        <StoryboardSummaryCard
+          summary={summaryOf(turn.storyboard)}
+          subtitle={turn.brief ? "直接生成" : "已確認的分鏡"}
+          onOpen={() => onEditStoryboard(turn)}
+          className="border-0 bg-muted/50"
+        />
+      ) : (
+        <p className="line-clamp-3 whitespace-pre-wrap px-1 text-sm leading-relaxed">{turn.brief}</p>
       )}
 
       {busy && (
-        <div className="space-y-2 rounded-xl border border-border bg-muted/25 p-3" role="status">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <Loader2 className="size-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-              {statusLabel(turn)}
+        <div
+          className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/70 bg-muted/50 shadow-inner ring-1 ring-border/20"
+          role="status"
+          aria-busy="true"
+          aria-live="polite"
+          data-video-generation-placeholder
+        >
+          <div className="image-generation-dots pointer-events-none absolute inset-0" aria-hidden="true" />
+          <div className="image-generation-glow pointer-events-none absolute -inset-[18%]" aria-hidden="true" />
+          <div
+            className="image-generation-glow image-generation-glow-secondary pointer-events-none absolute -inset-[18%]"
+            aria-hidden="true"
+          />
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-background/90 via-background/65 to-transparent px-3 pb-2.5 pt-10">
+            <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground">
+              <span
+                className="image-generation-status-dot size-1.5 shrink-0 rounded-full bg-foreground/70"
+                aria-hidden="true"
+              />
+              <span className="truncate">{statusLabel(turn)}</span>
+              <ElapsedTime />
             </span>
             <button
               type="button"
-              className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+              className="shrink-0 text-xs text-muted-foreground underline-offset-4 hover:underline"
               onClick={() => onStop(turn.clientId)}
             >
               停止等待
             </button>
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
           </div>
         </div>
       )}
@@ -127,22 +192,21 @@ function VideoTurn({ turn, onOpen, onRegenerate, onStop, onContinue, isActive })
       {turn.status === "succeeded" && turn.videoUrl && (
         <button
           type="button"
-          className="group block w-full overflow-hidden rounded-xl bg-black text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group block w-full overflow-hidden rounded-xl bg-black text-left animate-in fade-in duration-(--motion-enter) ease-emphasized focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onOpen(turn)}
           aria-label="播放生成影片"
         >
-          <video
-            src={turn.videoUrl}
-            muted
-            playsInline
-            preload="metadata"
-            className="aspect-video w-full object-contain"
-          />
+          <video src={turn.videoUrl} muted playsInline preload="metadata" className="aspect-video w-full object-contain" />
         </button>
       )}
 
-      <div className="flex items-center justify-end gap-1">
-        <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => onRegenerate(turn)}>
+      <div className="flex flex-wrap items-center justify-end gap-1">
+        {turn.storyboard && (
+          <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => onEditStoryboard(turn)}>
+            <Clapperboard className="size-3.5" aria-hidden="true" />修改分鏡
+          </Button>
+        )}
+        <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => onRegenerate(turn)} disabled={busy}>
           <RotateCcw className="size-3.5" aria-hidden="true" />重新生成
         </Button>
         {turn.videoUrl && (
@@ -184,6 +248,21 @@ function VideoPlayer({ video, onClose }) {
   );
 }
 
+function SourceChip({ source, label, onRemove, removeLabel }) {
+  return (
+    <div className="mb-2 flex items-center gap-2 rounded-xl bg-muted/50 p-2">
+      <img src={source.previewUrl} alt="" className="size-10 rounded-lg object-cover" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium">{source.name}</p>
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+      </div>
+      <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onRemove} aria-label={removeLabel}>
+        <X className="size-4" aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
+
 export default function VideoWorkspace({
   models = [],
   settings,
@@ -191,60 +270,127 @@ export default function VideoWorkspace({
   initialSource = null,
   onSaveHistory,
 }) {
-  const [prompt, setPrompt] = useState("");
+  const [brief, setBrief] = useState("");
   const [modelKey, setModelKey] = useState(models[0]?.modelKey || "");
   const [durationSeconds, setDurationSeconds] = useState(5);
   const [resolution, setResolution] = useState(() => initialResolution(models[0]));
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(false);
-  const [optimize, setOptimize] = useState(true);
   const [source, setSource] = useState(() => imageSource(initialSource));
   const [endSource, setEndSource] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [playerVideo, setPlayerVideo] = useState(null);
+  const [boardVisible, setBoardVisible] = useState(false);
   const fileRef = useRef(null);
   const endFileRef = useRef(null);
+  const briefRef = useRef(null);
   const threadEndRef = useRef(null);
+  const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const videos = useVideoGeneration({ onSaved: onSaveHistory });
 
   const model = models.find((item) => item.modelKey === modelKey) || models[0] || null;
+  const storyboard = useVideoStoryboard({ modelKey: model?.modelKey || "", hasStartFrame: Boolean(source) });
+  const { board, pending } = storyboard;
+  const unlimited = settings?.remainingQuota === null;
   const remainingQuota = Number(settings?.remainingQuota ?? 0);
-  const canSubmit = Boolean(prompt.trim() && model && remainingQuota > 0 && !isUploading);
-  const recentVideos = useMemo(
-    () => historyItems.filter((item) => item.videoJobId),
-    [historyItems]
+  const hasQuota = unlimited || remainingQuota > 0;
+  const drafting = pending === "draft" || pending === "script";
+  const revising = Boolean(board) && boardVisible;
+  const canSend = Boolean(brief.trim() && model && !isUploading && !pending);
+  const recentVideos = useMemo(() => historyItems.filter((item) => item.videoJobId), [historyItems]);
+
+  const thread = useMemo(
+    () => [
+      ...storyboard.messages.map((message) => ({ type: "message", key: message.id, createdAt: message.createdAt, message })),
+      ...videos.turns.map((turn) => ({ type: "turn", key: turn.clientId, createdAt: turn.createdAt, turn })),
+    ].sort((a, b) => a.createdAt - b.createdAt),
+    [storyboard.messages, videos.turns]
   );
+  const latestStoryboardId = [...storyboard.messages].reverse().find((message) => message.kind === "storyboard")?.id;
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ block: "nearest" });
-  }, [videos.turns.length]);
+  }, [thread.length]);
 
-  const submit = async ({ promptOverride, sourceOverride } = {}) => {
-    if (!model || remainingQuota <= 0) return;
-    const nextPrompt = promptOverride ?? prompt;
-    if (!nextPrompt.trim()) return;
-    const nextSource = sourceOverride === undefined ? source : sourceOverride;
+  const generateBlocker = !hasQuota
+    ? "今日額度已用完"
+    : isUploading
+      ? "影格上傳中…"
+      : storyboard.inspection.status === "loading"
+        ? "檢查分鏡中…"
+        : "";
+  const canGenerate = Boolean(
+    board?.compiled && model && hasQuota && !isUploading && !pending && storyboard.inspection.status === "ready"
+  );
+
+  const mediaOptions = (nextSource = source) => ({
+    mode: nextSource ? "i2v" : "t2v",
+    resolution: model.family === "minimax-h3-max" ? resolution : undefined,
+    aspectRatio: nextSource ? undefined : aspectRatio,
+    generateAudio,
+    sourceUploadId: nextSource?.sourceUploadId,
+    sourceImageJobId: nextSource?.sourceImageJobId,
+    endSourceUploadId: nextSource ? endSource?.sourceUploadId : undefined,
+    endSourceImageJobId: nextSource ? endSource?.sourceImageJobId : undefined,
+  });
+
+  const runVideo = async (request) => {
     setSubmitError("");
     try {
-      await videos.submit({
-        prompt: nextPrompt.trim(),
-        optimize,
-        modelKey: model.modelKey,
-        mode: nextSource ? "i2v" : "t2v",
-        durationSeconds,
-        resolution: model.family === "minimax-h3-max" ? resolution : undefined,
-        aspectRatio: nextSource ? undefined : aspectRatio,
-        generateAudio,
-        sourceUploadId: nextSource?.sourceUploadId,
-        sourceImageJobId: nextSource?.sourceImageJobId,
-        endSourceUploadId: nextSource ? endSource?.sourceUploadId : undefined,
-        endSourceImageJobId: nextSource ? endSource?.sourceImageJobId : undefined,
-      });
-      setPrompt("");
+      await videos.submit(request);
     } catch (error) {
       if (error?.name !== "AbortError") setSubmitError(error.message || "影片送出失敗");
     }
+  };
+
+  const attachment = source ? { previewUrl: source.previewUrl, name: source.name } : null;
+
+  const directGenerate = () => {
+    if (!canSend || !hasQuota) return;
+    const text = brief.trim();
+    setBrief("");
+    void runVideo({ brief: text, durationSeconds, modelKey: model.modelKey, ...mediaOptions() });
+  };
+
+  const startDraft = (kind) => {
+    if (!canSend) return;
+    const text = brief.trim();
+    setBrief("");
+    setBoardVisible(true);
+    if (kind === "script") void storyboard.fromScript({ script: text, attachment });
+    else void storyboard.draft({ brief: text, durationSeconds, attachment });
+  };
+
+  const sendRevision = () => {
+    if (!canSend) return;
+    const text = brief.trim();
+    setBrief("");
+    setBoardVisible(true);
+    void storyboard.revise({ instruction: text });
+  };
+
+  const confirmGenerate = () => {
+    if (!canGenerate) return;
+    const confirmed = board.storyboard;
+    storyboard.close();
+    setBoardVisible(false);
+    void runVideo({ storyboard: confirmed, modelKey: model.modelKey, ...mediaOptions() });
+  };
+
+  const openMessage = (message, isLatest) => {
+    if (!(isLatest && board)) storyboard.open(message.storyboard, { reopened: false });
+    setBoardVisible(true);
+  };
+
+  const editFromTurn = (turn) => {
+    storyboard.open(turn.storyboard);
+    setBoardVisible(true);
+  };
+
+  const askAbout = (question) => {
+    setBrief(`關於「${question}」：`);
+    briefRef.current?.focus();
   };
 
   const changeModel = (nextKey) => {
@@ -265,14 +411,14 @@ export default function VideoWorkspace({
   const handleFile = async (file, asEndFrame = false) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      setSubmitError("首影格圖片必須小於 10MB");
+      setSubmitError("影格圖片必須小於 10MB");
       return;
     }
     setIsUploading(true);
     setSubmitError("");
     try {
       const { uploadId } = await uploadFile(file, "image");
-      if (!uploadId) throw new Error("首影格上傳失敗");
+      if (!uploadId) throw new Error("影格上傳失敗");
       const nextSource = {
         sourceUploadId: uploadId,
         sourceImageJobId: null,
@@ -285,25 +431,23 @@ export default function VideoWorkspace({
         setEndSource(null);
       }
     } catch (error) {
-      setSubmitError(error.message || "首影格上傳失敗");
+      setSubmitError(error.message || "影格上傳失敗");
     } finally {
       setIsUploading(false);
     }
   };
 
   const regenerate = (turn) => {
-    setPrompt(turn.prompt);
-    void submit({ promptOverride: turn.prompt });
+    if (!hasQuota) return;
+    if (turn.storyboard) void runVideo({ storyboard: turn.storyboard, modelKey: turn.modelKey, ...turn.options });
+    else void runVideo({ brief: turn.brief, durationSeconds, modelKey: turn.modelKey, ...turn.options });
   };
 
   const openHistory = async (item) => {
     setSubmitError("");
     try {
       const blob = await downloadVideo({ jobId: item.videoJobId });
-      setPlayerVideo({
-        videoUrl: URL.createObjectURL(blob),
-        cleanup: true,
-      });
+      setPlayerVideo({ videoUrl: URL.createObjectURL(blob), cleanup: true });
     } catch (error) {
       setSubmitError(error.message || "影片載入失敗");
     }
@@ -343,7 +487,7 @@ export default function VideoWorkspace({
         name: "上一支影片最後一格",
       });
       setEndSource(null);
-      setPrompt(`延續前一個鏡頭：${turn.prompt}`);
+      setBrief(`延續前一個鏡頭：${turnTitle(turn)}`);
     } catch (error) {
       setSubmitError(error.message || "無法接續這支影片");
     } finally {
@@ -360,31 +504,41 @@ export default function VideoWorkspace({
   const activeTurn = videos.turns.find((turn) => turn.jobId === videos.activeJobId)
     || [...videos.turns].reverse().find((turn) => turn.videoUrl)
     || null;
-  const estimatedUsd = model
-    ? durationSeconds * (RATE_USD[resolution] || RATE_USD["1080P"])
-    : 0;
+  const showBoard = boardVisible && Boolean(board || drafting);
+  const durationOptions = Array.from(
+    { length: Math.max(0, (model?.maxDurationSeconds || 5) - (model?.capabilities?.minDuration || 1) + 1) },
+    (_, index) => String(index + (model?.capabilities?.minDuration || 1))
+  ).map((value) => ({ value, label: `${value} 秒` }));
+
+  const boardProps = {
+    storyboard,
+    model,
+    canGenerate,
+    generateBlocker,
+    onGenerate: confirmGenerate,
+  };
 
   return (
-    <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(460px,46%)_minmax(0,1fr)] lg:gap-5">
-      <section className="flex min-h-0 flex-col overflow-hidden lg:pr-1" aria-label="影片工作串流">
+    <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[400px_minmax(0,1fr)] lg:gap-5">
+      <section className="flex min-h-0 flex-col overflow-hidden" aria-label="影片工作串流">
         <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2 custom-scrollbar">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
-            {videos.turns.length === 0 && (
+            {thread.length === 0 && (
               <div className="flex min-h-52 flex-col items-center justify-center px-6 py-8 text-center">
                 <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                   <Clapperboard className="size-7" aria-hidden="true" />
                 </span>
-                <h2 className="text-base font-semibold">把一段描述變成影片</h2>
+                <h2 className="text-base font-semibold">先擬分鏡，再生成影片</h2>
                 <p className="mt-1 max-w-md text-balance text-sm text-muted-foreground">
-                  可直接文字生成，或加入首影格讓角色、構圖與畫面文字更穩定。
+                  描述想要的畫面，AI 會拆成可檢查的分鏡；簡單的單一鏡頭也可以直接生成。
                 </p>
                 <div className="mt-5 flex flex-wrap justify-center gap-2">
-                  {["晨光穿過森林的慢鏡頭", "珍珠奶茶在夜市燈光下緩慢旋轉", "以城市為背景的品牌開場"].map((suggestion) => (
+                  {SUGGESTIONS.map((suggestion) => (
                     <button
                       key={suggestion}
                       type="button"
                       className="rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground press-feedback hover:text-foreground"
-                      onClick={() => setPrompt(suggestion)}
+                      onClick={() => setBrief(suggestion)}
                     >
                       {suggestion}
                     </button>
@@ -392,56 +546,71 @@ export default function VideoWorkspace({
                 </div>
               </div>
             )}
-            {videos.turns.map((turn) => (
-              <VideoTurn
-                key={turn.clientId}
-                turn={turn}
-                isActive={turn.jobId === videos.activeJobId}
-                onOpen={setPlayerVideo}
-                onRegenerate={regenerate}
-                onStop={videos.stopWaiting}
-                onContinue={(turn) => void continueFromVideo(turn)}
-              />
-            ))}
+            {thread.map((item) => {
+              if (item.type === "turn") {
+                return (
+                  <VideoTurn
+                    key={item.key}
+                    turn={item.turn}
+                    isActive={item.turn.jobId === videos.activeJobId}
+                    onOpen={setPlayerVideo}
+                    onRegenerate={regenerate}
+                    onStop={videos.stopWaiting}
+                    onContinue={(turn) => void continueFromVideo(turn)}
+                    onEditStoryboard={editFromTurn}
+                  />
+                );
+              }
+              const { message } = item;
+              if (message.role === "user") return <UserBubble key={item.key} text={message.text} attachment={message.attachment} />;
+              return (
+                <AgentMessage
+                  key={item.key}
+                  message={message}
+                  isLatest={message.id === latestStoryboardId}
+                  onOpen={openMessage}
+                  onQuestion={askAbout}
+                />
+              );
+            })}
+            {pending && (
+              <p className="storyboard-enter flex items-center gap-2 text-xs text-muted-foreground" role="status">
+                <Loader2 className="size-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+                {drafting ? "AI 正在擬分鏡…" : "AI 正在修改分鏡…"}
+              </p>
+            )}
             <div ref={threadEndRef} />
           </div>
         </div>
 
         <div className="mx-auto w-full max-w-2xl rounded-3xl border border-border bg-card p-2 shadow-sm">
           {source && (
-            <div className="mb-2 flex items-center gap-2 rounded-xl bg-muted/50 p-2">
-              <img src={source.previewUrl} alt="" className="size-10 rounded-lg object-cover" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium">{source.name}</p>
-                <p className="text-[11px] text-muted-foreground">作為首影格</p>
-              </div>
-              <Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => {
+            <SourceChip
+              source={source}
+              label="作為首影格"
+              removeLabel="移除首影格"
+              onRemove={() => {
                 setSource(null);
                 setEndSource(null);
-              }} aria-label="移除首影格">
-                <X className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
+              }}
+            />
           )}
           {source && endSource && (
-            <div className="mb-2 flex items-center gap-2 rounded-xl bg-muted/50 p-2">
-              <img src={endSource.previewUrl} alt="" className="size-10 rounded-lg object-cover" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium">{endSource.name}</p>
-                <p className="text-[11px] text-muted-foreground">作為尾影格</p>
-              </div>
-              <Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => setEndSource(null)} aria-label="移除尾影格">
-                <X className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
+            <SourceChip source={endSource} label="作為尾影格" removeLabel="移除尾影格" onRemove={() => setEndSource(null)} />
           )}
           <Textarea
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="描述主體、場景、運鏡、光線與要保留的動作…"
-            maxLength={4000}
-            className="min-h-24 resize-none border-0 bg-transparent px-3 text-[15px] shadow-none focus-visible:ring-0"
-            aria-label="影片描述"
+            ref={briefRef}
+            value={brief}
+            onChange={(event) => setBrief(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || !revising) return;
+              event.preventDefault();
+              sendRevision();
+            }}
+            placeholder={revising ? "告訴 AI 要怎麼改分鏡，例如：第 2 幕改成特寫…" : "描述主體、場景與想要的鏡頭，或貼上整段腳本…"}
+            maxLength={revising ? 4000 : 50000}
+            className="min-h-20 resize-none border-0 bg-transparent px-3 text-[15px] shadow-none focus-visible:ring-0"
+            aria-label={revising ? "修改分鏡的指令" : "影片描述"}
           />
           <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-2 pt-2">
             <Button type="button" variant="ghost" size="icon" className="size-9" onClick={() => fileRef.current?.click()} disabled={isUploading} aria-label="上傳首影格">
@@ -457,18 +626,17 @@ export default function VideoWorkspace({
               value={model?.modelKey || ""}
               onValueChange={changeModel}
               options={models.map((item) => ({ value: item.modelKey, label: item.label }))}
-              className="h-9 min-w-36 flex-1 text-xs sm:flex-none"
+              className="h-9 min-w-32 flex-1 text-xs sm:flex-none"
             />
-            <SelectField
-              aria-label="影片秒數"
-              value={String(durationSeconds)}
-              onValueChange={(value) => setDurationSeconds(Number(value))}
-              options={Array.from(
-                { length: Math.max(0, (model?.maxDurationSeconds || 5) - (model?.capabilities?.minDuration || 1) + 1) },
-                (_, index) => String(index + (model?.capabilities?.minDuration || 1))
-              ).map((value) => ({ value, label: `${value} 秒` }))}
-              className="h-9 w-20 text-xs"
-            />
+            {!revising && (
+              <SelectField
+                aria-label="影片秒數"
+                value={String(durationSeconds)}
+                onValueChange={(value) => setDurationSeconds(Number(value))}
+                options={durationOptions}
+                className="h-9 w-20 text-xs"
+              />
+            )}
             {!source && (
               <SelectField
                 aria-label="影片比例"
@@ -489,32 +657,48 @@ export default function VideoWorkspace({
                 className="h-9 w-24 text-xs"
               />
             )}
-            <label className="ml-auto flex h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-xs text-muted-foreground">
-              <Sparkles className="size-3.5 text-primary" aria-hidden="true" />
-              AI 優化
-              <input type="checkbox" checked={optimize} onChange={(event) => setOptimize(event.target.checked)} className="accent-primary" />
-            </label>
             {model?.capabilities?.supportsAudioToggle && model.allowAudio && (
               <label className="flex h-9 items-center gap-2 rounded-lg px-2 text-xs text-muted-foreground">
                 含音訊
                 <input type="checkbox" checked={generateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} className="accent-primary" />
               </label>
             )}
-            <Button type="button" size="sm" className="h-9 gap-1.5 rounded-xl" disabled={!canSubmit} onClick={() => void submit()}>
-              <Clapperboard className="size-4" aria-hidden="true" />生成影片
-            </Button>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-1 pt-2 text-[11px] text-muted-foreground">
-            <span>
-              {model?.family === "kling-v3-pro" ? "預估 3–5 分鐘" : "預估約 30 秒"} · 約 ${estimatedUsd.toFixed(2)}
+          <div className="flex items-center gap-2 px-2 pb-0.5 pt-2">
+            <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+              {unlimited ? "不限額" : `今日剩餘 ${remainingQuota} 次`}
             </span>
-            <span>今日剩餘 {remainingQuota} 次</span>
+            {revising ? (
+              <Button type="button" size="sm" className="h-9 rounded-xl" disabled={!canSend} onClick={sendRevision}>
+                送出
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl" disabled={!canSend || !hasQuota} onClick={directGenerate}>
+                  直接生成
+                </Button>
+                <div className="flex">
+                  <Button type="button" size="sm" className="h-9 gap-1.5 rounded-l-xl rounded-r-none" disabled={!canSend} onClick={() => startDraft("draft")}>
+                    <Clapperboard className="size-4" aria-hidden="true" />生成分鏡
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" size="sm" className="h-9 rounded-l-none rounded-r-xl border-l border-primary-foreground/20 px-2" disabled={!canSend} aria-label="更多分鏡方式">
+                        <ChevronDown className="size-4" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => startDraft("script")}>
+                        <FileText className="size-4" aria-hidden="true" />依腳本整理分鏡
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </>
+            )}
           </div>
         </div>
         {submitError && <p role="alert" className="mx-auto mt-2 max-w-2xl text-xs text-destructive">{submitError}</p>}
-        <p className="mx-auto mt-2 max-w-2xl px-3 text-[11px] leading-relaxed text-muted-foreground">
-          影片中的文字請直接寫進提示詞，或使用已包含文字的首影格；背景小字可能失真。資料會送至 fal 公開預覽服務。
-        </p>
         <input
           ref={fileRef}
           type="file"
@@ -540,21 +724,27 @@ export default function VideoWorkspace({
       </section>
 
       <section className="relative hidden min-h-0 overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px] lg:flex" aria-label="影片畫布">
-        {activeTurn?.videoUrl ? (
-          <div className="flex min-h-0 w-full flex-col">
+        {showBoard && !isMobile ? (
+          <StoryboardBoard {...boardProps} onClose={() => setBoardVisible(false)} />
+        ) : activeTurn?.videoUrl ? (
+          <div className="flex min-h-0 w-full flex-col animate-in fade-in duration-(--motion-enter) ease-emphasized">
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card/90 px-4 backdrop-blur-md">
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold">{activeTurn.prompt}</p>
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold">{turnTitle(activeTurn)}</p>
+              {board && !boardVisible && (
+                <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setBoardVisible(true)}>
+                  查看分鏡
+                </Button>
+              )}
+              {activeTurn.storyboard && (
+                <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => editFromTurn(activeTurn)}>
+                  <Clapperboard className="size-3.5" aria-hidden="true" />修改分鏡
+                </Button>
+              )}
               <a href={activeTurn.videoUrl} download className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="下載影片">
                 <Download className="size-4" aria-hidden="true" />
               </a>
             </div>
-            <video
-              key={activeTurn.videoUrl}
-              src={activeTurn.videoUrl}
-              controls
-              playsInline
-              className="min-h-0 w-full flex-1 object-contain"
-            />
+            <video key={activeTurn.videoUrl} src={activeTurn.videoUrl} controls playsInline className="min-h-0 w-full flex-1 object-contain" />
           </div>
         ) : videos.turns.length ? (
           <div className="m-auto flex flex-col items-center gap-3 text-center text-muted-foreground">
@@ -565,8 +755,8 @@ export default function VideoWorkspace({
           <div className="m-auto flex max-w-sm flex-col items-center gap-4 px-8 text-center">
             <ImagePlay className="size-10 text-muted-foreground/50" aria-hidden="true" />
             <div>
-              <p className="text-sm font-medium text-foreground">影片會出現在這裡</p>
-              <p className="mt-1 text-xs text-muted-foreground">完成後可直接播放、下載或保存到素材中心。</p>
+              <p className="text-sm font-medium text-foreground">分鏡與影片會出現在這裡</p>
+              <p className="mt-1 text-xs text-muted-foreground">確認分鏡後送出，完成即可播放、下載或保存到素材中心。</p>
             </div>
             {recentVideos.length > 0 && (
               <div className="mt-2 flex w-full flex-col gap-2">
@@ -583,6 +773,9 @@ export default function VideoWorkspace({
         )}
       </section>
 
+      <AnimatePresence>
+        {showBoard && isMobile && <StoryboardSheet {...boardProps} onClose={() => setBoardVisible(false)} />}
+      </AnimatePresence>
       <VideoPlayer video={playerVideo} onClose={closePlayer} />
     </div>
   );

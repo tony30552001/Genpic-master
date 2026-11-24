@@ -1,4 +1,11 @@
 const { IMAGE_API_TYPES, IMAGE_QUALITIES } = require("./_shared/imageModelConfig");
+const {
+  ANGLES,
+  CAMERAS,
+  MAX_SHOTS,
+  PROMPT_LIMIT,
+  SHOT_SIZES,
+} = require("./_shared/videoStoryboard");
 
 const jsonObjectSchema = {
   type: "object",
@@ -383,20 +390,18 @@ addOperation("/api/image-jobs/{id}/image", "get", {
 
 addOperation("/api/video-jobs", "post", {
   summary: "Queue a text-to-video or image-to-video job",
-  description: "Uses an allowed tenant video model and enforces the user's daily quota. Image sources must be owned by the caller.",
+  description: "Uses an allowed tenant video model and enforces the user's daily quota unless the user is unlimited. The duration is the sum of the storyboard shots; the storyboard is compiled deterministically into the model request. Image sources must be owned by the caller.",
   tags: ["Video"],
   body: true,
   csrf: true,
   successStatuses: [202],
   bodySchema: {
     type: "object",
-    required: ["modelKey", "prompt", "mode", "durationSeconds"],
+    required: ["modelKey", "storyboard", "mode"],
     properties: {
       modelKey: { type: "string" },
-      prompt: { type: "string", maxLength: 20000 },
-      originalPrompt: { type: "string", maxLength: 20000 },
+      storyboard: { $ref: "#/components/schemas/VideoStoryboard" },
       mode: { type: "string", enum: ["t2v", "i2v"] },
-      durationSeconds: { type: "integer", minimum: 1, maximum: 15 },
       resolution: { type: "string", enum: ["480P", "768P", "1080P"] },
       aspectRatio: { type: "string" },
       generateAudio: { type: "boolean" },
@@ -653,11 +658,28 @@ addOperation("/api/optimize-prompt", "post", {
   csrf: true,
 });
 
-addOperation("/api/video-prompt", "post", {
-  summary: "Optimize a video prompt while preserving explicitly quoted text",
+addOperation("/api/video-storyboard", "post", {
+  summary: "Draft, revise, split a script into, or inspect a video storyboard",
+  description: "draft and revise use the tenant prompt_optimization model; fromScript keeps every script verbatim unless condensed; inspect only validates, returns warnings and the compiled model request. Agent output that breaks storyboard rules returns 502.",
   tags: ["Video"],
   body: true,
   csrf: true,
+  bodySchema: {
+    type: "object",
+    required: ["action", "modelKey"],
+    properties: {
+      action: { type: "string", enum: ["draft", "revise", "fromScript", "inspect"] },
+      modelKey: { type: "string" },
+      brief: { type: "string", maxLength: 20000, description: "draft" },
+      durationSeconds: { type: "integer", minimum: 1, maximum: 15, description: "draft" },
+      shotCount: { type: "integer", minimum: 1, maximum: 6, description: "draft; 1 for direct generation" },
+      hasStartFrame: { type: "boolean" },
+      storyboard: { $ref: "#/components/schemas/VideoStoryboard" },
+      instruction: { type: "string", maxLength: 4000, description: "revise" },
+      shotId: { type: "string", description: "revise a single shot" },
+      script: { type: "string", maxLength: 50000, description: "fromScript" },
+    },
+  },
 });
 
 addOperation("/api/send-line-image", "post", {
@@ -954,6 +976,46 @@ module.exports = {
     { name: "Administration" },
   ],
   components: {
+    schemas: {
+      VideoStoryboard: {
+        type: "object",
+        required: ["title", "global", "shots"],
+        properties: {
+          title: { type: "string", maxLength: 30 },
+          global: {
+            type: "object",
+            properties: {
+              style: { type: "string", maxLength: 300 },
+              lighting: { type: "string", maxLength: 300 },
+              constraints: { type: "array", maxItems: 8, items: { type: "string", maxLength: 200 } },
+              negative: { type: "string", maxLength: PROMPT_LIMIT },
+            },
+          },
+          shots: {
+            type: "array",
+            minItems: 1,
+            maxItems: MAX_SHOTS,
+            description: "A shot is either structured (script null) or a script shot (shotSize through environment null).",
+            items: {
+              type: "object",
+              required: ["id", "duration"],
+              properties: {
+                id: { type: "string", pattern: "^[A-Za-z0-9_-]{1,40}$" },
+                title: { type: ["string", "null"], maxLength: 30 },
+                script: { type: ["string", "null"], maxLength: PROMPT_LIMIT },
+                scriptOriginal: { type: ["string", "null"] },
+                duration: { type: "integer", minimum: 1, maximum: 15 },
+                shotSize: { type: ["string", "null"], enum: [...Object.keys(SHOT_SIZES), null] },
+                angle: { type: ["string", "null"], enum: [...Object.keys(ANGLES), null] },
+                camera: { type: ["string", "null"], enum: [...Object.keys(CAMERAS), null] },
+                action: { type: ["string", "null"], maxLength: 1000 },
+                environment: { type: ["string", "null"], maxLength: 500 },
+              },
+            },
+          },
+        },
+      },
+    },
     securitySchemes: {
       sessionCookie: {
         type: "apiKey",

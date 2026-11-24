@@ -1,0 +1,128 @@
+import React, { useId, useState } from "react";
+import { ChevronDown, Plus, X } from "@/components/icons/lucideControls";
+import { cn } from "@/lib/utils";
+
+const MAX_CONSTRAINTS = 8;
+
+const fieldClass =
+  "h-8 w-full min-w-0 rounded-lg border border-border bg-transparent px-2.5 text-[13px] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none";
+
+/** Whole-video settings (style, lighting, consistency, negative) as a collapsible card. */
+export default function GlobalCard({ global, onChange, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [draftConstraint, setDraftConstraint] = useState("");
+  const id = useId();
+  const summary = [global.style, global.lighting].filter(Boolean).join(" · ") || "尚未設定";
+
+  const addConstraint = () => {
+    const text = draftConstraint.trim();
+    if (!text || global.constraints.length >= MAX_CONSTRAINTS) return;
+    onChange({ constraints: [...global.constraints, text] });
+    setDraftConstraint("");
+  };
+
+  return (
+    <section className="storyboard-enter shrink-0 rounded-2xl border border-border bg-card">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={`${id}-body`}
+      >
+        全片設定
+        <span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">{summary}</span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 text-muted-foreground transition-transform duration-(--motion-enter) ease-emphasized",
+            open && "rotate-180"
+          )}
+          aria-hidden="true"
+        />
+      </button>
+      <div
+        id={`${id}-body`}
+        className={cn(
+          "grid transition-[grid-template-rows] duration-(--motion-enter) ease-emphasized",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+        inert={!open}
+      >
+        <div className="overflow-hidden">
+          <div className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 px-3 pb-3 text-xs">
+            <label htmlFor={`${id}-style`} className="text-muted-foreground">風格</label>
+            <input
+              id={`${id}-style`}
+              className={fieldClass}
+              value={global.style}
+              maxLength={300}
+              placeholder="例如：溫暖寫實、電影感"
+              onChange={(event) => onChange({ style: event.target.value })}
+            />
+            <label htmlFor={`${id}-light`} className="text-muted-foreground">光線</label>
+            <input
+              id={`${id}-light`}
+              className={fieldClass}
+              value={global.lighting}
+              maxLength={300}
+              placeholder="例如：清晨側光、暖色調"
+              onChange={(event) => onChange({ lighting: event.target.value })}
+            />
+            <span className="self-start pt-1.5 text-muted-foreground">保持一致</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {global.constraints.map((item, index) => (
+                <span key={`${item}-${index}`} className="inline-flex h-6.5 max-w-full items-center gap-1 rounded-full bg-muted pl-2.5 pr-1 text-xs">
+                  <span className="truncate">{item}</span>
+                  <button
+                    type="button"
+                    className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground press-feedback hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => onChange({ constraints: global.constraints.filter((_, i) => i !== index) })}
+                    aria-label={`移除「${item}」`}
+                  >
+                    <X className="size-3" aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+              {global.constraints.length < MAX_CONSTRAINTS && (
+                <span className="inline-flex h-6.5 min-w-32 flex-1 items-center gap-1 rounded-full border border-dashed border-border pl-2.5 pr-1 focus-within:border-primary">
+                  <input
+                    value={draftConstraint}
+                    maxLength={200}
+                    onChange={(event) => setDraftConstraint(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                        event.preventDefault();
+                        addConstraint();
+                      }
+                    }}
+                    placeholder="新增要保持一致的細節"
+                    className="min-w-0 flex-1 bg-transparent text-xs placeholder:text-muted-foreground focus-visible:outline-none"
+                    aria-label="新增保持一致的細節"
+                  />
+                  <button
+                    type="button"
+                    className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground press-feedback hover:bg-muted hover:text-foreground disabled:opacity-40"
+                    onClick={addConstraint}
+                    disabled={!draftConstraint.trim()}
+                    aria-label="加入"
+                  >
+                    <Plus className="size-3" aria-hidden="true" />
+                  </button>
+                </span>
+              )}
+            </div>
+            <label htmlFor={`${id}-negative`} className="text-muted-foreground">避免</label>
+            <input
+              id={`${id}-negative`}
+              className={fieldClass}
+              value={global.negative}
+              maxLength={2500}
+              placeholder="例如：blur, distort, low quality"
+              onChange={(event) => onChange({ negative: event.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

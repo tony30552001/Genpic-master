@@ -59,7 +59,7 @@ import {
   listAdminUserOptions,
   updateAdminUserRole,
   updateAdminUserStatus,
-  updateAdminUserVideoStatus,
+  updateAdminUserVideoAccess,
 } from "../../services/adminService";
 
 const SECTIONS = [
@@ -229,6 +229,26 @@ const AdminTablePagination = ({ pagination, itemLabel, isRefreshing, onPageChang
     </div>
   );
 };
+
+const VideoAccessSwitch = ({ checked, label, ariaLabel, disabled, onToggle }) => (
+  <label className={cn("inline-flex items-center gap-2 whitespace-nowrap text-xs", disabled && "opacity-40")}>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onToggle}
+      className={cn(
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        checked ? "bg-primary" : "bg-input"
+      )}
+    >
+      <span className={cn("size-4 rounded-full bg-background shadow-sm transition-transform", checked ? "translate-x-4" : "translate-x-0.5")} />
+    </button>
+    <span aria-hidden="true">{label}</span>
+  </label>
+);
 
 const AdminTable = ({ columns, minWidth, isEmpty, emptyMessage, footer, children }) => (
   <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -591,16 +611,20 @@ export default function AdminPanel() {
     void applyUserStatusChange(item);
   };
 
-  const handleVideoAccessChange = async (item) => {
+  const handleVideoAccessChange = async (item, field) => {
     setErrorMessage("");
     try {
-      const updated = await updateAdminUserVideoStatus(item.id, !item.videoEnabled);
+      const updated = await updateAdminUserVideoAccess(item.id, { [field]: !item[field] });
       setUsers((previous) =>
         previous.map((entry) => (entry.id === item.id ? { ...entry, ...updated } : entry))
       );
-      setSuccessMessage(`${item.displayName} 的影片創作已${updated.videoEnabled ? "開放" : "關閉"}。`);
+      setSuccessMessage(
+        field === "videoUnlimited"
+          ? `${item.displayName} 的影片額度已${updated.videoUnlimited ? "改為不限額" : "恢復每日上限"}。`
+          : `${item.displayName} 的影片創作已${updated.videoEnabled ? "開放" : "關閉"}。`
+      );
     } catch (error) {
-      setErrorMessage(error.message || "影片開放狀態更新失敗");
+      setErrorMessage(error.message || "影片權限更新失敗");
     }
   };
 
@@ -908,20 +932,22 @@ export default function AdminPanel() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={Boolean(item.videoEnabled)}
-                            aria-label={`${item.videoEnabled ? "關閉" : "開放"} ${item.displayName} 影片創作`}
-                            disabled={!item.isActive}
-                            onClick={() => void handleVideoAccessChange(item)}
-                            className={cn(
-                              "relative inline-flex h-5 w-9 items-center rounded-full border border-transparent transition-colors disabled:opacity-40",
-                              item.videoEnabled ? "bg-primary" : "bg-input"
-                            )}
-                          >
-                            <span className={cn("size-4 rounded-full bg-background shadow-sm transition-transform", item.videoEnabled ? "translate-x-4" : "translate-x-0.5")} />
-                          </button>
+                          <div className="flex flex-col gap-1.5">
+                            <VideoAccessSwitch
+                              checked={Boolean(item.videoEnabled)}
+                              label="開放"
+                              ariaLabel={`${item.displayName} 影片創作`}
+                              disabled={!item.isActive}
+                              onToggle={() => void handleVideoAccessChange(item, "videoEnabled")}
+                            />
+                            <VideoAccessSwitch
+                              checked={Boolean(item.videoUnlimited)}
+                              label="不限額"
+                              ariaLabel={`${item.displayName} 影片不限額`}
+                              disabled={!item.isActive || !item.videoEnabled}
+                              onToggle={() => void handleVideoAccessChange(item, "videoUnlimited")}
+                            />
+                          </div>
                         </td>
                         <td className="px-4 py-3 tabular-nums">{item.generationCount}</td>
                         <td className="px-4 py-3 tabular-nums">{item.styleCount}</td>

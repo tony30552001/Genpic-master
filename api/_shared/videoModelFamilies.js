@@ -18,6 +18,7 @@ const VIDEO_MODEL_FAMILIES = Object.freeze({
     aspectRatios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
     supportsAudioToggle: false,
     fixedAudio: true,
+    multiShot: false,
     defaultResolution: "768P",
     estimatedSeconds: 30,
   }),
@@ -31,6 +32,7 @@ const VIDEO_MODEL_FAMILIES = Object.freeze({
     aspectRatios: ["16:9", "9:16", "1:1"],
     supportsAudioToggle: true,
     fixedAudio: false,
+    multiShot: true,
     defaultResolution: "1080P",
     estimatedSeconds: 310,
   }),
@@ -86,12 +88,17 @@ const validateVideoOptions = ({ model, durationSeconds, resolution, aspectRatio,
   };
 };
 
-const buildVideoRequest = ({ model, prompt, options, mode, imageDataUrl, endImageDataUrl }) => {
+const buildVideoRequest = ({ model, compiled, options, mode, imageDataUrl, endImageDataUrl }) => {
   const body = {
     model: model.deploymentName,
-    prompt,
     enable_safety_checker: true,
   };
+  if (compiled.prompt) body.prompt = compiled.prompt;
+  if (compiled.multiPrompt) {
+    body.multi_prompt = compiled.multiPrompt;
+    body.shot_type = "customize";
+  }
+  if (compiled.negativePrompt) body.negative_prompt = compiled.negativePrompt;
   if (model.family === "minimax-h3-max") {
     body.duration = options.durationSeconds;
     body.resolution = options.resolution;
@@ -128,6 +135,7 @@ const publicVideoFamily = (familyId) => {
     aspectRatios: family.aspectRatios,
     supportsAudioToggle: family.supportsAudioToggle,
     fixedAudio: family.fixedAudio,
+    multiShot: family.multiShot,
     estimatedSeconds: family.estimatedSeconds,
   };
 };

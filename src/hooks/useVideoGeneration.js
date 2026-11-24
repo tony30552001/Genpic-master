@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createVideoJob,
   downloadVideo,
-  optimizeVideoPrompt,
+  draftVideoStoryboard,
   waitForVideoJob,
 } from "../services/aiService";
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
+/**
+ * Runs video turns. A turn either sends a confirmed `storyboard`, or a `brief`
+ * that the storyboard agent first turns into a single shot ("直接生成").
+ */
 export default function useVideoGeneration({ onSaved }) {
   const [turns, setTurns] = useState([]);
   const [activeJobId, setActiveJobId] = useState(null);
@@ -30,8 +34,9 @@ export default function useVideoGeneration({ onSaved }) {
   }, []);
 
   const submit = useCallback(async ({
-    prompt,
-    optimize = true,
+    storyboard: confirmed = null,
+    brief = "",
+    durationSeconds,
     modelKey,
     ...options
   }) => {
@@ -42,31 +47,29 @@ export default function useVideoGeneration({ onSaved }) {
       ...current,
       {
         clientId,
-        prompt,
+        createdAt: Date.now(),
+        brief,
+        storyboard: confirmed,
         modelKey,
         options,
-        status: "optimizing",
-        explanation: "",
+        status: confirmed ? "queued" : "drafting",
       },
     ]);
     try {
-      let optimizedPrompt = prompt;
-      let explanation = "";
-      if (optimize) {
-        const optimized = await optimizeVideoPrompt({
-          prompt,
+      let storyboard = confirmed;
+      if (!storyboard) {
+        const drafted = await draftVideoStoryboard({
+          modelKey,
+          brief,
+          durationSeconds,
+          shotCount: 1,
+          hasStartFrame: Boolean(options.sourceUploadId || options.sourceImageJobId),
           signal: controller.signal,
         });
-        optimizedPrompt = optimized.optimizedPrompt;
-        explanation = optimized.explanation;
+        storyboard = drafted.storyboard;
+        updateTurn(clientId, { storyboard, status: "queued" });
       }
-      updateTurn(clientId, { status: "queued", optimizedPrompt, explanation });
-      const admission = await createVideoJob({
-        modelKey,
-        prompt: optimizedPrompt,
-        originalPrompt: prompt,
-        ...options,
-      });
+      const admission = await createVideoJob({ modelKey, storyboard, ...options });
       const jobId = admission.jobId;
       updateTurn(clientId, { jobId, status: admission.status, phase: admission.phase });
       setActiveJobId(jobId);
@@ -90,8 +93,8 @@ export default function useVideoGeneration({ onSaved }) {
       });
       await onSaved?.({
         videoJobId: jobId,
-        userScript: prompt,
-        fullPrompt: optimizedPrompt,
+        userScript: brief || storyboard.title,
+        fullPrompt: completed.prompt,
       });
       return { jobId, videoUrl };
     } catch (error) {
@@ -110,7 +113,7 @@ export default function useVideoGeneration({ onSaved }) {
   const stopWaiting = useCallback((clientId) => {
     controllers.current.get(clientId)?.abort();
     controllers.current.delete(clientId);
-    updateTurn(clientId, { status: "failed", error: "已停止等待；遠端工作未取消，仍可能產生費用。" });
+    updateTurn(clientId, { status: "failed", error: "已停止等待；遠端工作若已送出仍會繼續執行。" });
   }, [updateTurn]);
 
   return {
@@ -121,3 +124,4 @@ export default function useVideoGeneration({ onSaved }) {
     stopWaiting,
   };
 }
+

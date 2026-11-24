@@ -34,7 +34,7 @@ describe("video model families", () => {
     });
     const request = buildVideoRequest({
       model: h3,
-      prompt: "A slow camera move",
+      compiled: { prompt: "A slow camera move", multiPrompt: null, negativePrompt: null },
       options,
       mode: "t2v",
     });
@@ -48,7 +48,7 @@ describe("video model families", () => {
     });
   });
 
-  it("uses Kling duration strings and an image-specific first-frame field", () => {
+  it("sends Kling multi-shot storyboards with duration strings and first-frame fields", () => {
     const options = validateVideoOptions({
       model: kling,
       mode: "i2v",
@@ -57,7 +57,11 @@ describe("video model families", () => {
     });
     const request = buildVideoRequest({
       model: kling,
-      prompt: "Continue this shot",
+      compiled: {
+        prompt: null,
+        multiPrompt: [{ prompt: "Open", duration: "1" }, { prompt: "Close", duration: "2" }],
+        negativePrompt: "blur",
+      },
       options,
       mode: "i2v",
       imageDataUrl: "data:image/jpeg;base64,abc",
@@ -68,8 +72,12 @@ describe("video model families", () => {
       generate_audio: false,
       start_image_url: "data:image/jpeg;base64,abc",
       end_image_url: "data:image/jpeg;base64,def",
+      multi_prompt: [{ prompt: "Open", duration: "1" }, { prompt: "Close", duration: "2" }],
+      shot_type: "customize",
+      negative_prompt: "blur",
     });
     expect(request.body).not.toHaveProperty("resolution");
+    expect(request.body).not.toHaveProperty("prompt");
   });
 
   it("enforces catalog and family limits", () => {

@@ -58,4 +58,15 @@ describe("profile image catalog", () => {
     expect(context.res.body.modelPolicy).toEqual(modelPolicy);
     expect(context.res.body.imageModels).toEqual(imageModels);
   });
+
+  it("reports unlimited video users without a remaining quota", async () => {
+    policy.ensureModelPolicy.mockResolvedValue({ allowedModels: [], defaultModel: null });
+    models.listPublicImageModels.mockResolvedValue([]);
+    db.query.mockResolvedValue({ rows: [{ video_enabled: true, video_unlimited: true }] });
+    const context = {};
+    await handler(context, { method: "GET", headers: {} });
+    expect(context.res.body.user.videoUnlimited).toBe(true);
+    expect(context.res.body.videoSettings.remainingQuota).toBeNull();
+    expect(videoJobs.getRemainingQuota).not.toHaveBeenCalled();
+  });
 });

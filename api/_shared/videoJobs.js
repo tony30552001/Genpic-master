@@ -22,6 +22,11 @@ const {
   withVideoModelTransaction,
 } = require("./videoModels");
 const { ensureVideoSettings } = require("./videoPolicy");
+const {
+  compileStoryboard,
+  normalizeStoryboard,
+  storyboardDuration,
+} = require("./videoStoryboard");
 
 const MAX_SUBMIT_ATTEMPTS = 3;
 const LOCK_TIMEOUT_MINUTES = 5;
@@ -45,12 +50,13 @@ const assertSource = (sourceCount, mode) => {
 
 const assertEnabledUser = async ({ client, tenantId, userId }) => {
   const result = await client.query(
-    "SELECT video_enabled FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true",
+    "SELECT video_enabled, video_unlimited FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true",
     [userId, tenantId]
   );
   if (!result.rows[0]?.video_enabled) {
     throw new VideoModelError("此帳號尚未開放影片創作，請聯絡管理員", "video_disabled", 403);
   }
+  return Boolean(result.rows[0].video_unlimited);
 };
 
 const assertOwnedSource = async ({
@@ -105,10 +111,8 @@ const createVideoJob = async ({
   tenantId,
   userId,
   modelKey,
-  prompt,
-  originalPrompt,
+  storyboard: rawStoryboard,
   mode = "t2v",
-  durationSeconds = 5,
   resolution,
   aspectRatio = "16:9",
   generateAudio = false,
@@ -116,13 +120,9 @@ const createVideoJob = async ({
   sourceImageJobId = null,
   endSourceUploadId = null,
   endSourceImageJobId = null,
-  bypassQuota = false,
   skipAdmission = false,
 }) => {
-  const canonicalPrompt = typeof prompt === "string" ? prompt.trim() : "";
-  if (!canonicalPrompt || canonicalPrompt.length > 20_000) {
-    throw new VideoModelError("影片描述必須是 1 至 20000 字元的文字");
-  }
+  const storyboard = normalizeStoryboard(rawStoryboard);
   const sourceIds = {
     sourceUploadId: normalizeUuid(sourceUploadId),
     sourceImageJobId: normalizeUuid(sourceImageJobId),
@@ -144,7 +144,7 @@ const createVideoJob = async ({
   }
 
   return withVideoModelTransaction(tenantId, async (client) => {
-    if (!skipAdmission) await assertEnabledUser({ client, tenantId, userId });
+    const unlimited = skipAdmission ? true : await assertEnabledUser({ client, tenantId, userId });
     const settings = await ensureVideoSettings(tenantId, client);
     if (!skipAdmission && !settings.allowedModels.includes(modelKey)) {
       throw new VideoModelError("此影片模型尚未開放給使用者", "video_model_not_allowed", 403);
@@ -153,11 +153,12 @@ const createVideoJob = async ({
     const options = validateVideoOptions({
       model,
       mode,
-      durationSeconds,
+      durationSeconds: storyboardDuration(storyboard),
       resolution,
       aspectRatio,
       generateAudio,
     });
+    const compiled = compileStoryboard(model.family, storyboard);
     await assertOwnedSource({
       client,
       mode,
@@ -165,7 +166,7 @@ const createVideoJob = async ({
       tenantId,
       userId,
     });
-    if (!bypassQuota && !skipAdmission) {
+    if (!unlimited) {
       const admitted = await client.query(
         `SELECT COUNT(*)::int AS count
          FROM video_generation_jobs
@@ -180,14 +181,14 @@ const createVideoJob = async ({
     }
     const inserted = await client.query(
       `INSERT INTO video_generation_jobs
-       (tenant_id, user_id, model_key, mode, prompt, original_prompt, duration_seconds,
+       (tenant_id, user_id, model_key, mode, prompt, storyboard, duration_seconds,
         resolution, aspect_ratio, generate_audio, source_upload_id, source_image_job_id,
         end_source_upload_id, end_source_image_job_id)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING id, status, phase, model_key, created_at`,
       [
-        tenantId, userId, modelKey, mode, canonicalPrompt,
-        String(originalPrompt || prompt).trim().slice(0, 20_000),
+        tenantId, userId, modelKey, mode, compiled.storedPrompt,
+        JSON.stringify(storyboard),
         options.durationSeconds, options.resolution, options.aspectRatio,
         options.generateAudio, sourceIds.sourceUploadId, sourceIds.sourceImageJobId,
         sourceIds.endSourceUploadId, sourceIds.endSourceImageJobId,
@@ -199,7 +200,7 @@ const createVideoJob = async ({
 
 const getVideoJobForUser = async ({ jobId, tenantId, userId }) => {
   const result = await query(
-    `SELECT id, model_key, mode, prompt, original_prompt, status, phase, attempts,
+    `SELECT id, model_key, mode, prompt, storyboard, status, phase, attempts,
             duration_seconds, resolution, aspect_ratio, generate_audio,
             provider_request_id, source_upload_id, source_image_job_id,
             end_source_upload_id, end_source_image_job_id,
@@ -466,7 +467,7 @@ const processNextVideoJob = async () => {
           : null;
       const request = buildVideoRequest({
         model,
-        prompt: job.prompt,
+        compiled: compileStoryboard(model.family, job.storyboard),
         options: {
           durationSeconds: job.duration_seconds,
           resolution: job.resolution,
