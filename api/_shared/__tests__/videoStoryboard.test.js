@@ -28,6 +28,23 @@ const board = (shots, global = {}) =>
     shots,
   });
 
+const T2V = { mode: "t2v" };
+const I2V = { mode: "i2v" };
+const character = (overrides = {}) => ({
+  id: "c1",
+  name: "咖啡師",
+  description: "短髮，深綠圍裙",
+  uploadIds: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"],
+  ...overrides,
+});
+const mug = character({
+  id: "c2",
+  name: "馬克杯",
+  description: "",
+  uploadIds: ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"],
+  imageLabel: "image2",
+});
+
 describe("normalizeStoryboard", () => {
   it("rejects a shot that mixes script and structured fields", () => {
     expect(() => board([shot({ script: "原文" })])).toThrow(/不能同時/);
@@ -37,11 +54,62 @@ describe("normalizeStoryboard", () => {
     expect(() => board([shot({ camera: "zoom" })])).toThrow(/運鏡/);
     expect(() => board([shot(), shot()])).toThrow(/重複/);
   });
+
+  it("validates characters and the shots that tag them", () => {
+    expect(board([shot()], { characters: [mug] }).global.characters[0].imageLabel).toBe("Image2");
+    expect(() => board([shot()], { characters: [character({ uploadIds: [mug.uploadIds[0]] })] })).toThrow(/參考圖/);
+    expect(() => board([shot({ characterIds: ["c9"] })], { characters: [character()] })).toThrow(/不存在/);
+    expect(() =>
+      board([shot()], { characters: [character(), character({ id: "c2" }), character({ id: "c3" }), character({ id: "c4" })] })
+    ).toThrow(/最多 3/);
+  });
+});
+
+describe("compileStoryboard characters", () => {
+  const cast = (overrides = {}) =>
+    board(
+      [
+        shot({ characterIds: ["c1"] }),
+        { id: "s2", duration: 2, script: "@Image2 放在吧台上，@Image3 在後方", characterIds: [] },
+      ],
+      { characters: [character(), mug], ...overrides }
+    );
+
+  it("sends tagged and script-bound characters as Kling elements with a start frame", () => {
+    const compiled = compileStoryboard("kling-v3-pro", cast(), I2V);
+    expect(compiled.characterMode).toBe("elements");
+    expect(compiled.elements.map((item) => item.characterId)).toEqual(["c1", "c2"]);
+    expect(compiled.multiPrompt[0].prompt).toContain("Characters: @Element1 (咖啡師).");
+    expect(compiled.multiPrompt[1].prompt).toBe("@Element2 放在吧台上，@Image3 在後方 Keep: 圍裙一致.");
+  });
+
+  it("numbers elements by use and skips characters no shot features", () => {
+    const compiled = compileStoryboard(
+      "kling-v3-pro",
+      board([shot({ characterIds: ["c2"] })], { characters: [character(), { ...mug, imageLabel: null }] }),
+      I2V
+    );
+    expect(compiled.elements.map((item) => item.characterId)).toEqual(["c2"]);
+    expect(compiled.prompt).toContain("@Element1 (馬克杯)");
+  });
+
+  it("writes characters as text without a start frame and for MiniMax", () => {
+    const kling = compileStoryboard("kling-v3-pro", cast(), T2V);
+    expect(kling).toMatchObject({ characterMode: "text", elements: [] });
+    expect(kling.multiPrompt[0].prompt).toContain("Characters: 咖啡師（短髮，深綠圍裙）.");
+    expect(kling.multiPrompt[1].prompt).toContain("馬克杯 放在吧台上");
+    const minimax = compileStoryboard("minimax-h3-max", cast(), I2V);
+    expect(minimax.characterMode).toBe("text");
+    expect(minimax.prompt).toContain("[00:00–00:03] Wide shot, eye level, slow push-in. Characters: 咖啡師（短髮，深綠圍裙）. 咖啡師推開店門.");
+  });
 });
 
 describe("compileStoryboard", () => {
+  it("reports no characters when the storyboard has none", () => {
+    expect(compileStoryboard("kling-v3-pro", board([shot()]), I2V)).toMatchObject({ characterMode: "none", elements: [] });
+  });
   it("sends one Kling shot as a single prompt with constraints and negative prompt", () => {
-    const compiled = compileStoryboard("kling-v3-pro", board([shot()]));
+    const compiled = compileStoryboard("kling-v3-pro", board([shot()]), T2V);
     expect(compiled).toMatchObject({
       sendMode: "single",
       prompt: "溫暖寫實. 清晨側光. Wide shot, eye level, slow push-in. 咖啡師推開店門. 木質吧台. Keep: 圍裙一致.",
@@ -53,7 +121,8 @@ describe("compileStoryboard", () => {
   it("sends several Kling shots as multi_prompt and keeps script text verbatim", () => {
     const compiled = compileStoryboard(
       "kling-v3-pro",
-      board([shot(), { id: "s2", duration: 2, script: "她微笑。", shotSize: null }])
+      board([shot(), { id: "s2", duration: 2, script: "她微笑。", shotSize: null }]),
+      T2V
     );
     expect(compiled.sendMode).toBe("multi");
     expect(compiled.multiPrompt[1]).toEqual({ prompt: "她微笑。 Keep: 圍裙一致.", duration: "2" });
@@ -63,7 +132,8 @@ describe("compileStoryboard", () => {
   it("merges MiniMax shots into one timecoded prompt", () => {
     const compiled = compileStoryboard(
       "minimax-h3-max",
-      board([shot(), shot({ id: "s2", duration: 4, shotSize: "close-up", camera: "static", action: "她微笑" })])
+      board([shot(), shot({ id: "s2", duration: 4, shotSize: "close-up", camera: "static", action: "她微笑" })]),
+      T2V
     );
     expect(compiled.prompt).toBe(
       "Overall style: 溫暖寫實. Lighting: 清晨側光. Consistency: 圍裙一致. Avoid: blur.\n" +
@@ -74,7 +144,7 @@ describe("compileStoryboard", () => {
 
   it("rejects a compiled prompt over the model limit", () => {
     expect(() =>
-      compileStoryboard("minimax-h3-max", board([shot({ action: "走".repeat(1000) }), shot({ id: "s2", action: "走".repeat(1000) }), shot({ id: "s3", action: "走".repeat(600) })]))
+      compileStoryboard("minimax-h3-max", board([shot({ action: "走".repeat(1000) }), shot({ id: "s2", action: "走".repeat(1000) }), shot({ id: "s3", action: "走".repeat(600) })]), T2V)
     ).toThrow(/2500/);
   });
 });
@@ -97,6 +167,13 @@ describe("storyboardWarnings", () => {
     const storyboard = board([{ id: "s1", duration: 3, script: "依照 @Image1 的構圖推進" }]);
     expect(storyboardWarnings(storyboard)).toHaveLength(1);
     expect(storyboardWarnings(storyboard, { hasStartFrame: true })).toHaveLength(0);
+  });
+
+  it("does not flag script references bound to a character", () => {
+    const bound = board([{ id: "s1", duration: 3, script: "@Image2 放在吧台上" }], { characters: [mug] });
+    expect(storyboardWarnings(bound)).toHaveLength(0);
+    const unbound = board([{ id: "s1", duration: 3, script: "@Image2 旁邊是 @Image1" }], { characters: [mug] });
+    expect(storyboardWarnings(unbound)[0].message).toMatch(/@Image1/);
   });
 });
 

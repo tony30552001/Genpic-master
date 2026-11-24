@@ -7,7 +7,8 @@ import { Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import { useHistoryLayer } from "@/hooks/useHistoryLayer";
 import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
-import { isScriptShot, shotSummary, storyboardSeconds } from "@/lib/videoStoryboard";
+import { characterModeLabel, isScriptShot, scriptImageLabels, shotSummary, storyboardSeconds } from "@/lib/videoStoryboard";
+import CharacterList from "./CharacterList";
 import { cn } from "@/lib/utils";
 import GlobalCard from "./GlobalCard";
 import ShotCard from "./ShotCard";
@@ -173,7 +174,13 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                     從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。
                   </p>
                 )}
-                <GlobalCard global={board.storyboard.global} onChange={actions.updateGlobal} defaultOpen={false} />
+                <GlobalCard global={board.storyboard.global} onChange={actions.updateGlobal} defaultOpen={false}>
+                  <CharacterList
+                    characters={board.storyboard.global.characters}
+                    imageLabels={scriptImageLabels(board.storyboard)}
+                    actions={actions}
+                  />
+                </GlobalCard>
                 {board.storyboard.shots.map((shot, index) => (
                   <button
                     key={shot.id}
@@ -191,6 +198,14 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                       <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         <span className="truncate">{shotSummary(shot)}</span>
                         <span className="shrink-0 tabular-nums">· {shot.duration} 秒</span>
+                        {shot.characterIds.length > 0 && (
+                          <span className="truncate text-primary">
+                            {board.storyboard.global.characters
+                              .filter((character) => shot.characterIds.includes(character.id))
+                              .map((character) => `@${character.name}`)
+                              .join(" ")}
+                          </span>
+                        )}
                         {warnedIds.has(shot.id) && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-label="有提醒" />}
                       </span>
                       <span className="line-clamp-2 text-[13px]">{isScriptShot(shot) ? shot.script : shot.action || "尚未填寫動作"}</span>
@@ -248,9 +263,11 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
 
 function SheetFooter({ storyboard, actions, model, canGenerate, generateBlocker, onGenerate }) {
   const { board, pending, inspection } = storyboard;
+  const characterMode = characterModeLabel(board?.compiled, model?.family);
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {inspection.status === "invalid" && <p role="alert" className="text-xs text-destructive">{inspection.error}</p>}
+      {characterMode && <p className="text-xs text-muted-foreground">{characterMode}</p>}
       <p className="truncate text-xs text-muted-foreground">{generateBlocker || estimateLabel(model)}</p>
       <div className="flex gap-2">
         <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => void actions.redraft()} disabled={!board || Boolean(pending)}>
@@ -303,7 +320,9 @@ function ShotEditor({ shot, index, board, pending, actions, onClose }) {
           busy={Boolean(pending)}
           rewriting={pending === `revise:${shot.id}`}
           canDelete={board.storyboard.shots.length > 1}
+          characters={board.storyboard.global.characters}
           onChange={(patch) => actions.updateShot(shot.id, patch)}
+          onToggleCharacter={(characterId) => actions.toggleShotCharacter(shot.id, characterId)}
           onRewrite={(mode) => void actions.rewriteShot(shot.id, mode)}
           onFix={(warning) => void actions.fixWarning(warning)}
           onDelete={() => {

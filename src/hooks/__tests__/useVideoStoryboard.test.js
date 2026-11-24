@@ -1,6 +1,8 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import useVideoStoryboard from "../useVideoStoryboard";
+import { storyboardActions } from "../../components/video/storyboard/storyboardActions";
+import { uploadFile } from "../../services/storageService";
 import {
   draftVideoStoryboard,
   inspectVideoStoryboard,
@@ -14,6 +16,8 @@ vi.mock("../../services/aiService", () => ({
   scriptToVideoStoryboard: vi.fn(),
 }));
 
+vi.mock("../../services/storageService", () => ({ uploadFile: vi.fn() }));
+
 const shot = (id, action) => ({
   id,
   title: null,
@@ -25,15 +29,31 @@ const shot = (id, action) => ({
   camera: "static",
   action,
   environment: "",
+  characterIds: [],
 });
 
 const storyboard = {
   title: "晨光森林",
-  global: { style: "寫實", lighting: "晨光", constraints: [], negative: "" },
+  global: { style: "寫實", lighting: "晨光", constraints: [], negative: "", characters: [] },
   shots: [shot("s1", "鏡頭穿過樹林"), shot("s2", "陽光灑落")],
 };
 
-const compiled = { sendMode: "multi", prompt: null, multiPrompt: [], negativePrompt: null };
+const compiled = {
+  sendMode: "multi",
+  prompt: null,
+  multiPrompt: [],
+  negativePrompt: null,
+  characterMode: "none",
+  elements: [],
+};
+
+const barista = {
+  id: "c1",
+  name: "咖啡師",
+  description: "",
+  uploadIds: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"],
+  imageLabel: null,
+};
 
 const agentResult = (overrides = {}) => ({
   storyboard,
@@ -142,5 +162,56 @@ describe("useVideoStoryboard", () => {
     expect(result.current.board).toBeNull();
     expect(result.current.pending).toBeNull();
     expect(result.current.messages.at(-1)).toMatchObject({ kind: "error", text: "分鏡 AI 逾時" });
+  });
+
+  it("keeps the board's characters when drafting again", async () => {
+    const cast = {
+      ...storyboard,
+      global: { ...storyboard.global, characters: [barista] },
+      shots: [{ ...storyboard.shots[0], characterIds: ["c1"] }, storyboard.shots[1]],
+    };
+    draftVideoStoryboard.mockResolvedValueOnce(agentResult({ storyboard: cast }));
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+
+    await act(() => result.current.draft({ brief: "咖啡廣告", durationSeconds: 6 }));
+    await act(() => result.current.draft({ brief: "換成夜景", durationSeconds: 6 }));
+
+    expect(draftVideoStoryboard.mock.calls[0][0].characters).toEqual([]);
+    expect(draftVideoStoryboard.mock.calls[1][0].characters).toEqual([barista]);
+  });
+
+  it("removing a character also clears it from every shot", async () => {
+    const cast = {
+      ...storyboard,
+      global: { ...storyboard.global, characters: [barista] },
+      shots: storyboard.shots.map((item) => ({ ...item, characterIds: ["c1"] })),
+    };
+    draftVideoStoryboard.mockResolvedValueOnce(agentResult({ storyboard: cast }));
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: true }));
+    await act(() => result.current.draft({ brief: "咖啡廣告", durationSeconds: 6 }));
+
+    act(() => storyboardActions(result.current).removeCharacter("c1"));
+
+    expect(result.current.board.storyboard.global.characters).toEqual([]);
+    expect(result.current.board.storyboard.shots.map((item) => item.characterIds)).toEqual([[], []]);
+  });
+
+  it("uploads character images, remembers a preview, and rejects files over 10MB", async () => {
+    vi.useRealTimers(); // FileReader never settles under fake timers.
+    uploadFile.mockResolvedValue({ uploadId: "AAAAAAAA-1111-4111-8111-111111111111" });
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: true }));
+    const file = new File(["png"], "front.png", { type: "image/png" });
+
+    let uploadId;
+    await act(async () => {
+      uploadId = await result.current.uploadImage(file);
+    });
+
+    expect(uploadId).toBe("aaaaaaaa-1111-4111-8111-111111111111");
+    expect(result.current.previews[uploadId]).toMatch(/^data:image\/png/);
+
+    const large = new File(["x"], "large.png", { type: "image/png" });
+    Object.defineProperty(large, "size", { value: 10 * 1024 * 1024 + 1 });
+    await expect(result.current.uploadImage(large)).rejects.toThrow("角色參考圖必須小於 10MB");
   });
 });

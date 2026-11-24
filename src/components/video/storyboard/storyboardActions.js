@@ -1,4 +1,4 @@
-import { createShot, MAX_SHOTS } from "@/lib/videoStoryboard";
+import { createShot, MAX_CHARACTERS, MAX_SHOTS, newCharacterId } from "@/lib/videoStoryboard";
 
 const CONDENSE_INSTRUCTION =
   "把這一幕的腳本濃縮到 2500 字以內，保留引號內文字、@ 引用與主要動作，原文放在 scriptOriginal";
@@ -8,6 +8,12 @@ const REWRITE_INSTRUCTION =
 /** Edits and agent requests shared by the desktop board and the phone sheet. */
 export const storyboardActions = (storyboard) => {
   const shots = storyboard.board?.storyboard.shots || [];
+  const characters = storyboard.board?.storyboard.global.characters || [];
+  const editCharacters = (update) =>
+    storyboard.edit((current) => ({
+      ...current,
+      global: { ...current.global, characters: update(current.global.characters) },
+    }));
   return {
     updateShot: (shotId, patch) =>
       storyboard.edit(
@@ -27,6 +33,43 @@ export const storyboardActions = (storyboard) => {
     canAddShot: shots.length < MAX_SHOTS,
     updateGlobal: (patch) =>
       storyboard.edit((current) => ({ ...current, global: { ...current.global, ...patch } })),
+    toggleShotCharacter: (shotId, characterId) =>
+      storyboard.edit(
+        (current) => ({
+          ...current,
+          shots: current.shots.map((shot) => {
+            if (shot.id !== shotId) return shot;
+            const ids = shot.characterIds.includes(characterId)
+              ? shot.characterIds.filter((id) => id !== characterId)
+              : [...shot.characterIds, characterId];
+            // Keep catalog order so element numbering matches the global card.
+            const order = current.global.characters.map((character) => character.id);
+            return { ...shot, characterIds: order.filter((id) => ids.includes(id)) };
+          }),
+        }),
+        shotId
+      ),
+    addCharacter: (character) =>
+      editCharacters((current) => [...current, { ...character, id: newCharacterId(current) }]),
+    updateCharacter: (characterId, patch) =>
+      editCharacters((current) =>
+        current.map((character) => (character.id === characterId ? { ...character, ...patch } : character))
+      ),
+    removeCharacter: (characterId) =>
+      storyboard.edit((current) => ({
+        ...current,
+        global: {
+          ...current.global,
+          characters: current.global.characters.filter((character) => character.id !== characterId),
+        },
+        shots: current.shots.map((shot) => ({
+          ...shot,
+          characterIds: shot.characterIds.filter((id) => id !== characterId),
+        })),
+      })),
+    canAddCharacter: characters.length < MAX_CHARACTERS,
+    uploadImage: storyboard.uploadImage,
+    previews: storyboard.previews,
     rewriteShot: (shotId, mode) => {
       const index = shots.findIndex((shot) => shot.id === shotId);
       return storyboard.revise({
@@ -56,7 +99,9 @@ export const compiledPreview = (compiled) => {
   const body = compiled.multiPrompt
     ? compiled.multiPrompt.map((item, index) => `第 ${index + 1} 幕（${item.duration} 秒）\n${item.prompt}`).join("\n\n")
     : compiled.prompt;
-  return compiled.negativePrompt ? `${body}\n\nNegative: ${compiled.negativePrompt}` : body;
+  const elements = compiled.elements.map((element, index) => `@Element${index + 1} = ${element.name}`);
+  const withElements = compiled.characterMode === "elements" ? `${elements.join("\n")}\n\n${body}` : body;
+  return compiled.negativePrompt ? `${withElements}\n\nNegative: ${compiled.negativePrompt}` : withElements;
 };
 
 export const boardStatus = (storyboard) => {

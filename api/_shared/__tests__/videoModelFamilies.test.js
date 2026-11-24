@@ -80,6 +80,30 @@ describe("video model families", () => {
     expect(request.body).not.toHaveProperty("prompt");
   });
 
+  it("sends Kling reference elements only on image-to-video", () => {
+    const options = validateVideoOptions({ model: kling, mode: "i2v", durationSeconds: 3 });
+    const compiled = {
+      prompt: "@Element1 waves",
+      multiPrompt: null,
+      negativePrompt: null,
+      characterMode: "elements",
+      elements: [{ characterId: "c1" }],
+    };
+    const request = buildVideoRequest({
+      model: kling,
+      compiled,
+      options,
+      mode: "i2v",
+      imageDataUrl: "data:start",
+      elementImages: [["data:front", "data:side", "data:back"]],
+    });
+    expect(request.body.elements).toEqual([
+      { frontal_image_url: "data:front", reference_image_urls: ["data:side", "data:back"] },
+    ]);
+    expect(() => buildVideoRequest({ model: kling, compiled, options, mode: "t2v", elementImages: [["a", "b"]] }))
+      .toThrow(/不支援/);
+  });
+
   it("enforces catalog and family limits", () => {
     expect(() => validateVideoOptions({
       model: { ...h3, maxDurationSeconds: 3 },

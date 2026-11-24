@@ -3,7 +3,8 @@ import { Plus, X } from "@/components/icons/lucideControls";
 import { Clapperboard } from "@/components/icons/lucideContent";
 import { Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
-import { SEND_MODE_LABELS, storyboardSeconds } from "@/lib/videoStoryboard";
+import { SEND_MODE_LABELS, characterModeLabel, scriptImageLabels, storyboardSeconds } from "@/lib/videoStoryboard";
+import CharacterList from "./CharacterList";
 import GlobalCard from "./GlobalCard";
 import ShotCard from "./ShotCard";
 import StoryboardTimeline from "./StoryboardTimeline";
@@ -45,6 +46,7 @@ export default function StoryboardBoard({
   const { shots, global } = board.storyboard;
   const seconds = storyboardSeconds(board.storyboard);
   const status = boardStatus(storyboard);
+  const characterMode = characterModeLabel(board.compiled, model?.family);
   const busy = Boolean(pending);
   const jump = (shotId) => {
     const card = document.getElementById(`storyboard-shot-${shotId}`);
@@ -73,7 +75,13 @@ export default function StoryboardBoard({
           </p>
         )}
         <StoryboardTimeline shots={shots} warnedIds={warnedIds} changedIds={board.changedShotIds} onJump={jump} />
-        <GlobalCard global={global} onChange={actions.updateGlobal} />
+        <GlobalCard global={global} onChange={actions.updateGlobal}>
+          <CharacterList
+            characters={global.characters}
+            imageLabels={scriptImageLabels(board.storyboard)}
+            actions={actions}
+          />
+        </GlobalCard>
         {shots.map((shot, index) => (
           <ShotCard
             key={shot.id}
@@ -86,7 +94,9 @@ export default function StoryboardBoard({
             busy={busy}
             rewriting={pending === `revise:${shot.id}`}
             canDelete={shots.length > 1}
+            characters={global.characters}
             onChange={(patch) => actions.updateShot(shot.id, patch)}
+            onToggleCharacter={(characterId) => actions.toggleShotCharacter(shot.id, characterId)}
             onRewrite={(mode) => void actions.rewriteShot(shot.id, mode)}
             onFix={(warning) => void actions.fixWarning(warning)}
             onDelete={() => actions.deleteShot(shot.id)}
@@ -119,6 +129,7 @@ export default function StoryboardBoard({
             {showCompiled ? "收起" : "預覽送出內容"}
           </button>
         </div>
+        {characterMode && <p className="text-xs text-muted-foreground">{characterMode}</p>}
         {showCompiled && board.compiled && (
           <pre className="storyboard-enter max-h-40 overflow-auto whitespace-pre-wrap rounded-xl bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed custom-scrollbar">
             {compiledPreview(board.compiled)}

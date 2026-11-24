@@ -103,4 +103,28 @@ describe("video-storyboard", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.message).toMatch(/20 秒/);
   });
+
+  it("keeps the user's characters out of the agent's control", async () => {
+    const barista = {
+      id: "c1",
+      name: "咖啡師",
+      description: "短髮",
+      uploadIds: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"],
+      imageLabel: null,
+    };
+    const before = { ...storyboard([shot(), shot({ id: "s2" })]), global: { ...storyboard([]).global, characters: [barista] } };
+    llmRuntime.generateJson.mockResolvedValue({
+      storyboard: storyboard([shot({ characterIds: ["c1"] }), shot({ id: "s2" })]),
+      changedShotIds: ["s1"],
+    });
+    const res = await invoke({ action: "revise", storyboard: before, instruction: "第 1 幕加入咖啡師", hasStartFrame: true });
+    const sent = JSON.parse(llmRuntime.generateJson.mock.calls[0][0].userMessage);
+    expect(sent.storyboard.global.characters[0]).not.toHaveProperty("uploadIds");
+    expect(res.status).toBe(200);
+    expect(res.body.storyboard.global.characters).toEqual([barista]);
+    expect(res.body.compiled).toMatchObject({
+      characterMode: "elements",
+      elements: [{ characterId: "c1", name: "咖啡師" }],
+    });
+  });
 });

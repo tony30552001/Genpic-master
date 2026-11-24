@@ -21,22 +21,25 @@ const {
   assertStoryboardDuration,
   compileStoryboard,
   durationRange,
+  normalizeCharacters,
   normalizeStoryboard,
   storyboardDuration,
   storyboardWarnings,
 } = require("../_shared/videoStoryboard");
 
 const SCHEMA = `Storyboard JSON:
-{"title":"<=30 chars","global":{"style":"","lighting":"","constraints":["<=8 items"],"negative":"English negative prompt"},
+{"title":"<=30 chars","global":{"style":"","lighting":"","constraints":["<=8 items"],"negative":"English negative prompt","characters":"read-only, see below"},
 "shots":[{"id":"s1","title":"<=30 chars or null","script":null,"scriptOriginal":null,"duration":3,
 "shotSize":"${Object.keys(SHOT_SIZES).join("|")}",
 "angle":"${Object.keys(ANGLES).join("|")}",
 "camera":"${Object.keys(CAMERAS).join("|")}",
-"action":"one main action","environment":"setting details"}]}
+"action":"one main action","environment":"setting details","characterIds":["ids from characters"]}]}
 Rules:
 - At most ${MAX_SHOTS} shots. Durations are integers of 1-15 seconds.
 - A structured shot has script=null and sets shotSize, angle, camera, action and environment.
 - A script shot sets script and leaves shotSize, angle, camera, action and environment null.
+- characters lists the user's characters and products with reference images. You cannot add, remove or edit them; omit global.characters from your output.
+- Set characterIds on every shot to the characters that appear in it, or [] when none. Call a character by its name in action text.
 - Keep each shot to one main action that fits its duration. Describe motion, not a still image.
 - A static camera must not push in or pull out.
 - Write title, action, environment, style, lighting and constraints in the user's language.
@@ -68,6 +71,7 @@ Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chines
 - duration comes from the scene text (for example 5 秒 or 5-second); otherwise use 5.
 - Only if a scene exceeds ${PROMPT_LIMIT} characters, move repeated consistency notes to global.constraints and prohibitions to global.negative, then condense: put the condensed text in script and the exact source text in scriptOriginal. Keep quoted text and @ references.
 - If the script asks for no music or no sound, say in explanation that native audio should be turned off.
+- A character's imageLabel (for example Image1) means the script's @Image1 shows that character; tag those scenes with its id.
 - shotNotes warn about too many actions for the duration, text the model would misspell, or unusable reference images.`;
 
 const requireString = (value, label, maxLength) => {
@@ -98,9 +102,15 @@ const loadAllowedModel = async (identity, modelKey) => {
   return model;
 };
 
-const agentStoryboard = (raw) => {
+// Characters belong to the user: the agent sees them without upload ids and
+// cannot change them, so they are restored before validating its output.
+const agentStoryboard = (raw, characters) => {
+  const storyboard =
+    raw && typeof raw === "object" && raw.global && typeof raw.global === "object"
+      ? { ...raw, global: { ...raw.global, characters } }
+      : raw;
   try {
-    return normalizeStoryboard(raw);
+    return normalizeStoryboard(storyboard);
   } catch (caught) {
     if (caught instanceof VideoModelError) {
       throw agentFailure(`AI 產生的分鏡不符合規則：${caught.message}，請重試`);
@@ -109,10 +119,18 @@ const agentStoryboard = (raw) => {
   }
 };
 
+const agentCharacters = (characters) =>
+  characters.map(({ id, name, description, imageLabel }) => ({ id, name, description, imageLabel }));
+
+const agentInput = (storyboard) => ({
+  ...storyboard,
+  global: { ...storyboard.global, characters: agentCharacters(storyboard.global.characters) },
+});
+
 const agentText = (value) => (typeof value === "string" ? value.trim().slice(0, 2000) : "");
 
 const respondStoryboard = ({ storyboard, model, hasStartFrame, extra }) => {
-  const compiled = compileStoryboard(model.family, storyboard);
+  const compiled = compileStoryboard(model.family, storyboard, { mode: hasStartFrame ? "i2v" : "t2v" });
   return {
     storyboard,
     durationSeconds: storyboardDuration(storyboard),
@@ -122,6 +140,8 @@ const respondStoryboard = ({ storyboard, model, hasStartFrame, extra }) => {
       prompt: compiled.prompt,
       multiPrompt: compiled.multiPrompt,
       negativePrompt: compiled.negativePrompt,
+      characterMode: compiled.characterMode,
+      elements: compiled.elements.map(({ characterId, name }) => ({ characterId, name })),
     },
     ...extra,
   };
@@ -151,13 +171,14 @@ const draft = async ({ identity, body, model }) => {
     throw new VideoModelError(`幕數必須介於 1 與 ${MAX_SHOTS}`);
   }
   const hasStartFrame = Boolean(body.hasStartFrame);
+  const characters = normalizeCharacters(body.characters);
   const data = await runAgent({
     identity,
     systemMessage: DRAFT_SYSTEM,
-    input: { brief, durationSeconds, shotCount, hasStartFrame },
+    input: { brief, durationSeconds, shotCount, hasStartFrame, characters: agentCharacters(characters) },
     maxOutputTokens: 6000,
   });
-  const storyboard = agentStoryboard(data.storyboard);
+  const storyboard = agentStoryboard(data.storyboard, characters);
   if (shotCount !== null && storyboard.shots.length !== shotCount) {
     throw agentFailure(`AI 產生了 ${storyboard.shots.length} 幕，應為 ${shotCount} 幕，請重試`);
   }
@@ -187,10 +208,10 @@ const revise = async ({ identity, body, model }) => {
   const data = await runAgent({
     identity,
     systemMessage: REVISE_SYSTEM,
-    input: { storyboard: before, instruction, shotId, minSeconds: min, maxSeconds: max },
+    input: { storyboard: agentInput(before), instruction, shotId, minSeconds: min, maxSeconds: max },
     maxOutputTokens: 8000,
   });
-  const after = agentStoryboard(data.storyboard);
+  const after = agentStoryboard(data.storyboard, before.global.characters);
   const changedShotIds = assertRevisionScope({
     before,
     after,
@@ -209,13 +230,14 @@ const revise = async ({ identity, body, model }) => {
 
 const fromScript = async ({ identity, body, model }) => {
   const script = requireString(body.script, "腳本", MAX_SCRIPT_SOURCE);
+  const characters = normalizeCharacters(body.characters);
   const data = await runAgent({
     identity,
     systemMessage: SCRIPT_SYSTEM,
-    input: { script },
+    input: { script, characters: agentCharacters(characters) },
     maxOutputTokens: 16000,
   });
-  const storyboard = agentStoryboard(data.storyboard);
+  const storyboard = agentStoryboard(data.storyboard, characters);
   assertScriptFidelity(script, storyboard);
   const total = storyboardDuration(storyboard);
   const { max } = durationRange(model);

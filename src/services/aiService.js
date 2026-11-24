@@ -270,14 +270,14 @@ export const transformImage = async ({
 const postVideoStoryboard = (action, { signal, ...body }) =>
   apiPost(`${API_BASE_URL}/video-storyboard`, { action, ...body }, { signal });
 
-export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, signal }) =>
-  postVideoStoryboard("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, signal });
+export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal }) =>
+  postVideoStoryboard("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal });
 
 export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal }) =>
   postVideoStoryboard("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal });
 
-export const scriptToVideoStoryboard = ({ modelKey, script, hasStartFrame, signal }) =>
-  postVideoStoryboard("fromScript", { modelKey, script, hasStartFrame, signal });
+export const scriptToVideoStoryboard = ({ modelKey, script, hasStartFrame, characters, signal }) =>
+  postVideoStoryboard("fromScript", { modelKey, script, hasStartFrame, characters, signal });
 
 export const inspectVideoStoryboard = ({ modelKey, storyboard, hasStartFrame, signal }) =>
   postVideoStoryboard("inspect", { modelKey, storyboard, hasStartFrame, signal });

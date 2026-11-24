@@ -62,6 +62,7 @@ export const createShot = (shots) => ({
   camera: "static",
   action: "",
   environment: "",
+  characterIds: [],
 });
 
 export const SEND_MODE_LABELS = Object.freeze({
@@ -69,3 +70,37 @@ export const SEND_MODE_LABELS = Object.freeze({
   multi: "原生多鏡頭",
   merged: "合併成一段帶時間碼的提示詞",
 });
+
+// Mirrors api/_shared/videoStoryboard.js: a Kling element is a frontal image plus 1-3 references.
+export const MAX_CHARACTERS = 3;
+export const MIN_CHARACTER_IMAGES = 2;
+export const MAX_CHARACTER_IMAGES = 4;
+export const MAX_CHARACTER_IMAGE_BYTES = 10 * 1024 * 1024;
+
+export const newCharacterId = (characters) => {
+  const used = new Set(characters.map((character) => character.id));
+  let index = characters.length + 1;
+  while (used.has(`c${index}`)) index += 1;
+  return `c${index}`;
+};
+
+const IMAGE_LABEL_REFERENCES = /@(Image[1-9]\d?)(?!\d)/gi;
+
+/** `@ImageN` labels the script shots reference, normalized to `ImageN`. */
+export const scriptImageLabels = (storyboard) => {
+  const labels = new Set();
+  for (const shot of storyboard.shots) {
+    for (const match of (shot.script || "").matchAll(IMAGE_LABEL_REFERENCES)) {
+      labels.add(`Image${match[1].slice(5)}`);
+    }
+  }
+  return [...labels].sort((a, b) => Number(a.slice(5)) - Number(b.slice(5)));
+};
+
+/** How the compiled request uses character references, or null when there are none. */
+export const characterModeLabel = (compiled, family) => {
+  if (!compiled || compiled.characterMode === "none") return null;
+  if (compiled.characterMode === "elements") return `以 ${compiled.elements.length} 個角色參考圖送出`;
+  if (family?.startsWith("minimax")) return "MiniMax 不使用角色參考圖，角色以文字描述送出";
+  return "沒有首影格，不使用角色參考圖，角色以文字描述送出";
+};

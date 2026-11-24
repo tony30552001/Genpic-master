@@ -5,11 +5,15 @@ import {
   reviseVideoStoryboard,
   scriptToVideoStoryboard,
 } from "../services/aiService";
-import { storyboardSeconds } from "../lib/videoStoryboard";
+import { uploadFile } from "../services/storageService";
+import { readFileAsDataUrl } from "../lib/imageFile";
+import { MAX_CHARACTER_IMAGE_BYTES, storyboardSeconds } from "../lib/videoStoryboard";
 
 const INSPECT_DELAY_MS = 400;
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+
+const boardCharacters = (board) => board?.storyboard.global.characters || [];
 
 const summarize = (storyboard, warnings) => ({
   title: storyboard.title,
@@ -23,13 +27,16 @@ const summarize = (storyboard, warnings) => ({
 /**
  * Owns the storyboard being reviewed: the agent conversation (draft, revise,
  * fromScript), local edits, and the server-side inspection that returns
- * warnings and the exact payload preview for every edit.
+ * warnings and the exact payload preview for every edit. Character images
+ * are uploaded here; `previews` maps their upload ids to local thumbnails
+ * (a reopened storyboard has none, so the UI falls back to initials).
  */
 export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
   const [board, setBoard] = useState(null);
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState(null);
   const [inspection, setInspection] = useState({ status: "idle", error: "", config: "" });
+  const [previews, setPreviews] = useState({});
   const boardRef = useRef(board);
   const agentController = useRef(null);
   const inspectController = useRef(null);
@@ -143,8 +150,10 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     });
   }, [addMessage]);
 
-  const draft = useCallback(({ brief, durationSeconds, attachment }) =>
-    runAgent({
+  // A new draft or script replaces the board but keeps its characters.
+  const draft = useCallback(({ brief, durationSeconds, attachment }) => {
+    const characters = boardCharacters(boardRef.current);
+    return runAgent({
       replaceBoard: true,
       kind: "draft",
       userText: brief,
@@ -154,13 +163,16 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
         brief,
         durationSeconds,
         hasStartFrame: latest.current.hasStartFrame,
+        characters,
         signal,
       }),
       onResult: (result) => acceptResult(result, {}),
-    }), [acceptResult, runAgent]);
+    });
+  }, [acceptResult, runAgent]);
 
-  const fromScript = useCallback(({ script, attachment }) =>
-    runAgent({
+  const fromScript = useCallback(({ script, attachment }) => {
+    const characters = boardCharacters(boardRef.current);
+    return runAgent({
       replaceBoard: true,
       kind: "script",
       userText: script,
@@ -169,10 +181,12 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
         modelKey: latest.current.modelKey,
         script,
         hasStartFrame: latest.current.hasStartFrame,
+        characters,
         signal,
       }),
       onResult: (result) => acceptResult(result, {}),
-    }), [acceptResult, runAgent]);
+    });
+  }, [acceptResult, runAgent]);
 
   const revise = useCallback(({ instruction, shotId = null, label }) => {
     if (!board) return Promise.resolve();
@@ -224,6 +238,15 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     scheduleInspect(storyboard);
   }, [scheduleInspect]);
 
+  const uploadImage = useCallback(async (file) => {
+    if (file.size > MAX_CHARACTER_IMAGE_BYTES) throw new Error("角色參考圖必須小於 10MB");
+    const [{ uploadId }, dataUrl] = await Promise.all([uploadFile(file, "image"), readFileAsDataUrl(file)]);
+    if (!uploadId) throw new Error("角色參考圖上傳失敗");
+    const id = uploadId.toLowerCase();
+    setPreviews((current) => ({ ...current, [id]: dataUrl }));
+    return id;
+  }, []);
+
   const close = useCallback(() => {
     agentController.current?.abort();
     inspectController.current?.abort();
@@ -241,6 +264,8 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     messages,
     pending,
     inspection: currentInspection,
+    previews,
+    uploadImage,
     draft,
     fromScript,
     revise,

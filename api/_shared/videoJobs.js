@@ -107,6 +107,23 @@ const assertOwnedSource = async ({
   }
 };
 
+const expiredElementError = (name) =>
+  new VideoModelError(
+    `角色「${name}」的參考圖已失效（上傳圖片保留 48 小時），請重新上傳`,
+    "upload_not_found",
+    404
+  );
+
+const assertOwnedElements = async ({ elements, tenantId, userId }) => {
+  for (const element of elements) {
+    for (const uploadId of element.uploadIds) {
+      if (!(await resolveOwnedImageUpload({ uploadId, tenantId, userId }))) {
+        throw expiredElementError(element.name);
+      }
+    }
+  }
+};
+
 const createVideoJob = async ({
   tenantId,
   userId,
@@ -158,7 +175,7 @@ const createVideoJob = async ({
       aspectRatio,
       generateAudio,
     });
-    const compiled = compileStoryboard(model.family, storyboard);
+    const compiled = compileStoryboard(model.family, storyboard, { mode });
     await assertOwnedSource({
       client,
       mode,
@@ -166,6 +183,7 @@ const createVideoJob = async ({
       tenantId,
       userId,
     });
+    await assertOwnedElements({ elements: compiled.elements, tenantId, userId });
     if (!unlimited) {
       const admitted = await client.query(
         `SELECT COUNT(*)::int AS count
@@ -376,6 +394,35 @@ const loadVideoFrameDataUrl = async (job) => {
   });
 };
 
+const ELEMENT_IMAGE_SIZE = 1024;
+
+const loadElementImages = async (job, elements) => {
+  const images = [];
+  for (const element of elements) {
+    const urls = [];
+    for (const uploadId of element.uploadIds) {
+      const upload = await resolveOwnedImageUpload({
+        uploadId,
+        tenantId: job.tenant_id,
+        userId: job.user_id,
+      });
+      if (!upload) throw expiredElementError(element.name);
+      urls.push(await toJpegDataUrl((await downloadOwnedImage(upload)).buffer, ELEMENT_IMAGE_SIZE));
+    }
+    images.push(urls);
+  }
+  return images;
+};
+
+const toJpegDataUrl = async (buffer, maxSize) => {
+  const jpeg = await sharp(buffer)
+    .rotate()
+    .resize({ width: maxSize, height: maxSize, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 86 })
+    .toBuffer();
+  return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+};
+
 const loadOwnedImageDataUrl = async ({ uploadId, imageJobId, job }) => {
   let source;
   if (uploadId) {
@@ -397,12 +444,7 @@ const loadOwnedImageDataUrl = async ({ uploadId, imageJobId, job }) => {
     }
     source = { buffer: await downloadGeneratedImage({ blobName: imageJob.result_blob_name }) };
   } else throw new VideoModelError("找不到可用的圖片來源", "source_job_not_found", 404);
-  const jpeg = await sharp(source.buffer)
-    .rotate()
-    .resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 86 })
-    .toBuffer();
-  return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+  return toJpegDataUrl(source.buffer, 2048);
 };
 
 const assertSubmitCapacity = async (job, settings) => {
@@ -465,9 +507,10 @@ const processNextVideoJob = async () => {
               job,
             })
           : null;
+      const compiled = compileStoryboard(model.family, normalizeStoryboard(job.storyboard), { mode: job.mode });
       const request = buildVideoRequest({
         model,
-        compiled: compileStoryboard(model.family, job.storyboard),
+        compiled,
         options: {
           durationSeconds: job.duration_seconds,
           resolution: job.resolution,
@@ -477,6 +520,7 @@ const processNextVideoJob = async () => {
         mode: job.mode,
         imageDataUrl,
         endImageDataUrl,
+        elementImages: await loadElementImages(job, compiled.elements),
       });
       const requestId = await submitVideo({
         config: model,

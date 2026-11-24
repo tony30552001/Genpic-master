@@ -2,6 +2,7 @@ const { IMAGE_API_TYPES, IMAGE_QUALITIES } = require("./_shared/imageModelConfig
 const {
   ANGLES,
   CAMERAS,
+  MAX_CHARACTERS,
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
@@ -678,6 +679,12 @@ addOperation("/api/video-storyboard", "post", {
       instruction: { type: "string", maxLength: 4000, description: "revise" },
       shotId: { type: "string", description: "revise a single shot" },
       script: { type: "string", maxLength: 50000, description: "fromScript" },
+      characters: {
+        type: "array",
+        maxItems: MAX_CHARACTERS,
+        description: "draft and fromScript; revise and inspect read them from storyboard.global",
+        items: { $ref: "#/components/schemas/VideoCharacter" },
+      },
     },
   },
 });
@@ -977,6 +984,24 @@ module.exports = {
   ],
   components: {
     schemas: {
+      VideoCharacter: {
+        type: "object",
+        required: ["id", "name", "uploadIds"],
+        description: "A character or product. Kling image-to-video sends it as an element referenced by @ElementN; otherwise the name and description are written into each shot.",
+        properties: {
+          id: { type: "string", pattern: "^[A-Za-z0-9_-]{1,40}$" },
+          name: { type: "string", maxLength: 30 },
+          description: { type: "string", maxLength: 300 },
+          uploadIds: {
+            type: "array",
+            minItems: 2,
+            maxItems: 4,
+            description: "Owned image uploads; the first is the frontal image.",
+            items: { type: "string", format: "uuid" },
+          },
+          imageLabel: { type: ["string", "null"], pattern: "^Image[1-9][0-9]?$", description: "Script @ImageN this character replaces" },
+        },
+      },
       VideoStoryboard: {
         type: "object",
         required: ["title", "global", "shots"],
@@ -989,6 +1014,7 @@ module.exports = {
               lighting: { type: "string", maxLength: 300 },
               constraints: { type: "array", maxItems: 8, items: { type: "string", maxLength: 200 } },
               negative: { type: "string", maxLength: PROMPT_LIMIT },
+              characters: { type: "array", maxItems: MAX_CHARACTERS, items: { $ref: "#/components/schemas/VideoCharacter" } },
             },
           },
           shots: {
@@ -1010,6 +1036,7 @@ module.exports = {
                 camera: { type: ["string", "null"], enum: [...Object.keys(CAMERAS), null] },
                 action: { type: ["string", "null"], maxLength: 1000 },
                 environment: { type: ["string", "null"], maxLength: 500 },
+                characterIds: { type: "array", items: { type: "string" }, description: "ids from global.characters" },
               },
             },
           },

@@ -19,6 +19,7 @@ const VIDEO_MODEL_FAMILIES = Object.freeze({
     supportsAudioToggle: false,
     fixedAudio: true,
     multiShot: false,
+    elements: false,
     defaultResolution: "768P",
     estimatedSeconds: 30,
   }),
@@ -33,6 +34,8 @@ const VIDEO_MODEL_FAMILIES = Object.freeze({
     supportsAudioToggle: true,
     fixedAudio: false,
     multiShot: true,
+    // fal accepts `elements` only on image-to-video.
+    elements: true,
     defaultResolution: "1080P",
     estimatedSeconds: 310,
   }),
@@ -88,7 +91,8 @@ const validateVideoOptions = ({ model, durationSeconds, resolution, aspectRatio,
   };
 };
 
-const buildVideoRequest = ({ model, compiled, options, mode, imageDataUrl, endImageDataUrl }) => {
+const buildVideoRequest = ({ model, compiled, options, mode, imageDataUrl, endImageDataUrl, elementImages = [] }) => {
+  const family = getVideoModelFamily(model.family);
   const body = {
     model: model.deploymentName,
     enable_safety_checker: true,
@@ -99,6 +103,14 @@ const buildVideoRequest = ({ model, compiled, options, mode, imageDataUrl, endIm
     body.shot_type = "customize";
   }
   if (compiled.negativePrompt) body.negative_prompt = compiled.negativePrompt;
+  if (compiled.characterMode === "elements") {
+    if (!family.elements || mode !== "i2v") throw new VideoModelError("此影片模型不支援角色參考圖");
+    if (elementImages.length !== compiled.elements.length) throw new VideoModelError("角色參考圖數量不符");
+    body.elements = elementImages.map(([frontal, ...references]) => ({
+      frontal_image_url: frontal,
+      reference_image_urls: references,
+    }));
+  }
   if (model.family === "minimax-h3-max") {
     body.duration = options.durationSeconds;
     body.resolution = options.resolution;
@@ -118,8 +130,8 @@ const buildVideoRequest = ({ model, compiled, options, mode, imageDataUrl, endIm
     }
   }
   return {
-    family: getVideoModelFamily(model.family),
-    path: `${getVideoModelFamily(model.family).route}/${mode === "t2v" ? "text-to-video" : "image-to-video"}`,
+    family,
+    path: `${family.route}/${mode === "t2v" ? "text-to-video" : "image-to-video"}`,
     body,
   };
 };

@@ -7,12 +7,14 @@ const MAX_CONSTRAINTS = 8;
 const fieldClass =
   "h-8 w-full min-w-0 rounded-lg border border-border bg-transparent px-2.5 text-[13px] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none";
 
-/** Whole-video settings (style, lighting, consistency, negative) as a collapsible card. */
-export default function GlobalCard({ global, onChange, defaultOpen = true }) {
+/** Whole-video settings (style, lighting, consistency, negative) as a collapsible card; `children` renders below them. */
+export default function GlobalCard({ global, onChange, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
   const [draftConstraint, setDraftConstraint] = useState("");
   const id = useId();
-  const summary = [global.style, global.lighting].filter(Boolean).join(" · ") || "尚未設定";
+  const characterCount = global.characters.length;
+  const summary =
+    [global.style, global.lighting, characterCount ? `${characterCount} 個角色` : ""].filter(Boolean).join(" · ") || "尚未設定";
 
   const addConstraint = () => {
     const text = draftConstraint.trim();
@@ -121,6 +123,7 @@ export default function GlobalCard({ global, onChange, defaultOpen = true }) {
               onChange={(event) => onChange({ negative: event.target.value })}
             />
           </div>
+          {children}
         </div>
       </div>
     </section>

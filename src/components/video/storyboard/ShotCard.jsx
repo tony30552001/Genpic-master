@@ -130,7 +130,9 @@ export default function ShotCard({
   rewriting = false,
   canDelete = true,
   fill = false,
+  characters = [],
   onChange,
+  onToggleCharacter,
   onRewrite,
   onFix,
   onDelete,
@@ -249,6 +251,30 @@ export default function ShotCard({
             />
           </label>
         </>
+      )}
+
+      {characters.length > 0 && (
+        <div className="relative col-start-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={`${label}出場角色`}>
+          {characters.map((character) => {
+            const on = shot.characterIds.includes(character.id);
+            return (
+              <button
+                key={character.id}
+                type="button"
+                className={cn(
+                  "inline-flex h-6.5 max-w-40 items-center rounded-full border px-2.5 text-xs press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  on
+                    ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                    : "border-dashed border-border text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => onToggleCharacter(character.id)}
+                aria-pressed={on}
+              >
+                <span className="truncate">@{character.name || "未命名"}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
 
       {changed && (
