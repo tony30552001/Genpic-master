@@ -270,15 +270,33 @@ export const transformImage = async ({
 const postVideoStoryboard = (action, { signal, ...body }) =>
   apiPost(`${API_BASE_URL}/video-storyboard`, { action, ...body }, { signal });
 
+// The worker times out every storyboard job, so polling always settles.
+export const waitForStoryboardJob = async ({ jobId, signal, pollIntervalMs = 2000 }) => {
+  if (!jobId) throw new Error("分鏡 AI 沒有回傳工作識別碼");
+  for (;;) {
+    await abortableDelay(pollIntervalMs, signal);
+    const job = await apiGet(`${API_BASE_URL}/video-storyboard/jobs/${encodeURIComponent(jobId)}`, { signal });
+    if (job.status === "succeeded") return job.result;
+    if (job.status === "failed") throw new Error(job.error?.message || "分鏡 AI 暫時無法回應，請稍後重試");
+  }
+};
+
+// Agent actions are queued because one analysis-model call can outlast the
+// backend's request limit.
+const runStoryboardAgent = async (action, { signal, ...body }) => {
+  const { jobId } = await postVideoStoryboard(action, { signal, ...body });
+  return waitForStoryboardJob({ jobId, signal });
+};
+
 export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal }) =>
-  postVideoStoryboard("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal });
+  runStoryboardAgent("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal });
 
 export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal }) =>
-  postVideoStoryboard("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal });
+  runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal });
 
 // Pass either pasted `script` text or the `uploadId` of a script document.
 export const scriptToVideoStoryboard = ({ modelKey, script, uploadId, hasStartFrame, characters, signal }) =>
-  postVideoStoryboard("fromScript", { modelKey, script, uploadId, hasStartFrame, characters, signal });
+  runStoryboardAgent("fromScript", { modelKey, script, uploadId, hasStartFrame, characters, signal });
 
 export const inspectVideoStoryboard = ({ modelKey, storyboard, hasStartFrame, signal }) =>
   postVideoStoryboard("inspect", { modelKey, storyboard, hasStartFrame, signal });

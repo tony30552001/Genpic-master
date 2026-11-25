@@ -26,6 +26,7 @@ const imageTransform = require("./image-transform");
 const { startImageJobWorker } = require("./_shared/imageJobs");
 const { startVideoJobWorker } = require("./_shared/videoJobs");
 const { startVideoRenderWorker } = require("./_shared/videoRenders");
+const { startStoryboardJobWorker } = require("./_shared/videoStoryboardJobs");
 const lineConfig = require("./line-config");
 const me = require("./me");
 const optimizePrompt = require("./optimize-prompt");
@@ -175,6 +176,7 @@ registerRoutes(
   videoProjects
 );
 registerRoutes(["/api/video-storyboard"], ["POST", "OPTIONS"], videoStoryboard);
+registerRoutes(["/api/video-storyboard/jobs/:id"], ["GET", "OPTIONS"], videoStoryboard);
 registerRoutes(["/api/image-transform"], ["POST", "OPTIONS"], imageTransform);
 registerRoutes(["/api/line-config"], ["GET", "POST", "DELETE", "OPTIONS"], lineConfig);
 registerRoutes(["/api/optimize-prompt"], ["POST", "OPTIONS"], optimizePrompt);
@@ -255,6 +257,7 @@ const start = () => {
   startImageJobWorker();
   startVideoJobWorker();
   startVideoRenderWorker();
+  startStoryboardJobWorker();
   startDeckJobWorker();
   const stopUploadCleanupWorker = startUploadCleanupWorker();
   server.once("close", stopUploadCleanupWorker);

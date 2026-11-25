@@ -130,6 +130,9 @@ PPT Master 簡報生成（大綱、逐頁 SVG 撰寫與修復迴圈）使用「�
 部署後務必經由 `https://<swa-domain>` 實測：首段文字是否逐字出現（未被代理緩衝）、
 停止回覆與重新整理後狀態是否一致。
 
+影片分鏡的 AI 動作（草擬、修改、腳本匯入）同樣可能超過 45 秒，因此改由 `video_storyboard_jobs`
+背景 worker 執行，前端輪詢 `/api/video-storyboard/jobs/{id}`；只有分鏡檢查（inspect）同步回應。
+
 任何用途尚未指派前，對應 API 會回傳 HTTP 503 與 `llm_not_configured`，
 簡報 job 則會直接標記為失敗，不會重試。
 

@@ -383,6 +383,13 @@ addOperation("/api/image-jobs/{id}", "get", {
   parameters: pathParameters("id"),
 });
 
+addOperation("/api/video-storyboard/jobs/{id}", "get", {
+  summary: "Get an owned storyboard agent job",
+  description: "status is queued, processing, succeeded (with result, the storyboard action's response) or failed (with error.code and error.message). Finished jobs are deleted a day after they complete.",
+  tags: ["Video"],
+  parameters: pathParameters("id"),
+});
+
 addOperation("/api/image-jobs/{id}/image", "get", {
   summary: "Download the result image of an owned succeeded image job",
   description: "Returns 409 until the job succeeds. Results are immutable, so the response is privately cacheable.",
@@ -682,8 +689,9 @@ addOperation("/api/optimize-prompt", "post", {
 });
 
 addOperation("/api/video-storyboard", "post", {
-  summary: "Draft, revise, split a script into, or inspect a video storyboard",
-  description: "draft and revise use the tenant prompt_optimization model; fromScript keeps every script verbatim unless condensed; inspect only validates. fromScript takes either pasted script text or the uploadId of a ready document upload (DOCX, TXT or MD; other types return 415). A DOCX becomes one shot per heading-marked scene, and its embedded images are stored as the caller's image uploads and attached as shot references; referencePreviews maps each new uploadId to a small data URL. Every action returns warnings and the planned segments, each with its compiled model request. Agent output that breaks storyboard rules returns 502.",
+  summary: "Queue a storyboard agent job, or inspect a video storyboard",
+  description: "draft, revise and fromScript return 202 with a jobId and run in the storyboard job worker, because one analysis-model call can outlast the SWA linked backend's 45-second request limit; poll GET /api/video-storyboard/jobs/{id} for the result. The worker rechecks model access when the job runs. inspect validates synchronously and returns 200. draft and revise use the tenant prompt_optimization model; fromScript keeps every script verbatim unless condensed. fromScript takes either pasted script text or the uploadId of a ready document upload (DOCX, TXT or MD; other types return 415). A DOCX becomes one shot per heading-marked scene, and its embedded images are stored as the caller's image uploads and attached as shot references; referencePreviews maps each new uploadId to a small data URL. Every result carries warnings and the planned segments, each with its compiled model request. Agent output that breaks storyboard rules fails the job with storyboard_agent_failed.",
+  successStatuses: [200, 202],
   tags: ["Video"],
   body: true,
   csrf: true,
