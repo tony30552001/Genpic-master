@@ -8,7 +8,7 @@ import {
   updateAdminVideoModel,
   updateAdminVideoSettings,
 } from "../services/adminService";
-import { waitForVideoJob } from "../services/aiService";
+import { waitForVideoProject } from "../services/aiService";
 
 export default function useVideoModelAdmin({ notify, refreshProfile }) {
   const [catalog, setCatalog] = useState(null);
@@ -100,7 +100,7 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
         { modelKey: model.modelKey },
         { signal: controller.signal }
       );
-      await waitForVideoJob({ jobId: admitted.jobId, signal: controller.signal });
+      await waitForVideoProject({ projectId: admitted.projectId, signal: controller.signal });
       notify({ tone: "success", text: `「${model.label}」影片測試成功。` });
     } catch (error) {
       if (error?.name !== "AbortError") {

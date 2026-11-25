@@ -15,97 +15,17 @@ const {
   VideoModelError,
   buildVideoRequest,
   getVideoModelFamily,
-  validateVideoOptions,
 } = require("./videoModelFamilies");
-const {
-  resolveVideoModel,
-  withVideoModelTransaction,
-} = require("./videoModels");
+const { resolveVideoModel } = require("./videoModels");
 const { ensureVideoSettings } = require("./videoPolicy");
-const {
-  compileStoryboard,
-  normalizeStoryboard,
-  storyboardDuration,
-} = require("./videoStoryboard");
+const { compileStoryboard, normalizeStoryboard } = require("./videoStoryboard");
+const { VideoRenderError, extractLastFrame } = require("./videoRenderClient");
 
 const MAX_SUBMIT_ATTEMPTS = 3;
 const LOCK_TIMEOUT_MINUTES = 5;
 const JOB_TIMEOUT_MINUTES = 30;
 const POLL_DELAY_SECONDS = 4;
 const RETRY_DELAY_SECONDS = 15;
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const normalizeUuid = (value) =>
-  typeof value === "string" && UUID_PATTERN.test(value.trim())
-    ? value.trim().toLowerCase()
-    : null;
-
-const assertSource = (sourceCount, mode) => {
-  if ((mode === "t2v" && sourceCount !== 0) || (mode === "i2v" && sourceCount !== 1)) {
-    throw new VideoModelError("影片生成來源設定無效");
-  }
-};
-
-const assertEnabledUser = async ({ client, tenantId, userId }) => {
-  const result = await client.query(
-    "SELECT video_enabled, video_unlimited FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true",
-    [userId, tenantId]
-  );
-  if (!result.rows[0]?.video_enabled) {
-    throw new VideoModelError("此帳號尚未開放影片創作，請聯絡管理員", "video_disabled", 403);
-  }
-  return Boolean(result.rows[0].video_unlimited);
-};
-
-const assertOwnedSource = async ({
-  client,
-  mode,
-  sourceUploadId,
-  sourceImageJobId,
-  endSourceUploadId,
-  endSourceImageJobId,
-  tenantId,
-  userId,
-}) => {
-  const sources = [sourceUploadId, sourceImageJobId].filter(Boolean);
-  assertSource(sources.length, mode);
-  if (sourceUploadId) {
-    const upload = await resolveOwnedImageUpload({ uploadId: sourceUploadId, tenantId, userId });
-    if (!upload) throw new VideoModelError("找不到可用的首影格上傳", "upload_not_found", 404);
-  }
-  if (sourceImageJobId) {
-    const job = await getImageJobForUser({
-      jobId: sourceImageJobId,
-      tenantId,
-      userId,
-    });
-    if (job?.status !== "succeeded") {
-      throw new VideoModelError("找不到可用的圖片版本", "source_job_not_found", 404);
-    }
-  }
-  const endSources = [endSourceUploadId, endSourceImageJobId].filter(Boolean);
-  if (endSources.length > 1 || (endSources.length && mode !== "i2v")) {
-    throw new VideoModelError("尾影格來源設定無效");
-  }
-  if (
-    endSourceUploadId &&
-    !(await resolveOwnedImageUpload({ uploadId: endSourceUploadId, tenantId, userId }))
-  ) {
-    throw new VideoModelError("找不到可用的尾影格上傳", "upload_not_found", 404);
-  }
-  if (endSourceImageJobId) {
-    const endJob = await getImageJobForUser({
-      jobId: endSourceImageJobId,
-      tenantId,
-      userId,
-    });
-    if (endJob?.status !== "succeeded") {
-      throw new VideoModelError("找不到可用的尾影格圖片版本", "source_job_not_found", 404);
-    }
-  }
-};
 
 const expiredElementError = (name) =>
   new VideoModelError(
@@ -114,106 +34,14 @@ const expiredElementError = (name) =>
     404
   );
 
-const assertOwnedElements = async ({ elements, tenantId, userId }) => {
-  for (const element of elements) {
-    for (const uploadId of element.uploadIds) {
-      if (!(await resolveOwnedImageUpload({ uploadId, tenantId, userId }))) {
-        throw expiredElementError(element.name);
-      }
-    }
-  }
-};
-
-const createVideoJob = async ({
-  tenantId,
-  userId,
-  modelKey,
-  storyboard: rawStoryboard,
-  mode = "t2v",
-  resolution,
-  aspectRatio = "16:9",
-  generateAudio = false,
-  sourceUploadId = null,
-  sourceImageJobId = null,
-  endSourceUploadId = null,
-  endSourceImageJobId = null,
-  skipAdmission = false,
-}) => {
-  const storyboard = normalizeStoryboard(rawStoryboard);
-  const sourceIds = {
-    sourceUploadId: normalizeUuid(sourceUploadId),
-    sourceImageJobId: normalizeUuid(sourceImageJobId),
-    endSourceUploadId: normalizeUuid(endSourceUploadId),
-    endSourceImageJobId: normalizeUuid(endSourceImageJobId),
-  };
-  const primarySourceCount = [
-    sourceIds.sourceUploadId,
-    sourceIds.sourceImageJobId,
-  ].filter(Boolean).length;
-  assertSource(primarySourceCount, mode);
-  if (
-    (sourceUploadId && !sourceIds.sourceUploadId) ||
-    (sourceImageJobId && !sourceIds.sourceImageJobId) ||
-    (endSourceUploadId && !sourceIds.endSourceUploadId) ||
-    (endSourceImageJobId && !sourceIds.endSourceImageJobId)
-  ) {
-    throw new VideoModelError("來源識別碼格式無效");
-  }
-
-  return withVideoModelTransaction(tenantId, async (client) => {
-    const unlimited = skipAdmission ? true : await assertEnabledUser({ client, tenantId, userId });
-    const settings = await ensureVideoSettings(tenantId, client);
-    if (!skipAdmission && !settings.allowedModels.includes(modelKey)) {
-      throw new VideoModelError("此影片模型尚未開放給使用者", "video_model_not_allowed", 403);
-    }
-    const model = await resolveVideoModel({ tenantId, modelKey, client });
-    const options = validateVideoOptions({
-      model,
-      mode,
-      durationSeconds: storyboardDuration(storyboard),
-      resolution,
-      aspectRatio,
-      generateAudio,
-    });
-    const compiled = compileStoryboard(model.family, storyboard, { mode });
-    await assertOwnedSource({
-      client,
-      mode,
-      ...sourceIds,
-      tenantId,
-      userId,
-    });
-    await assertOwnedElements({ elements: compiled.elements, tenantId, userId });
-    if (!unlimited) {
-      const admitted = await client.query(
-        `SELECT COUNT(*)::int AS count
-         FROM video_generation_jobs
-         WHERE tenant_id = $1 AND user_id = $2
-           AND created_at >= date_trunc('day', now())
-           AND status <> 'failed'`,
-        [tenantId, userId]
-      );
-      if (Number(admitted.rows[0]?.count || 0) >= settings.dailyQuotaPerUser) {
-        throw new VideoModelError("今日影片額度已用完，請明天再試", "video_quota_exceeded", 429);
-      }
-    }
-    const inserted = await client.query(
-      `INSERT INTO video_generation_jobs
-       (tenant_id, user_id, model_key, mode, prompt, storyboard, duration_seconds,
-        resolution, aspect_ratio, generate_audio, source_upload_id, source_image_job_id,
-        end_source_upload_id, end_source_image_job_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-       RETURNING id, status, phase, model_key, created_at`,
-      [
-        tenantId, userId, modelKey, mode, compiled.storedPrompt,
-        JSON.stringify(storyboard),
-        options.durationSeconds, options.resolution, options.aspectRatio,
-        options.generateAudio, sourceIds.sourceUploadId, sourceIds.sourceImageJobId,
-        sourceIds.endSourceUploadId, sourceIds.endSourceImageJobId,
-      ]
-    );
-    return inserted.rows[0];
-  });
+const countAdmittedToday = async (db, { tenantId, userId }) => {
+  const result = await db.query(
+    `SELECT COUNT(*)::int AS count FROM video_generation_jobs
+     WHERE tenant_id = $1 AND user_id = $2
+       AND created_at >= date_trunc('day', now()) AND status <> 'failed'`,
+    [tenantId, userId]
+  );
+  return Number(result.rows[0]?.count || 0);
 };
 
 const getVideoJobForUser = async ({ jobId, tenantId, userId }) => {
@@ -235,6 +63,8 @@ const claimNextVideoJob = async () => {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    // A chained segment's clock starts when it is first claimed, because it
+    // waits for the segments before it.
     await client.query(
       `UPDATE video_generation_jobs
        SET status = 'failed', phase = 'completed',
@@ -242,7 +72,8 @@ const claimNextVideoJob = async () => {
            error_message = '影片生成工作逾時，請重新提交',
            locked_at = NULL, completed_at = now(), updated_at = now()
        WHERE status IN ('queued', 'processing')
-         AND created_at < now() - make_interval(mins => $1)`,
+         AND COALESCE(started_at, CASE WHEN previous_job_id IS NULL THEN created_at END)
+             < now() - make_interval(mins => $1)`,
       [JOB_TIMEOUT_MINUTES]
     );
     await client.query(
@@ -256,19 +87,40 @@ const claimNextVideoJob = async () => {
          AND locked_at < now() - make_interval(mins => $1)`,
       [LOCK_TIMEOUT_MINUTES]
     );
+    await client.query(
+      `UPDATE video_generation_jobs AS jobs
+       SET status = 'failed', phase = 'completed',
+           error_code = 'previous_segment_failed',
+           error_message = '同一支影片的其他段生成失敗，此段已停止',
+           locked_at = NULL, completed_at = now(), updated_at = now()
+       WHERE jobs.status = 'queued'
+         AND EXISTS (
+           SELECT 1 FROM video_generation_jobs failed
+           WHERE failed.project_id = jobs.project_id AND failed.status = 'failed'
+         )`
+    );
     const result = await client.query(
       `WITH candidate AS (
          SELECT id
-         FROM video_generation_jobs
+         FROM video_generation_jobs AS waiting
          WHERE
-           (status = 'queued' AND available_at <= now())
+           (
+             status = 'queued' AND available_at <= now()
+             AND (
+               previous_job_id IS NULL
+               OR EXISTS (
+                 SELECT 1 FROM video_generation_jobs previous
+                 WHERE previous.id = waiting.previous_job_id AND previous.status = 'succeeded'
+               )
+             )
+           )
            OR (
              status = 'processing'
              AND phase IN ('polling', 'storing')
              AND next_poll_at <= now()
              AND (locked_at IS NULL OR locked_at < now() - make_interval(mins => $1))
            )
-         ORDER BY created_at
+         ORDER BY created_at, segment_index
          FOR UPDATE SKIP LOCKED
          LIMIT 1
        )
@@ -329,7 +181,8 @@ const markVideoSubmitted = async ({ job, requestId }) =>
   });
 
 const markVideoFailure = async ({ job, error }) => {
-  const transient = isTransientVideoError(error);
+  const transient =
+    isTransientVideoError(error) || (error instanceof VideoRenderError && error.retryable);
   if (transient && job.phase === "submitting" && job.attempts < MAX_SUBMIT_ATTEMPTS) {
     const delay = Math.max(
       RETRY_DELAY_SECONDS,
@@ -354,7 +207,10 @@ const markVideoFailure = async ({ job, error }) => {
     });
     return;
   }
-  const userFacing = error instanceof VideoModelError || error instanceof FoundryFalError;
+  const userFacing =
+    error instanceof VideoModelError ||
+    error instanceof FoundryFalError ||
+    error instanceof VideoRenderError;
   await updateByLock({
     job,
     sql: `status = 'failed', phase = 'completed', error_code = $3, error_message = $4,
@@ -376,17 +232,25 @@ const markVideoFailure = async ({ job, error }) => {
 const getRemainingQuota = async ({ tenantId, userId }) => {
   const [settings, admitted] = await Promise.all([
     ensureVideoSettings(tenantId),
-    query(
-      `SELECT COUNT(*)::int AS count FROM video_generation_jobs
-       WHERE tenant_id = $1 AND user_id = $2
-         AND created_at >= date_trunc('day', now()) AND status <> 'failed'`,
-      [tenantId, userId]
-    ),
+    countAdmittedToday({ query }, { tenantId, userId }),
   ]);
-  return Math.max(0, settings.dailyQuotaPerUser - Number(admitted.rows[0]?.count || 0));
+  return Math.max(0, settings.dailyQuotaPerUser - admitted);
 };
 
+// A chained segment starts from the previous segment's last frame.
 const loadVideoFrameDataUrl = async (job) => {
+  if (job.previous_job_id) {
+    const previous = await query(
+      `SELECT last_frame_blob_name FROM video_generation_jobs
+       WHERE id = $1 AND status = 'succeeded'`,
+      [job.previous_job_id]
+    );
+    const blobName = previous.rows[0]?.last_frame_blob_name;
+    if (!blobName) {
+      throw new VideoModelError("找不到上一段影片的最後一格畫面", "previous_frame_missing", 409);
+    }
+    return toJpegDataUrl(await downloadGeneratedImage({ blobName }), 2048);
+  }
   return loadOwnedImageDataUrl({
     uploadId: job.source_upload_id,
     imageJobId: job.source_image_job_id,
@@ -465,26 +329,51 @@ const assertSubmitCapacity = async (job, settings) => {
   }
 };
 
+/**
+ * Copies the provider's video into storage, then, when a chained segment
+ * waits on this job, extracts its last frame before marking it succeeded.
+ * The stored blob is recorded first so a retried render step does not
+ * download the video again.
+ */
 const storeVideoResult = async (job, model) => {
-  const family = getVideoModelFamily(model.family);
-  const result = await getVideoResult({
-    config: model,
-    familyRoute: family.route,
-    requestId: job.provider_request_id,
-  });
-  const download = await downloadVideoResult({ config: model, result });
-  const stored = await uploadGeneratedStream({
-    blobName: `videos/jobs/${job.id}/${job.lock_version}.mp4`,
-    stream: download.stream,
-    contentType: "video/mp4",
-    contentLength: download.size,
-  });
+  let videoBlobName = job.result_blob_name;
+  if (!videoBlobName) {
+    const family = getVideoModelFamily(model.family);
+    const result = await getVideoResult({
+      config: model,
+      familyRoute: family.route,
+      requestId: job.provider_request_id,
+    });
+    const download = await downloadVideoResult({ config: model, result });
+    const stored = await uploadGeneratedStream({
+      blobName: `videos/jobs/${job.id}/${job.lock_version}.mp4`,
+      stream: download.stream,
+      contentType: "video/mp4",
+      contentLength: download.size,
+    });
+    const recorded = await updateByLock({
+      job,
+      sql: "result_blob_name = $3, result_mime_type = $4, result_size_bytes = $5",
+      values: [stored.blobName, stored.contentType, stored.size],
+    });
+    if (!recorded.rowCount) return;
+    videoBlobName = stored.blobName;
+  }
+  const successor = await query(
+    "SELECT 1 FROM video_generation_jobs WHERE previous_job_id = $1 LIMIT 1",
+    [job.id]
+  );
+  const lastFrame = successor.rows.length
+    ? await extractLastFrame({
+        videoBlobName,
+        frameBlobName: `videos/jobs/${job.id}/${job.lock_version}-last.png`,
+      })
+    : null;
   await updateByLock({
     job,
-    sql: `status = 'succeeded', phase = 'completed', result_blob_name = $3,
-          result_mime_type = $4, result_size_bytes = $5,
+    sql: `status = 'succeeded', phase = 'completed', last_frame_blob_name = $3,
           error_code = NULL, error_message = NULL, locked_at = NULL, completed_at = now()`,
-    values: [stored.blobName, stored.contentType, stored.size],
+    values: [lastFrame?.blobName || null],
   });
 };
 
@@ -584,7 +473,8 @@ const startVideoJobWorker = () => {
 };
 
 module.exports = {
-  createVideoJob,
+  countAdmittedToday,
+  expiredElementError,
   getRemainingQuota,
   getVideoJobForUser,
   processNextVideoJob,

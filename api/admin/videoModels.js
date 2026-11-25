@@ -10,7 +10,7 @@ const {
   resolveVideoModel,
   updateVideoModel,
 } = require("../_shared/videoModels");
-const { createVideoJob } = require("../_shared/videoJobs");
+const { createVideoProject } = require("../_shared/videoProjects");
 
 const catalogPayload = async (tenantId) => ({
   models: await listVideoModels(tenantId),
@@ -73,7 +73,7 @@ const handleVideoModelTest = async (context, req, identity) => {
       modelKey,
     });
     const family = require("../_shared/videoModelFamilies").getVideoModelFamily(model.family);
-    const job = await createVideoJob({
+    const project = await createVideoProject({
       tenantId: identity.tenantId,
       userId: identity.userId,
       modelKey,
@@ -96,7 +96,7 @@ const handleVideoModelTest = async (context, req, identity) => {
       generateAudio: false,
       skipAdmission: true,
     });
-    context.res = ok({ jobId: job.id, status: job.status, modelKey }, 202, req);
+    context.res = ok({ projectId: project.projectId, modelKey }, 202, req);
   } catch (caught) {
     if (!(caught instanceof VideoModelError)) throw caught;
     context.res = error(caught.message, caught.code, caught.status, req);

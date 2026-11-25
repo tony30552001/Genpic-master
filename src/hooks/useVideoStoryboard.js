@@ -27,7 +27,7 @@ const summarize = (storyboard, warnings) => ({
 /**
  * Owns the storyboard being reviewed: the agent conversation (draft, revise,
  * fromScript), local edits, and the server-side inspection that returns
- * warnings and the exact payload preview for every edit. Character images
+ * warnings and the per-segment payload preview for every edit. Character images
  * are uploaded here; `previews` maps their upload ids to local thumbnails
  * (a reopened storyboard has none, so the UI falls back to initials).
  */
@@ -71,7 +71,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       setBoard((current) => current && {
         ...current,
         warnings: result.warnings,
-        compiled: result.compiled,
+        segments: result.segments,
       });
       setInspection({ status: "ready", error: "", config: inspectedConfig });
     } catch (error) {
@@ -134,7 +134,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       revision: (current?.revision ?? 0) + 1,
       storyboard: result.storyboard,
       warnings: result.warnings,
-      compiled: result.compiled,
+      segments: result.segments,
       shotNotes: result.shotNotes ?? (extra.keepNotes ? current?.shotNotes : {}) ?? {},
       changedShotIds: extra.changedShotIds || [],
       reopened: extra.keepNotes ? Boolean(current?.reopened) : false,
@@ -230,7 +230,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       revision: (current?.revision ?? 0) + 1,
       storyboard,
       warnings: [],
-      compiled: null,
+      segments: null,
       shotNotes: {},
       changedShotIds: [],
       reopened,

@@ -282,30 +282,30 @@ export const scriptToVideoStoryboard = ({ modelKey, script, hasStartFrame, chara
 export const inspectVideoStoryboard = ({ modelKey, storyboard, hasStartFrame, signal }) =>
   postVideoStoryboard("inspect", { modelKey, storyboard, hasStartFrame, signal });
 
-export const createVideoJob = async (payload) =>
-  apiPost(`${API_BASE_URL}/video-jobs`, payload);
+export const createVideoProject = async (payload) =>
+  apiPost(`${API_BASE_URL}/video-projects`, payload);
 
-export const getVideoJob = async ({ jobId, signal }) =>
-  apiGet(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}`, { signal });
+export const getVideoProject = async ({ projectId, signal }) =>
+  apiGet(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}`, { signal });
 
-export const waitForVideoJob = async ({
-  jobId,
-  signal,
-  onProgress,
-  pollIntervalMs = 4000,
-  timeoutMs = 30 * 60 * 1000,
-}) => {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt <= timeoutMs) {
-    const job = await getVideoJob({ jobId, signal });
-    onProgress?.(job);
-    if (job?.status === "succeeded") return job;
-    if (job?.status === "failed") {
-      throw new Error(job.error?.message || "影片生成失敗，請稍後重試");
-    }
+export const failedSegmentMessage = (project) => {
+  const failed = project.segments.find((segment) => segment.status === "failed" && segment.error?.code !== "previous_segment_failed")
+    || project.segments.find((segment) => segment.status === "failed");
+  const message = failed?.error?.message || "影片生成失敗，請稍後重試";
+  return project.segments.length > 1 ? `第 ${failed.index + 1} 段：${message}` : message;
+};
+
+// Resolves when every segment succeeded; a failed segment fails the project.
+// The worker times out each segment and fails the ones queued behind it, so
+// a project always settles.
+export const waitForVideoProject = async ({ projectId, signal, onProgress, pollIntervalMs = 4000 }) => {
+  for (;;) {
+    const project = await getVideoProject({ projectId, signal });
+    onProgress?.(project);
+    if (project.status === "succeeded") return project;
+    if (project.status === "failed") throw new Error(failedSegmentMessage(project));
     await abortableDelay(pollIntervalMs, signal);
   }
-  throw new Error("影片生成工作逾時，請稍後重試");
 };
 
 export const downloadVideo = async ({ jobId, signal }) =>

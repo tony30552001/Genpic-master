@@ -10,6 +10,16 @@ const getServiceKey = () => String(process.env.VIDEO_RENDER_SERVICE_KEY || "");
 
 const isConfigured = () => Boolean(getServiceUrl() && getServiceKey());
 
+/** `retryable` marks failures worth retrying: network, timeout and 5xx. */
+class VideoRenderError extends Error {
+  constructor(message, code, { retryable = false } = {}) {
+    super(message);
+    this.name = "VideoRenderError";
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
+
 const describeFailure = (payload, status) => {
   const detail = payload?.detail;
   if (typeof detail === "string") return `影片組合服務失敗：${detail} (${status})`;
@@ -19,7 +29,10 @@ const describeFailure = (payload, status) => {
 
 const request = async (path, body) => {
   if (!isConfigured()) {
-    throw new Error("VIDEO_RENDER_SERVICE_URL 或 VIDEO_RENDER_SERVICE_KEY 尚未設定，無法使用影片組合服務");
+    throw new VideoRenderError(
+      "VIDEO_RENDER_SERVICE_URL 或 VIDEO_RENDER_SERVICE_KEY 尚未設定，無法使用影片組合服務",
+      "video_render_unconfigured"
+    );
   }
 
   let response;
@@ -34,8 +47,12 @@ const request = async (path, body) => {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (error) {
-    if (error.name === "TimeoutError") throw new Error("影片組合服務逾時未回應");
-    throw new Error(`無法連線影片組合服務：${error.message}`);
+    if (error.name === "TimeoutError") {
+      throw new VideoRenderError("影片組合服務逾時未回應", "video_render_timeout", { retryable: true });
+    }
+    throw new VideoRenderError(`無法連線影片組合服務：${error.message}`, "video_render_unreachable", {
+      retryable: true,
+    });
   }
 
   const text = await response.text();
@@ -45,7 +62,11 @@ const request = async (path, body) => {
   } catch {
     payload = null;
   }
-  if (!response.ok) throw new Error(describeFailure(payload, response.status));
+  if (!response.ok) {
+    throw new VideoRenderError(describeFailure(payload, response.status), "video_render_failed", {
+      retryable: response.status >= 500,
+    });
+  }
   return payload;
 };
 
@@ -68,4 +89,4 @@ const extractLastFrame = async ({ videoBlobName, frameBlobName }) => {
   };
 };
 
-module.exports = { extractLastFrame, isConfigured };
+module.exports = { VideoRenderError, extractLastFrame, isConfigured };

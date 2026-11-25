@@ -7,6 +7,7 @@ const {
   assertScriptFidelity,
   compileStoryboard,
   normalizeStoryboard,
+  planSegments,
   storyboardWarnings,
 } = require("../videoStoryboard");
 
@@ -65,6 +66,43 @@ describe("normalizeStoryboard", () => {
   });
 });
 
+describe("planSegments", () => {
+  const kling = { family: "kling-v3-pro", maxDurationSeconds: 15 };
+  const shots = (durations, overrides = {}) =>
+    durations.map((duration, index) => shot({ id: `s${index + 1}`, duration, ...overrides[index] }));
+  const plan = (value, mode = "t2v") =>
+    planSegments(board(value), kling, { mode }).map(({ shotIds, durationSeconds, chained, mode: segmentMode }) => ({
+      shotIds,
+      durationSeconds,
+      chained,
+      mode: segmentMode,
+    }));
+
+  it("chains segments when a scene runs past the model length", () => {
+    expect(plan(shots([10, 5, 6]), "i2v")).toEqual([
+      { shotIds: ["s1", "s2"], durationSeconds: 15, chained: false, mode: "i2v" },
+      { shotIds: ["s3"], durationSeconds: 6, chained: true, mode: "i2v" },
+    ]);
+  });
+
+  it("starts an unchained text-to-video segment at a scene cut", () => {
+    expect(plan(shots([5, 5], { 1: { cut: true } }))).toEqual([
+      { shotIds: ["s1"], durationSeconds: 5, chained: false, mode: "t2v" },
+      { shotIds: ["s2"], durationSeconds: 5, chained: false, mode: "t2v" },
+    ]);
+    expect(board(shots([5], { 0: { cut: true } })).shots[0].cut).toBe(false);
+  });
+
+  it("caps a segment's shot count", () => {
+    expect(plan(shots([2, 2, 2, 2, 2, 2, 3])).map((segment) => segment.shotIds.length)).toEqual([6, 1]);
+  });
+
+  it("rejects segments that are too short and projects that are too long", () => {
+    expect(() => plan(shots([5, 2], { 1: { cut: true } }))).toThrow(/第 2 段（第 2 幕）只有 2 秒/);
+    expect(() => planSegments(board(shots([12])), { ...kling, maxDurationSeconds: 10 }, T2V)).toThrow(/每段 10 秒/);
+    expect(() => plan(shots(Array(9).fill(14)))).toThrow(/120 秒上限/);
+  });
+});
 describe("compileStoryboard characters", () => {
   const cast = (overrides = {}) =>
     board(

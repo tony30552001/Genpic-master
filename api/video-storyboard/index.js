@@ -11,31 +11,34 @@ const { ensureVideoSettings } = require("../_shared/videoPolicy");
 const {
   ANGLES,
   CAMERAS,
+  MAX_PROJECT_SECONDS,
   MAX_SCRIPT_SOURCE,
+  MAX_SEGMENT_SHOTS,
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
   assertQuotedTextPreserved,
   assertRevisionScope,
   assertScriptFidelity,
-  assertStoryboardDuration,
-  compileStoryboard,
   durationRange,
   normalizeCharacters,
   normalizeStoryboard,
+  planSegments,
   storyboardDuration,
   storyboardWarnings,
 } = require("../_shared/videoStoryboard");
 
 const SCHEMA = `Storyboard JSON:
 {"title":"<=30 chars","global":{"style":"","lighting":"","constraints":["<=8 items"],"negative":"English negative prompt","characters":"read-only, see below"},
-"shots":[{"id":"s1","title":"<=30 chars or null","script":null,"scriptOriginal":null,"duration":3,
+"shots":[{"id":"s1","title":"<=30 chars or null","script":null,"scriptOriginal":null,"duration":3,"cut":false,
 "shotSize":"${Object.keys(SHOT_SIZES).join("|")}",
 "angle":"${Object.keys(ANGLES).join("|")}",
 "camera":"${Object.keys(CAMERAS).join("|")}",
 "action":"one main action","environment":"setting details","characterIds":["ids from characters"]}]}
 Rules:
-- At most ${MAX_SHOTS} shots. Durations are integers of 1-15 seconds.
+- At most ${MAX_SHOTS} shots and ${MAX_PROJECT_SECONDS} seconds in total. Durations are integers from 1 to segmentSeconds.max.
+- The video is generated in segments. Consecutive shots are grouped into one segment of at most segmentSeconds.max seconds and ${MAX_SEGMENT_SHOTS} shots; the next segment continues from the last frame of the previous one.
+- Set cut=true on a shot that starts a new scene (new place, time or subject); the scene then starts fresh instead of continuing the previous frame. The first shot always has cut=false. Every scene must last at least segmentSeconds.min seconds.
 - A structured shot has script=null and sets shotSize, angle, camera, action and environment.
 - A script shot sets script and leaves shotSize, angle, camera, action and environment null.
 - characters lists the user's characters and products with reference images. You cannot add, remove or edit them; omit global.characters from your output.
@@ -47,11 +50,11 @@ Rules:
 - Never ask the video model to render written text, signs or logos unless the user quoted that text.
 - Keep the converted prompt of every shot under ${PROMPT_LIMIT} characters.`;
 
-const DRAFT_SYSTEM = `You are a film storyboard artist for short AI-generated videos.
+const DRAFT_SYSTEM = `You are a film storyboard artist for AI-generated videos.
 ${SCHEMA}
 Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chinese","questions":["<=2 questions in Traditional Chinese"]}.
 Plan structured shots whose durations add up exactly to durationSeconds.
-If shotCount is given, return exactly that many shots and no questions; otherwise choose 2-${MAX_SHOTS} shots.
+If shotCount is given, return exactly that many shots and no questions; otherwise choose 2-6 shots for a video up to segmentSeconds.max and about one shot per 3-8 seconds for a longer one.
 Ask a question only when a missing answer would seriously change the result; otherwise return [] and state your assumptions in explanation.
 When hasStartFrame is true, describe only motion, camera and changes over time, not what the first frame already shows.`;
 
@@ -68,7 +71,8 @@ ${SCHEMA}
 Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chinese","shotNotes":[{"shotId":"s1","notes":["<=3 suggestions in Traditional Chinese"]}]}.
 - Split scenes on headings such as 場景 1, 第 1 幕, Scene 1, numbered titles, timecodes, or blank lines. One scene is one script shot.
 - script is the scene text copied exactly from the source, without its heading. Keep the original heading as title; add a short title only when missing.
-- duration comes from the scene text (for example 5 秒 or 5-second); otherwise use 5.
+- duration comes from the scene text (for example 5 秒 or 5-second); otherwise use 5. Never exceed segmentSeconds.max.
+- Set cut=true on a scene whose place or time differs from the previous scene.
 - Only if a scene exceeds ${PROMPT_LIMIT} characters, move repeated consistency notes to global.constraints and prohibitions to global.negative, then condense: put the condensed text in script and the exact source text in scriptOriginal. Keep quoted text and @ references.
 - If the script asks for no music or no sound, say in explanation that native audio should be turned off.
 - A character's imageLabel (for example Image1) means the script's @Image1 shows that character; tag those scenes with its id.
@@ -129,20 +133,42 @@ const agentInput = (storyboard) => ({
 
 const agentText = (value) => (typeof value === "string" ? value.trim().slice(0, 2000) : "");
 
-const respondStoryboard = ({ storyboard, model, hasStartFrame, extra }) => {
-  const compiled = compileStoryboard(model.family, storyboard, { mode: hasStartFrame ? "i2v" : "t2v" });
+// Agent output that cannot be segmented is an agent failure (502), not a
+// problem with the user's input.
+const planForResponse = ({ storyboard, model, hasStartFrame, fromAgent }) => {
+  try {
+    return planSegments(storyboard, model, { mode: hasStartFrame ? "i2v" : "t2v" });
+  } catch (caught) {
+    if (fromAgent && caught instanceof VideoModelError) {
+      throw agentFailure(`AI 產生的分鏡無法分段：${caught.message}。請重試`);
+    }
+    throw caught;
+  }
+};
+
+const respondStoryboard = ({ storyboard, model, hasStartFrame, fromAgent = false, extra }) => {
+  const segments = planForResponse({ storyboard, model, hasStartFrame, fromAgent });
   return {
     storyboard,
     durationSeconds: storyboardDuration(storyboard),
-    warnings: storyboardWarnings(storyboard, { hasStartFrame }),
-    compiled: {
-      sendMode: compiled.sendMode,
-      prompt: compiled.prompt,
-      multiPrompt: compiled.multiPrompt,
-      negativePrompt: compiled.negativePrompt,
-      characterMode: compiled.characterMode,
-      elements: compiled.elements.map(({ characterId, name }) => ({ characterId, name })),
-    },
+    warnings: segments.flatMap((segment) =>
+      storyboardWarnings(segment.storyboard, { hasStartFrame: segment.mode === "i2v" })
+    ),
+    segments: segments.map(({ index, shotIds, durationSeconds, chained, mode, compiled }) => ({
+      index,
+      shotIds,
+      durationSeconds,
+      chained,
+      mode,
+      compiled: {
+        sendMode: compiled.sendMode,
+        prompt: compiled.prompt,
+        multiPrompt: compiled.multiPrompt,
+        negativePrompt: compiled.negativePrompt,
+        characterMode: compiled.characterMode,
+        elements: compiled.elements.map(({ characterId, name }) => ({ characterId, name })),
+      },
+    })),
     ...extra,
   };
 };
@@ -162,9 +188,13 @@ const runAgent = async ({ identity, systemMessage, input, maxOutputTokens }) => 
 const draft = async ({ identity, body, model }) => {
   const brief = requireString(body.brief, "影片概述", 20_000);
   const durationSeconds = Number(body.durationSeconds);
-  const { min, max } = durationRange(model);
-  if (!Number.isInteger(durationSeconds) || durationSeconds < min || durationSeconds > max) {
-    throw new VideoModelError(`影片秒數必須介於 ${min} 與 ${max} 秒`);
+  const segmentSeconds = durationRange(model);
+  if (
+    !Number.isInteger(durationSeconds) ||
+    durationSeconds < segmentSeconds.min ||
+    durationSeconds > MAX_PROJECT_SECONDS
+  ) {
+    throw new VideoModelError(`影片秒數必須介於 ${segmentSeconds.min} 與 ${MAX_PROJECT_SECONDS} 秒`);
   }
   const shotCount = body.shotCount === undefined || body.shotCount === null ? null : Number(body.shotCount);
   if (shotCount !== null && (!Number.isInteger(shotCount) || shotCount < 1 || shotCount > MAX_SHOTS)) {
@@ -175,7 +205,14 @@ const draft = async ({ identity, body, model }) => {
   const data = await runAgent({
     identity,
     systemMessage: DRAFT_SYSTEM,
-    input: { brief, durationSeconds, shotCount, hasStartFrame, characters: agentCharacters(characters) },
+    input: {
+      brief,
+      durationSeconds,
+      shotCount,
+      hasStartFrame,
+      segmentSeconds,
+      characters: agentCharacters(characters),
+    },
     maxOutputTokens: 6000,
   });
   const storyboard = agentStoryboard(data.storyboard, characters);
@@ -193,6 +230,7 @@ const draft = async ({ identity, body, model }) => {
     storyboard,
     model,
     hasStartFrame,
+    fromAgent: true,
     extra: { explanation: agentText(data.explanation), questions },
   });
 };
@@ -204,11 +242,18 @@ const revise = async ({ identity, body, model }) => {
   if (shotId && !before.shots.some((shot) => shot.id === shotId)) {
     throw new VideoModelError("找不到要修改的幕");
   }
-  const { min, max } = durationRange(model);
+  const segmentSeconds = durationRange(model);
   const data = await runAgent({
     identity,
     systemMessage: REVISE_SYSTEM,
-    input: { storyboard: agentInput(before), instruction, shotId, minSeconds: min, maxSeconds: max },
+    input: {
+      storyboard: agentInput(before),
+      instruction,
+      shotId,
+      minSeconds: segmentSeconds.min,
+      maxSeconds: MAX_PROJECT_SECONDS,
+      segmentSeconds,
+    },
     maxOutputTokens: 8000,
   });
   const after = agentStoryboard(data.storyboard, before.global.characters);
@@ -218,12 +263,12 @@ const revise = async ({ identity, body, model }) => {
     declaredChangedIds: data.changedShotIds,
     shotId,
   });
-  assertStoryboardDuration(after, model, 502);
   assertQuotedTextPreserved(instruction, after);
   return respondStoryboard({
     storyboard: after,
     model,
     hasStartFrame: Boolean(body.hasStartFrame),
+    fromAgent: true,
     extra: { changedShotIds, explanation: agentText(data.explanation) },
   });
 };
@@ -234,19 +279,11 @@ const fromScript = async ({ identity, body, model }) => {
   const data = await runAgent({
     identity,
     systemMessage: SCRIPT_SYSTEM,
-    input: { script, characters: agentCharacters(characters) },
+    input: { script, segmentSeconds: durationRange(model), characters: agentCharacters(characters) },
     maxOutputTokens: 16000,
   });
   const storyboard = agentStoryboard(data.storyboard, characters);
   assertScriptFidelity(script, storyboard);
-  const total = storyboardDuration(storyboard);
-  const { max } = durationRange(model);
-  if (total > max) {
-    throw new VideoModelError(
-      `腳本加總 ${total} 秒，超過單支影片上限 ${max} 秒。長片拆段會在後續版本提供，請先刪減場景或縮短秒數`
-    );
-  }
-  assertStoryboardDuration(storyboard, model);
   const ids = new Set(storyboard.shots.map((shot) => shot.id));
   const shotNotes = Object.fromEntries(
     (Array.isArray(data.shotNotes) ? data.shotNotes : [])
@@ -266,7 +303,6 @@ const fromScript = async ({ identity, body, model }) => {
 
 const inspect = async ({ body, model }) => {
   const storyboard = normalizeStoryboard(body.storyboard);
-  assertStoryboardDuration(storyboard, model);
   return respondStoryboard({ storyboard, model, hasStartFrame: Boolean(body.hasStartFrame) });
 };
 

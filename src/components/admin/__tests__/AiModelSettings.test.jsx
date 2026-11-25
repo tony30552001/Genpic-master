@@ -41,7 +41,7 @@ vi.mock("../../../services/adminService", () => ({
   testAdminVideoModel: vi.fn(),
   updateAdminVideoSettings: vi.fn(),
 }));
-vi.mock("../../../services/aiService", () => ({ waitForImageJob: vi.fn(), waitForVideoJob: vi.fn() }));
+vi.mock("../../../services/aiService", () => ({ waitForImageJob: vi.fn(), waitForVideoProject: vi.fn() }));
 
 const { refreshProfile } = vi.hoisted(() => ({ refreshProfile: vi.fn() }));
 vi.mock("../../../hooks/useAuth", () => ({ default: () => ({ refreshProfile }) }));

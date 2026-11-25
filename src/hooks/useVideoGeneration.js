@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  createVideoJob,
+  createVideoProject,
   downloadVideo,
   draftVideoStoryboard,
-  waitForVideoJob,
+  waitForVideoProject,
 } from "../services/aiService";
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
 /**
  * Runs video turns. A turn either sends a confirmed `storyboard`, or a `brief`
- * that the storyboard agent first turns into a single shot ("直接生成").
+ * that the storyboard agent first turns into `shotCount` shots ("直接生成").
+ * Each turn is one video project; long storyboards run as several segments
+ * that play back in order. Only single-segment turns are saved to history.
  */
 export default function useVideoGeneration({ onSaved }) {
   const [turns, setTurns] = useState([]);
-  const [activeJobId, setActiveJobId] = useState(null);
+  const [activeTurnId, setActiveTurnId] = useState(null);
   const controllers = useRef(new Map());
   const urls = useRef(new Set());
 
@@ -25,11 +27,7 @@ export default function useVideoGeneration({ onSaved }) {
 
   const updateTurn = useCallback((clientId, patch) => {
     setTurns((current) =>
-      current.map((turn) =>
-        turn.clientId === clientId
-          ? { ...turn, ...(typeof patch === "function" ? patch(turn) : patch) }
-          : turn
-      )
+      current.map((turn) => (turn.clientId === clientId ? { ...turn, ...patch } : turn))
     );
   }, []);
 
@@ -37,6 +35,7 @@ export default function useVideoGeneration({ onSaved }) {
     storyboard: confirmed = null,
     brief = "",
     durationSeconds,
+    shotCount = 1,
     modelKey,
     ...options
   }) => {
@@ -52,9 +51,12 @@ export default function useVideoGeneration({ onSaved }) {
         storyboard: confirmed,
         modelKey,
         options,
+        durationSeconds,
+        shotCount,
         status: confirmed ? "queued" : "drafting",
       },
     ]);
+    setActiveTurnId(clientId);
     try {
       let storyboard = confirmed;
       if (!storyboard) {
@@ -62,41 +64,37 @@ export default function useVideoGeneration({ onSaved }) {
           modelKey,
           brief,
           durationSeconds,
-          shotCount: 1,
+          shotCount,
           hasStartFrame: Boolean(options.sourceUploadId || options.sourceImageJobId),
           signal: controller.signal,
         });
         storyboard = drafted.storyboard;
         updateTurn(clientId, { storyboard, status: "queued" });
       }
-      const admission = await createVideoJob({ modelKey, storyboard, ...options });
-      const jobId = admission.jobId;
-      updateTurn(clientId, { jobId, status: admission.status, phase: admission.phase });
-      setActiveJobId(jobId);
-      const completed = await waitForVideoJob({
-        jobId,
+      const admission = await createVideoProject({ modelKey, storyboard, ...options });
+      const { projectId } = admission;
+      updateTurn(clientId, { projectId, segments: admission.segments });
+      const completed = await waitForVideoProject({
+        projectId,
         signal: controller.signal,
-        onProgress: (job) =>
-          updateTurn(clientId, {
-            status: job.status,
-            phase: job.phase,
-          }),
+        onProgress: (project) => updateTurn(clientId, { status: project.status, segments: project.segments }),
       });
-      const blob = await downloadVideo({ jobId, signal: controller.signal });
-      const videoUrl = URL.createObjectURL(blob);
-      urls.current.add(videoUrl);
-      updateTurn(clientId, {
-        status: completed.status,
-        phase: completed.phase,
-        videoUrl,
-        completedAt: completed.completedAt,
-      });
-      await onSaved?.({
-        videoJobId: jobId,
-        userScript: brief || storyboard.title,
-        fullPrompt: completed.prompt,
-      });
-      return { jobId, videoUrl };
+      const videoUrls = [];
+      for (const segment of completed.segments) {
+        const blob = await downloadVideo({ jobId: segment.jobId, signal: controller.signal });
+        const url = URL.createObjectURL(blob);
+        urls.current.add(url);
+        videoUrls.push(url);
+      }
+      updateTurn(clientId, { status: "succeeded", segments: completed.segments, videoUrls });
+      if (completed.segments.length === 1) {
+        await onSaved?.({
+          videoJobId: completed.segments[0].jobId,
+          userScript: brief || storyboard.title,
+          fullPrompt: completed.segments[0].prompt,
+        });
+      }
+      return { projectId, videoUrls };
     } catch (error) {
       if (error?.name !== "AbortError") {
         updateTurn(clientId, {
@@ -118,10 +116,9 @@ export default function useVideoGeneration({ onSaved }) {
 
   return {
     turns,
-    activeJobId,
-    setActiveJobId,
+    activeTurnId,
+    setActiveTurnId,
     submit,
     stopWaiting,
   };
 }
-

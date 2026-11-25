@@ -28,8 +28,24 @@ export const CAMERA_LABELS = Object.freeze({
   handheld: "手持",
 });
 
-export const MAX_SHOTS = 6;
+// Mirrors api/_shared/videoStoryboard.js.
+export const MAX_SHOTS = 30;
 export const MAX_SHOT_SECONDS = 15;
+export const MAX_PROJECT_SECONDS = 120;
+const LONG_DURATIONS = [20, 30, 45, 60, 90, 120];
+
+/** Seconds one model request (one segment) can cover. */
+export const segmentRange = (model) => ({
+  min: model?.capabilities?.minDuration || 1,
+  max: Math.min(model?.capabilities?.maxDuration ?? Infinity, model?.maxDurationSeconds || 5),
+});
+
+/** Every second up to one segment, then longer multi-segment lengths. */
+export const durationChoices = (model) => {
+  const { min, max } = segmentRange(model);
+  const single = Array.from({ length: Math.max(0, max - min + 1) }, (_, index) => min + index);
+  return [...single, ...LONG_DURATIONS.filter((value) => value > max)];
+};
 
 export const toOptions = (labels) =>
   Object.entries(labels).map(([value, label]) => ({ value, label }));
@@ -63,6 +79,7 @@ export const createShot = (shots) => ({
   action: "",
   environment: "",
   characterIds: [],
+  cut: false,
 });
 
 export const SEND_MODE_LABELS = Object.freeze({
@@ -97,10 +114,39 @@ export const scriptImageLabels = (storyboard) => {
   return [...labels].sort((a, b) => Number(a.slice(5)) - Number(b.slice(5)));
 };
 
-/** How the compiled request uses character references, or null when there are none. */
-export const characterModeLabel = (compiled, family) => {
-  if (!compiled || compiled.characterMode === "none") return null;
-  if (compiled.characterMode === "elements") return `以 ${compiled.elements.length} 個角色參考圖送出`;
+const segmentNumbers = (segments) => segments.map((segment) => segment.index + 1).join("、");
+
+/** How the segment requests use character references, or null when there are none. */
+export const characterModeLabel = (segments, family) => {
+  if (!segments) return null;
+  const withElements = segments.filter((segment) => segment.compiled.characterMode === "elements");
+  const asText = segments.filter((segment) => segment.compiled.characterMode === "text");
+  if (!withElements.length && !asText.length) return null;
+  if (!asText.length) {
+    const ids = new Set(
+      withElements.flatMap((segment) => segment.compiled.elements.map((element) => element.characterId))
+    );
+    return `以 ${ids.size} 個角色參考圖送出`;
+  }
   if (family?.startsWith("minimax")) return "MiniMax 不使用角色參考圖，角色以文字描述送出";
-  return "沒有首影格，不使用角色參考圖，角色以文字描述送出";
+  if (!withElements.length) return "沒有首影格，不使用角色參考圖，角色以文字描述送出";
+  return `第 ${segmentNumbers(asText)} 段沒有首影格，角色以文字描述送出；其餘段使用角色參考圖`;
 };
+
+/** How one segment starts, for segment headers and the request preview. */
+export const segmentStartLabel = (segment) => {
+  if (segment.chained) return "接續上一段最後一格";
+  if (segment.index === 0) return segment.mode === "i2v" ? "從首影格開始" : "從文字開始";
+  return "場景轉換，從文字開始";
+};
+
+/** Footer summary of how the storyboard is sent. */
+export const sendModeLabel = (segments) => {
+  if (!segments) return "檢查中…";
+  if (segments.length === 1) return SEND_MODE_LABELS[segments[0].compiled.sendMode];
+  return `分 ${segments.length} 段生成，依序播放`;
+};
+
+/** Segments keyed by their first shot id; empty for a single segment. */
+export const segmentStarts = (segments) =>
+  new Map(segments && segments.length > 1 ? segments.map((segment) => [segment.shotIds[0], segment]) : []);

@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 
 describe("video-storyboard", () => {
-  it("returns a drafted storyboard with its compiled request and warnings", async () => {
+  it("returns a drafted storyboard with its segment requests and warnings", async () => {
     llmRuntime.generateJson.mockResolvedValue({
       storyboard: storyboard([shot(), shot({ id: "s2", camera: "static", action: "鏡頭推近「早安」招牌" })]),
       explanation: "假設清晨",
@@ -73,7 +73,8 @@ describe("video-storyboard", () => {
     });
     const res = await invoke({ action: "draft", brief: "咖啡廳開店，招牌寫「早安」", durationSeconds: 10 });
     expect(res.status).toBe(200);
-    expect(res.body.compiled.sendMode).toBe("multi");
+    expect(res.body.segments).toEqual([expect.objectContaining({ index: 0, chained: false, mode: "t2v" })]);
+    expect(res.body.segments[0].compiled.sendMode).toBe("multi");
     expect(res.body.warnings).toEqual([expect.objectContaining({ shotId: "s2", code: "camera_conflict" })]);
   });
 
@@ -95,13 +96,28 @@ describe("video-storyboard", () => {
     expect(res.body.changedShotIds).toEqual(["s2"]);
   });
 
-  it("rejects scripts longer than a single video", async () => {
+  it("splits scripts longer than one segment into chained segments", async () => {
     llmRuntime.generateJson.mockResolvedValue({
       storyboard: storyboard([scriptShot("s1", "她推開門。", 10), scriptShot("s2", "他微笑。", 10)]),
     });
     const res = await invoke({ action: "fromScript", script: "場景 1 她推開門。 場景 2 他微笑。" });
-    expect(res.status).toBe(400);
-    expect(res.body.error.message).toMatch(/20 秒/);
+    expect(res.status).toBe(200);
+    expect(res.body.durationSeconds).toBe(20);
+    expect(res.body.segments.map(({ shotIds, chained, mode }) => ({ shotIds, chained, mode }))).toEqual([
+      { shotIds: ["s1"], chained: false, mode: "t2v" },
+      { shotIds: ["s2"], chained: true, mode: "i2v" },
+    ]);
+  });
+
+  it("treats an agent storyboard that cannot be segmented as an agent failure", async () => {
+    llmRuntime.generateJson.mockResolvedValue({
+      storyboard: storyboard([shot({ duration: 10 }), shot({ id: "s2", duration: 2, cut: true })]),
+      changedShotIds: ["s2"],
+    });
+    const before = storyboard([shot({ duration: 10 }), shot({ id: "s2", duration: 2 })]);
+    const res = await invoke({ action: "revise", storyboard: before, instruction: "第 2 幕換場景" });
+    expect(res.status).toBe(502);
+    expect(res.body.error.message).toMatch(/無法分段/);
   });
 
   it("keeps the user's characters out of the agent's control", async () => {
@@ -122,7 +138,7 @@ describe("video-storyboard", () => {
     expect(sent.storyboard.global.characters[0]).not.toHaveProperty("uploadIds");
     expect(res.status).toBe(200);
     expect(res.body.storyboard.global.characters).toEqual([barista]);
-    expect(res.body.compiled).toMatchObject({
+    expect(res.body.segments[0].compiled).toMatchObject({
       characterMode: "elements",
       elements: [{ characterId: "c1", name: "咖啡師" }],
     });

@@ -3,10 +3,11 @@ import { Plus, X } from "@/components/icons/lucideControls";
 import { Clapperboard } from "@/components/icons/lucideContent";
 import { Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
-import { SEND_MODE_LABELS, characterModeLabel, scriptImageLabels, storyboardSeconds } from "@/lib/videoStoryboard";
+import { characterModeLabel, scriptImageLabels, segmentStarts, sendModeLabel, storyboardSeconds } from "@/lib/videoStoryboard";
 import CharacterList from "./CharacterList";
 import GlobalCard from "./GlobalCard";
 import ShotCard from "./ShotCard";
+import SegmentDivider from "./SegmentDivider";
 import StoryboardTimeline from "./StoryboardTimeline";
 import { StatusPill, StoryboardSkeleton } from "./StoryboardParts";
 import { boardStatus, compiledPreview, estimateLabel, storyboardActions } from "./storyboardActions";
@@ -46,7 +47,8 @@ export default function StoryboardBoard({
   const { shots, global } = board.storyboard;
   const seconds = storyboardSeconds(board.storyboard);
   const status = boardStatus(storyboard);
-  const characterMode = characterModeLabel(board.compiled, model?.family);
+  const characterMode = characterModeLabel(board.segments, model?.family);
+  const startsAt = segmentStarts(board.segments);
   const busy = Boolean(pending);
   const jump = (shotId) => {
     const card = document.getElementById(`storyboard-shot-${shotId}`);
@@ -74,7 +76,7 @@ export default function StoryboardBoard({
             從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。
           </p>
         )}
-        <StoryboardTimeline shots={shots} warnedIds={warnedIds} changedIds={board.changedShotIds} onJump={jump} />
+        <StoryboardTimeline shots={shots} segments={board.segments} warnedIds={warnedIds} changedIds={board.changedShotIds} onJump={jump} />
         <GlobalCard global={global} onChange={actions.updateGlobal}>
           <CharacterList
             characters={global.characters}
@@ -83,8 +85,9 @@ export default function StoryboardBoard({
           />
         </GlobalCard>
         {shots.map((shot, index) => (
+          <React.Fragment key={shot.id}>
+            {startsAt.has(shot.id) && <SegmentDivider segment={startsAt.get(shot.id)} />}
           <ShotCard
-            key={shot.id}
             shot={shot}
             index={index}
             warnings={board.warnings.filter((warning) => warning.shotId === shot.id)}
@@ -101,6 +104,7 @@ export default function StoryboardBoard({
             onFix={(warning) => void actions.fixWarning(warning)}
             onDelete={() => actions.deleteShot(shot.id)}
           />
+          </React.Fragment>
         ))}
         {actions.canAddShot && (
           <button
@@ -117,22 +121,22 @@ export default function StoryboardBoard({
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="shrink-0">送出方式</span>
           <span className="min-w-0 truncate">
-            {model?.label} · {board.compiled ? SEND_MODE_LABELS[board.compiled.sendMode] : "檢查中…"}
+            {model?.label} · {sendModeLabel(board.segments)}
           </span>
           <button
             type="button"
             className="ml-auto shrink-0 rounded font-semibold text-primary press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             onClick={() => setShowCompiled((value) => !value)}
             aria-expanded={showCompiled}
-            disabled={!board.compiled}
+            disabled={!board.segments}
           >
             {showCompiled ? "收起" : "預覽送出內容"}
           </button>
         </div>
         {characterMode && <p className="text-xs text-muted-foreground">{characterMode}</p>}
-        {showCompiled && board.compiled && (
+        {showCompiled && board.segments && (
           <pre className="storyboard-enter max-h-40 overflow-auto whitespace-pre-wrap rounded-xl bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed custom-scrollbar">
-            {compiledPreview(board.compiled)}
+            {compiledPreview(board.segments)}
           </pre>
         )}
         {inspection.status === "invalid" && (
@@ -141,7 +145,7 @@ export default function StoryboardBoard({
         <div className="flex items-center gap-2.5">
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             <b className="font-semibold text-foreground">{shots.length} 幕 · {seconds} 秒</b>
-            {" · "}{generateBlocker || estimateLabel(model)}
+            {" · "}{generateBlocker || estimateLabel(model, board.segments?.length)}
           </span>
           <Button type="button" variant="outline" size="sm" className="h-8.5 rounded-xl" onClick={() => void actions.redraft()} disabled={busy}>
             {pending === "revise" && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}

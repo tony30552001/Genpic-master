@@ -47,6 +47,10 @@ const compiled = {
   elements: [],
 };
 
+const segmentOf = (value) => [
+  { index: 0, shotIds: ["s1", "s2"], durationSeconds: 6, mode: "t2v", chained: false, compiled: value },
+];
+
 const barista = {
   id: "c1",
   name: "咖啡師",
@@ -58,7 +62,7 @@ const barista = {
 const agentResult = (overrides = {}) => ({
   storyboard,
   warnings: [{ shotId: "s2", code: "static_action", message: "固定鏡頭缺少動作" }],
-  compiled,
+  segments: segmentOf(compiled),
   explanation: "拆成兩幕",
   questions: ["要加字幕嗎？"],
   ...overrides,
@@ -95,7 +99,7 @@ describe("useVideoStoryboard", () => {
   });
 
   it("debounces inspection after an edit and keeps the edited storyboard", async () => {
-    inspectVideoStoryboard.mockResolvedValue({ warnings: [], compiled: { ...compiled, sendMode: "single" } });
+    inspectVideoStoryboard.mockResolvedValue({ warnings: [], segments: segmentOf({ ...compiled, sendMode: "single" }) });
     const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
     await act(() => result.current.draft({ brief: "森林晨光", durationSeconds: 6 }));
 
@@ -108,12 +112,12 @@ describe("useVideoStoryboard", () => {
     expect(inspectVideoStoryboard).toHaveBeenCalledTimes(1);
     expect(result.current.board.storyboard.shots).toHaveLength(1);
     expect(result.current.board.warnings).toEqual([]);
-    expect(result.current.board.compiled.sendMode).toBe("single");
+    expect(result.current.board.segments[0].compiled.sendMode).toBe("single");
     expect(result.current.inspection.status).toBe("ready");
   });
 
   it("treats the result as stale and re-inspects when the model changes", async () => {
-    inspectVideoStoryboard.mockResolvedValue({ warnings: [], compiled });
+    inspectVideoStoryboard.mockResolvedValue({ warnings: [], segments: segmentOf(compiled) });
     const { result, rerender } = renderHook((props) => useVideoStoryboard(props), {
       initialProps: { modelKey: "kling", hasStartFrame: false },
     });

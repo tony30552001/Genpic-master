@@ -3,6 +3,8 @@ const {
   ANGLES,
   CAMERAS,
   MAX_CHARACTERS,
+  MAX_PROJECT_SECONDS,
+  MAX_SEGMENT_SHOTS,
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
@@ -389,9 +391,9 @@ addOperation("/api/image-jobs/{id}/image", "get", {
   successSchema: { type: "string", format: "binary" },
 });
 
-addOperation("/api/video-jobs", "post", {
-  summary: "Queue a text-to-video or image-to-video job",
-  description: "Uses an allowed tenant video model and enforces the user's daily quota unless the user is unlimited. The duration is the sum of the storyboard shots; the storyboard is compiled deterministically into the model request. Image sources must be owned by the caller.",
+addOperation("/api/video-projects", "post", {
+  summary: "Queue a storyboard as a video project",
+  description: `Uses an allowed tenant video model and enforces the user's daily quota unless the user is unlimited. The storyboard (at most ${MAX_PROJECT_SECONDS} seconds) is split into segments that fit one model request; a segment closes at a shot with cut=true, at the model's per-request length, or after ${MAX_SEGMENT_SHOTS} shots. Each segment is one video job and counts against the quota. A segment that continues the same scene starts from the previous segment's last frame (image-to-video); a segment after a cut is text-to-video. An end frame requires a single segment. Image sources must be owned by the caller.`,
   tags: ["Video"],
   body: true,
   csrf: true,
@@ -402,9 +404,9 @@ addOperation("/api/video-jobs", "post", {
     properties: {
       modelKey: { type: "string" },
       storyboard: { $ref: "#/components/schemas/VideoStoryboard" },
-      mode: { type: "string", enum: ["t2v", "i2v"] },
+      mode: { type: "string", enum: ["t2v", "i2v"], description: "Mode of the first segment" },
       resolution: { type: "string", enum: ["480P", "768P", "1080P"] },
-      aspectRatio: { type: "string" },
+      aspectRatio: { type: "string", description: "Used by text-to-video segments" },
       generateAudio: { type: "boolean" },
       sourceUploadId: { type: "string", format: "uuid" },
       sourceImageJobId: { type: "string", format: "uuid" },
@@ -414,14 +416,15 @@ addOperation("/api/video-jobs", "post", {
   },
 });
 
-addOperation("/api/video-jobs/{id}", "get", {
-  summary: "Get the status of an owned video generation job",
+addOperation("/api/video-projects/{id}", "get", {
+  summary: "Get an owned video project with the status of each segment",
+  description: "status is failed when any segment failed, succeeded when all succeeded, processing once any segment started, otherwise queued. Download each succeeded segment from /api/video-jobs/{jobId}/video.",
   tags: ["Video"],
   parameters: pathParameters("id"),
 });
 
 addOperation("/api/video-jobs/{id}/video", "get", {
-  summary: "Download the immutable MP4 result of an owned succeeded video job",
+  summary: "Download the immutable MP4 of an owned succeeded video segment",
   tags: ["Video"],
   parameters: pathParameters("id"),
   successContentType: "video/mp4",
@@ -661,7 +664,7 @@ addOperation("/api/optimize-prompt", "post", {
 
 addOperation("/api/video-storyboard", "post", {
   summary: "Draft, revise, split a script into, or inspect a video storyboard",
-  description: "draft and revise use the tenant prompt_optimization model; fromScript keeps every script verbatim unless condensed; inspect only validates, returns warnings and the compiled model request. Agent output that breaks storyboard rules returns 502.",
+  description: "draft and revise use the tenant prompt_optimization model; fromScript keeps every script verbatim unless condensed; inspect only validates. Every action returns warnings and the planned segments, each with its compiled model request. Agent output that breaks storyboard rules returns 502.",
   tags: ["Video"],
   body: true,
   csrf: true,
@@ -672,8 +675,8 @@ addOperation("/api/video-storyboard", "post", {
       action: { type: "string", enum: ["draft", "revise", "fromScript", "inspect"] },
       modelKey: { type: "string" },
       brief: { type: "string", maxLength: 20000, description: "draft" },
-      durationSeconds: { type: "integer", minimum: 1, maximum: 15, description: "draft" },
-      shotCount: { type: "integer", minimum: 1, maximum: 6, description: "draft; 1 for direct generation" },
+      durationSeconds: { type: "integer", minimum: 1, maximum: MAX_PROJECT_SECONDS, description: "draft" },
+      shotCount: { type: "integer", minimum: 1, maximum: MAX_SHOTS, description: "draft; set for direct generation" },
       hasStartFrame: { type: "boolean" },
       storyboard: { $ref: "#/components/schemas/VideoStoryboard" },
       instruction: { type: "string", maxLength: 4000, description: "revise" },
@@ -1031,6 +1034,7 @@ module.exports = {
                 script: { type: ["string", "null"], maxLength: PROMPT_LIMIT },
                 scriptOriginal: { type: ["string", "null"] },
                 duration: { type: "integer", minimum: 1, maximum: 15 },
+                cut: { type: "boolean", description: "Starts a new scene and a new text-to-video segment; ignored on the first shot" },
                 shotSize: { type: ["string", "null"], enum: [...Object.keys(SHOT_SIZES), null] },
                 angle: { type: ["string", "null"], enum: [...Object.keys(ANGLES), null] },
                 camera: { type: ["string", "null"], enum: [...Object.keys(CAMERAS), null] },

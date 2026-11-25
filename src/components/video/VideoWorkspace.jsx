@@ -18,8 +18,9 @@ import useVideoStoryboard from "@/hooks/useVideoStoryboard";
 import { downloadVideo } from "@/services/aiService";
 import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
-import { storyboardSeconds } from "@/lib/videoStoryboard";
+import { durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
+import SegmentedPlayer from "./SegmentedPlayer";
 import StoryboardBoard from "./storyboard/StoryboardBoard";
 import StoryboardSheet from "./storyboard/StoryboardSheet";
 import StoryboardSummaryCard from "./storyboard/StoryboardSummaryCard";
@@ -53,7 +54,36 @@ const initialResolution = (model) => {
   return allowed.includes("768P") ? "768P" : allowed[0] || "";
 };
 
-const statusLabel = (turn) => STATUS_LABELS[turn.phase] || STATUS_LABELS[turn.status] || "準備中";
+const statusLabel = (turn) => {
+  const segments = turn.segments || [];
+  const current = segments.find((segment) => segment.status !== "succeeded");
+  const label = STATUS_LABELS[current?.phase] || STATUS_LABELS[current?.status] || STATUS_LABELS[turn.status] || "準備中";
+  return segments.length > 1 && current ? `第 ${current.index + 1}/${segments.length} 段 · ${label}` : label;
+};
+
+const SEGMENT_TONES = {
+  succeeded: "bg-primary",
+  processing: "bg-primary/45",
+  failed: "bg-destructive",
+  queued: "bg-foreground/15",
+};
+
+function SegmentProgress({ segments }) {
+  return (
+    <div className="flex gap-1" aria-hidden="true">
+      {segments.map((segment) => (
+        <span
+          key={segment.index}
+          style={{ flexGrow: segment.durationSeconds }}
+          className={cn(
+            "h-1 basis-0 rounded-full transition-colors duration-(--motion-enter) ease-emphasized",
+            SEGMENT_TONES[segment.status] || SEGMENT_TONES.queued
+          )}
+        />
+      ))}
+    </div>
+  );
+}
 
 const turnTitle = (turn) => turn.storyboard?.title || turn.brief;
 
@@ -130,6 +160,8 @@ function AgentMessage({ message, isLatest, onOpen, onQuestion }) {
 
 function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, onEditStoryboard }) {
   const busy = !["succeeded", "failed"].includes(turn.status);
+  const segmentCount = turn.segments?.length || 0;
+  const videoUrls = turn.videoUrls || [];
   return (
     <article
       className={cn(
@@ -162,7 +194,9 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, o
             className="image-generation-glow image-generation-glow-secondary pointer-events-none absolute -inset-[18%]"
             aria-hidden="true"
           />
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-background/90 via-background/65 to-transparent px-3 pb-2.5 pt-10">
+          <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-background/90 via-background/65 to-transparent px-3 pb-2.5 pt-10">
+            {segmentCount > 1 && <SegmentProgress segments={turn.segments} />}
+            <div className="flex items-center justify-between gap-3">
             <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground">
               <span
                 className="image-generation-status-dot size-1.5 shrink-0 rounded-full bg-foreground/70"
@@ -178,6 +212,7 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, o
             >
               停止等待
             </button>
+            </div>
           </div>
         </div>
       )}
@@ -189,15 +224,23 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, o
         </p>
       )}
 
-      {turn.status === "succeeded" && turn.videoUrl && (
+      {turn.status === "succeeded" && videoUrls.length > 0 && (
         <button
           type="button"
-          className="group block w-full overflow-hidden rounded-xl bg-black text-left animate-in fade-in duration-(--motion-enter) ease-emphasized focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => onOpen(turn)}
-          aria-label="播放生成影片"
+          className="group relative block w-full overflow-hidden rounded-xl bg-black text-left animate-in fade-in duration-(--motion-enter) ease-emphasized focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => onOpen({ videoUrls })}
+          aria-label={videoUrls.length > 1 ? `依序播放 ${videoUrls.length} 段影片` : "播放生成影片"}
         >
-          <video src={turn.videoUrl} muted playsInline preload="metadata" className="aspect-video w-full object-contain" />
+          <video src={videoUrls[0]} muted playsInline preload="metadata" className="aspect-video w-full object-contain" />
+          {videoUrls.length > 1 && (
+            <span className="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
+              {videoUrls.length} 段
+            </span>
+          )}
         </button>
+      )}
+      {turn.status === "succeeded" && videoUrls.length > 1 && (
+        <p className="px-1 text-[11px] text-muted-foreground">分 {videoUrls.length} 段依序播放，不會保存到素材中心。</p>
       )}
 
       <div className="flex flex-wrap items-center justify-end gap-1">
@@ -209,19 +252,19 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, o
         <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => onRegenerate(turn)} disabled={busy}>
           <RotateCcw className="size-3.5" aria-hidden="true" />重新生成
         </Button>
-        {turn.videoUrl && (
-          <>
-            <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => onContinue(turn)}>
-              <ImagePlus className="size-3.5" aria-hidden="true" />接著生成
-            </Button>
-            <a
-              href={turn.videoUrl}
-              download={`pixora-video-${turn.jobId || turn.clientId}.mp4`}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Download className="size-3.5" aria-hidden="true" />下載
-            </a>
-          </>
+        {videoUrls.length > 0 && (
+          <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => onContinue(turn)}>
+            <ImagePlus className="size-3.5" aria-hidden="true" />接著生成
+          </Button>
+        )}
+        {videoUrls.length === 1 && (
+          <a
+            href={videoUrls[0]}
+            download={`pixora-video-${turn.segments[0].jobId}.mp4`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Download className="size-3.5" aria-hidden="true" />下載
+          </a>
         )}
       </div>
     </article>
@@ -237,12 +280,12 @@ function VideoPlayer({ video, onClose }) {
           <X aria-hidden="true" />
         </Button>
       </div>
-      <video
-        src={video.videoUrl}
-        controls
-        playsInline
+      <SegmentedPlayer
+        key={video.videoUrls[0]}
+        urls={video.videoUrls}
         autoPlay
-        className="mx-auto my-auto max-h-[calc(100dvh-5rem)] w-full max-w-5xl object-contain"
+        dark
+        className="mx-auto my-auto max-h-[calc(100dvh-5rem)] w-full max-w-5xl"
       />
     </div>
   );
@@ -321,13 +364,13 @@ export default function VideoWorkspace({
         ? "檢查分鏡中…"
         : "";
   const canGenerate = Boolean(
-    board?.compiled && model && hasQuota && !isUploading && !pending && storyboard.inspection.status === "ready"
+    board?.segments && model && hasQuota && !isUploading && !pending && storyboard.inspection.status === "ready"
   );
 
   const mediaOptions = (nextSource = source) => ({
     mode: nextSource ? "i2v" : "t2v",
     resolution: model.family === "minimax-h3-max" ? resolution : undefined,
-    aspectRatio: nextSource ? undefined : aspectRatio,
+    aspectRatio,
     generateAudio,
     sourceUploadId: nextSource?.sourceUploadId,
     sourceImageJobId: nextSource?.sourceImageJobId,
@@ -350,7 +393,7 @@ export default function VideoWorkspace({
     if (!canSend || !hasQuota) return;
     const text = brief.trim();
     setBrief("");
-    void runVideo({ brief: text, durationSeconds, modelKey: model.modelKey, ...mediaOptions() });
+    void runVideo({ brief: text, durationSeconds, shotCount: Math.ceil(durationSeconds / segmentRange(model).max), modelKey: model.modelKey, ...mediaOptions() });
   };
 
   const startDraft = (kind) => {
@@ -397,10 +440,8 @@ export default function VideoWorkspace({
     const next = models.find((item) => item.modelKey === nextKey);
     setModelKey(nextKey);
     if (!next) return;
-    setDurationSeconds((value) => Math.max(
-      next.capabilities?.minDuration || 1,
-      Math.min(value, next.maxDurationSeconds || 5)
-    ));
+    const choices = durationChoices(next);
+    setDurationSeconds((value) => choices.includes(value) ? value : choices.findLast((choice) => choice <= value) ?? choices[0]);
     setResolution(initialResolution(next));
     if (!next.capabilities?.aspectRatios?.includes(aspectRatio)) {
       setAspectRatio(next.capabilities?.aspectRatios?.[0] || "16:9");
@@ -440,14 +481,14 @@ export default function VideoWorkspace({
   const regenerate = (turn) => {
     if (!hasQuota) return;
     if (turn.storyboard) void runVideo({ storyboard: turn.storyboard, modelKey: turn.modelKey, ...turn.options });
-    else void runVideo({ brief: turn.brief, durationSeconds, modelKey: turn.modelKey, ...turn.options });
+    else void runVideo({ brief: turn.brief, durationSeconds: turn.durationSeconds, shotCount: turn.shotCount, modelKey: turn.modelKey, ...turn.options });
   };
 
   const openHistory = async (item) => {
     setSubmitError("");
     try {
       const blob = await downloadVideo({ jobId: item.videoJobId });
-      setPlayerVideo({ videoUrl: URL.createObjectURL(blob), cleanup: true });
+      setPlayerVideo({ videoUrls: [URL.createObjectURL(blob)], cleanup: true });
     } catch (error) {
       setSubmitError(error.message || "影片載入失敗");
     }
@@ -462,7 +503,7 @@ export default function VideoWorkspace({
       video.onloadedmetadata = resolve;
       video.onerror = () => reject(new Error("無法讀取影片最後一格"));
     });
-    video.src = turn.videoUrl;
+    video.src = turn.videoUrls[turn.videoUrls.length - 1];
     try {
       await loaded;
       const seeked = new Promise((resolve, reject) => {
@@ -478,7 +519,7 @@ export default function VideoWorkspace({
       const blob = await new Promise((resolve, reject) =>
         canvas.toBlob((value) => value ? resolve(value) : reject(new Error("無法建立首影格")), "image/jpeg", 0.9)
       );
-      const file = new File([blob], `video-frame-${turn.jobId}.jpg`, { type: "image/jpeg" });
+      const file = new File([blob], `video-frame-${turn.clientId}.jpg`, { type: "image/jpeg" });
       const uploaded = await uploadFile(file, "image");
       setSource({
         sourceUploadId: uploaded.uploadId,
@@ -497,18 +538,15 @@ export default function VideoWorkspace({
   };
 
   const closePlayer = () => {
-    if (playerVideo?.cleanup) URL.revokeObjectURL(playerVideo.videoUrl);
+    if (playerVideo?.cleanup) playerVideo.videoUrls.forEach((url) => URL.revokeObjectURL(url));
     setPlayerVideo(null);
   };
 
-  const activeTurn = videos.turns.find((turn) => turn.jobId === videos.activeJobId)
-    || [...videos.turns].reverse().find((turn) => turn.videoUrl)
+  const activeTurn = videos.turns.find((turn) => turn.clientId === videos.activeTurnId)
+    || [...videos.turns].reverse().find((turn) => turn.videoUrls)
     || null;
   const showBoard = boardVisible && Boolean(board || drafting);
-  const durationOptions = Array.from(
-    { length: Math.max(0, (model?.maxDurationSeconds || 5) - (model?.capabilities?.minDuration || 1) + 1) },
-    (_, index) => String(index + (model?.capabilities?.minDuration || 1))
-  ).map((value) => ({ value, label: `${value} 秒` }));
+  const durationOptions = durationChoices(model).map((value) => ({ value: String(value), label: `${value} 秒` }));
 
   const boardProps = {
     storyboard,
@@ -552,7 +590,7 @@ export default function VideoWorkspace({
                   <VideoTurn
                     key={item.key}
                     turn={item.turn}
-                    isActive={item.turn.jobId === videos.activeJobId}
+                    isActive={item.turn.clientId === videos.activeTurnId}
                     onOpen={setPlayerVideo}
                     onRegenerate={regenerate}
                     onStop={videos.stopWaiting}
@@ -726,7 +764,7 @@ export default function VideoWorkspace({
       <section className="relative hidden min-h-0 overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px] lg:flex" aria-label="影片畫布">
         {showBoard && !isMobile ? (
           <StoryboardBoard {...boardProps} onClose={() => setBoardVisible(false)} />
-        ) : activeTurn?.videoUrl ? (
+        ) : activeTurn?.videoUrls ? (
           <div className="flex min-h-0 w-full flex-col animate-in fade-in duration-(--motion-enter) ease-emphasized">
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card/90 px-4 backdrop-blur-md">
               <p className="min-w-0 flex-1 truncate text-sm font-semibold">{turnTitle(activeTurn)}</p>
@@ -740,11 +778,13 @@ export default function VideoWorkspace({
                   <Clapperboard className="size-3.5" aria-hidden="true" />修改分鏡
                 </Button>
               )}
-              <a href={activeTurn.videoUrl} download className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="下載影片">
-                <Download className="size-4" aria-hidden="true" />
-              </a>
+              {activeTurn.videoUrls.length === 1 && (
+                <a href={activeTurn.videoUrls[0]} download className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="下載影片">
+                  <Download className="size-4" aria-hidden="true" />
+                </a>
+              )}
             </div>
-            <video key={activeTurn.videoUrl} src={activeTurn.videoUrl} controls playsInline className="min-h-0 w-full flex-1 object-contain" />
+            <SegmentedPlayer key={activeTurn.clientId} urls={activeTurn.videoUrls} className="min-h-0 flex-1" />
           </div>
         ) : videos.turns.length ? (
           <div className="m-auto flex flex-col items-center gap-3 text-center text-muted-foreground">

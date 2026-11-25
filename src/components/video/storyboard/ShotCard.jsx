@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Minus, Plus, Trash2 } from "@/components/icons/lucideControls";
-import { Sparkles } from "@/components/icons/lucideContent";
+import { Scissors, Sparkles } from "@/components/icons/lucideContent";
 import { AlertTriangle, Loader2 } from "@/components/icons/lucideStatus";
 import { SelectField } from "@/components/ui/select-field";
 import {
@@ -188,6 +188,23 @@ export default function ShotCard({
           </>
         )}
         <span className="ml-auto flex items-center gap-1">
+          {index > 0 && (
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-7 items-center gap-1 rounded-lg border px-2 text-xs press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                shot.cut
+                  ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                  : "border-dashed border-border text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => onChange({ cut: !shot.cut })}
+              aria-pressed={shot.cut}
+              aria-label={`${label}場景轉換`}
+              title={shot.cut ? "這一幕換到新場景，從新的一段開始" : "設為場景轉換：這一幕從新的一段開始，不接續上一幕畫面"}
+            >
+              <Scissors className="size-3.5" aria-hidden="true" />場景轉換
+            </button>
+          )}
           <DurationStepper value={shot.duration} onChange={(duration) => onChange({ duration })} label={label} />
           {!script && (
             <button

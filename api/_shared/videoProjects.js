@@ -1,0 +1,264 @@
+const { query } = require("./db");
+const { resolveOwnedImageUpload } = require("./imageUploads");
+const { getImageJobForUser } = require("./imageJobs");
+const { VideoModelError, validateVideoOptions } = require("./videoModelFamilies");
+const { resolveVideoModel, withVideoModelTransaction } = require("./videoModels");
+const { ensureVideoSettings } = require("./videoPolicy");
+const { normalizeStoryboard, planSegments } = require("./videoStoryboard");
+const videoRenderClient = require("./videoRenderClient");
+const { countAdmittedToday, expiredElementError } = require("./videoJobs");
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizeUuid = (value) =>
+  typeof value === "string" && UUID_PATTERN.test(value.trim())
+    ? value.trim().toLowerCase()
+    : null;
+
+const assertEnabledUser = async ({ client, tenantId, userId }) => {
+  const result = await client.query(
+    "SELECT video_enabled, video_unlimited FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true",
+    [userId, tenantId]
+  );
+  if (!result.rows[0]?.video_enabled) {
+    throw new VideoModelError("此帳號尚未開放影片創作，請聯絡管理員", "video_disabled", 403);
+  }
+  return Boolean(result.rows[0].video_unlimited);
+};
+
+const assertOwnedUpload = async ({ uploadId, tenantId, userId, message }) => {
+  if (uploadId && !(await resolveOwnedImageUpload({ uploadId, tenantId, userId }))) {
+    throw new VideoModelError(message, "upload_not_found", 404);
+  }
+};
+
+const assertOwnedImageJob = async ({ jobId, tenantId, userId, message }) => {
+  if (!jobId) return;
+  const job = await getImageJobForUser({ jobId, tenantId, userId });
+  if (job?.status !== "succeeded") throw new VideoModelError(message, "source_job_not_found", 404);
+};
+
+const assertOwnedSources = async ({ sources, tenantId, userId }) => {
+  await assertOwnedUpload({
+    uploadId: sources.sourceUploadId, tenantId, userId, message: "找不到可用的首影格上傳",
+  });
+  await assertOwnedImageJob({
+    jobId: sources.sourceImageJobId, tenantId, userId, message: "找不到可用的圖片版本",
+  });
+  await assertOwnedUpload({
+    uploadId: sources.endSourceUploadId, tenantId, userId, message: "找不到可用的尾影格上傳",
+  });
+  await assertOwnedImageJob({
+    jobId: sources.endSourceImageJobId, tenantId, userId, message: "找不到可用的尾影格圖片版本",
+  });
+};
+
+const assertOwnedElements = async ({ segments, tenantId, userId }) => {
+  const checked = new Set();
+  for (const segment of segments) {
+    for (const element of segment.compiled.elements) {
+      for (const uploadId of element.uploadIds) {
+        if (checked.has(uploadId)) continue;
+        if (!(await resolveOwnedImageUpload({ uploadId, tenantId, userId }))) {
+          throw expiredElementError(element.name);
+        }
+        checked.add(uploadId);
+      }
+    }
+  }
+};
+
+const normalizeSources = (raw) => {
+  const sources = {};
+  for (const key of ["sourceUploadId", "sourceImageJobId", "endSourceUploadId", "endSourceImageJobId"]) {
+    sources[key] = normalizeUuid(raw[key]);
+    if (raw[key] && !sources[key]) throw new VideoModelError("來源識別碼格式無效");
+  }
+  return sources;
+};
+
+const assertSourceShape = ({ sources, mode, segmentCount }) => {
+  const startCount = [sources.sourceUploadId, sources.sourceImageJobId].filter(Boolean).length;
+  if ((mode === "t2v" && startCount !== 0) || (mode === "i2v" && startCount !== 1)) {
+    throw new VideoModelError("影片生成來源設定無效");
+  }
+  const endCount = [sources.endSourceUploadId, sources.endSourceImageJobId].filter(Boolean).length;
+  if (endCount > 1 || (endCount && mode !== "i2v")) throw new VideoModelError("尾影格來源設定無效");
+  if (endCount && segmentCount > 1) {
+    throw new VideoModelError(`尾影格只能用於單段影片，這份分鏡會分成 ${segmentCount} 段，請移除尾影格`);
+  }
+};
+
+const assertQuota = async ({ client, tenantId, userId, settings, segmentCount }) => {
+  const remaining = settings.dailyQuotaPerUser - (await countAdmittedToday(client, { tenantId, userId }));
+  if (remaining <= 0) {
+    throw new VideoModelError("今日影片額度已用完，請明天再試", "video_quota_exceeded", 429);
+  }
+  if (segmentCount > remaining) {
+    throw new VideoModelError(
+      `這支影片需要 ${segmentCount} 段，今日影片額度只剩 ${remaining} 段`,
+      "video_quota_exceeded",
+      429
+    );
+  }
+};
+
+/**
+ * Admits a storyboard as one project: it is split into segments and every
+ * segment becomes a video job. A chained segment waits for the previous job
+ * and starts from its last frame. Each segment counts against the quota.
+ */
+const createVideoProject = async ({
+  tenantId,
+  userId,
+  modelKey,
+  storyboard: rawStoryboard,
+  mode = "t2v",
+  resolution,
+  aspectRatio = "16:9",
+  generateAudio = false,
+  skipAdmission = false,
+  ...rawSources
+}) => {
+  const storyboard = normalizeStoryboard(rawStoryboard);
+  const sources = normalizeSources(rawSources);
+
+  return withVideoModelTransaction(tenantId, async (client) => {
+    const unlimited = skipAdmission ? true : await assertEnabledUser({ client, tenantId, userId });
+    const settings = await ensureVideoSettings(tenantId, client);
+    if (!skipAdmission && !settings.allowedModels.includes(modelKey)) {
+      throw new VideoModelError("此影片模型尚未開放給使用者", "video_model_not_allowed", 403);
+    }
+    const model = await resolveVideoModel({ tenantId, modelKey, client });
+    const segments = planSegments(storyboard, model, { mode });
+    assertSourceShape({ sources, mode, segmentCount: segments.length });
+    if (segments.some((segment) => segment.chained) && !videoRenderClient.isConfigured()) {
+      throw new VideoModelError(
+        "影片接續服務尚未設定，無法生成多段連續影片，請聯絡管理員",
+        "video_render_unconfigured",
+        503
+      );
+    }
+    const options = segments.map((segment) =>
+      validateVideoOptions({
+        model,
+        mode: segment.mode,
+        durationSeconds: segment.durationSeconds,
+        resolution,
+        aspectRatio,
+        generateAudio,
+      })
+    );
+    await assertOwnedSources({ sources, tenantId, userId });
+    await assertOwnedElements({ segments, tenantId, userId });
+    if (!unlimited) {
+      await assertQuota({ client, tenantId, userId, settings, segmentCount: segments.length });
+    }
+
+    const project = (
+      await client.query(
+        `INSERT INTO video_projects (tenant_id, user_id, model_key, storyboard)
+         VALUES ($1,$2,$3,$4)
+         RETURNING id, created_at`,
+        [tenantId, userId, modelKey, JSON.stringify(storyboard)]
+      )
+    ).rows[0];
+
+    const jobs = [];
+    for (const segment of segments) {
+      const first = segment.index === 0;
+      const option = options[segment.index];
+      const inserted = await client.query(
+        `INSERT INTO video_generation_jobs
+         (tenant_id, user_id, model_key, mode, prompt, storyboard, duration_seconds,
+          resolution, aspect_ratio, generate_audio, source_upload_id, source_image_job_id,
+          end_source_upload_id, end_source_image_job_id, project_id, segment_index,
+          previous_job_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         RETURNING id, status, phase`,
+        [
+          tenantId, userId, modelKey, segment.mode, segment.compiled.storedPrompt,
+          JSON.stringify(segment.storyboard),
+          option.durationSeconds, option.resolution, option.aspectRatio, option.generateAudio,
+          first ? sources.sourceUploadId : null,
+          first ? sources.sourceImageJobId : null,
+          first ? sources.endSourceUploadId : null,
+          first ? sources.endSourceImageJobId : null,
+          project.id, segment.index,
+          segment.chained ? jobs[segment.index - 1].id : null,
+        ]
+      );
+      jobs.push(inserted.rows[0]);
+    }
+    return {
+      projectId: project.id,
+      segments: segments.map((segment) => ({
+        index: segment.index,
+        jobId: jobs[segment.index].id,
+        durationSeconds: segment.durationSeconds,
+        mode: segment.mode,
+        chained: segment.chained,
+      })),
+    };
+  });
+};
+
+const projectStatus = (segments) => {
+  if (segments.some((segment) => segment.status === "failed")) return "failed";
+  if (segments.every((segment) => segment.status === "succeeded")) return "succeeded";
+  if (segments.some((segment) => segment.status !== "queued")) return "processing";
+  return "queued";
+};
+
+const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
+  const project = await query(
+    `SELECT id, model_key, storyboard, created_at
+     FROM video_projects
+     WHERE id = $1 AND tenant_id = $2 AND user_id = $3`,
+    [projectId, tenantId, userId]
+  );
+  if (!project.rows[0]) return null;
+  const jobs = await query(
+    `SELECT id, segment_index, mode, status, phase, duration_seconds, prompt,
+            previous_job_id, error_code, error_message, completed_at
+     FROM video_generation_jobs
+     WHERE project_id = $1
+     ORDER BY segment_index`,
+    [projectId]
+  );
+  const segments = jobs.rows.map((job) => ({
+    index: job.segment_index,
+    jobId: job.id,
+    status: job.status,
+    phase: job.phase,
+    mode: job.mode,
+    chained: Boolean(job.previous_job_id),
+    durationSeconds: job.duration_seconds,
+    prompt: job.prompt,
+    completedAt: job.completed_at,
+    ...(job.status === "failed"
+      ? {
+          error: {
+            code: job.error_code || "video_generation_failed",
+            message: job.error_message || "影片生成失敗，請稍後重試",
+          },
+        }
+      : {}),
+  }));
+  const row = project.rows[0];
+  return {
+    projectId: row.id,
+    modelKey: row.model_key,
+    storyboard: row.storyboard,
+    createdAt: row.created_at,
+    status: projectStatus(segments),
+    segments,
+  };
+};
+
+module.exports = {
+  createVideoProject,
+  getVideoProjectForUser,
+  projectStatus,
+};

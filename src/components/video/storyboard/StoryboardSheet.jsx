@@ -7,10 +7,11 @@ import { Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import { useHistoryLayer } from "@/hooks/useHistoryLayer";
 import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
-import { characterModeLabel, isScriptShot, scriptImageLabels, shotSummary, storyboardSeconds } from "@/lib/videoStoryboard";
+import { characterModeLabel, isScriptShot, scriptImageLabels, segmentStarts, sendModeLabel, shotSummary, storyboardSeconds } from "@/lib/videoStoryboard";
 import CharacterList from "./CharacterList";
 import { cn } from "@/lib/utils";
 import GlobalCard from "./GlobalCard";
+import SegmentDivider from "./SegmentDivider";
 import ShotCard from "./ShotCard";
 import { StatusPill, StoryboardSkeleton } from "./StoryboardParts";
 import { boardStatus, estimateLabel, storyboardActions } from "./storyboardActions";
@@ -84,6 +85,7 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
   };
 
   const seconds = board ? storyboardSeconds(board.storyboard) : 0;
+  const startsAt = segmentStarts(board?.segments);
   const status = board ? boardStatus(storyboard) : { label: "AI 擬稿中", tone: "draft" };
 
   return (
@@ -150,7 +152,8 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                     style={{ flexGrow: shot.duration }}
                     className={cn(
                       "relative flex min-w-0 basis-0 items-center justify-center rounded-md bg-primary/12 text-[10px] font-semibold tabular-nums text-primary",
-                      board.changedShotIds.includes(shot.id) && "bg-primary/25"
+                      board.changedShotIds.includes(shot.id) && "bg-primary/25",
+                      index > 0 && startsAt.has(shot.id) && "ml-1.5"
                     )}
                   >
                     {index + 1}
@@ -182,8 +185,9 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                   />
                 </GlobalCard>
                 {board.storyboard.shots.map((shot, index) => (
+                  <React.Fragment key={shot.id}>
+                  {startsAt.has(shot.id) && <SegmentDivider segment={startsAt.get(shot.id)} />}
                   <button
-                    key={shot.id}
                     type="button"
                     style={{ "--i": index }}
                     className={cn(
@@ -214,6 +218,7 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                       <Loader2 className="mt-1 size-4 shrink-0 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
                     )}
                   </button>
+                  </React.Fragment>
                 ))}
                 {actions.canAddShot && (
                   <button
@@ -263,12 +268,12 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
 
 function SheetFooter({ storyboard, actions, model, canGenerate, generateBlocker, onGenerate }) {
   const { board, pending, inspection } = storyboard;
-  const characterMode = characterModeLabel(board?.compiled, model?.family);
+  const characterMode = characterModeLabel(board?.segments, model?.family);
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {inspection.status === "invalid" && <p role="alert" className="text-xs text-destructive">{inspection.error}</p>}
       {characterMode && <p className="text-xs text-muted-foreground">{characterMode}</p>}
-      <p className="truncate text-xs text-muted-foreground">{generateBlocker || estimateLabel(model)}</p>
+      <p className="truncate text-xs text-muted-foreground">{generateBlocker || `${sendModeLabel(board?.segments)} · ${estimateLabel(model, board?.segments?.length)}`}</p>
       <div className="flex gap-2">
         <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => void actions.redraft()} disabled={!board || Boolean(pending)}>
           {pending === "revise" && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}

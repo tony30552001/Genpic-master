@@ -1,4 +1,4 @@
-import { createShot, MAX_CHARACTERS, MAX_SHOTS, newCharacterId } from "@/lib/videoStoryboard";
+import { createShot, MAX_CHARACTERS, MAX_SHOTS, newCharacterId, segmentStartLabel } from "@/lib/videoStoryboard";
 
 const CONDENSE_INSTRUCTION =
   "把這一幕的腳本濃縮到 2500 字以內，保留引號內文字、@ 引用與主要動作，原文放在 scriptOriginal";
@@ -94,14 +94,24 @@ export const storyboardActions = (storyboard) => {
   };
 };
 
-export const compiledPreview = (compiled) => {
-  if (!compiled) return "";
+const compiledBody = (compiled) => {
   const body = compiled.multiPrompt
     ? compiled.multiPrompt.map((item, index) => `第 ${index + 1} 幕（${item.duration} 秒）\n${item.prompt}`).join("\n\n")
     : compiled.prompt;
   const elements = compiled.elements.map((element, index) => `@Element${index + 1} = ${element.name}`);
   const withElements = compiled.characterMode === "elements" ? `${elements.join("\n")}\n\n${body}` : body;
   return compiled.negativePrompt ? `${withElements}\n\nNegative: ${compiled.negativePrompt}` : withElements;
+};
+
+/** The request each segment sends; segments after the first get a header. */
+export const compiledPreview = (segments) => {
+  if (!segments) return "";
+  if (segments.length === 1) return compiledBody(segments[0].compiled);
+  return segments
+    .map((segment) =>
+      `── 第 ${segment.index + 1} 段 · ${segment.durationSeconds} 秒 · ${segmentStartLabel(segment)} ──\n${compiledBody(segment.compiled)}`
+    )
+    .join("\n\n");
 };
 
 export const boardStatus = (storyboard) => {
@@ -117,5 +127,8 @@ export const STATUS_TONES = {
   done: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
 };
 
-export const estimateLabel = (model) =>
-  model?.family === "kling-v3-pro" ? "預估 3–5 分鐘" : "預估約 1 分鐘";
+// Segments render one after another, so a longer storyboard takes longer.
+export const estimateLabel = (model, segmentCount = 1) =>
+  model?.family === "kling-v3-pro"
+    ? `預估 ${3 * segmentCount}–${5 * segmentCount} 分鐘`
+    : segmentCount > 1 ? `預估約 ${segmentCount} 分鐘` : "預估約 1 分鐘";

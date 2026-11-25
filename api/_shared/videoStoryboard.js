@@ -1,6 +1,8 @@
 const { VideoModelError, getVideoModelFamily } = require("./videoModelFamilies");
 
-const MAX_SHOTS = 6;
+const MAX_SHOTS = 30;
+const MAX_SEGMENT_SHOTS = 6;
+const MAX_PROJECT_SECONDS = 120;
 const MAX_SHOT_SECONDS = 15;
 const PROMPT_LIMIT = 2500;
 const MAX_SCRIPT_SOURCE = 50_000;
@@ -132,12 +134,14 @@ const normalizeShot = (raw, index, characterIds) => {
   if (!Number.isInteger(duration) || duration < 1 || duration > MAX_SHOT_SECONDS) {
     fail(`${label}的秒數必須是 1 至 ${MAX_SHOT_SECONDS} 的整數`);
   }
+  if (hasValue(raw.cut) && typeof raw.cut !== "boolean") fail(`${label}的場景轉換設定無效`);
   const shot = {
     id: raw.id,
     title: optionalText(raw.title, `${label}的標題`, 30) || null,
     script: null,
     scriptOriginal: null,
     duration,
+    cut: index > 0 && raw.cut === true,
     shotSize: null,
     angle: null,
     camera: null,
@@ -206,13 +210,59 @@ const durationRange = (model) => {
   };
 };
 
-const assertStoryboardDuration = (storyboard, model, status = 400) => {
-  const total = storyboardDuration(storyboard);
+/**
+ * Splits a storyboard into model-sized segments. A segment closes when the
+ * next shot starts a new scene (`cut`), would exceed the model's per-request
+ * length, or would exceed MAX_SEGMENT_SHOTS. A segment that continues the
+ * same scene is chained: it starts from the previous segment's last frame,
+ * so it is image-to-video. Segments after a cut are text-to-video; the first
+ * segment uses `mode`.
+ */
+const planSegments = (storyboard, model, { mode }) => {
   const { min, max } = durationRange(model);
-  if (total < min || total > max) {
-    fail(`分鏡總長 ${total} 秒，此模型必須介於 ${min} 與 ${max} 秒`, status);
+  const total = storyboardDuration(storyboard);
+  if (total > MAX_PROJECT_SECONDS) {
+    fail(`分鏡總長 ${total} 秒，超過 ${MAX_PROJECT_SECONDS} 秒上限`);
   }
-  return total;
+  const groups = [];
+  let current = null;
+  storyboard.shots.forEach((shot, index) => {
+    if (shot.duration > max) {
+      fail(`第 ${index + 1} 幕 ${shot.duration} 秒，超過此模型每段 ${max} 秒的上限`);
+    }
+    if (
+      !current ||
+      shot.cut ||
+      current.durationSeconds + shot.duration > max ||
+      current.shots.length >= MAX_SEGMENT_SHOTS
+    ) {
+      current = { start: index, shots: [], durationSeconds: 0, chained: Boolean(current) && !shot.cut };
+      groups.push(current);
+    }
+    current.shots.push(shot);
+    current.durationSeconds += shot.duration;
+  });
+  return groups.map((group, index) => {
+    const range = group.shots.length > 1
+      ? `第 ${group.start + 1}–${group.start + group.shots.length} 幕`
+      : `第 ${group.start + 1} 幕`;
+    if (group.durationSeconds < min) {
+      fail(
+        `第 ${index + 1} 段（${range}）只有 ${group.durationSeconds} 秒，此模型每段至少 ${min} 秒。請延長秒數或取消場景轉換`
+      );
+    }
+    const segmentMode = index === 0 ? mode : group.chained ? "i2v" : "t2v";
+    const segmentStoryboard = { title: storyboard.title, global: storyboard.global, shots: group.shots };
+    return {
+      index,
+      shotIds: group.shots.map((shot) => shot.id),
+      durationSeconds: group.durationSeconds,
+      chained: group.chained,
+      mode: segmentMode,
+      storyboard: segmentStoryboard,
+      compiled: compileStoryboard(model.family, segmentStoryboard, { mode: segmentMode }),
+    };
+  });
 };
 
 const sentence = (value) => value.trim().replace(/[。.．\s]+$/u, "");
@@ -469,18 +519,20 @@ module.exports = {
   ANGLES,
   CAMERAS,
   MAX_CHARACTERS,
+  MAX_PROJECT_SECONDS,
   MAX_SCRIPT_SOURCE,
+  MAX_SEGMENT_SHOTS,
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
   assertQuotedTextPreserved,
   assertRevisionScope,
   assertScriptFidelity,
-  assertStoryboardDuration,
   compileStoryboard,
   durationRange,
   normalizeCharacters,
   normalizeStoryboard,
+  planSegments,
   quotedTexts,
   storyboardDuration,
   storyboardWarnings,

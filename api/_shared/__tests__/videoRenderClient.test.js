@@ -71,6 +71,19 @@ describe("videoRenderClient.extractLastFrame", () => {
     ).rejects.toThrow("影片組合服務失敗：ffmpeg exited with 1 (422)");
   });
 
+  it("marks 5xx and network failures as retryable but not 4xx", async () => {
+    const attempt = async (fetchImpl) => {
+      vi.stubGlobal("fetch", fetchImpl);
+      return loadClient()
+        .extractLastFrame({ videoBlobName: "v.mp4", frameBlobName: "f.png" })
+        .catch((caught) => caught);
+    };
+
+    expect((await attempt(vi.fn().mockResolvedValue(jsonResponse(503, {})))).retryable).toBe(true);
+    expect((await attempt(vi.fn().mockRejectedValue(new TypeError("fetch failed")))).retryable).toBe(true);
+    expect((await attempt(vi.fn().mockResolvedValue(jsonResponse(422, {})))).retryable).toBe(false);
+  });
+
   it("refuses to run without service configuration", async () => {
     delete process.env.VIDEO_RENDER_SERVICE_KEY;
     const fetchMock = vi.fn();
