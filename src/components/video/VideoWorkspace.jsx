@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { ChevronDown, Download, Plus, RotateCcw, X } from "@/components/icons/lucideControls";
-import { Clapperboard, FileText, FileUp, ImagePlay, ImagePlus, Layers } from "@/components/icons/lucideContent";
+import { ChevronDown, Download, RotateCcw, X } from "@/components/icons/lucideControls";
+import { Clapperboard, FileText, FileUp, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
 import { AlertCircle, Check, Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select-field";
 import { Textarea } from "@/components/ui/textarea";
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
@@ -35,7 +36,17 @@ const STATUS_LABELS = {
   failed: "生成失敗",
 };
 
-const SUGGESTIONS = ["晨光穿過森林的慢鏡頭", "珍珠奶茶在夜市燈光下緩慢旋轉", "以城市為背景的品牌開場"];
+const CHIP_CLASS =
+  "inline-flex h-8 items-center rounded-[10px] border border-border px-2 text-xs whitespace-nowrap press-feedback hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted";
+
+function SettingRow({ label, children }) {
+  return (
+    <div className="flex min-h-8 items-center justify-between gap-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 const imageSource = (source) => {
   if (!source) return null;
@@ -333,21 +344,6 @@ function VideoPlayer({ video, onClose }) {
   );
 }
 
-function SourceChip({ source, label, onRemove, removeLabel }) {
-  return (
-    <div className="mb-2 flex items-center gap-2 rounded-xl bg-muted/50 p-2">
-      <img src={source.previewUrl} alt="" className="size-10 rounded-lg object-cover" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium">{source.name}</p>
-        <p className="text-[11px] text-muted-foreground">{label}</p>
-      </div>
-      <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onRemove} aria-label={removeLabel}>
-        <X className="size-4" aria-hidden="true" />
-      </Button>
-    </div>
-  );
-}
-
 export default function VideoWorkspace({
   models = [],
   settings,
@@ -597,6 +593,12 @@ export default function VideoWorkspace({
     || null;
   const showBoard = boardVisible && Boolean(board || drafting);
   const durationOptions = durationChoices(model).map((value) => ({ value: String(value), label: `${value} 秒` }));
+  const settingsLabel = [
+    !revising && `${durationSeconds} 秒`,
+    !source && aspectRatio,
+    model?.family === "minimax-h3-max" && resolution,
+    generateAudio && "含音訊",
+  ].filter(Boolean).join(" · ") || "設定";
 
   const boardProps = {
     storyboard,
@@ -611,29 +613,6 @@ export default function VideoWorkspace({
       <section className="flex min-h-0 flex-col overflow-hidden" aria-label="影片工作串流">
         <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2 custom-scrollbar">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
-            {thread.length === 0 && (
-              <div className="flex min-h-52 flex-col items-center justify-center px-6 py-8 text-center">
-                <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <Clapperboard className="size-7" aria-hidden="true" />
-                </span>
-                <h2 className="text-base font-semibold">先擬分鏡，再生成影片</h2>
-                <p className="mt-1 max-w-md text-balance text-sm text-muted-foreground">
-                  描述想要的畫面，AI 會拆成可檢查的分鏡；簡單的單一鏡頭也可以直接生成。
-                </p>
-                <div className="mt-5 flex flex-wrap justify-center gap-2">
-                  {SUGGESTIONS.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      className="rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground press-feedback hover:text-foreground"
-                      onClick={() => setBrief(suggestion)}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             {thread.map((item) => {
               if (item.type === "turn") {
                 return (
@@ -672,122 +651,180 @@ export default function VideoWorkspace({
           </div>
         </div>
 
-        <div className="mx-auto w-full max-w-2xl rounded-3xl border border-border bg-card p-2 shadow-sm">
-          {source && (
-            <SourceChip
-              source={source}
-              label="作為首影格"
-              removeLabel="移除首影格"
-              onRemove={() => {
-                setSource(null);
-                setEndSource(null);
+        <div className="mx-auto w-full max-w-2xl rounded-[22px] border border-border bg-card p-3 shadow-sm">
+          <div className="flex gap-2.5">
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                className={cn(
+                  "flex size-14 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-xl text-muted-foreground press-feedback hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed",
+                  source ? "ring-1 ring-border" : "border border-dashed border-border"
+                )}
+                onClick={() => fileRef.current?.click()}
+                disabled={isUploading}
+                aria-label={source ? `更換首影格（${source.name}）` : "上傳首影格"}
+              >
+                {isUploading ? (
+                  <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                ) : source ? (
+                  <img src={source.previewUrl} alt="" className="size-full object-cover animate-in fade-in duration-(--motion-enter) ease-emphasized" />
+                ) : (
+                  <>
+                    <ImagePlus className="size-4" aria-hidden="true" />
+                    <span className="text-[10px] leading-none">首影格</span>
+                  </>
+                )}
+              </button>
+              {source && !isUploading && (
+                <button
+                  type="button"
+                  className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-foreground text-background shadow-sm after:absolute after:-inset-2 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => {
+                    setSource(null);
+                    setEndSource(null);
+                  }}
+                  aria-label="移除首影格"
+                >
+                  <X className="size-3" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <Textarea
+              ref={briefRef}
+              value={brief}
+              onChange={(event) => setBrief(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || !revising) return;
+                event.preventDefault();
+                sendRevision();
               }}
+              placeholder={revising ? "告訴 AI 怎麼調整，例如「第 2 幕改成夜景」" : "一兩句話概述影片（主題、氣氛、長度）…"}
+              maxLength={revising ? 4000 : 50000}
+              className="min-h-14 max-h-30 min-w-0 flex-1 resize-none border-0 bg-transparent p-0.5 text-sm shadow-none field-sizing-content focus-visible:ring-0 focus-visible:ring-offset-0 md:text-sm"
+              aria-label={revising ? "告訴 AI 要怎麼調整" : "影片概述"}
             />
-          )}
-          {source && endSource && (
-            <SourceChip source={endSource} label="作為尾影格" removeLabel="移除尾影格" onRemove={() => setEndSource(null)} />
-          )}
-          <Textarea
-            ref={briefRef}
-            value={brief}
-            onChange={(event) => setBrief(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || !revising) return;
-              event.preventDefault();
-              sendRevision();
-            }}
-            placeholder={revising ? "告訴 AI 要怎麼改分鏡，例如：第 2 幕改成特寫…" : "描述主體、場景與想要的鏡頭，或貼上整段腳本…"}
-            maxLength={revising ? 4000 : 50000}
-            className="min-h-20 resize-none border-0 bg-transparent px-3 text-[15px] shadow-none focus-visible:ring-0"
-            aria-label={revising ? "修改分鏡的指令" : "影片描述"}
-          />
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-2 pt-2">
-            <Button type="button" variant="ghost" size="icon" className="size-9" onClick={() => fileRef.current?.click()} disabled={isUploading} aria-label="上傳首影格">
-              {isUploading ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Plus aria-hidden="true" />}
-            </Button>
-            {source && !endSource && (
-              <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => endFileRef.current?.click()} disabled={isUploading}>
-                尾影格
-              </Button>
-            )}
-            <SelectField
-              aria-label="影片模型"
-              value={model?.modelKey || ""}
-              onValueChange={changeModel}
-              options={models.map((item) => ({ value: item.modelKey, label: item.label }))}
-              className="h-9 min-w-32 flex-1 text-xs sm:flex-none"
-            />
-            {!revising && (
-              <SelectField
-                aria-label="影片秒數"
-                value={String(durationSeconds)}
-                onValueChange={(value) => setDurationSeconds(Number(value))}
-                options={durationOptions}
-                className="h-9 w-20 text-xs"
-              />
-            )}
-            {!source && (
-              <SelectField
-                aria-label="影片比例"
-                value={aspectRatio}
-                onValueChange={setAspectRatio}
-                options={(model?.capabilities?.aspectRatios || ["16:9"]).map((value) => ({ value, label: value }))}
-                className="h-9 w-20 text-xs"
-              />
-            )}
-            {model?.family === "minimax-h3-max" && (
-              <SelectField
-                aria-label="影片畫質"
-                value={resolution}
-                onValueChange={setResolution}
-                options={(model.capabilities?.resolutions || [])
-                  .slice(0, (model.capabilities?.resolutions || []).indexOf(model.maxResolution) + 1)
-                  .map((value) => ({ value, label: value }))}
-                className="h-9 w-24 text-xs"
-              />
-            )}
-            {model?.capabilities?.supportsAudioToggle && model.allowAudio && (
-              <label className="flex h-9 items-center gap-2 rounded-lg px-2 text-xs text-muted-foreground">
-                含音訊
-                <input type="checkbox" checked={generateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} className="accent-primary" />
-              </label>
-            )}
           </div>
-          <div className="flex items-center gap-2 px-2 pb-0.5 pt-2">
-            <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-              {unlimited ? "不限額" : `今日剩餘 ${remainingQuota} 次`}
-            </span>
-            {revising ? (
-              <Button type="button" size="sm" className="h-9 rounded-xl" disabled={!canSend} onClick={sendRevision}>
-                送出
-              </Button>
-            ) : (
-              <>
-                <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl" disabled={!canSend || !hasQuota} onClick={directGenerate}>
-                  直接生成
-                </Button>
-                <div className="flex">
-                  <Button type="button" size="sm" className="h-9 gap-1.5 rounded-l-xl rounded-r-none" disabled={!canSend} onClick={() => startDraft("draft")}>
-                    <Clapperboard className="size-4" aria-hidden="true" />生成分鏡
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" size="sm" className="h-9 rounded-l-none rounded-r-xl border-l border-primary-foreground/20 px-2" disabled={!canStart} aria-label="更多分鏡方式">
-                        <ChevronDown className="size-4" aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem disabled={!canSend} onSelect={() => startDraft("script")}>
-                        <FileText className="size-4" aria-hidden="true" />依腳本整理分鏡
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => scriptFileRef.current?.click()}>
-                        <FileUp className="size-4" aria-hidden="true" />匯入腳本文件
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-1 gap-y-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className={CHIP_CLASS + " min-w-0"} aria-label={`影片模型：${model?.label || "未設定"}`}>
+                  <span className="truncate">{model?.label || "未設定模型"}</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" className="w-56 p-1">
+                <div role="group" aria-label="影片模型">
+                  {models.map((item) => (
+                    <button
+                      key={item.modelKey}
+                      type="button"
+                      aria-pressed={item.modelKey === model?.modelKey}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => changeModel(item.modelKey)}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {item.modelKey === model?.modelKey && <Check className="size-4 text-primary" aria-hidden="true" />}
+                    </button>
+                  ))}
                 </div>
-              </>
-            )}
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className={CHIP_CLASS + " shrink-0"} aria-label={`影片設定：${settingsLabel}`}>
+                  {settingsLabel}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" className="grid w-64 gap-3 p-3">
+                {!revising && (
+                  <SettingRow label="秒數">
+                    <SelectField aria-label="影片秒數" value={String(durationSeconds)} onValueChange={(value) => setDurationSeconds(Number(value))} options={durationOptions} className="h-8 w-28 text-xs" />
+                  </SettingRow>
+                )}
+                <SettingRow label="比例">
+                  {source ? (
+                    <span className="text-xs text-muted-foreground">依首影格</span>
+                  ) : (
+                    <SelectField
+                      aria-label="影片比例"
+                      value={aspectRatio}
+                      onValueChange={setAspectRatio}
+                      options={(model?.capabilities?.aspectRatios || ["16:9"]).map((value) => ({ value, label: value }))}
+                      className="h-8 w-28 text-xs"
+                    />
+                  )}
+                </SettingRow>
+                {model?.family === "minimax-h3-max" && (
+                  <SettingRow label="畫質">
+                    <SelectField
+                      aria-label="影片畫質"
+                      value={resolution}
+                      onValueChange={setResolution}
+                      options={(model.capabilities?.resolutions || [])
+                        .slice(0, (model.capabilities?.resolutions || []).indexOf(model.maxResolution) + 1)
+                        .map((value) => ({ value, label: value }))}
+                      className="h-8 w-28 text-xs"
+                    />
+                  </SettingRow>
+                )}
+                {model?.capabilities?.supportsAudioToggle && model.allowAudio && (
+                  <SettingRow label="含音訊">
+                    <input type="checkbox" aria-label="含音訊" checked={generateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} className="size-4 accent-primary" />
+                  </SettingRow>
+                )}
+                {source && (
+                  <SettingRow label="尾影格">
+                    {endSource ? (
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <img src={endSource.previewUrl} alt="" className="size-8 rounded-md object-cover" />
+                        <Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => setEndSource(null)} aria-label="移除尾影格">
+                          <X className="size-4" aria-hidden="true" />
+                        </Button>
+                      </span>
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => endFileRef.current?.click()} disabled={isUploading}>
+                        上傳尾影格
+                      </Button>
+                    )}
+                  </SettingRow>
+                )}
+                <p className="border-t border-border pt-2.5 text-[11px] text-muted-foreground">
+                  {unlimited ? "不限額" : `今日剩餘 ${remainingQuota} 次`}
+                </p>
+              </PopoverContent>
+            </Popover>
+            <div className="ml-auto flex shrink-0 gap-1">
+              {revising ? (
+                <Button type="button" size="sm" className="h-[34px] rounded-[11px] px-3.5 text-[13px]" disabled={!canSend} onClick={sendRevision}>
+                  送出
+                </Button>
+              ) : (
+                <>
+                  <Button type="button" variant="outline" size="sm" className="h-[34px] rounded-[11px] px-2.5 text-[13px]" disabled={!canSend || !hasQuota} onClick={directGenerate}>
+                    直接生成
+                  </Button>
+                  <div className="flex">
+                    <Button type="button" size="sm" className="h-[34px] gap-1 rounded-l-[11px] rounded-r-none px-2.5 text-[13px]" disabled={!canSend} onClick={() => startDraft("draft")}>
+                      <Sparkles className="size-3.5" aria-hidden="true" />生成分鏡
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" size="sm" className="h-[34px] w-7 rounded-l-none rounded-r-[11px] border-l border-primary-foreground/20 px-0" disabled={!canStart} aria-label="更多分鏡方式">
+                          <ChevronDown className="size-4" aria-hidden="true" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem disabled={!canSend} onSelect={() => startDraft("script")}>
+                          <FileText className="size-4" aria-hidden="true" />依腳本整理分鏡
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => scriptFileRef.current?.click()}>
+                          <FileUp className="size-4" aria-hidden="true" />匯入腳本文件
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
         {submitError && <p role="alert" className="mx-auto mt-2 max-w-2xl text-xs text-destructive">{submitError}</p>}
@@ -858,23 +895,25 @@ export default function VideoWorkspace({
             <p className="text-sm">{statusLabel(videos.turns[videos.turns.length - 1])}</p>
           </div>
         ) : (
-          <div className="m-auto flex max-w-sm flex-col items-center gap-4 px-8 text-center">
-            <ImagePlay className="size-10 text-muted-foreground/50" aria-hidden="true" />
-            <div>
-              <p className="text-sm font-medium text-foreground">分鏡與影片會出現在這裡</p>
-              <p className="mt-1 text-xs text-muted-foreground">確認分鏡後送出，完成即可播放、下載或保存到素材中心。</p>
+          <div className="flex min-h-0 w-full flex-col">
+            <div className="flex h-13 shrink-0 items-center border-b border-border bg-card/90 px-4 backdrop-blur-md">
+              <h2 className="truncate text-[15px] font-semibold">分鏡板</h2>
             </div>
-            {recentVideos.length > 0 && (
-              <div className="mt-2 flex w-full flex-col gap-2">
-                <p className="text-left text-xs font-medium text-muted-foreground">最近影片</p>
-                {recentVideos.slice(0, 3).map((item) => (
-                  <button key={item.id} type="button" className="flex items-center gap-2 rounded-lg border border-border bg-card/90 p-2 text-left text-xs press-feedback" onClick={() => void openHistory(item)}>
-                    <Clapperboard className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                    <span className="truncate">{item.userScript || "未命名影片"}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="m-auto flex max-w-xs flex-col items-center px-6 text-center">
+              <p className="text-sm font-medium text-foreground">分鏡會出現在這裡</p>
+              <p className="mt-1 text-balance text-[13px] leading-relaxed text-muted-foreground">按「生成分鏡」讓 AI 把概述拆成一幕一幕，確認後再生成；按「直接生成」則以單一鏡頭生成。</p>
+              {recentVideos.length > 0 && (
+                <div className="mt-6 flex w-full flex-col gap-2">
+                  <p className="text-left text-xs font-medium text-muted-foreground">最近影片</p>
+                  {recentVideos.slice(0, 3).map((item) => (
+                    <button key={item.id} type="button" className="flex items-center gap-2 rounded-lg border border-border bg-card/90 p-2 text-left text-xs press-feedback" onClick={() => void openHistory(item)}>
+                      <Clapperboard className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="truncate">{item.userScript || "未命名影片"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </section>
