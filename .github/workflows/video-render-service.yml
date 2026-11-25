@@ -1,0 +1,90 @@
+name: Deploy video render service
+
+# ffmpeg sidecar for storyboard video assembly. It only changes when this
+# directory changes and deploys to Azure Container Apps, separately from the
+# Static Web App and App Service pipeline.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/video-render-service/**'
+      - '.github/workflows/video-render-service.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pixora-video-render-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: video-render-service
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # smoke.py runs inside the Dockerfile, so a broken ffmpeg pipeline
+      # already fails `az acr build`.
+      - name: Build image in Azure Container Registry
+        run: |
+          az acr build \
+            --registry "${{ secrets.AZURE_CONTAINER_REGISTRY }}" \
+            --image "${IMAGE_NAME}:${{ github.sha }}" \
+            --image "${IMAGE_NAME}:latest" \
+            --file services/video-render-service/Dockerfile \
+            services/video-render-service
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name "${{ secrets.AZURE_VIDEO_RENDER_CONTAINER_APP }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${IMAGE_NAME}:${{ github.sha }}"
+
+      # Ingress only accepts the App Service outbound IPs, so a runner cannot
+      # reach /health; assert on the control plane that the revision started.
+      - name: Verify the new revision starts
+        run: |
+          revision=$(az containerapp show \
+            --name "${{ secrets.AZURE_VIDEO_RENDER_CONTAINER_APP }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --query properties.latestRevisionName -o tsv)
+          echo "watching revision ${revision}"
+
+          for attempt in $(seq 1 20); do
+            state=$(az containerapp revision show \
+              --name "${{ secrets.AZURE_VIDEO_RENDER_CONTAINER_APP }}" \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+              --revision "${revision}" \
+              --query properties.runningState -o tsv)
+
+            case "${state}" in
+              Running|RunningAtMaxScale)
+                echo "revision ${revision} is ${state}"
+                exit 0
+                ;;
+              Failed|Degraded)
+                echo "revision ${revision} failed to start: ${state}" >&2
+                exit 1
+                ;;
+            esac
+
+            echo "attempt ${attempt}: state=${state}"
+            sleep 15
+          done
+
+          echo "revision ${revision} did not start in time" >&2
+          exit 1

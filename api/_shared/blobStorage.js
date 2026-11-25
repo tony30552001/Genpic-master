@@ -1,16 +1,46 @@
 const {
+  BlobSASPermissions,
   BlobServiceClient,
+  SASProtocol,
   StorageSharedKeyCredential,
+  generateBlobSASQueryParameters,
 } = require("@azure/storage-blob");
 
-const getContainerClient = async (containerName) => {
+const getGeneratedContainerName = () => process.env.BLOB_CONTAINER_GENERATED || "generated";
+
+const getStorageCredential = () => {
   const account = process.env.AZURE_STORAGE_ACCOUNT;
   const key = process.env.AZURE_STORAGE_KEY;
   if (!account || !key) {
     throw new Error("Storage 設定缺失");
   }
+  return { account, credential: new StorageSharedKeyCredential(account, key) };
+};
 
-  const credential = new StorageSharedKeyCredential(account, key);
+/**
+ * Signs one blob in the generated container for an external worker such as the
+ * video render service. `permissions` is an Azure SAS permission string.
+ */
+const signGeneratedBlobUrl = ({ blobName, permissions, expiresInMs }) => {
+  const { account, credential } = getStorageCredential();
+  const containerName = getGeneratedContainerName();
+  const sasToken = generateBlobSASQueryParameters(
+    {
+      containerName,
+      blobName,
+      permissions: BlobSASPermissions.parse(permissions),
+      protocol: SASProtocol.Https,
+      startsOn: new Date(Date.now() - 5 * 60 * 1000),
+      expiresOn: new Date(Date.now() + expiresInMs),
+    },
+    credential
+  ).toString();
+  const path = blobName.split("/").map(encodeURIComponent).join("/");
+  return `https://${account}.blob.core.windows.net/${containerName}/${path}?${sasToken}`;
+};
+
+const getContainerClient = async (containerName) => {
+  const { account, credential } = getStorageCredential();
   const serviceClient = new BlobServiceClient(
     `https://${account}.blob.core.windows.net`,
     credential
@@ -110,6 +140,7 @@ module.exports = {
   downloadGeneratedImage,
   fetchImageSource,
   getGeneratedBlobDownload,
+  signGeneratedBlobUrl,
   uploadGeneratedBlob,
   uploadGeneratedImage,
   uploadGeneratedStream,
