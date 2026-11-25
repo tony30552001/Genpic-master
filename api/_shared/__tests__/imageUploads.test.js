@@ -6,9 +6,12 @@ const uploads = require("../uploads");
 const uploadStorage = require("../uploadStorage");
 
 uploads.getOwnedUpload = vi.fn();
+uploads.createPendingUpload = vi.fn();
+uploads.markUploadReady = vi.fn();
 uploadStorage.downloadUploadBuffer = vi.fn();
+uploadStorage.writeReadyBlob = vi.fn();
 
-const { downloadOwnedImage, normalizeUploadId, resolveOwnedImageUpload } =
+const { createReadyImageUpload, downloadOwnedImage, normalizeUploadId, resolveOwnedImageUpload } =
   require("../imageUploads");
 
 const OWNER = { tenantId: "tenant-1", userId: "user-1" };
@@ -78,5 +81,34 @@ describe("owner-scoped image upload resolver", () => {
       contentType: "image/png",
     });
     expect(uploadStorage.downloadUploadBuffer).toHaveBeenCalledWith(upload);
+  });
+});
+
+describe("createReadyImageUpload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("stores server-produced bytes as a ready image upload owned by the user", async () => {
+    const buffer = Buffer.from("jpeg");
+    uploads.createPendingUpload.mockResolvedValue({ id: IMAGE_ID });
+    uploads.markUploadReady.mockResolvedValue({ id: IMAGE_ID });
+
+    await expect(
+      createReadyImageUpload({ ...OWNER, buffer, contentType: "image/jpeg", fileName: "Image1.jpg" })
+    ).resolves.toBe(IMAGE_ID);
+    expect(uploads.createPendingUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ ...OWNER, purpose: "image", contentType: "image/jpeg", sizeBytes: 4 })
+    );
+    expect(uploadStorage.writeReadyBlob).toHaveBeenCalledWith({ uploadId: IMAGE_ID, buffer, contentType: "image/jpeg" });
+    expect(uploads.markUploadReady).toHaveBeenCalledWith({ uploadId: IMAGE_ID, ...OWNER });
+  });
+
+  it("fails when the upload cannot be marked ready", async () => {
+    uploads.createPendingUpload.mockResolvedValue({ id: IMAGE_ID });
+    uploads.markUploadReady.mockResolvedValue(null);
+    await expect(
+      createReadyImageUpload({ ...OWNER, buffer: Buffer.from("x"), contentType: "image/jpeg", fileName: "a.jpg" })
+    ).rejects.toThrow(/Upload state changed/);
   });
 });

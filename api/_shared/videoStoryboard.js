@@ -6,6 +6,7 @@ const MAX_PROJECT_SECONDS = 120;
 const MAX_SHOT_SECONDS = 15;
 const PROMPT_LIMIT = 2500;
 const MAX_SCRIPT_SOURCE = 50_000;
+const MAX_SHOT_REFERENCES = 10;
 
 const SHOT_SIZES = Object.freeze({
   "extreme-wide": "Extreme wide shot",
@@ -126,6 +127,34 @@ const normalizeCharacterIds = (raw, characterIds, label) => {
   return [...raw];
 };
 
+const normalizeUploadId = (value, label) => {
+  if (typeof value !== "string" || !UPLOAD_ID.test(value)) fail(`${label}的圖片識別碼無效`);
+  return value.toLowerCase();
+};
+
+const normalizeReferences = (raw, label) => {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_SHOT_REFERENCES) {
+    fail(`${label}的參考圖必須是最多 ${MAX_SHOT_REFERENCES} 張的清單`);
+  }
+  const references = raw.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) fail(`${label}的參考圖格式無效`);
+    const imageLabel = normalizeImageLabel(item.label, label);
+    if (!imageLabel) fail(`${label}的參考圖缺少圖片代號`);
+    return { label: imageLabel, uploadId: normalizeUploadId(item.uploadId, label) };
+  });
+  if (new Set(references.map((item) => item.label)).size !== references.length) fail(`${label}的參考圖代號重複`);
+  return references;
+};
+
+// Only a shot that starts a fresh segment (the first shot or a scene cut)
+// can have its own start frame; a chained segment starts from the last frame.
+const normalizeStartFrame = (raw, index, label) => {
+  if (!hasValue(raw.startFrameUploadId)) return null;
+  if (index > 0 && raw.cut !== true) fail(`${label}不是場景開頭，只有第一幕或場景轉換的幕可以設定首影格`);
+  return normalizeUploadId(raw.startFrameUploadId, label);
+};
+
 const normalizeShot = (raw, index, characterIds) => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`第 ${index + 1} 幕格式無效`);
   const label = `第 ${index + 1} 幕`;
@@ -140,6 +169,8 @@ const normalizeShot = (raw, index, characterIds) => {
     title: optionalText(raw.title, `${label}的標題`, 30) || null,
     script: null,
     scriptOriginal: null,
+    references: normalizeReferences(raw.references, label),
+    startFrameUploadId: normalizeStartFrame(raw, index, label),
     duration,
     cut: index > 0 && raw.cut === true,
     shotSize: null,
@@ -215,8 +246,9 @@ const durationRange = (model) => {
  * next shot starts a new scene (`cut`), would exceed the model's per-request
  * length, or would exceed MAX_SEGMENT_SHOTS. A segment that continues the
  * same scene is chained: it starts from the previous segment's last frame,
- * so it is image-to-video. Segments after a cut are text-to-video; the first
- * segment uses `mode`.
+ * so it is image-to-video. Any other segment is image-to-video when its first
+ * shot has a start frame, otherwise text-to-video; for the first segment
+ * `mode` "i2v" means the request carries its own start frame.
  */
 const planSegments = (storyboard, model, { mode }) => {
   const { min, max } = durationRange(model);
@@ -242,6 +274,9 @@ const planSegments = (storyboard, model, { mode }) => {
     current.shots.push(shot);
     current.durationSeconds += shot.duration;
   });
+  if (mode === "i2v" && storyboard.shots[0].startFrameUploadId) {
+    fail("已附加首影格，第 1 幕不能再設定首影格，請移除其中一個");
+  }
   return groups.map((group, index) => {
     const range = group.shots.length > 1
       ? `第 ${group.start + 1}–${group.start + group.shots.length} 幕`
@@ -251,7 +286,9 @@ const planSegments = (storyboard, model, { mode }) => {
         `第 ${index + 1} 段（${range}）只有 ${group.durationSeconds} 秒，此模型每段至少 ${min} 秒。請延長秒數或取消場景轉換`
       );
     }
-    const segmentMode = index === 0 ? mode : group.chained ? "i2v" : "t2v";
+    const startFrameUploadId = group.chained ? null : group.shots[0].startFrameUploadId;
+    const segmentMode =
+      group.chained || startFrameUploadId || (index === 0 && mode === "i2v") ? "i2v" : "t2v";
     const segmentStoryboard = { title: storyboard.title, global: storyboard.global, shots: group.shots };
     return {
       index,
@@ -259,6 +296,7 @@ const planSegments = (storyboard, model, { mode }) => {
       durationSeconds: group.durationSeconds,
       chained: group.chained,
       mode: segmentMode,
+      startFrameUploadId,
       storyboard: segmentStoryboard,
       compiled: compileStoryboard(model.family, segmentStoryboard, { mode: segmentMode }),
     };
@@ -495,22 +533,39 @@ const assertRevisionScope = ({ before, after, declaredChangedIds, shotId }) => {
 
 const collapseWhitespace = (text) => text.replace(/\s+/g, " ").trim();
 
+const agentFail = (message) => fail(message, 502, "storyboard_agent_failed");
+
+// The source text of a script shot; condensed shots keep it in scriptOriginal.
+const scriptSource = (shot, index) => {
+  if (!shot.script) agentFail(`依腳本整理的第 ${index + 1} 幕缺少腳本原文`);
+  if (shot.scriptOriginal) {
+    const kept = [...quotedTexts(shot.scriptOriginal), ...(shot.scriptOriginal.match(/@\S+/g) || [])];
+    if (kept.some((text) => !shot.script.includes(text))) {
+      agentFail(`第 ${index + 1} 幕濃縮時遺漏了引號文字或 @ 引用，請重試`);
+    }
+  }
+  return collapseWhitespace(shot.scriptOriginal || shot.script);
+};
+
 const assertScriptFidelity = (source, storyboard) => {
   const normalizedSource = collapseWhitespace(source);
   let cursor = 0;
   storyboard.shots.forEach((shot, index) => {
-    if (!shot.script) fail(`依腳本整理的第 ${index + 1} 幕缺少腳本原文`, 502, "storyboard_agent_failed");
-    const original = collapseWhitespace(shot.scriptOriginal || shot.script);
+    const original = scriptSource(shot, index);
     const found = normalizedSource.indexOf(original, cursor);
-    if (found < 0) {
-      fail(`第 ${index + 1} 幕的腳本和原文不一致，AI 不可改寫原文，請重試`, 502, "storyboard_agent_failed");
-    }
+    if (found < 0) agentFail(`第 ${index + 1} 幕的腳本和原文不一致，AI 不可改寫原文，請重試`);
     cursor = found + original.length;
-    if (shot.scriptOriginal) {
-      const kept = [...quotedTexts(shot.scriptOriginal), ...(shot.scriptOriginal.match(/@\S+/g) || [])];
-      if (kept.some((text) => !shot.script.includes(text))) {
-        fail(`第 ${index + 1} 幕濃縮時遺漏了引號文字或 @ 引用，請重試`, 502, "storyboard_agent_failed");
-      }
+  });
+};
+
+/** A document's scenes are already split: one shot per scene, in order, verbatim. */
+const assertSceneFidelity = (scenes, storyboard) => {
+  if (storyboard.shots.length !== scenes.length) {
+    agentFail(`AI 產生了 ${storyboard.shots.length} 幕，文件有 ${scenes.length} 個場景，請重試`);
+  }
+  storyboard.shots.forEach((shot, index) => {
+    if (scriptSource(shot, index) !== collapseWhitespace(scenes[index].text)) {
+      agentFail(`第 ${index + 1} 幕的腳本和文件的場景「${scenes[index].title}」不一致，AI 不可改寫原文，請重試`);
     }
   });
 };
@@ -522,11 +577,13 @@ module.exports = {
   MAX_PROJECT_SECONDS,
   MAX_SCRIPT_SOURCE,
   MAX_SEGMENT_SHOTS,
+  MAX_SHOT_REFERENCES,
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
   assertQuotedTextPreserved,
   assertRevisionScope,
+  assertSceneFidelity,
   assertScriptFidelity,
   compileStoryboard,
   durationRange,

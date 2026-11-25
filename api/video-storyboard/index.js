@@ -8,6 +8,7 @@ const { generateJson } = require("../_shared/llmRuntime");
 const { VideoModelError } = require("../_shared/videoModelFamilies");
 const { listPublicVideoModels } = require("../_shared/videoModels");
 const { ensureVideoSettings } = require("../_shared/videoPolicy");
+const { importSceneImages, readScriptDocument } = require("../_shared/scriptDocument");
 const {
   ANGLES,
   CAMERAS,
@@ -19,6 +20,7 @@ const {
   SHOT_SIZES,
   assertQuotedTextPreserved,
   assertRevisionScope,
+  assertSceneFidelity,
   assertScriptFidelity,
   durationRange,
   normalizeCharacters,
@@ -66,17 +68,30 @@ If shotId is given, change only that shot and keep the global settings unchanged
 For a script shot, change only the sentences the instruction names and keep the rest of the script verbatim.
 New shots need new unique ids. Durations may change, but their sum must stay between minSeconds and maxSeconds.`;
 
-const SCRIPT_SYSTEM = `You split a user's written video script into a storyboard. You never rewrite the script.
-${SCHEMA}
-Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chinese","shotNotes":[{"shotId":"s1","notes":["<=3 suggestions in Traditional Chinese"]}]}.
-- Split scenes on headings such as 場景 1, 第 1 幕, Scene 1, numbered titles, timecodes, or blank lines. One scene is one script shot.
-- script is the scene text copied exactly from the source, without its heading. Keep the original heading as title; add a short title only when missing.
-- duration comes from the scene text (for example 5 秒 or 5-second); otherwise use 5. Never exceed segmentSeconds.max.
+const SCRIPT_OUTPUT = `Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chinese","shotNotes":[{"shotId":"s1","notes":["<=3 suggestions in Traditional Chinese"]}]}.`;
+
+const SCRIPT_RULES = `- duration comes from the scene text (for example 5 秒 or 5-second); otherwise use 5. Never exceed segmentSeconds.max.
 - Set cut=true on a scene whose place or time differs from the previous scene.
 - Only if a scene exceeds ${PROMPT_LIMIT} characters, move repeated consistency notes to global.constraints and prohibitions to global.negative, then condense: put the condensed text in script and the exact source text in scriptOriginal. Keep quoted text and @ references.
 - If the script asks for no music or no sound, say in explanation that native audio should be turned off.
 - A character's imageLabel (for example Image1) means the script's @Image1 shows that character; tag those scenes with its id.
 - shotNotes warn about too many actions for the duration, text the model would misspell, or unusable reference images.`;
+
+const SCRIPT_SYSTEM = `You split a user's written video script into a storyboard. You never rewrite the script.
+${SCHEMA}
+${SCRIPT_OUTPUT}
+- Split scenes on headings such as 場景 1, 第 1 幕, Scene 1, numbered titles, timecodes, or blank lines. One scene is one script shot.
+- script is the scene text copied exactly from the source, without its heading. Keep the original heading as title; add a short title only when missing.
+${SCRIPT_RULES}`;
+
+const DOCUMENT_SYSTEM = `You turn the scenes of a user's video script document into a storyboard. You never rewrite the script.
+${SCHEMA}
+${SCRIPT_OUTPUT}
+- scenes are already split. Return exactly one script shot per scene, in the same order.
+- script is the scene text copied exactly. Set title to null; the scene title is kept by the system.
+- preface is text before the first scene, such as a synopsis or style notes. Use it for global settings; never make it a shot.
+- images lists the labels of pictures embedded in each scene; they are the scene's reference images.
+${SCRIPT_RULES}`;
 
 const requireString = (value, label, maxLength) => {
   if (typeof value !== "string" || !value.trim() || value.trim().length > maxLength) {
@@ -106,12 +121,31 @@ const loadAllowedModel = async (identity, modelKey) => {
   return model;
 };
 
-// Characters belong to the user: the agent sees them without upload ids and
-// cannot change them, so they are restored before validating its output.
-const agentStoryboard = (raw, characters) => {
+const NO_ASSETS = Object.freeze({ references: [], startFrameUploadId: null });
+
+const shotAssets = (storyboard) =>
+  new Map(
+    storyboard.shots.map((shot) => [
+      shot.id,
+      { references: shot.references, startFrameUploadId: shot.startFrameUploadId },
+    ])
+  );
+
+// Characters and shot images belong to the user: the agent sees neither
+// upload ids nor shot images and cannot change them, so they are restored by
+// id before validating its output.
+const agentStoryboard = (raw, characters, assets = new Map()) => {
   const storyboard =
     raw && typeof raw === "object" && raw.global && typeof raw.global === "object"
-      ? { ...raw, global: { ...raw.global, characters } }
+      ? {
+          ...raw,
+          global: { ...raw.global, characters },
+          shots: Array.isArray(raw.shots)
+            ? raw.shots.map((shot) =>
+                shot && typeof shot === "object" ? { ...shot, ...(assets.get(shot.id) || NO_ASSETS) } : shot
+              )
+            : raw.shots,
+        }
       : raw;
   try {
     return normalizeStoryboard(storyboard);
@@ -129,6 +163,7 @@ const agentCharacters = (characters) =>
 const agentInput = (storyboard) => ({
   ...storyboard,
   global: { ...storyboard.global, characters: agentCharacters(storyboard.global.characters) },
+  shots: storyboard.shots.map(({ references: _references, startFrameUploadId: _startFrameUploadId, ...shot }) => shot),
 });
 
 const agentText = (value) => (typeof value === "string" ? value.trim().slice(0, 2000) : "");
@@ -256,7 +291,7 @@ const revise = async ({ identity, body, model }) => {
     },
     maxOutputTokens: 8000,
   });
-  const after = agentStoryboard(data.storyboard, before.global.characters);
+  const after = agentStoryboard(data.storyboard, before.global.characters, shotAssets(before));
   const changedShotIds = assertRevisionScope({
     before,
     after,
@@ -273,9 +308,19 @@ const revise = async ({ identity, body, model }) => {
   });
 };
 
-const fromScript = async ({ identity, body, model }) => {
-  const script = requireString(body.script, "腳本", MAX_SCRIPT_SOURCE);
-  const characters = normalizeCharacters(body.characters);
+const agentShotNotes = (data, storyboard) => {
+  const ids = new Set(storyboard.shots.map((shot) => shot.id));
+  return Object.fromEntries(
+    (Array.isArray(data.shotNotes) ? data.shotNotes : [])
+      .filter((entry) => ids.has(entry?.shotId) && Array.isArray(entry.notes))
+      .map((entry) => [
+        entry.shotId,
+        entry.notes.filter((note) => typeof note === "string" && note.trim()).slice(0, 3).map(agentText),
+      ])
+  );
+};
+
+const splitScript = async ({ identity, body, model, script, characters }) => {
   const data = await runAgent({
     identity,
     systemMessage: SCRIPT_SYSTEM,
@@ -284,21 +329,89 @@ const fromScript = async ({ identity, body, model }) => {
   });
   const storyboard = agentStoryboard(data.storyboard, characters);
   assertScriptFidelity(script, storyboard);
-  const ids = new Set(storyboard.shots.map((shot) => shot.id));
-  const shotNotes = Object.fromEntries(
-    (Array.isArray(data.shotNotes) ? data.shotNotes : [])
-      .filter((entry) => ids.has(entry?.shotId) && Array.isArray(entry.notes))
-      .map((entry) => [
-        entry.shotId,
-        entry.notes.filter((note) => typeof note === "string" && note.trim()).slice(0, 3).map(agentText),
-      ])
-  );
   return respondStoryboard({
     storyboard,
     model,
     hasStartFrame: Boolean(body.hasStartFrame),
-    extra: { explanation: agentText(data.explanation), shotNotes },
+    extra: {
+      explanation: agentText(data.explanation),
+      shotNotes: agentShotNotes(data, storyboard),
+      referencePreviews: {},
+    },
   });
+};
+
+const documentNotes = ({ prefaceImageCount, skipped }) => [
+  ...(prefaceImageCount ? [`第一個場景標題前的 ${prefaceImageCount} 張圖片沒有匯入。`] : []),
+  ...skipped.map(({ label, reason }) => `${label}（${reason}）無法轉成參考圖，已略過。`),
+];
+
+// The document's scenes are kept as written: the server sets each shot's
+// title and reference images after checking the agent copied every scene.
+const splitDocumentScenes = async ({ identity, body, model, document, characters }) => {
+  const data = await runAgent({
+    identity,
+    systemMessage: DOCUMENT_SYSTEM,
+    input: {
+      preface: document.preface,
+      scenes: document.scenes.map(({ title, text, images }) => ({
+        title,
+        text,
+        images: images.map((image) => image.label),
+      })),
+      segmentSeconds: durationRange(model),
+      characters: agentCharacters(characters),
+    },
+    maxOutputTokens: 16000,
+  });
+  const drafted = agentStoryboard(data.storyboard, characters);
+  assertSceneFidelity(document.scenes, drafted);
+  const imported = await importSceneImages({
+    zip: document.zip,
+    scenes: document.scenes,
+    tenantId: identity.tenantId,
+    userId: identity.userId,
+  });
+  const storyboard = normalizeStoryboard({
+    ...drafted,
+    shots: drafted.shots.map((shot, index) => ({
+      ...shot,
+      title: document.scenes[index].title.slice(0, 30),
+      references: imported.references[index],
+    })),
+  });
+  return respondStoryboard({
+    storyboard,
+    model,
+    hasStartFrame: Boolean(body.hasStartFrame),
+    extra: {
+      explanation: [agentText(data.explanation), ...documentNotes({ ...document, ...imported })]
+        .filter(Boolean)
+        .join("\n"),
+      shotNotes: agentShotNotes(data, storyboard),
+      referencePreviews: imported.previews,
+    },
+  });
+};
+
+const fromScript = async ({ identity, body, model }) => {
+  const hasScript = body.script !== undefined && body.script !== null;
+  const hasUpload = body.uploadId !== undefined && body.uploadId !== null;
+  if (hasScript === hasUpload) throw new VideoModelError("請提供腳本文字或腳本文件其中一個");
+  const characters = normalizeCharacters(body.characters);
+  if (hasScript) {
+    const script = requireString(body.script, "腳本", MAX_SCRIPT_SOURCE);
+    return splitScript({ identity, body, model, script, characters });
+  }
+  const document = await readScriptDocument({
+    uploadId: body.uploadId,
+    tenantId: identity.tenantId,
+    userId: identity.userId,
+  });
+  if (document.kind === "text") {
+    return splitScript({ identity, body, model, script: document.script, characters });
+  }
+  return splitDocumentScenes({ identity, body, model, document, characters });
 };
 
 const inspect = async ({ body, model }) => {

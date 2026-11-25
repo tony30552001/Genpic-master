@@ -1,4 +1,11 @@
-import { createShot, MAX_CHARACTERS, MAX_SHOTS, newCharacterId, segmentStartLabel } from "@/lib/videoStoryboard";
+import {
+  canHaveStartFrame,
+  createShot,
+  MAX_CHARACTERS,
+  MAX_SHOTS,
+  newCharacterId,
+  segmentStartLabel,
+} from "@/lib/videoStoryboard";
 
 const CONDENSE_INSTRUCTION =
   "把這一幕的腳本濃縮到 2500 字以內，保留引號內文字、@ 引用與主要動作，原文放在 scriptOriginal";
@@ -14,15 +21,22 @@ export const storyboardActions = (storyboard) => {
       ...current,
       global: { ...current.global, characters: update(current.global.characters) },
     }));
-  return {
-    updateShot: (shotId, patch) =>
-      storyboard.edit(
-        (current) => ({
-          ...current,
-          shots: current.shots.map((shot) => (shot.id === shotId ? { ...shot, ...patch } : shot)),
+  // A shot that no longer starts a segment drops its start frame.
+  const updateShot = (shotId, patch) =>
+    storyboard.edit(
+      (current) => ({
+        ...current,
+        shots: current.shots.map((shot, index) => {
+          if (shot.id !== shotId) return shot;
+          const next = { ...shot, ...patch };
+          return canHaveStartFrame(next, index) ? next : { ...next, startFrameUploadId: null };
         }),
-        shotId
-      ),
+      }),
+      shotId
+    );
+  return {
+    updateShot,
+    setStartFrame: (shotId, uploadId) => updateShot(shotId, { startFrameUploadId: uploadId }),
     deleteShot: (shotId) =>
       storyboard.edit((current) => ({
         ...current,
@@ -70,6 +84,7 @@ export const storyboardActions = (storyboard) => {
     canAddCharacter: characters.length < MAX_CHARACTERS,
     uploadImage: storyboard.uploadImage,
     previews: storyboard.previews,
+    startFrameLocked: storyboard.hasStartFrame,
     rewriteShot: (shotId, mode) => {
       const index = shots.findIndex((shot) => shot.id === shotId);
       return storyboard.revise({

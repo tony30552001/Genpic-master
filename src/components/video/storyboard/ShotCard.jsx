@@ -8,6 +8,7 @@ import {
   CAMERA_LABELS,
   MAX_SHOT_SECONDS,
   SHOT_SIZE_LABELS,
+  canHaveStartFrame,
   isScriptShot,
   toOptions,
 } from "@/lib/videoStoryboard";
@@ -114,6 +115,53 @@ function ScriptBody({ shot, label, onChange, onCondense, busy, fill }) {
   );
 }
 
+function startFrameHint({ eligible, locked, selected }) {
+  if (!eligible) return "開啟場景轉換後，可以把參考圖設為這一幕的首影格";
+  if (locked) return "已附加首影格，第 1 幕不能再設定首影格";
+  if (selected) return "這一幕會從首影格開始，再點一次可取消";
+  return "點選參考圖，設為這一幕的首影格";
+}
+
+// Imported script images; on a shot that starts a segment, one can be its start frame.
+function ReferenceStrip({ shot, index, label, previews, startFrameLocked, onSetStartFrame }) {
+  const eligible = canHaveStartFrame(shot, index);
+  const locked = index === 0 && startFrameLocked;
+  const selectable = eligible && !locked;
+  return (
+    <div className="relative col-start-2 flex flex-col gap-1">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${label}參考圖`}>
+        {shot.references.map((reference) => {
+          const selected = shot.startFrameUploadId === reference.uploadId;
+          const preview = previews[reference.uploadId];
+          return (
+            <button
+              key={reference.uploadId}
+              type="button"
+              className={cn(
+                "relative flex size-14 items-center justify-center overflow-hidden rounded-lg border bg-muted text-[11px] text-muted-foreground transition-[border-color,box-shadow] duration-(--motion-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                selectable && "press-feedback",
+                selected ? "border-primary shadow-[0_0_0_1px_hsl(var(--primary))]" : "border-border"
+              )}
+              onClick={() => onSetStartFrame(selected ? null : reference.uploadId)}
+              disabled={!selectable}
+              aria-pressed={selectable ? selected : undefined}
+              aria-label={selectable ? `${reference.label}設為${label}首影格` : reference.label}
+            >
+              {preview ? <img src={preview} alt="" className="size-full object-cover" /> : reference.label}
+              {selected && (
+                <span className="absolute inset-x-0 bottom-0 bg-primary py-0.5 animate-in fade-in duration-(--motion-hover) ease-out text-center text-[10px] font-semibold text-primary-foreground">
+                  首影格
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-muted-foreground">{startFrameHint({ eligible, locked, selected: selectable && Boolean(shot.startFrameUploadId) })}</p>
+    </div>
+  );
+}
+
 /**
  * One storyboard shot. Structured shots edit shot size, angle, camera, action
  * and environment; script shots edit the user's script text. `fill` drops the
@@ -131,7 +179,10 @@ export default function ShotCard({
   canDelete = true,
   fill = false,
   characters = [],
+  previews = {},
+  startFrameLocked = false,
   onChange,
+  onSetStartFrame,
   onToggleCharacter,
   onRewrite,
   onFix,
@@ -292,6 +343,17 @@ export default function ShotCard({
             );
           })}
         </div>
+      )}
+
+      {shot.references.length > 0 && (
+        <ReferenceStrip
+          shot={shot}
+          index={index}
+          label={label}
+          previews={previews}
+          startFrameLocked={startFrameLocked}
+          onSetStartFrame={onSetStartFrame}
+        />
       )}
 
       {changed && (

@@ -2,7 +2,7 @@ const { StorageSharedKeyCredential, BlobServiceClient } = require("@azure/storag
 
 const { query, getPool } = require("./db");
 const { uploadGeneratedBlob } = require("./blobStorage");
-const { getOwnedUpload } = require("./uploads");
+const { resolveOwnedDocumentUpload } = require("./documentUploads");
 const { downloadUploadBuffer } = require("./uploadStorage");
 const { isUrlAllowed } = require("./urlValidator");
 const {
@@ -31,8 +31,6 @@ const MAX_ATTEMPTS = 2;
  */
 const LOCK_TIMEOUT_MINUTES = Number(process.env.DECK_JOB_TIMEOUT_MINUTES || 60);
 const RETRY_DELAY_SECONDS = 15;
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const createDeckJob = async ({
   tenantId,
@@ -88,36 +86,9 @@ const createDeckJob = async ({
   return result.rows[0];
 });
 
-const hasUsableUploadExpiry = (upload) => {
-  const expiresAt = new Date(upload?.expires_at).getTime();
-  return Number.isFinite(expiresAt) && expiresAt > Date.now();
-};
-
 const resolveDeckSourceUpload = async ({ sourceUploadId, tenantId, userId }) => {
-  const canonicalUploadId =
-    typeof sourceUploadId === "string" ? sourceUploadId.toLowerCase() : "";
-  if (!UUID_PATTERN.test(canonicalUploadId)) {
-    throw new Error("Source upload unavailable");
-  }
-
-  const upload = await getOwnedUpload({
-    uploadId: canonicalUploadId,
-    tenantId,
-    userId,
-    purpose: "document",
-    status: "ready",
-  });
-  if (
-    !upload ||
-    upload.id !== canonicalUploadId ||
-    upload.tenant_id !== tenantId ||
-    upload.user_id !== userId ||
-    upload.purpose !== "document" ||
-    upload.status !== "ready" ||
-    !hasUsableUploadExpiry(upload)
-  ) {
-    throw new Error("Source upload unavailable");
-  }
+  const upload = await resolveOwnedDocumentUpload({ uploadId: sourceUploadId, tenantId, userId });
+  if (!upload) throw new Error("Source upload unavailable");
   return upload;
 };
 

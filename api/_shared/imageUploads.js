@@ -1,5 +1,10 @@
-const { getOwnedUpload } = require("./uploads");
-const { buildReadyBlobName, downloadUploadBuffer } = require("./uploadStorage");
+const { UPLOAD_RETENTION_MS, createPendingUpload, getOwnedUpload, markUploadReady } = require("./uploads");
+const {
+  buildReadyBlobName,
+  downloadUploadBuffer,
+  maxBytesForPurpose,
+  writeReadyBlob,
+} = require("./uploadStorage");
 
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const UUID_PATTERN =
@@ -58,7 +63,27 @@ const downloadOwnedImage = async (upload) => {
   };
 };
 
+/** Stores image bytes the API produced as a ready upload owned by the user. */
+const createReadyImageUpload = async ({ tenantId, userId, buffer, contentType, fileName }) => {
+  if (!IMAGE_MIME_TYPES.has(contentType)) throw new Error("Unsupported image content type");
+  if (buffer.length > maxBytesForPurpose("image")) throw new Error("Image exceeds the upload limit");
+  const pending = await createPendingUpload({
+    tenantId,
+    userId,
+    purpose: "image",
+    originalFileName: fileName,
+    contentType,
+    sizeBytes: buffer.length,
+    expiresAt: new Date(Date.now() + UPLOAD_RETENTION_MS),
+  });
+  await writeReadyBlob({ uploadId: pending.id, buffer, contentType });
+  const ready = await markUploadReady({ uploadId: pending.id, tenantId, userId });
+  if (!ready) throw new Error("Upload state changed while storing the image");
+  return ready.id;
+};
+
 module.exports = {
+  createReadyImageUpload,
   downloadOwnedImage,
   normalizeUploadId,
   resolveOwnedImageUpload,

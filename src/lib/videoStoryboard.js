@@ -72,6 +72,8 @@ export const createShot = (shots) => ({
   title: null,
   script: null,
   scriptOriginal: null,
+  references: [],
+  startFrameUploadId: null,
   duration: 3,
   shotSize: "medium",
   angle: "eye-level",
@@ -81,6 +83,12 @@ export const createShot = (shots) => ({
   characterIds: [],
   cut: false,
 });
+
+// Mirrors api/_shared/videoStoryboard.js: only a shot that starts a fresh segment has its own start frame.
+export const canHaveStartFrame = (shot, index) => index === 0 || shot.cut;
+
+export const SCRIPT_DOCUMENT_EXTENSIONS = Object.freeze(["docx", "txt", "md"]);
+export const SCRIPT_DOCUMENT_ACCEPT = SCRIPT_DOCUMENT_EXTENSIONS.map((extension) => `.${extension}`).join(",");
 
 export const SEND_MODE_LABELS = Object.freeze({
   single: "單一提示詞",
@@ -137,7 +145,7 @@ export const characterModeLabel = (segments, family) => {
 export const segmentStartLabel = (segment) => {
   if (segment.chained) return "接續上一段最後一格";
   if (segment.index === 0) return segment.mode === "i2v" ? "從首影格開始" : "從文字開始";
-  return "場景轉換，從文字開始";
+  return segment.mode === "i2v" ? "場景轉換，從首影格開始" : "場景轉換，從文字開始";
 };
 
 /** Footer summary of how the storyboard is sent. */

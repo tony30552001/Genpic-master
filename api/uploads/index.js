@@ -3,6 +3,7 @@ const { requireAuth } = require("../_shared/auth");
 const { resolveIdentity } = require("../_shared/identity");
 const { rateLimit } = require("../_shared/rateLimit");
 const {
+  UPLOAD_RETENTION_MS,
   createPendingUpload,
   getOwnedUpload,
   markUploadReady,
@@ -17,7 +18,6 @@ const {
   inferMimeType,
 } = require("../_shared/documentParser");
 
-const DATABASE_RETENTION_MS = 48 * 60 * 60 * 1000;
 const MAX_FILE_NAME_LENGTH = 255;
 const ALLOWED_FIELDS = new Set([
   "fileName",
@@ -139,7 +139,7 @@ const handleCreate = async (context, req, identity) => {
       originalFileName: input.fileName,
       contentType: input.contentType,
       sizeBytes: input.sizeBytes,
-      expiresAt: new Date(Date.now() + DATABASE_RETENTION_MS),
+      expiresAt: new Date(Date.now() + UPLOAD_RETENTION_MS),
     });
     const grant = await issueUploadGrant({
       uploadId: upload.id,

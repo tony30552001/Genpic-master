@@ -326,7 +326,10 @@ function ShotEditor({ shot, index, board, pending, actions, onClose }) {
           rewriting={pending === `revise:${shot.id}`}
           canDelete={board.storyboard.shots.length > 1}
           characters={board.storyboard.global.characters}
+          previews={actions.previews}
+          startFrameLocked={actions.startFrameLocked}
           onChange={(patch) => actions.updateShot(shot.id, patch)}
+          onSetStartFrame={(uploadId) => actions.setStartFrame(shot.id, uploadId)}
           onToggleCharacter={(characterId) => actions.toggleShotCharacter(shot.id, characterId)}
           onRewrite={(mode) => void actions.rewriteShot(shot.id, mode)}
           onFix={(warning) => void actions.fixWarning(warning)}

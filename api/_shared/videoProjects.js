@@ -70,6 +70,17 @@ const assertOwnedElements = async ({ segments, tenantId, userId }) => {
   }
 };
 
+const assertOwnedStartFrames = async ({ segments, tenantId, userId }) => {
+  for (const segment of segments) {
+    await assertOwnedUpload({
+      uploadId: segment.startFrameUploadId,
+      tenantId,
+      userId,
+      message: `第 ${segment.index + 1} 段的首影格已過期或無法使用，請重新設定`,
+    });
+  }
+};
+
 const normalizeSources = (raw) => {
   const sources = {};
   for (const key of ["sourceUploadId", "sourceImageJobId", "endSourceUploadId", "endSourceImageJobId"]) {
@@ -108,7 +119,8 @@ const assertQuota = async ({ client, tenantId, userId, settings, segmentCount })
 /**
  * Admits a storyboard as one project: it is split into segments and every
  * segment becomes a video job. A chained segment waits for the previous job
- * and starts from its last frame. Each segment counts against the quota.
+ * and starts from its last frame; a segment whose first shot has a start
+ * frame starts from that image. Each segment counts against the quota.
  */
 const createVideoProject = async ({
   tenantId,
@@ -152,6 +164,7 @@ const createVideoProject = async ({
       })
     );
     await assertOwnedSources({ sources, tenantId, userId });
+    await assertOwnedStartFrames({ segments, tenantId, userId });
     await assertOwnedElements({ segments, tenantId, userId });
     if (!unlimited) {
       await assertQuota({ client, tenantId, userId, settings, segmentCount: segments.length });
@@ -182,7 +195,7 @@ const createVideoProject = async ({
           tenantId, userId, modelKey, segment.mode, segment.compiled.storedPrompt,
           JSON.stringify(segment.storyboard),
           option.durationSeconds, option.resolution, option.aspectRatio, option.generateAudio,
-          first ? sources.sourceUploadId : null,
+          segment.startFrameUploadId || (first ? sources.sourceUploadId : null),
           first ? sources.sourceImageJobId : null,
           first ? sources.endSourceUploadId : null,
           first ? sources.endSourceImageJobId : null,

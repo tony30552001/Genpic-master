@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { ChevronDown, Download, Plus, RotateCcw, X } from "@/components/icons/lucideControls";
-import { Clapperboard, FileText, ImagePlay, ImagePlus, Layers } from "@/components/icons/lucideContent";
+import { Clapperboard, FileText, FileUp, ImagePlay, ImagePlus, Layers } from "@/components/icons/lucideContent";
 import { AlertCircle, Check, Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +18,7 @@ import useVideoStoryboard from "@/hooks/useVideoStoryboard";
 import { downloadVideo } from "@/services/aiService";
 import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
-import { durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
+import { SCRIPT_DOCUMENT_ACCEPT, durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
 import SegmentedPlayer from "./SegmentedPlayer";
 import StoryboardBoard from "./storyboard/StoryboardBoard";
@@ -369,6 +369,7 @@ export default function VideoWorkspace({
   const [boardVisible, setBoardVisible] = useState(false);
   const fileRef = useRef(null);
   const endFileRef = useRef(null);
+  const scriptFileRef = useRef(null);
   const briefRef = useRef(null);
   const threadEndRef = useRef(null);
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
@@ -382,7 +383,8 @@ export default function VideoWorkspace({
   const hasQuota = unlimited || remainingQuota > 0;
   const drafting = pending === "draft" || pending === "script";
   const revising = Boolean(board) && boardVisible;
-  const canSend = Boolean(brief.trim() && model && !isUploading && !pending);
+  const canStart = Boolean(model && !isUploading && !pending);
+  const canSend = Boolean(brief.trim() && canStart);
   const recentVideos = useMemo(() => historyItems.filter((item) => item.videoProjectId), [historyItems]);
 
   const thread = useMemo(
@@ -445,6 +447,12 @@ export default function VideoWorkspace({
     setBoardVisible(true);
     if (kind === "script") void storyboard.fromScript({ script: text, attachment });
     else void storyboard.draft({ brief: text, durationSeconds, attachment });
+  };
+
+  const importScript = (file) => {
+    if (!file || !canStart) return;
+    setBoardVisible(true);
+    void storyboard.importScript({ file, attachment });
   };
 
   const sendRevision = () => {
@@ -764,13 +772,16 @@ export default function VideoWorkspace({
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" size="sm" className="h-9 rounded-l-none rounded-r-xl border-l border-primary-foreground/20 px-2" disabled={!canSend} aria-label="更多分鏡方式">
+                      <Button type="button" size="sm" className="h-9 rounded-l-none rounded-r-xl border-l border-primary-foreground/20 px-2" disabled={!canStart} aria-label="更多分鏡方式">
                         <ChevronDown className="size-4" aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => startDraft("script")}>
+                      <DropdownMenuItem disabled={!canSend} onSelect={() => startDraft("script")}>
                         <FileText className="size-4" aria-hidden="true" />依腳本整理分鏡
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => scriptFileRef.current?.click()}>
+                        <FileUp className="size-4" aria-hidden="true" />匯入腳本文件
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -800,6 +811,18 @@ export default function VideoWorkspace({
             const file = event.target.files?.[0];
             event.target.value = "";
             void handleFile(file, true);
+          }}
+        />
+        <input
+          ref={scriptFileRef}
+          type="file"
+          accept={SCRIPT_DOCUMENT_ACCEPT}
+          className="hidden"
+          aria-label="匯入腳本文件"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            importScript(file);
           }}
         />
       </section>

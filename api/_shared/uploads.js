@@ -1,5 +1,7 @@
 const { query, getPool } = require("./db");
 
+const UPLOAD_RETENTION_MS = 48 * 60 * 60 * 1000;
+
 const createPendingUpload = async ({
   tenantId,
   userId,
@@ -136,6 +138,7 @@ const releaseUploadCleanupClaim = async ({ uploadId, cleanupClaimedAt, errorCode
 };
 
 module.exports = {
+  UPLOAD_RETENTION_MS,
   claimExpiredUploads,
   createPendingUpload,
   getOwnedUpload,

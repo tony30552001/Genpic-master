@@ -10,6 +10,7 @@ const llmModels = require("../../_shared/llmModels");
 const llmRuntime = require("../../_shared/llmRuntime");
 const videoModels = require("../../_shared/videoModels");
 const videoPolicy = require("../../_shared/videoPolicy");
+const scriptDocument = require("../../_shared/scriptDocument");
 
 auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
@@ -19,6 +20,8 @@ llmModels.resolveRoleModel = vi.fn();
 llmRuntime.generateJson = vi.fn();
 videoModels.listPublicVideoModels = vi.fn();
 videoPolicy.ensureVideoSettings = vi.fn();
+scriptDocument.readScriptDocument = vi.fn();
+scriptDocument.importSceneImages = vi.fn();
 
 const handler = require("../index");
 
@@ -64,7 +67,74 @@ beforeEach(() => {
   llmModels.resolveRoleModel.mockResolvedValue({ model: {} });
 });
 
+const FRAME = "55555555-5555-4555-8555-555555555555";
+
 describe("video-storyboard", () => {
+  it("keeps a DOCX's scenes and attaches their images after the agent copies them", async () => {
+    const zip = {};
+    scriptDocument.readScriptDocument.mockResolvedValue({
+      kind: "scenes",
+      zip,
+      preface: "咖啡廣告",
+      prefaceImageCount: 1,
+      scenes: [
+        { title: "開店", text: "她推開門。", images: [{ path: "word/media/a.png", label: "Image1" }] },
+        { title: "吧台", text: "他微笑。", images: [] },
+      ],
+    });
+    scriptDocument.importSceneImages.mockResolvedValue({
+      references: [[{ label: "Image1", uploadId: FRAME }], []],
+      previews: { [FRAME]: "data:image/webp;base64,AA" },
+      skipped: [],
+    });
+    llmRuntime.generateJson.mockResolvedValue({
+      storyboard: storyboard([scriptShot("s1", "她推開門。", 5), { ...scriptShot("s2", "他微笑。", 5), title: "亂取" }]),
+      explanation: "已整理",
+    });
+
+    const res = await invoke({ action: "fromScript", uploadId: FRAME });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(llmRuntime.generateJson.mock.calls[0][0].userMessage).scenes[0].images).toEqual(["Image1"]);
+    expect(scriptDocument.importSceneImages).toHaveBeenCalledWith(expect.objectContaining({ zip, tenantId: "t", userId: "u" }));
+    expect(res.body.storyboard.shots.map(({ title, references }) => ({ title, references }))).toEqual([
+      { title: "開店", references: [{ label: "Image1", uploadId: FRAME }] },
+      { title: "吧台", references: [] },
+    ]);
+    expect(res.body.referencePreviews).toEqual({ [FRAME]: "data:image/webp;base64,AA" });
+    expect(res.body.explanation).toMatch(/標題前的 1 張圖片/);
+  });
+
+  it("does not store document images when the agent rewrites a scene", async () => {
+    scriptDocument.readScriptDocument.mockResolvedValue({
+      kind: "scenes", zip: {}, preface: "", prefaceImageCount: 0,
+      scenes: [{ title: "開店", text: "她推開門。", images: [] }],
+    });
+    llmRuntime.generateJson.mockResolvedValue({ storyboard: storyboard([scriptShot("s1", "她打開門。", 5)]) });
+    expect((await invoke({ action: "fromScript", uploadId: FRAME })).status).toBe(502);
+    expect(scriptDocument.importSceneImages).not.toHaveBeenCalled();
+  });
+
+  it("requires exactly one of script text or a script document", async () => {
+    expect((await invoke({ action: "fromScript", script: "場景 1", uploadId: FRAME })).status).toBe(400);
+    expect((await invoke({ action: "fromScript" })).status).toBe(400);
+  });
+
+  it("hides shot images from the agent and restores them on revise", async () => {
+    const references = [{ label: "Image1", uploadId: FRAME }];
+    const before = storyboard([shot({ references, startFrameUploadId: FRAME }), shot({ id: "s2" })]);
+    llmRuntime.generateJson.mockResolvedValue({
+      storyboard: storyboard([shot(), shot({ id: "s2", environment: "夜晚街道" })]),
+      changedShotIds: ["s2"],
+    });
+    const res = await invoke({ action: "revise", storyboard: before, instruction: "第 2 幕改成夜景" });
+    expect(res.status).toBe(200);
+    expect(llmRuntime.generateJson.mock.calls[0][0].userMessage).not.toContain(FRAME);
+    expect(res.body.storyboard.shots[0]).toMatchObject({ references, startFrameUploadId: FRAME });
+    expect(res.body.changedShotIds).toEqual(["s2"]);
+    expect(res.body.segments[0].mode).toBe("i2v");
+  });
+
   it("returns a drafted storyboard with its segment requests and warnings", async () => {
     llmRuntime.generateJson.mockResolvedValue({
       storyboard: storyboard([shot(), shot({ id: "s2", camera: "static", action: "鏡頭推近「早安」招牌" })]),

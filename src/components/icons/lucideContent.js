@@ -10,6 +10,7 @@ export {
   FileSearch,
   FileText,
   FileType,
+  FileUp,
   Globe,
   History,
   Image,

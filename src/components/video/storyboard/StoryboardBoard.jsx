@@ -98,7 +98,10 @@ export default function StoryboardBoard({
             rewriting={pending === `revise:${shot.id}`}
             canDelete={shots.length > 1}
             characters={global.characters}
+            previews={actions.previews}
+            startFrameLocked={actions.startFrameLocked}
             onChange={(patch) => actions.updateShot(shot.id, patch)}
+            onSetStartFrame={(uploadId) => actions.setStartFrame(shot.id, uploadId)}
             onToggleCharacter={(characterId) => actions.toggleShotCharacter(shot.id, characterId)}
             onRewrite={(mode) => void actions.rewriteShot(shot.id, mode)}
             onFix={(warning) => void actions.fixWarning(warning)}

@@ -276,8 +276,9 @@ export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCou
 export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal }) =>
   postVideoStoryboard("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal });
 
-export const scriptToVideoStoryboard = ({ modelKey, script, hasStartFrame, characters, signal }) =>
-  postVideoStoryboard("fromScript", { modelKey, script, hasStartFrame, characters, signal });
+// Pass either pasted `script` text or the `uploadId` of a script document.
+export const scriptToVideoStoryboard = ({ modelKey, script, uploadId, hasStartFrame, characters, signal }) =>
+  postVideoStoryboard("fromScript", { modelKey, script, uploadId, hasStartFrame, characters, signal });
 
 export const inspectVideoStoryboard = ({ modelKey, storyboard, hasStartFrame, signal }) =>
   postVideoStoryboard("inspect", { modelKey, storyboard, hasStartFrame, signal });

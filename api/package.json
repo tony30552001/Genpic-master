@@ -18,7 +18,9 @@
     "dotenv": "^17.3.1",
     "eventsource-parser": "^4.1.2",
     "express": "^5.1.0",
+    "fast-xml-parser": "^5.12.1",
     "google-auth-library": "^10.5.0",
+    "jszip": "^3.10.2",
     "pg": "^8.13.3",
     "pptxgenjs": "^3.12.0",
     "sharp": "^0.35.5"

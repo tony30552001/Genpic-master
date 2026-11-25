@@ -210,6 +210,15 @@ const downloadUploadBuffer = async (upload) => {
   return containerClient.getBlockBlobClient(readyBlobName).downloadToBuffer();
 };
 
+// Server-created uploads skip staging: the API already holds the bytes.
+const writeReadyBlob = async ({ uploadId, buffer, contentType }) => {
+  const { containerClient } = getUploadContainerClient();
+  await containerClient.getBlockBlobClient(buildReadyBlobName(uploadId)).uploadData(buffer, {
+    blobHTTPHeaders: { blobContentType: contentType },
+    conditions: { ifNoneMatch: "*" },
+  });
+};
+
 const issueReadGrant = (upload) => {
   const readyBlobName = assertVerifiedReadyUpload(upload);
   return issueBlobGrant({
@@ -243,4 +252,5 @@ module.exports = {
   issueUploadGrant,
   maxBytesForPurpose,
   promoteUpload,
+  writeReadyBlob,
 };

@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const {
   assertRevisionScope,
+  assertSceneFidelity,
   assertScriptFidelity,
   compileStoryboard,
   normalizeStoryboard,
@@ -64,6 +65,16 @@ describe("normalizeStoryboard", () => {
       board([shot()], { characters: [character(), character({ id: "c2" }), character({ id: "c3" }), character({ id: "c4" })] })
     ).toThrow(/最多 3/);
   });
+
+  it("allows a start frame only on a shot that starts a segment", () => {
+    const frame = "55555555-5555-4555-8555-555555555555";
+    const references = [{ label: "image1", uploadId: frame }];
+    const value = board([shot({ references, startFrameUploadId: frame }), shot({ id: "s2", cut: true, startFrameUploadId: frame })]);
+    expect(value.shots[0].references).toEqual([{ label: "Image1", uploadId: frame }]);
+    expect(value.shots[1].startFrameUploadId).toBe(frame);
+    expect(() => board([shot(), shot({ id: "s2", startFrameUploadId: frame })])).toThrow(/場景開頭/);
+    expect(() => board([shot({ references: [...references, ...references] })])).toThrow(/代號重複/);
+  });
 });
 
 describe("planSegments", () => {
@@ -101,6 +112,17 @@ describe("planSegments", () => {
     expect(() => plan(shots([5, 2], { 1: { cut: true } }))).toThrow(/第 2 段（第 2 幕）只有 2 秒/);
     expect(() => planSegments(board(shots([12])), { ...kling, maxDurationSeconds: 10 }, T2V)).toThrow(/每段 10 秒/);
     expect(() => plan(shots(Array(9).fill(14)))).toThrow(/120 秒上限/);
+  });
+
+  it("starts a cut segment from its first shot's start frame", () => {
+    const frame = "55555555-5555-4555-8555-555555555555";
+    const value = shots([5, 5], { 1: { cut: true, startFrameUploadId: frame } });
+    expect(planSegments(board(value), kling, T2V).map(({ mode, startFrameUploadId }) => ({ mode, startFrameUploadId })))
+      .toEqual([
+        { mode: "t2v", startFrameUploadId: null },
+        { mode: "i2v", startFrameUploadId: frame },
+      ]);
+    expect(() => plan(shots([5], { 0: { startFrameUploadId: frame } }), "i2v")).toThrow(/首影格/);
   });
 });
 describe("compileStoryboard characters", () => {
@@ -224,6 +246,25 @@ describe("assertRevisionScope", () => {
     expect(() =>
       assertRevisionScope({ before, after, declaredChangedIds: ["s2"], shotId: "s1" })
     ).toThrow(/指定幕以外/);
+  });
+});
+
+describe("assertSceneFidelity", () => {
+  const scenes = [
+    { title: "開店", text: "她推開門。" },
+    { title: "吧台", text: "他\n抬頭微笑。" },
+  ];
+
+  it("requires one verbatim shot per document scene", () => {
+    const shots = [
+      { id: "s1", duration: 3, script: "她推開門。" },
+      { id: "s2", duration: 3, script: "他 抬頭微笑。" },
+    ];
+    expect(() => assertSceneFidelity(scenes, board(shots))).not.toThrow();
+    expect(() => assertSceneFidelity(scenes, board(shots.slice(0, 1)))).toThrow(/2 個場景/);
+    expect(() =>
+      assertSceneFidelity(scenes, board([shots[0], { ...shots[1], script: "他微笑。" }]))
+    ).toThrow(/吧台/);
   });
 });
 

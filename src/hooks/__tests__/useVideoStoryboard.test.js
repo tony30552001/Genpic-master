@@ -7,6 +7,7 @@ import {
   draftVideoStoryboard,
   inspectVideoStoryboard,
   reviseVideoStoryboard,
+  scriptToVideoStoryboard,
 } from "../../services/aiService";
 
 vi.mock("../../services/aiService", () => ({
@@ -30,6 +31,8 @@ const shot = (id, action) => ({
   action,
   environment: "",
   characterIds: [],
+  references: [],
+  startFrameUploadId: null,
 });
 
 const storyboard = {
@@ -217,5 +220,56 @@ describe("useVideoStoryboard", () => {
     const large = new File(["x"], "large.png", { type: "image/png" });
     Object.defineProperty(large, "size", { value: 10 * 1024 * 1024 + 1 });
     await expect(result.current.uploadImage(large)).rejects.toThrow("角色參考圖必須小於 10MB");
+  });
+
+  it("imports a script document by upload id and keeps its reference previews", async () => {
+    const imageId = "33333333-3333-4333-8333-333333333333";
+    const imported = {
+      ...storyboard,
+      shots: [{ ...storyboard.shots[0], references: [{ label: "Image1", uploadId: imageId }] }, storyboard.shots[1]],
+    };
+    uploadFile.mockResolvedValue({ uploadId: "doc-1" });
+    scriptToVideoStoryboard.mockResolvedValue(
+      agentResult({ storyboard: imported, referencePreviews: { [imageId]: "data:image/webp;base64,AA" } })
+    );
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+    const file = new File(["docx"], "腳本.docx");
+
+    await act(() => result.current.importScript({ file }));
+
+    expect(uploadFile).toHaveBeenCalledWith(file, "document");
+    expect(scriptToVideoStoryboard).toHaveBeenCalledWith(
+      expect.objectContaining({ modelKey: "kling", uploadId: "doc-1", hasStartFrame: false })
+    );
+    expect(scriptToVideoStoryboard.mock.calls[0][0]).not.toHaveProperty("script");
+    expect(result.current.messages[0].text).toBe("匯入腳本文件：腳本.docx");
+    expect(result.current.previews[imageId]).toBe("data:image/webp;base64,AA");
+    expect(result.current.board.storyboard.shots[0].references).toEqual([{ label: "Image1", uploadId: imageId }]);
+  });
+
+  it("rejects unsupported script documents before uploading", async () => {
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+
+    await act(() => result.current.importScript({ file: new File(["x"], "腳本.pdf") }));
+
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(result.current.messages.at(-1)).toMatchObject({ kind: "error", text: "腳本文件只支援 DOCX、TXT、MD" });
+  });
+
+  it("clears a start frame when its shot no longer starts a segment", async () => {
+    const imageId = "33333333-3333-4333-8333-333333333333";
+    const imported = {
+      ...storyboard,
+      shots: [storyboard.shots[0], { ...storyboard.shots[1], cut: true, references: [{ label: "Image1", uploadId: imageId }] }],
+    };
+    draftVideoStoryboard.mockResolvedValueOnce(agentResult({ storyboard: imported }));
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+    await act(() => result.current.draft({ brief: "咖啡廣告", durationSeconds: 6 }));
+
+    act(() => storyboardActions(result.current).setStartFrame("s2", imageId));
+    expect(result.current.board.storyboard.shots[1].startFrameUploadId).toBe(imageId);
+
+    act(() => storyboardActions(result.current).updateShot("s2", { cut: false }));
+    expect(result.current.board.storyboard.shots[1]).toMatchObject({ cut: false, startFrameUploadId: null });
   });
 });

@@ -5,6 +5,7 @@ const {
   MAX_CHARACTERS,
   MAX_PROJECT_SECONDS,
   MAX_SEGMENT_SHOTS,
+  MAX_SHOT_REFERENCES,
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
@@ -682,7 +683,7 @@ addOperation("/api/optimize-prompt", "post", {
 
 addOperation("/api/video-storyboard", "post", {
   summary: "Draft, revise, split a script into, or inspect a video storyboard",
-  description: "draft and revise use the tenant prompt_optimization model; fromScript keeps every script verbatim unless condensed; inspect only validates. Every action returns warnings and the planned segments, each with its compiled model request. Agent output that breaks storyboard rules returns 502.",
+  description: "draft and revise use the tenant prompt_optimization model; fromScript keeps every script verbatim unless condensed; inspect only validates. fromScript takes either pasted script text or the uploadId of a ready document upload (DOCX, TXT or MD; other types return 415). A DOCX becomes one shot per heading-marked scene, and its embedded images are stored as the caller's image uploads and attached as shot references; referencePreviews maps each new uploadId to a small data URL. Every action returns warnings and the planned segments, each with its compiled model request. Agent output that breaks storyboard rules returns 502.",
   tags: ["Video"],
   body: true,
   csrf: true,
@@ -699,7 +700,8 @@ addOperation("/api/video-storyboard", "post", {
       storyboard: { $ref: "#/components/schemas/VideoStoryboard" },
       instruction: { type: "string", maxLength: 4000, description: "revise" },
       shotId: { type: "string", description: "revise a single shot" },
-      script: { type: "string", maxLength: 50000, description: "fromScript" },
+      script: { type: "string", maxLength: 50000, description: "fromScript; exclusive with uploadId" },
+      uploadId: { type: "string", format: "uuid", description: "fromScript; a ready document upload, exclusive with script" },
       characters: {
         type: "array",
         maxItems: MAX_CHARACTERS,
@@ -1052,6 +1054,24 @@ module.exports = {
                 title: { type: ["string", "null"], maxLength: 30 },
                 script: { type: ["string", "null"], maxLength: PROMPT_LIMIT },
                 scriptOriginal: { type: ["string", "null"] },
+                references: {
+                  type: "array",
+                  maxItems: MAX_SHOT_REFERENCES,
+                  description: "Images imported with the shot's script; the agent never sees or changes them",
+                  items: {
+                    type: "object",
+                    required: ["label", "uploadId"],
+                    properties: {
+                      label: { type: "string", pattern: "^Image[0-9]+$" },
+                      uploadId: { type: "string", format: "uuid" },
+                    },
+                  },
+                },
+                startFrameUploadId: {
+                  type: ["string", "null"],
+                  format: "uuid",
+                  description: "Image upload that starts this shot's segment as image-to-video; only on the first shot or a cut shot, and not together with a request start frame",
+                },
                 duration: { type: "integer", minimum: 1, maximum: 15 },
                 cut: { type: "boolean", description: "Starts a new scene and a new text-to-video segment; ignored on the first shot" },
                 shotSize: { type: ["string", "null"], enum: [...Object.keys(SHOT_SIZES), null] },

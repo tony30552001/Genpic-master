@@ -7,7 +7,12 @@ import {
 } from "../services/aiService";
 import { uploadFile } from "../services/storageService";
 import { readFileAsDataUrl } from "../lib/imageFile";
-import { MAX_CHARACTER_IMAGE_BYTES, storyboardSeconds } from "../lib/videoStoryboard";
+import { MAX_DOCUMENT_FILE_SIZE, getDocumentExtension } from "../lib/documentFormats";
+import {
+  MAX_CHARACTER_IMAGE_BYTES,
+  SCRIPT_DOCUMENT_EXTENSIONS,
+  storyboardSeconds,
+} from "../lib/videoStoryboard";
 
 const INSPECT_DELAY_MS = 400;
 
@@ -28,8 +33,9 @@ const summarize = (storyboard, warnings) => ({
  * Owns the storyboard being reviewed: the agent conversation (draft, revise,
  * fromScript), local edits, and the server-side inspection that returns
  * warnings and the per-segment payload preview for every edit. Character images
- * are uploaded here; `previews` maps their upload ids to local thumbnails
- * (a reopened storyboard has none, so the UI falls back to initials).
+ * are uploaded here; `previews` maps their upload ids, and those of images
+ * imported from a script document, to thumbnails (a reopened storyboard has
+ * none, so the UI falls back to labels).
  */
 export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
   const [board, setBoard] = useState(null);
@@ -188,6 +194,35 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     });
   }, [acceptResult, runAgent]);
 
+  const importScript = useCallback(({ file, attachment }) => {
+    const characters = boardCharacters(boardRef.current);
+    return runAgent({
+      replaceBoard: true,
+      kind: "script",
+      userText: `匯入腳本文件：${file.name}`,
+      attachment,
+      request: async (signal) => {
+        if (!SCRIPT_DOCUMENT_EXTENSIONS.includes(getDocumentExtension(file.name))) {
+          throw new Error("腳本文件只支援 DOCX、TXT、MD");
+        }
+        if (file.size > MAX_DOCUMENT_FILE_SIZE) throw new Error("腳本文件必須小於 50MB");
+        const { uploadId } = await uploadFile(file, "document");
+        if (!uploadId) throw new Error("腳本文件上傳失敗");
+        return scriptToVideoStoryboard({
+          modelKey: latest.current.modelKey,
+          uploadId,
+          hasStartFrame: latest.current.hasStartFrame,
+          characters,
+          signal,
+        });
+      },
+      onResult: (result) => {
+        setPreviews((current) => ({ ...current, ...result.referencePreviews }));
+        acceptResult(result, {});
+      },
+    });
+  }, [acceptResult, runAgent]);
+
   const revise = useCallback(({ instruction, shotId = null, label }) => {
     if (!board) return Promise.resolve();
     return runAgent({
@@ -264,10 +299,12 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     messages,
     pending,
     inspection: currentInspection,
+    hasStartFrame,
     previews,
     uploadImage,
     draft,
     fromScript,
+    importScript,
     revise,
     edit,
     open,
