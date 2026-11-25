@@ -80,8 +80,8 @@ export default function AssetCenter({
   const [isSavingMetadata, setIsSavingMetadata] = useState(false);
 
   const counts = {
-    images: historyItems.filter((item) => !item.videoJobId).length,
-    videos: historyItems.filter((item) => item.videoJobId).length,
+    images: historyItems.filter((item) => !item.videoProjectId).length,
+    videos: historyItems.filter((item) => item.videoProjectId).length,
     templates: templates.length,
     styles: savedStyles.length,
   };
@@ -197,7 +197,7 @@ export default function AssetCenter({
       {section === "images" && (
         <div className="animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="images">
           <ImageGallery
-            historyItems={historyItems.filter((item) => !item.videoJobId)}
+            historyItems={historyItems.filter((item) => !item.videoProjectId)}
             savedStyles={savedStyles}
             searchQuery={historySearchQuery}
             onEdit={onLoadHistory}
@@ -214,7 +214,7 @@ export default function AssetCenter({
       {section === "videos" && (
         <div className="animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="videos">
           <VideoGallery
-            historyItems={historyItems.filter((item) => item.videoJobId)}
+            historyItems={historyItems.filter((item) => item.videoProjectId)}
             searchQuery={historySearchQuery}
             onDelete={onDeleteHistory}
             onGoCreate={() => onGoCreate?.("video")}

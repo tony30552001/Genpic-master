@@ -75,9 +75,9 @@ export default function useHistory({ user }) {
   );
 
   const saveVideoHistoryItem = useCallback(
-    async ({ videoJobId, userScript, fullPrompt }) => {
+    async ({ videoProjectId, userScript, fullPrompt }) => {
       if (!user) return;
-      await addVideoHistoryItem({ videoJobId, userScript, fullPrompt });
+      await addVideoHistoryItem({ videoProjectId, userScript, fullPrompt });
       const items = await listHistory();
       setHistoryItems(items || []);
     },

@@ -1,9 +1,15 @@
-const { ok, error, options } = require("../_shared/http");
+const { ok, error, options, corsHeaders } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { resolveIdentity } = require("../_shared/identity");
 const { rateLimit } = require("../_shared/rateLimit");
+const { getGeneratedBlobDownload } = require("../_shared/blobStorage");
 const { VideoModelError } = require("../_shared/videoModelFamilies");
-const { createVideoProject, getVideoProjectForUser } = require("../_shared/videoProjects");
+const {
+  createVideoProject,
+  getVideoProjectForUser,
+  requestVideoRender,
+  resolveProjectVideo,
+} = require("../_shared/videoProjects");
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -56,6 +62,43 @@ module.exports = async function (context, req) {
     const projectId = req.params?.id;
     if (!UUID_PATTERN.test(projectId || "")) {
       context.res = error("影片專案識別碼格式無效", "bad_request", 400, req);
+      return;
+    }
+    const action = req.params?.action;
+    if (method === "POST" && action === "render") {
+      const render = await requestVideoRender({
+        projectId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+      });
+      context.res = ok(render, 202, req);
+      return;
+    }
+    if (method === "GET" && action === "video") {
+      const video = await resolveProjectVideo({
+        projectId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+      });
+      if (!video) {
+        context.res = error("影片尚未完成", "not_ready", 409, req);
+        return;
+      }
+      const blob = await getGeneratedBlobDownload({ blobName: video.blobName });
+      context.res = {
+        status: 200,
+        headers: {
+          ...corsHeaders(req),
+          "Content-Type": video.contentType,
+          "Content-Length": video.sizeBytes || undefined,
+          "Cache-Control": "private, max-age=31536000, immutable",
+        },
+        body: blob.readableStreamBody,
+      };
+      return;
+    }
+    if (method !== "GET" || action) {
+      context.res = error("Method not allowed", "method_not_allowed", 405, req);
       return;
     }
     const project = await getVideoProjectForUser({

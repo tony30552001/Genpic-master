@@ -29,7 +29,7 @@ export default function VideoGallery({ historyItems, searchQuery, onDelete, onGo
     setLoadingId(item.id);
     setError("");
     try {
-      const blob = await downloadVideo({ jobId: item.videoJobId });
+      const blob = await downloadVideo({ projectId: item.videoProjectId });
       setActive({ ...item, videoUrl: URL.createObjectURL(blob) });
     } catch (caught) {
       setError(caught.message || "影片載入失敗");

@@ -10,6 +10,8 @@ import hmac
 import logging
 import shutil
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -40,6 +42,13 @@ class LastFrameRequest(BaseModel):
     frameUrl: str = Field(min_length=1, max_length=4096)
 
 
+class RenderRequest(BaseModel):
+    segmentUrls: list[Annotated[str, Field(min_length=1, max_length=4096)]] = Field(
+        min_length=2, max_length=config.MAX_RENDER_SEGMENTS
+    )
+    outputUrl: str = Field(min_length=1, max_length=4096)
+
+
 @app.get("/health")
 def health() -> dict:
     try:
@@ -49,32 +58,54 @@ def health() -> dict:
     return {"status": "ok", "ffmpeg": version}
 
 
-@app.post("/last-frame")
-def last_frame(payload: LastFrameRequest, _: Authenticated) -> dict:
+def assert_blob_urls(*urls: str) -> None:
     try:
-        blob.assert_blob_url(payload.videoUrl)
-        blob.assert_blob_url(payload.frameUrl)
+        for url in urls:
+            blob.assert_blob_url(url)
     except blob.BlobError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
+
+@contextmanager
+def workspace(operation: str) -> Iterator[Path]:
+    """A scratch directory whose blob and ffmpeg failures map to HTTP errors."""
     config.WORKDIR.mkdir(parents=True, exist_ok=True)
     workdir = Path(tempfile.mkdtemp(dir=config.WORKDIR))
     try:
+        yield workdir
+    except blob.BlobError as error:
+        logger.error("%s blob transfer failed: %s", operation, error)
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except media.MediaError as error:
+        stderr = error.stderr.strip()[-2000:]
+        logger.error("%s ffmpeg failed: %s stderr=%s", operation, error, stderr)
+        raise HTTPException(status_code=422, detail={"message": str(error), "stderr": stderr}) from error
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+@app.post("/last-frame")
+def last_frame(payload: LastFrameRequest, _: Authenticated) -> dict:
+    assert_blob_urls(payload.videoUrl, payload.frameUrl)
+    with workspace("last-frame") as workdir:
         video = workdir / "source.mp4"
         frame = workdir / "last-frame.png"
         blob.download(payload.videoUrl, video)
         width, height = media.last_frame(video, frame)
         size = blob.upload(payload.frameUrl, frame, "image/png")
-    except blob.BlobError as error:
-        logger.error("last-frame blob transfer failed: %s", error)
-        raise HTTPException(status_code=502, detail=str(error)) from error
-    except media.MediaError as error:
-        logger.error("last-frame ffmpeg failed: %s stderr=%s", error, error.stderr.strip()[-2000:])
-        raise HTTPException(
-            status_code=422,
-            detail={"message": str(error), "stderr": error.stderr.strip()[-2000:]},
-        ) from error
-    finally:
-        shutil.rmtree(workdir, ignore_errors=True)
-
     return {"contentType": "image/png", "width": width, "height": height, "sizeBytes": size}
+
+
+@app.post("/render")
+def render(payload: RenderRequest, _: Authenticated) -> dict:
+    assert_blob_urls(*payload.segmentUrls, payload.outputUrl)
+    with workspace("render") as workdir:
+        sources = []
+        for index, url in enumerate(payload.segmentUrls):
+            source = workdir / f"segment-{index:02d}.mp4"
+            blob.download(url, source)
+            sources.append(source)
+        output = workdir / "render.mp4"
+        result = media.concat(sources, output)
+        size = blob.upload(payload.outputUrl, output, "video/mp4")
+    return {"contentType": "video/mp4", "sizeBytes": size, **result}

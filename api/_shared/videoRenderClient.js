@@ -1,6 +1,8 @@
 const { signGeneratedBlobUrl } = require("./blobStorage");
 
 const TIMEOUT_MS = Number(process.env.VIDEO_RENDER_TIMEOUT_MS || 180000);
+// Container Apps closes a request after 240 seconds.
+const CONCAT_TIMEOUT_MS = Number(process.env.VIDEO_RENDER_CONCAT_TIMEOUT_MS || 235000);
 const SAS_TTL_MS = 15 * 60 * 1000;
 
 const getServiceUrl = () =>
@@ -27,7 +29,7 @@ const describeFailure = (payload, status) => {
   return `影片組合服務請求失敗 (${status})`;
 };
 
-const request = async (path, body) => {
+const request = async (path, body, { timeoutMs = TIMEOUT_MS } = {}) => {
   if (!isConfigured()) {
     throw new VideoRenderError(
       "VIDEO_RENDER_SERVICE_URL 或 VIDEO_RENDER_SERVICE_KEY 尚未設定，無法使用影片組合服務",
@@ -44,7 +46,7 @@ const request = async (path, body) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     if (error.name === "TimeoutError") {
@@ -70,6 +72,9 @@ const request = async (path, body) => {
   return payload;
 };
 
+const readUrl = (blobName) =>
+  signGeneratedBlobUrl({ blobName, permissions: "r", expiresInMs: SAS_TTL_MS });
+
 /**
  * Writes the final frame of a generated video to `frameBlobName` (PNG) in the
  * generated container. Both blobs travel as short-lived SAS URLs, so the video
@@ -77,7 +82,7 @@ const request = async (path, body) => {
  */
 const extractLastFrame = async ({ videoBlobName, frameBlobName }) => {
   const result = await request("/last-frame", {
-    videoUrl: signGeneratedBlobUrl({ blobName: videoBlobName, permissions: "r", expiresInMs: SAS_TTL_MS }),
+    videoUrl: readUrl(videoBlobName),
     frameUrl: signGeneratedBlobUrl({ blobName: frameBlobName, permissions: "cw", expiresInMs: SAS_TTL_MS }),
   });
   return {
@@ -89,4 +94,29 @@ const extractLastFrame = async ({ videoBlobName, frameBlobName }) => {
   };
 };
 
-module.exports = { VideoRenderError, extractLastFrame, isConfigured };
+/**
+ * Joins segment videos in order into `outputBlobName` (MP4). Matching
+ * segments are stream-copied; otherwise the service re-encodes them to the
+ * first segment's size and frame rate.
+ */
+const concatSegments = async ({ segmentBlobNames, outputBlobName }) => {
+  const result = await request(
+    "/render",
+    {
+      segmentUrls: segmentBlobNames.map(readUrl),
+      outputUrl: signGeneratedBlobUrl({ blobName: outputBlobName, permissions: "cw", expiresInMs: SAS_TTL_MS }),
+    },
+    { timeoutMs: CONCAT_TIMEOUT_MS }
+  );
+  return {
+    blobName: outputBlobName,
+    contentType: result.contentType,
+    sizeBytes: result.sizeBytes,
+    durationSeconds: result.durationSeconds,
+    width: result.width,
+    height: result.height,
+    copied: result.copied,
+  };
+};
+
+module.exports = { VideoRenderError, concatSegments, extractLastFrame, isConfigured };

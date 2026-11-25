@@ -54,10 +54,10 @@ export const addHistoryItem = async ({
 };
 
 export const addVideoHistoryItem = async ({
-  videoJobId, userScript, fullPrompt,
+  videoProjectId, userScript, fullPrompt,
 }) =>
   apiPost(`${API_BASE_URL}/history`, {
-    videoJobId,
+    videoProjectId,
     userScript,
     fullPrompt,
     source: "video",

@@ -38,6 +38,8 @@ def download(url: str, target: Path) -> None:
 
 
 def upload(url: str, source: Path, content_type: str) -> int:
+    if source.stat().st_size > config.MAX_VIDEO_BYTES:
+        raise BlobError("output exceeds the size limit")
     payload = source.read_bytes()
     response = httpx.put(
         url,

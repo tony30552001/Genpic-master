@@ -12,6 +12,7 @@ const { handleImageModels, handleImageModelTest } = require("./imageModels");
 const { handleVideoModelTest, handleVideoModels } = require("./videoModels");
 const { ensureVideoSettings, updateVideoSettings } = require("../_shared/videoPolicy");
 const { listPublicVideoModels } = require("../_shared/videoModels");
+const { resolveProjectVideo } = require("../_shared/videoProjects");
 const {
   LLM_ROLES,
   createLlmModel,
@@ -71,7 +72,7 @@ const mapHistory = (row) => ({
   stylePrompt: row.style_prompt,
   model: row.model,
   jobId: row.image_job_id || null,
-  videoJobId: row.video_job_id || null,
+  videoProjectId: row.video_project_id || null,
   styleId: row.style_id,
   styleName: row.style_name,
   source: row.source || null,
@@ -234,13 +235,13 @@ const listHistory = async (context, identity, req) => {
     `SELECT
        h.id,
        (h.image_url IS NOT NULL AND h.image_url <> '') AS has_image,
-       (h.video_job_id IS NOT NULL) AS has_video,
+       (h.video_project_id IS NOT NULL) AS has_video,
        h.prompt,
        h.user_script,
        h.style_prompt,
        h.model,
        h.image_job_id,
-       h.video_job_id,
+       h.video_project_id,
        h.style_id,
        h.source,
        h.created_at,
@@ -483,24 +484,25 @@ const getHistoryVideo = async (context, identity, req, targetId) => {
     return;
   }
   const result = await query(
-    `SELECT jobs.result_blob_name, jobs.result_mime_type, jobs.result_size_bytes
-     FROM history h
-     JOIN video_generation_jobs jobs ON jobs.id = h.video_job_id
-     WHERE h.id = $1 AND h.tenant_id = $2 AND jobs.status = 'succeeded'`,
+    `SELECT video_project_id FROM history
+     WHERE id = $1 AND tenant_id = $2 AND video_project_id IS NOT NULL`,
     [targetId, identity.tenantId]
   );
-  const job = result.rows[0];
-  if (!job) {
+  const projectId = result.rows[0]?.video_project_id;
+  const video = projectId
+    ? await resolveProjectVideo({ projectId, tenantId: identity.tenantId })
+    : null;
+  if (!video) {
     context.res = error("找不到生成影片", "not_found", 404, req);
     return;
   }
-  const blob = await getGeneratedBlobDownload({ blobName: job.result_blob_name });
+  const blob = await getGeneratedBlobDownload({ blobName: video.blobName });
   context.res = {
     status: 200,
     headers: {
       ...corsHeaders(req),
-      "Content-Type": job.result_mime_type || "video/mp4",
-      "Content-Length": job.result_size_bytes || undefined,
+      "Content-Type": video.contentType,
+      "Content-Length": video.sizeBytes || undefined,
       "Cache-Control": "private, max-age=3600",
     },
     body: blob.readableStreamBody,

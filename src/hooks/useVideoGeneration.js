@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createVideoProject,
   downloadVideo,
+  downloadVideoSegment,
   draftVideoStoryboard,
+  renderVideoProject,
   waitForVideoProject,
+  waitForVideoRender,
 } from "../services/aiService";
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
@@ -12,7 +15,8 @@ const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.
  * Runs video turns. A turn either sends a confirmed `storyboard`, or a `brief`
  * that the storyboard agent first turns into `shotCount` shots ("直接生成").
  * Each turn is one video project; long storyboards run as several segments
- * that play back in order. Only single-segment turns are saved to history.
+ * that play back in order. A single-segment turn is saved to history when it
+ * finishes; a multi-segment turn only after `merge` joins it into one video.
  */
 export default function useVideoGeneration({ onSaved }) {
   const [turns, setTurns] = useState([]);
@@ -29,6 +33,19 @@ export default function useVideoGeneration({ onSaved }) {
     setTurns((current) =>
       current.map((turn) => (turn.clientId === clientId ? { ...turn, ...patch } : turn))
     );
+  }, []);
+
+  const objectUrl = useCallback((blob) => {
+    const url = URL.createObjectURL(blob);
+    urls.current.add(url);
+    return url;
+  }, []);
+
+  const releaseUrls = useCallback((list) => {
+    list.forEach((url) => {
+      URL.revokeObjectURL(url);
+      urls.current.delete(url);
+    });
   }, []);
 
   const submit = useCallback(async ({
@@ -81,15 +98,12 @@ export default function useVideoGeneration({ onSaved }) {
       });
       const videoUrls = [];
       for (const segment of completed.segments) {
-        const blob = await downloadVideo({ jobId: segment.jobId, signal: controller.signal });
-        const url = URL.createObjectURL(blob);
-        urls.current.add(url);
-        videoUrls.push(url);
+        videoUrls.push(objectUrl(await downloadVideoSegment({ jobId: segment.jobId, signal: controller.signal })));
       }
       updateTurn(clientId, { status: "succeeded", segments: completed.segments, videoUrls });
       if (completed.segments.length === 1) {
         await onSaved?.({
-          videoJobId: completed.segments[0].jobId,
+          videoProjectId: projectId,
           userScript: brief || storyboard.title,
           fullPrompt: completed.segments[0].prompt,
         });
@@ -106,7 +120,39 @@ export default function useVideoGeneration({ onSaved }) {
     } finally {
       controllers.current.delete(clientId);
     }
-  }, [onSaved, updateTurn]);
+  }, [objectUrl, onSaved, updateTurn]);
+
+  // Joins a finished multi-segment turn into one video, replaces the segment
+  // playback with it and saves it to history. Asking again after a failure
+  // reuses a render that already succeeded, so a failed save can be retried.
+  const merge = useCallback(async (turn) => {
+    const controller = new AbortController();
+    controllers.current.set(turn.clientId, controller);
+    updateTurn(turn.clientId, { mergeStatus: "merging", mergeError: null });
+    let url = null;
+    try {
+      await renderVideoProject({ projectId: turn.projectId });
+      await waitForVideoRender({ projectId: turn.projectId, signal: controller.signal });
+      url = objectUrl(await downloadVideo({ projectId: turn.projectId, signal: controller.signal }));
+      await onSaved?.({
+        videoProjectId: turn.projectId,
+        userScript: turn.brief || turn.storyboard.title,
+        fullPrompt: turn.segments.map((segment) => segment.prompt).join("\n\n"),
+      });
+      releaseUrls(turn.videoUrls);
+      updateTurn(turn.clientId, { mergeStatus: "merged", videoUrls: [url] });
+    } catch (error) {
+      if (url) releaseUrls([url]);
+      if (error?.name !== "AbortError") {
+        updateTurn(turn.clientId, {
+          mergeStatus: "failed",
+          mergeError: error.message || "影片合併失敗，請重新合併",
+        });
+      }
+    } finally {
+      controllers.current.delete(turn.clientId);
+    }
+  }, [objectUrl, onSaved, releaseUrls, updateTurn]);
 
   const stopWaiting = useCallback((clientId) => {
     controllers.current.get(clientId)?.abort();
@@ -119,6 +165,7 @@ export default function useVideoGeneration({ onSaved }) {
     activeTurnId,
     setActiveTurnId,
     submit,
+    merge,
     stopWaiting,
   };
 }

@@ -7,6 +7,7 @@ const { ensureVideoSettings } = require("./videoPolicy");
 const { normalizeStoryboard, planSegments } = require("./videoStoryboard");
 const videoRenderClient = require("./videoRenderClient");
 const { countAdmittedToday, expiredElementError } = require("./videoJobs");
+const { getLatestVideoRender, getSucceededRenderBlob, queueVideoRender } = require("./videoRenders");
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -254,11 +255,58 @@ const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
     createdAt: row.created_at,
     status: projectStatus(segments),
     segments,
+    render: segments.length > 1 ? await getLatestVideoRender(row.id) : null,
   };
+};
+
+/**
+ * Queues the join of a finished multi-segment project into one MP4. Asking
+ * again while a render is queued, running or done returns that render.
+ */
+const requestVideoRender = async ({ projectId, tenantId, userId }) => {
+  const project = await getVideoProjectForUser({ projectId, tenantId, userId });
+  if (!project) throw new VideoModelError("找不到影片專案", "not_found", 404);
+  if (project.segments.length < 2) {
+    throw new VideoModelError("單段影片不需要合併", "render_not_needed", 400);
+  }
+  if (project.status !== "succeeded") {
+    throw new VideoModelError("所有段落完成後才能合併", "not_ready", 409);
+  }
+  if (!videoRenderClient.isConfigured()) {
+    throw new VideoModelError("影片組合服務尚未設定，無法合併影片，請聯絡管理員", "video_render_unconfigured", 503);
+  }
+  return queueVideoRender({ tenantId, userId, projectId });
+};
+
+/**
+ * The finished video of a project: its only segment, or its succeeded
+ * render, or null while it has none. A missing project is a 404 error.
+ * Without `userId` any project of the tenant resolves (management views).
+ */
+const resolveProjectVideo = async ({ projectId, tenantId, userId = null }) => {
+  const project = await query(
+    `SELECT id FROM video_projects
+     WHERE id = $1 AND tenant_id = $2 AND ($3::uuid IS NULL OR user_id = $3)`,
+    [projectId, tenantId, userId]
+  );
+  if (!project.rows[0]) throw new VideoModelError("找不到影片專案", "not_found", 404);
+  const jobs = await query(
+    `SELECT status, result_blob_name, result_mime_type, result_size_bytes
+     FROM video_generation_jobs
+     WHERE project_id = $1`,
+    [projectId]
+  );
+  if (jobs.rows.length > 1) return getSucceededRenderBlob(projectId);
+  const job = jobs.rows[0];
+  return job?.status === "succeeded"
+    ? { blobName: job.result_blob_name, contentType: job.result_mime_type || "video/mp4", sizeBytes: job.result_size_bytes }
+    : null;
 };
 
 module.exports = {
   createVideoProject,
   getVideoProjectForUser,
   projectStatus,
+  requestVideoRender,
+  resolveProjectVideo,
 };

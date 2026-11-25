@@ -308,5 +308,23 @@ export const waitForVideoProject = async ({ projectId, signal, onProgress, pollI
   }
 };
 
-export const downloadVideo = async ({ jobId, signal }) =>
+export const renderVideoProject = async ({ projectId }) =>
+  apiPost(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/render`, {});
+
+// Resolves when the project's render succeeded. The worker times out every
+// render, so it always settles.
+export const waitForVideoRender = async ({ projectId, signal, pollIntervalMs = 3000 }) => {
+  for (;;) {
+    const { render } = await getVideoProject({ projectId, signal });
+    if (render?.status === "succeeded") return render;
+    if (render?.status === "failed") throw new Error(render.error?.message || "影片合併失敗，請重新合併");
+    await abortableDelay(pollIntervalMs, signal);
+  }
+};
+
+// The project's finished video: its only segment or its merged render.
+export const downloadVideo = async ({ projectId, signal }) =>
+  apiGetBlob(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/video`, { signal });
+
+export const downloadVideoSegment = async ({ jobId, signal }) =>
   apiGetBlob(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/video`, { signal });

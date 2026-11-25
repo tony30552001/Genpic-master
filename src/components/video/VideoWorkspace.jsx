@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { ChevronDown, Download, Plus, RotateCcw, X } from "@/components/icons/lucideControls";
-import { Clapperboard, FileText, ImagePlay, ImagePlus } from "@/components/icons/lucideContent";
-import { AlertCircle, Loader2 } from "@/components/icons/lucideStatus";
+import { Clapperboard, FileText, ImagePlay, ImagePlus, Layers } from "@/components/icons/lucideContent";
+import { AlertCircle, Check, Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -158,7 +158,51 @@ function AgentMessage({ message, isLatest, onOpen, onQuestion }) {
   );
 }
 
-function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, onEditStoryboard }) {
+function MergeBar({ turn, onMerge }) {
+  const merging = turn.mergeStatus === "merging";
+  if (turn.mergeStatus === "merged") {
+    return (
+      <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground animate-in fade-in duration-(--motion-enter) ease-emphasized" role="status">
+        <Check className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+        已合併成一支影片並保存到素材中心
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3 rounded-xl bg-muted/50 py-2 pl-3 pr-2">
+        <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-muted-foreground" aria-live="polite">
+          {merging
+            ? `正在把 ${turn.segments.length} 段接成一支影片，約需一到兩分鐘…`
+            : `目前分 ${turn.segments.length} 段依序播放；合併後才能下載並保存到素材中心。`}
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          className="press-feedback shrink-0 gap-1.5 text-xs"
+          onClick={() => onMerge(turn)}
+          disabled={merging}
+          aria-busy={merging}
+        >
+          {merging ? (
+            <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          ) : (
+            <Layers className="size-3.5" aria-hidden="true" />
+          )}
+          {merging ? "合併中" : turn.mergeStatus === "failed" ? "重新合併" : "合併成一支影片"}
+        </Button>
+      </div>
+      {turn.mergeStatus === "failed" && (
+        <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive" role="alert">
+          <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          {turn.mergeError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, onEditStoryboard, onMerge }) {
   const busy = !["succeeded", "failed"].includes(turn.status);
   const segmentCount = turn.segments?.length || 0;
   const videoUrls = turn.videoUrls || [];
@@ -239,9 +283,7 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, o
           )}
         </button>
       )}
-      {turn.status === "succeeded" && videoUrls.length > 1 && (
-        <p className="px-1 text-[11px] text-muted-foreground">分 {videoUrls.length} 段依序播放，不會保存到素材中心。</p>
-      )}
+      {turn.status === "succeeded" && segmentCount > 1 && <MergeBar turn={turn} onMerge={onMerge} />}
 
       <div className="flex flex-wrap items-center justify-end gap-1">
         {turn.storyboard && (
@@ -260,7 +302,7 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, o
         {videoUrls.length === 1 && (
           <a
             href={videoUrls[0]}
-            download={`pixora-video-${turn.segments[0].jobId}.mp4`}
+            download={`pixora-video-${turn.projectId}.mp4`}
             className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Download className="size-3.5" aria-hidden="true" />下載
@@ -341,7 +383,7 @@ export default function VideoWorkspace({
   const drafting = pending === "draft" || pending === "script";
   const revising = Boolean(board) && boardVisible;
   const canSend = Boolean(brief.trim() && model && !isUploading && !pending);
-  const recentVideos = useMemo(() => historyItems.filter((item) => item.videoJobId), [historyItems]);
+  const recentVideos = useMemo(() => historyItems.filter((item) => item.videoProjectId), [historyItems]);
 
   const thread = useMemo(
     () => [
@@ -487,7 +529,7 @@ export default function VideoWorkspace({
   const openHistory = async (item) => {
     setSubmitError("");
     try {
-      const blob = await downloadVideo({ jobId: item.videoJobId });
+      const blob = await downloadVideo({ projectId: item.videoProjectId });
       setPlayerVideo({ videoUrls: [URL.createObjectURL(blob)], cleanup: true });
     } catch (error) {
       setSubmitError(error.message || "影片載入失敗");
@@ -596,6 +638,7 @@ export default function VideoWorkspace({
                     onStop={videos.stopWaiting}
                     onContinue={(turn) => void continueFromVideo(turn)}
                     onEditStoryboard={editFromTurn}
+                    onMerge={videos.merge}
                   />
                 );
               }
@@ -779,12 +822,12 @@ export default function VideoWorkspace({
                 </Button>
               )}
               {activeTurn.videoUrls.length === 1 && (
-                <a href={activeTurn.videoUrls[0]} download className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="下載影片">
+                <a href={activeTurn.videoUrls[0]} download={`pixora-video-${activeTurn.projectId}.mp4`} className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="下載影片">
                   <Download className="size-4" aria-hidden="true" />
                 </a>
               )}
             </div>
-            <SegmentedPlayer key={activeTurn.clientId} urls={activeTurn.videoUrls} className="min-h-0 flex-1" />
+            <SegmentedPlayer key={activeTurn.videoUrls[0]} urls={activeTurn.videoUrls} className="min-h-0 flex-1" />
           </div>
         ) : videos.turns.length ? (
           <div className="m-auto flex flex-col items-center gap-3 text-center text-muted-foreground">

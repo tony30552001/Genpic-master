@@ -1,13 +1,23 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import useVideoGeneration from "../useVideoGeneration";
-import { createVideoProject, downloadVideo, waitForVideoProject } from "../../services/aiService";
+import {
+  createVideoProject,
+  downloadVideo,
+  downloadVideoSegment,
+  renderVideoProject,
+  waitForVideoProject,
+  waitForVideoRender,
+} from "../../services/aiService";
 
 vi.mock("../../services/aiService", () => ({
   createVideoProject: vi.fn(),
   downloadVideo: vi.fn(),
+  downloadVideoSegment: vi.fn(),
   draftVideoStoryboard: vi.fn(),
+  renderVideoProject: vi.fn(),
   waitForVideoProject: vi.fn(),
+  waitForVideoRender: vi.fn(),
 }));
 
 const storyboard = { title: "晨光森林", global: {}, shots: [] };
@@ -28,7 +38,8 @@ const finish = (count) => {
 
 describe("useVideoGeneration", () => {
   beforeEach(() => {
-    downloadVideo.mockImplementation(async ({ jobId }) => new Blob([jobId]));
+    downloadVideoSegment.mockImplementation(async ({ jobId }) => new Blob([jobId]));
+    downloadVideo.mockResolvedValue(new Blob(["merged"]));
     globalThis.URL.createObjectURL = vi.fn((blob) => `blob:${blob.size}-${Math.random()}`);
     globalThis.URL.revokeObjectURL = vi.fn();
   });
@@ -46,7 +57,7 @@ describe("useVideoGeneration", () => {
     await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
 
     expect(createVideoProject).toHaveBeenCalledWith({ modelKey: "kling", storyboard, mode: "t2v" });
-    expect(onSaved).toHaveBeenCalledWith({ videoJobId: "job-0", userScript: "晨光森林", fullPrompt: "prompt-0" });
+    expect(onSaved).toHaveBeenCalledWith({ videoProjectId: "p1", userScript: "晨光森林", fullPrompt: "prompt-0" });
     expect(result.current.turns[0]).toMatchObject({ status: "succeeded", videoUrls: [expect.any(String)] });
   });
 
@@ -57,8 +68,44 @@ describe("useVideoGeneration", () => {
 
     await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
 
-    expect(downloadVideo.mock.calls.map(([args]) => args.jobId)).toEqual(["job-0", "job-1", "job-2"]);
+    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["job-0", "job-1", "job-2"]);
     expect(result.current.turns[0].videoUrls).toHaveLength(3);
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("merges a multi-segment project into one video, replaces the segments and saves it", async () => {
+    finish(2);
+    const onSaved = vi.fn();
+    const { result } = renderHook(() => useVideoGeneration({ onSaved }));
+    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
+    const segmentUrls = result.current.turns[0].videoUrls;
+
+    await act(() => result.current.merge(result.current.turns[0]));
+
+    expect(renderVideoProject).toHaveBeenCalledWith({ projectId: "p1" });
+    expect(downloadVideo).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p1" }));
+    expect(onSaved).toHaveBeenCalledWith({
+      videoProjectId: "p1",
+      userScript: "晨光森林",
+      fullPrompt: "prompt-0\n\nprompt-1",
+    });
+    expect(URL.revokeObjectURL.mock.calls.map(([url]) => url)).toEqual(segmentUrls);
+    expect(result.current.turns[0]).toMatchObject({ mergeStatus: "merged", videoUrls: [expect.any(String)] });
+  });
+
+  it("keeps the segments and shows the error when merging fails", async () => {
+    finish(2);
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
+    waitForVideoRender.mockRejectedValue(new Error("影片合併逾時，請重新合併"));
+
+    await act(() => result.current.merge(result.current.turns[0]));
+
+    expect(downloadVideo).not.toHaveBeenCalled();
+    expect(result.current.turns[0]).toMatchObject({
+      mergeStatus: "failed",
+      mergeError: "影片合併逾時，請重新合併",
+      videoUrls: [expect.any(String), expect.any(String)],
+    });
   });
 });

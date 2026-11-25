@@ -2,7 +2,9 @@
 
 1. Encodes a clip that is red for one second, then blue, and asserts the
    extracted last frame is blue at the source resolution.
-2. Drives the HTTP routes with blob transfer replaced by local file copies.
+2. Concatenates matching clips by stream copy, and mismatched clips (size,
+   frame rate, one without sound) by re-encoding to the first clip's format.
+3. Drives the HTTP routes with blob transfer replaced by local file copies.
 """
 
 from __future__ import annotations
@@ -58,6 +60,52 @@ def check_last_frame(workdir: Path) -> Path:
     return clip
 
 
+def make_colored(path: Path, color: str, size: str, rate: int, sound: bool) -> Path:
+    audio = ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1"] if sound else []
+    codecs = ["-c:a", "aac", "-shortest"] if sound else []
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-f", "lavfi", "-i", f"color=c={color}:s={size}:r={rate}:d=1", *audio,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", *codecs, str(path),
+        ],
+        check=True,
+    )
+    return path
+
+
+def frame_rgb(path: Path, at: float) -> tuple[int, int, int]:
+    frame = path.with_name(f"{path.stem}-{at}.png")
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-ss", str(at), "-i", str(path), "-frames:v", "1", str(frame)],
+        check=True,
+    )
+    return center_rgb(frame)
+
+
+def check_concat(workdir: Path) -> None:
+    red = make_colored(workdir / "red.mp4", "red", "320x180", 24, True)
+    blue = make_colored(workdir / "blue.mp4", "blue", "320x180", 24, True)
+    copied = workdir / "copied.mp4"
+    result = media.concat([red, blue], copied)
+    assert result["copied"], result
+    assert (result["width"], result["height"]) == (320, 180), result
+    assert 1.9 <= result["durationSeconds"] <= 2.2, result
+    assert frame_rgb(copied, 0.5)[0] > 200, "first second is not red"
+    assert frame_rgb(copied, 1.5)[2] > 200, "second second is not blue"
+
+    square = make_colored(workdir / "square.mp4", "blue", "240x240", 30, False)
+    encoded = workdir / "encoded.mp4"
+    result = media.concat([red, square], encoded)
+    assert not result["copied"], result
+    assert (result["width"], result["height"]) == (320, 180), result
+    assert 1.9 <= result["durationSeconds"] <= 2.2, result
+    probed = media.probe(encoded)
+    assert probed["audio"] and probed["audio"][0] == "aac", probed
+    assert probed["fps"] == "24/1", probed
+    assert frame_rgb(encoded, 1.5)[2] > 200, "re-encoded second clip is not blue"
+
+
 def check_routes(clip: Path, workdir: Path) -> None:
     uploaded: dict[str, bytes] = {}
     blob.download = lambda url, target: shutil.copyfile(clip, target)
@@ -92,6 +140,22 @@ def check_routes(clip: Path, workdir: Path) -> None:
     assert body["width"] == 320 and body["height"] == 180, body
     assert uploaded[frame_url][:8] == b"\x89PNG\r\n\x1a\n"
     assert body["sizeBytes"] == len(uploaded[frame_url])
+
+    output_url = "https://demo.blob.core.windows.net/generated/render.mp4?sig=z"
+    too_few = client.post(
+        "/render", headers=headers, json={"segmentUrls": [video_url], "outputUrl": output_url}
+    )
+    assert too_few.status_code == 422, too_few.text
+    rendered = client.post(
+        "/render",
+        headers=headers,
+        json={"segmentUrls": [video_url, video_url], "outputUrl": output_url},
+    )
+    assert rendered.status_code == 200, rendered.text
+    body = rendered.json()
+    assert body["copied"] and body["contentType"] == "video/mp4", body
+    assert 3.9 <= body["durationSeconds"] <= 4.2, body
+    assert body["sizeBytes"] == len(uploaded[output_url])
     assert not any(Path(os.environ["VIDEO_RENDER_WORKDIR"]).iterdir()), "workdir not cleaned"
 
 
@@ -99,6 +163,7 @@ def main_smoke() -> int:
     workdir = Path(tempfile.mkdtemp())
     try:
         clip = check_last_frame(workdir)
+        check_concat(workdir)
         check_routes(clip, workdir)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

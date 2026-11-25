@@ -14,9 +14,11 @@ describe("image model API contracts", () => {
     }
   });
 
-  it("requires a successful job reference to create history", () => {
-    expect(paths["/api/history"].post.requestBody.content["application/json"].schema.required)
-      .toEqual(["jobId", "imageUrl"]);
+  it("requires an image job or a video project to create history", () => {
+    expect(paths["/api/history"].post.requestBody.content["application/json"].schema.oneOf).toEqual([
+      { required: ["jobId", "imageUrl"] },
+      { required: ["videoProjectId"] },
+    ]);
     expect(paths["/api/history"].post.responses).toHaveProperty("409");
   });
 

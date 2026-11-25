@@ -418,9 +418,27 @@ addOperation("/api/video-projects", "post", {
 
 addOperation("/api/video-projects/{id}", "get", {
   summary: "Get an owned video project with the status of each segment",
-  description: "status is failed when any segment failed, succeeded when all succeeded, processing once any segment started, otherwise queued. Download each succeeded segment from /api/video-jobs/{jobId}/video.",
+  description: "status is failed when any segment failed, succeeded when all succeeded, processing once any segment started, otherwise queued. Download each succeeded segment from /api/video-jobs/{jobId}/video. render is null for a single segment; for several segments it is the newest render ({ renderId, status, completedAt, error? }) or null before the first render request.",
   tags: ["Video"],
   parameters: pathParameters("id"),
+});
+
+addOperation("/api/video-projects/{id}/render", "post", {
+  summary: "Join a finished multi-segment project into one MP4",
+  description: "Requires every segment to have succeeded. Queues a render job that joins the segments in order; matching segments are stream-copied, others are re-encoded to the first segment's size and frame rate. While a render is queued, processing or succeeded, the call returns that render instead of queueing another; after a failure it queues a new one. Poll GET /api/video-projects/{id} for render.status.",
+  tags: ["Video"],
+  csrf: true,
+  parameters: pathParameters("id"),
+  successStatuses: [202],
+});
+
+addOperation("/api/video-projects/{id}/video", "get", {
+  summary: "Download the finished MP4 of an owned video project",
+  description: "The only segment of a single-segment project, or the succeeded render of a multi-segment project. Returns 409 until that video exists.",
+  tags: ["Video"],
+  parameters: pathParameters("id"),
+  successContentType: "video/mp4",
+  successSchema: { type: "string", format: "binary" },
 });
 
 addOperation("/api/video-jobs/{id}/video", "get", {
@@ -917,10 +935,11 @@ paths["/api/history"].post.requestBody = {
     "application/json": {
       schema: {
         type: "object",
-        required: ["jobId", "imageUrl"],
+        oneOf: [{ required: ["jobId", "imageUrl"] }, { required: ["videoProjectId"] }],
         properties: {
           jobId: { type: "string", format: "uuid", description: "Owned succeeded image job; the server derives the history model from this job, never current policy." },
-          imageUrl: { type: "string", description: "Compressed history preview." },
+          imageUrl: { type: "string", description: "Compressed history preview; required with jobId." },
+          videoProjectId: { type: "string", format: "uuid", description: "Owned video project with a finished video: its only segment succeeded, or its multi-segment render succeeded. The model comes from the project." },
           fullPrompt: { type: "string" },
           userScript: { type: "string" },
           stylePrompt: { type: "string" },
@@ -931,9 +950,9 @@ paths["/api/history"].post.requestBody = {
     },
   },
 };
-paths["/api/history"].post.responses[201] = response("Saved job-backed image history");
+paths["/api/history"].post.responses[201] = response("Saved image or video history");
 delete paths["/api/history"].post.responses[200];
-paths["/api/history"].post.responses[409] = response("The image job has not succeeded");
+paths["/api/history"].post.responses[409] = response("The image job has not succeeded, or the video project has no finished video");
 paths["/api/deck-jobs"].post.responses[202] = response("Queued deck job", {
   schema: {
     type: "object",

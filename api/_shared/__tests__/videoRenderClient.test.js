@@ -84,6 +84,29 @@ describe("videoRenderClient.extractLastFrame", () => {
     expect((await attempt(vi.fn().mockResolvedValue(jsonResponse(422, {})))).retryable).toBe(false);
   });
 
+  it("joins segments through /render with read URLs in order and a write URL for the output", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { contentType: "video/mp4", sizeBytes: 8192, durationSeconds: 20, copied: true })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await loadClient().concatSegments({
+      segmentBlobNames: ["a.mp4", "b.mp4"],
+      outputBlobName: "videos/projects/p1/r1-1.mp4",
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://render.example/render");
+    expect(JSON.parse(init.body)).toEqual({
+      segmentUrls: [
+        "https://acct.blob.core.windows.net/generated/a.mp4?sp=r",
+        "https://acct.blob.core.windows.net/generated/b.mp4?sp=r",
+      ],
+      outputUrl: "https://acct.blob.core.windows.net/generated/videos/projects/p1/r1-1.mp4?sp=cw",
+    });
+    expect(result).toMatchObject({ blobName: "videos/projects/p1/r1-1.mp4", sizeBytes: 8192, durationSeconds: 20 });
+  });
+
   it("refuses to run without service configuration", async () => {
     delete process.env.VIDEO_RENDER_SERVICE_KEY;
     const fetchMock = vi.fn();
