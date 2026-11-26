@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { ChevronDown, Download, RotateCcw, X } from "@/components/icons/lucideControls";
-import { Clapperboard, FileText, FileUp, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
+import { BookOpen, Clapperboard, FileText, FileUp, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
 import { AlertCircle, Check, Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,7 @@ import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
 import { SCRIPT_DOCUMENT_ACCEPT, durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
+import ScriptTemplateDialog from "./ScriptTemplateDialog";
 import SegmentedPlayer from "./SegmentedPlayer";
 import StoryboardBoard from "./storyboard/StoryboardBoard";
 import StoryboardSheet from "./storyboard/StoryboardSheet";
@@ -363,6 +364,7 @@ export default function VideoWorkspace({
   const [submitError, setSubmitError] = useState("");
   const [playerVideo, setPlayerVideo] = useState(null);
   const [boardVisible, setBoardVisible] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const fileRef = useRef(null);
   const endFileRef = useRef(null);
   const scriptFileRef = useRef(null);
@@ -819,6 +821,9 @@ export default function VideoWorkspace({
                         <DropdownMenuItem onSelect={() => scriptFileRef.current?.click()}>
                           <FileUp className="size-4" aria-hidden="true" />匯入腳本文件
                         </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setTemplateOpen(true)}>
+                          <BookOpen className="size-4" aria-hidden="true" />腳本範本與說明
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -922,6 +927,7 @@ export default function VideoWorkspace({
         {showBoard && isMobile && <StoryboardSheet {...boardProps} onClose={() => setBoardVisible(false)} />}
       </AnimatePresence>
       <VideoPlayer video={playerVideo} onClose={closePlayer} />
+      <ScriptTemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} />
     </div>
   );
 }

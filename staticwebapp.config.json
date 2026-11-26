@@ -7,6 +7,9 @@
   ],
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/api/*", "*.css", "*.js", "*.png", "*.jpg", "*.svg", "*.ico"]
+    "exclude": ["/assets/*", "/api/*", "/templates/*", "*.css", "*.js", "*.png", "*.jpg", "*.svg", "*.ico"]
+  },
+  "mimeTypes": {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   }
 }

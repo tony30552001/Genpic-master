@@ -404,9 +404,6 @@ const fromScript = async ({ identity, body, model }) => {
     tenantId: identity.tenantId,
     userId: identity.userId,
   });
-  if (document.kind === "text") {
-    return splitScript({ identity, body, model, script: document.script, characters });
-  }
   return splitDocumentScenes({ identity, body, model, document, characters });
 };
 

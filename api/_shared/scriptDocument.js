@@ -18,6 +18,9 @@ const HEADING_STYLE = /^(heading [1-9]|title)$/i;
 const HEADING_STYLE_ID = /^(Heading[1-9]|Title)$/i;
 const OFF_VALUES = new Set(["0", "false", "off"]);
 const TEXT_EXTENSIONS = new Set(["txt", "md"]);
+const MARKDOWN_HEADING = /^#{1,6}\s+(.+?)\s*#*\s*$/;
+const NO_HEADINGS =
+  "文件中找不到場景標題。Word 請用「標題」樣式或整段粗體且不超過 30 字的段落，Markdown 與 TXT 請用 # 開頭的標題標示每個場景";
 
 const invalid = (message) => new VideoModelError(message, "script_document_invalid", 422);
 
@@ -156,6 +159,26 @@ const assertZipSize = (zip) => {
   if (total > MAX_UNCOMPRESSED_BYTES) throw invalid("DOCX 解壓後超過 200MB，請縮小內嵌圖片後再匯入");
 };
 
+const joinLines = (lines) => lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+
+const assertSceneCount = (count) => {
+  if (!count) throw invalid(NO_HEADINGS);
+  if (count > MAX_SHOTS) throw invalid(`文件有 ${count} 個場景，最多 ${MAX_SHOTS} 個`);
+};
+
+const sceneText = (scene) => {
+  const text = joinLines(scene.lines);
+  if (!text) throw invalid(`場景「${scene.title}」沒有文字內容`);
+  return text;
+};
+
+const assertTotalLength = (scenes) => {
+  const totalLength = scenes.reduce((sum, scene) => sum + scene.text.length, 0);
+  if (totalLength > MAX_SCRIPT_SOURCE) {
+    throw invalid(`文件文字共 ${totalLength} 字，超過 ${MAX_SCRIPT_SOURCE} 字上限`);
+  }
+};
+
 const loadZip = async (buffer) => {
   try {
     return await JSZip.loadAsync(buffer);
@@ -189,18 +212,13 @@ const parseScriptDocx = async (buffer) => {
     target.lines.push(paragraph.text);
     target.imageIds.push(...paragraph.imageIds);
   }
-  if (!scenes.length) {
-    throw invalid("文件中找不到場景標題。請用 Word 的「標題」樣式，或整段粗體且不超過 30 字的段落標示每個場景");
-  }
-  if (scenes.length > MAX_SHOTS) throw invalid(`文件有 ${scenes.length} 個場景，最多 ${MAX_SHOTS} 個`);
+  assertSceneCount(scenes.length);
 
   // Labels follow first appearance across the document (Image1, Image2…), so
   // a script's @ImageN and a character's imageLabel name the same picture.
   const labels = new Map();
-  const joinLines = (lines) => lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   const result = scenes.map((scene) => {
-    const text = joinLines(scene.lines);
-    if (!text) throw invalid(`場景「${scene.title}」沒有文字內容`);
+    const text = sceneText(scene);
     const images = [...new Map(
       scene.imageIds
         .map((id) => imageTargets.get(id))
@@ -218,16 +236,32 @@ const parseScriptDocx = async (buffer) => {
   if (labels.size > MAX_DOCUMENT_IMAGES) {
     throw invalid(`文件內嵌 ${labels.size} 張圖片，最多 ${MAX_DOCUMENT_IMAGES} 張`);
   }
-  const totalLength = result.reduce((sum, scene) => sum + scene.text.length, 0);
-  if (totalLength > MAX_SCRIPT_SOURCE) {
-    throw invalid(`文件文字共 ${totalLength} 字，超過 ${MAX_SCRIPT_SOURCE} 字上限`);
-  }
+  assertTotalLength(result);
   return {
     zip,
     preface: joinLines(preface.lines),
     prefaceImageCount: new Set(preface.imageIds).size,
     scenes: result,
   };
+};
+
+/**
+ * Splits a Markdown or plain-text script into scenes. A scene starts at a
+ * line beginning with one to six "#"; text before the first heading is the
+ * preface. Text scripts carry no images.
+ */
+const parseScriptText = (text) => {
+  const preface = [];
+  const scenes = [];
+  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
+    const heading = line.match(MARKDOWN_HEADING);
+    if (heading) scenes.push({ title: heading[1], lines: [] });
+    else (scenes.at(-1)?.lines || preface).push(line);
+  }
+  assertSceneCount(scenes.length);
+  const result = scenes.map((scene) => ({ title: scene.title, text: sceneText(scene), images: [] }));
+  assertTotalLength(result);
+  return { zip: null, preface: joinLines(preface), prefaceImageCount: 0, scenes: result };
 };
 
 const encodeImage = async (buffer) => {
@@ -295,9 +329,9 @@ const importSceneImages = async ({ zip, scenes, tenantId, userId }) => {
 };
 
 /**
- * Reads an uploaded script document. TXT and MD return their text, which is
- * split like a pasted script; DOCX returns its parsed scenes, whose images
- * are stored later with importSceneImages.
+ * Reads an uploaded script document into scenes: DOCX through
+ * parseScriptDocx, TXT and MD through parseScriptText. Scene images are
+ * stored later with importSceneImages.
  */
 const readScriptDocument = async ({ uploadId, tenantId, userId }) => {
   const upload = await resolveOwnedDocumentUpload({ uploadId, tenantId, userId });
@@ -307,20 +341,14 @@ const readScriptDocument = async ({ uploadId, tenantId, userId }) => {
     throw new VideoModelError("腳本文件只支援 DOCX、TXT、MD", "script_document_unsupported", 415);
   }
   const buffer = await downloadUploadBuffer(upload);
-  if (TEXT_EXTENSIONS.has(extension)) {
-    const script = buffer.toString("utf8").replace(/^\uFEFF/, "").trim();
-    if (!script) throw invalid("腳本文件沒有文字內容");
-    if (script.length > MAX_SCRIPT_SOURCE) {
-      throw invalid(`腳本文件共 ${script.length} 字，超過 ${MAX_SCRIPT_SOURCE} 字上限`);
-    }
-    return { kind: "text", script };
-  }
-  return { kind: "scenes", ...(await parseScriptDocx(buffer)) };
+  if (TEXT_EXTENSIONS.has(extension)) return parseScriptText(buffer.toString("utf8"));
+  return parseScriptDocx(buffer);
 };
 
 module.exports = {
   MAX_DOCUMENT_IMAGES,
   importSceneImages,
   parseScriptDocx,
+  parseScriptText,
   readScriptDocument,
 };

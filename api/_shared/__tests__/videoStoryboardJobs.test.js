@@ -81,7 +81,6 @@ describe("storyboard agent jobs", () => {
   it("keeps a DOCX's scenes and attaches their images after the agent copies them", async () => {
     const zip = {};
     scriptDocument.readScriptDocument.mockResolvedValue({
-      kind: "scenes",
       zip,
       preface: "咖啡廣告",
       prefaceImageCount: 1,
@@ -115,7 +114,7 @@ describe("storyboard agent jobs", () => {
 
   it("does not store document images when the agent rewrites a scene", async () => {
     scriptDocument.readScriptDocument.mockResolvedValue({
-      kind: "scenes", zip: {}, preface: "", prefaceImageCount: 0,
+      zip: {}, preface: "", prefaceImageCount: 0,
       scenes: [{ title: "開店", text: "她推開門。", images: [] }],
     });
     llmRuntime.generateJson.mockResolvedValue({ storyboard: storyboard([scriptShot("s1", "她打開門。", 5)]) });

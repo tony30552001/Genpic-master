@@ -32,6 +32,11 @@ export const CAMERA_LABELS = Object.freeze({
 export const MAX_SHOTS = 30;
 export const MAX_SHOT_SECONDS = 15;
 export const MAX_PROJECT_SECONDS = 120;
+export const PROMPT_LIMIT = 2500;
+export const MAX_SCRIPT_SOURCE = 50000;
+export const MAX_SHOT_REFERENCES = 10;
+// Mirrors api/_shared/scriptDocument.js.
+export const MAX_SCRIPT_DOCUMENT_IMAGES = 40;
 const LONG_DURATIONS = [20, 30, 45, 60, 90, 120];
 
 /** Seconds one model request (one segment) can cover. */

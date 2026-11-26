@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { SCRIPT_EXAMPLE, SCRIPT_TEMPLATE_FILES, scriptExampleMarkdown } from "../../../src/lib/videoScriptTemplate.js";
 
 const require = createRequire(import.meta.url);
 const JSZip = require("jszip");
@@ -12,7 +15,7 @@ imageUploads.createReadyImageUpload = vi.fn();
 documentUploads.resolveOwnedDocumentUpload = vi.fn();
 uploadStorage.downloadUploadBuffer = vi.fn();
 
-const { importSceneImages, parseScriptDocx, readScriptDocument } = require("../scriptDocument");
+const { importSceneImages, parseScriptDocx, parseScriptText, readScriptDocument } = require("../scriptDocument");
 
 const OWNER = { tenantId: "tenant-1", userId: "user-1" };
 const NS =
@@ -87,6 +90,47 @@ describe("parseScriptDocx", () => {
   });
 });
 
+describe("parseScriptText", () => {
+  it("splits scenes on # headings and keeps the text before the first heading as the preface", () => {
+    expect(parseScriptText("\uFEFF全片設定：清潔員穿藍色制服。\n\n## 場景一：備品 ##\n推車停在門口。\n\n\n\n（5 秒）\n# 洗手\r\n濕洗手。")).toEqual({
+      zip: null,
+      preface: "全片設定：清潔員穿藍色制服。",
+      prefaceImageCount: 0,
+      scenes: [
+        { title: "場景一：備品", text: "推車停在門口。\n\n（5 秒）", images: [] },
+        { title: "洗手", text: "濕洗手。", images: [] },
+      ],
+    });
+  });
+
+  it("rejects text without headings, an empty scene and too many scenes", () => {
+    expect(() => parseScriptText("場景 1 她推開門。")).toThrow(expect.objectContaining({ status: 422, message: expect.stringMatching(/# 開頭的標題/) }));
+    expect(() => parseScriptText("## 開店\n## 吧台\n他微笑。")).toThrow(/開店/);
+    expect(() => parseScriptText(Array.from({ length: 31 }, (_, i) => `## ${i}\n動作`).join("\n"))).toThrow(/31 個場景/);
+  });
+});
+
+describe("published script templates", () => {
+  const publicFile = (path) => readFile(join(process.cwd(), "public", path));
+  const titles = SCRIPT_EXAMPLE.scenes.map((scene) => scene.title);
+
+  it("imports the example as DOCX and as Markdown with the same scenes", async () => {
+    const docx = await parseScriptDocx(await publicFile(SCRIPT_TEMPLATE_FILES.example));
+    const markdown = parseScriptText(scriptExampleMarkdown());
+    expect(docx.scenes.map((scene) => scene.title)).toEqual(titles);
+    expect(markdown.scenes.map((scene) => scene.title)).toEqual(titles);
+    expect(docx.preface).toBe(SCRIPT_EXAMPLE.preface);
+    expect(markdown.preface).toBe(SCRIPT_EXAMPLE.preface);
+    expect(docx.scenes.map((scene) => scene.text)).toEqual(markdown.scenes.map((scene) => scene.text));
+  });
+
+  it("imports the blank template as two scenes", async () => {
+    const template = await parseScriptDocx(await publicFile(SCRIPT_TEMPLATE_FILES.template));
+    expect(template.scenes.map((scene) => scene.title)).toEqual(["場景一：（場景標題）", "場景二：（場景標題）"]);
+    expect(template.preface).toMatch(/^影片腳本範本/);
+  });
+});
+
 describe("importSceneImages", () => {
   it("stores each distinct image once and skips vector images", async () => {
     const buffer = await buildDocx({
@@ -115,12 +159,12 @@ describe("importSceneImages", () => {
 });
 
 describe("readScriptDocument", () => {
-  it("reads TXT as script text and rejects unsupported or missing documents", async () => {
-    documentUploads.resolveOwnedDocumentUpload.mockResolvedValue({ original_file_name: "腳本.txt" });
-    uploadStorage.downloadUploadBuffer.mockResolvedValue(Buffer.from("\uFEFF場景 1 她推開門。\n"));
-    await expect(readScriptDocument({ uploadId: "id", ...OWNER })).resolves.toEqual({
-      kind: "text",
-      script: "場景 1 她推開門。",
+  it("splits MD by headings and rejects unsupported or missing documents", async () => {
+    documentUploads.resolveOwnedDocumentUpload.mockResolvedValue({ original_file_name: "腳本.md" });
+    uploadStorage.downloadUploadBuffer.mockResolvedValue(Buffer.from("## 開店\n她推開門。\n"));
+    await expect(readScriptDocument({ uploadId: "id", ...OWNER })).resolves.toMatchObject({
+      preface: "",
+      scenes: [{ title: "開店", text: "她推開門。", images: [] }],
     });
 
     documentUploads.resolveOwnedDocumentUpload.mockResolvedValue({ original_file_name: "腳本.pdf" });
