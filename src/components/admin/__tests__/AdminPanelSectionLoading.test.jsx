@@ -14,6 +14,7 @@ import {
   listAdminUserOptions,
   listAdminUsers,
   updateAdminUserStatus,
+  updateAdminUserVideoAccess,
 } from "../../../services/adminService";
 
 vi.mock("../../../services/adminService", () => ({
@@ -39,13 +40,14 @@ vi.mock("../../../services/adminService", () => ({
   updateAdminModelSettings: vi.fn(),
   updateAdminUserRole: vi.fn(),
   updateAdminUserStatus: vi.fn(),
+  updateAdminUserVideoAccess: vi.fn(),
 }));
 
 const { refreshProfile } = vi.hoisted(() => ({ refreshProfile: vi.fn() }));
 vi.mock("../../../hooks/useAuth", () => ({
   default: () => ({
     user: { displayName: "管理員", email: "admin@example.com" },
-    profile: { displayName: "管理員", role: "admin" },
+    profile: { id: "admin-1", displayName: "管理員", role: "admin" },
     handleLogout: vi.fn(),
     refreshProfile,
   }),
@@ -131,6 +133,25 @@ describe("AdminPanel section loading", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "確認停用" }));
     await screen.findByText("Alice 已停用。");
     expect(updateAdminUserStatus).toHaveBeenCalledWith("user-1", false);
+  });
+
+  it("reloads the signed-in profile only when changing the admin's own video access", async () => {
+    const self = { id: "admin-1", email: "admin@example.com", displayName: "管理員", role: "admin", isActive: true, videoEnabled: true, videoUnlimited: false };
+    listAdminUsers.mockResolvedValue({
+      items: [self, { ...self, id: "user-1", email: "alice@example.com", displayName: "Alice", role: "viewer" }],
+      pagination: { page: 1, pageSize: 10, total: 2, totalPages: 1 },
+    });
+    updateAdminUserVideoAccess.mockResolvedValue({ videoEnabled: true, videoUnlimited: true });
+    renderPanel();
+    await screen.findByText("alice@example.com");
+
+    fireEvent.click(screen.getByRole("switch", { name: "Alice 影片不限額" }));
+    await screen.findByText("Alice 的影片額度已改為不限額。");
+    expect(refreshProfile).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("switch", { name: "管理員 影片不限額" }));
+    await waitFor(() => expect(refreshProfile).toHaveBeenCalledTimes(1));
+    expect(updateAdminUserVideoAccess).toHaveBeenLastCalledWith("admin-1", { videoUnlimited: true });
   });
 
   it("loads a section once when it is first opened", async () => {

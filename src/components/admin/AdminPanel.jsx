@@ -315,7 +315,7 @@ const AdminHeader = ({ user, onBack, onLogout, children }) => (
 
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const { user, profile, handleLogout } = useAuth();
+  const { user, profile, handleLogout, refreshProfile } = useAuth();
   const [activeSection, setActiveSection] = useState("users");
   const [users, setUsers] = useState([]);
   const [historyItems, setHistoryItems] = useState([]);
@@ -623,6 +623,7 @@ export default function AdminPanel() {
           ? `${item.displayName} 的影片額度已${updated.videoUnlimited ? "改為不限額" : "恢復每日上限"}。`
           : `${item.displayName} 的影片創作已${updated.videoEnabled ? "開放" : "關閉"}。`
       );
+      if (item.id === profile?.id) await refreshProfile();
     } catch (error) {
       setErrorMessage(error.message || "影片權限更新失敗");
     }
