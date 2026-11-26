@@ -31,6 +31,7 @@ export {
   MoveHorizontal,
   Paintbrush,
   Pencil,
+  Play,
   Plus,
   Redo2,
   RotateCcw,

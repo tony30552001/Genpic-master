@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { ChevronDown, Download, RotateCcw, SquarePen, Trash2, X } from "@/components/icons/lucideControls";
+import { ChevronDown, Download, Play, RotateCcw, SquarePen, Trash2, X } from "@/components/icons/lucideControls";
 import { BookOpen, Clapperboard, FileText, FileUp, History, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
 import { AlertCircle, Check, Loader2 } from "@/components/icons/lucideStatus";
 import {
@@ -111,7 +111,7 @@ const sessionSnapshot = ({ messages, board, pendingJob, turns, settings, brief }
         reopened: board.reopened,
       },
       pendingAgent: pendingJob,
-      turns: turns.map(({ videoUrls: _videoUrls, ...turn }) => turn),
+      turns: turns.map(({ videoUrls: _videoUrls, segmentUrls: _segmentUrls, ...turn }) => turn),
       settings: { ...settings, source: savedSource(settings.source), endSource: savedSource(settings.endSource) },
       brief,
     },
@@ -172,6 +172,20 @@ function SegmentProgress({ segments }) {
 }
 
 const turnTitle = (turn) => turn.storyboard?.title || turn.brief;
+
+// Downloaded segments from the first one on, so playback order and the
+// "第 N 段" labels stay correct while later segments still run.
+const readySegmentUrls = (turn) => {
+  const ready = [];
+  for (const segment of turn.segments || []) {
+    const url = segment.status === "succeeded" && turn.segmentUrls?.[segment.jobId];
+    if (!url) break;
+    ready.push(url);
+  }
+  return ready;
+};
+
+const playableUrls = (turn) => turn.videoUrls || readySegmentUrls(turn);
 
 const summaryOf = (storyboard) => ({
   title: storyboard.title,
@@ -294,6 +308,8 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
   const segmentCount = turn.segments?.length || 0;
   const retryable = turn.status === "failed" && turn.projectId && turn.segments?.some((segment) => segment.status === "failed");
   const videoUrls = turn.videoUrls || [];
+  const playable = playableUrls(turn);
+  const partial = !turn.videoUrls && playable.length > 0;
   return (
     <article
       className={cn(
@@ -326,6 +342,17 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
             className="image-generation-glow image-generation-glow-secondary pointer-events-none absolute -inset-[18%]"
             aria-hidden="true"
           />
+          {partial && (
+            <video
+              key={playable.at(-1)}
+              src={playable.at(-1)}
+              muted
+              playsInline
+              preload="metadata"
+              className="absolute inset-0 size-full bg-black object-contain animate-in fade-in duration-(--motion-enter) ease-emphasized"
+              aria-hidden="true"
+            />
+          )}
           <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-background/90 via-background/65 to-transparent px-3 pb-2.5 pt-10">
             {segmentCount > 1 && <SegmentProgress segments={turn.segments} />}
             <div className="flex items-center justify-between gap-3">
@@ -337,13 +364,24 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
               <span className="truncate">{statusLabel(turn)}</span>
               <ElapsedTime />
             </span>
-            <button
-              type="button"
-              className="shrink-0 text-xs text-muted-foreground underline-offset-4 hover:underline"
-              onClick={() => onStop(turn.clientId)}
-            >
-              停止等待
-            </button>
+            <span className="flex shrink-0 items-center gap-3">
+              {partial && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => onOpen({ videoUrls: playable })}
+                >
+                  <Play className="size-3" aria-hidden="true" />預覽 {playable.length} 段
+                </button>
+              )}
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                onClick={() => onStop(turn.clientId)}
+              >
+                停止等待
+              </button>
+            </span>
             </div>
           </div>
         </div>
@@ -367,17 +405,17 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
         </div>
       )}
 
-      {turn.status === "succeeded" && videoUrls.length > 0 && (
+      {!busy && playable.length > 0 && (
         <button
           type="button"
           className="group relative block w-full overflow-hidden rounded-xl bg-black text-left animate-in fade-in duration-(--motion-enter) ease-emphasized focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => onOpen({ videoUrls })}
-          aria-label={videoUrls.length > 1 ? `依序播放 ${videoUrls.length} 段影片` : "播放生成影片"}
+          onClick={() => onOpen({ videoUrls: playable })}
+          aria-label={playable.length > 1 ? `依序播放 ${playable.length} 段影片` : "播放生成影片"}
         >
-          <video src={videoUrls[0]} muted playsInline preload="metadata" className="aspect-video w-full object-contain" />
-          {videoUrls.length > 1 && (
+          <video src={playable[0]} muted playsInline preload="metadata" className="aspect-video w-full object-contain" />
+          {(playable.length > 1 || partial) && (
             <span className="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
-              {videoUrls.length} 段
+              {partial ? `已完成 ${playable.length}/${segmentCount} 段` : `${playable.length} 段`}
             </span>
           )}
         </button>
@@ -721,8 +759,9 @@ export default function VideoWorkspace({
   };
 
   const activeTurn = videos.turns.find((turn) => turn.clientId === videos.activeTurnId)
-    || [...videos.turns].reverse().find((turn) => turn.videoUrls)
+    || [...videos.turns].reverse().find((turn) => playableUrls(turn).length > 0)
     || null;
+  const activeUrls = activeTurn ? playableUrls(activeTurn) : [];
   const showBoard = boardVisible && Boolean(board || drafting);
   const durationOptions = durationChoices(model).map((value) => ({ value: String(value), label: `${value} 秒` }));
   const settingsLabel = [
@@ -1057,10 +1096,18 @@ export default function VideoWorkspace({
       <section className="relative hidden min-h-0 overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px] lg:flex" aria-label="影片畫布">
         {showBoard && !isMobile ? (
           <StoryboardBoard {...boardProps} onClose={() => setBoardVisible(false)} />
-        ) : activeTurn?.videoUrls ? (
+        ) : activeUrls.length > 0 ? (
           <div className="flex min-h-0 w-full flex-col animate-in fade-in duration-(--motion-enter) ease-emphasized">
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card/90 px-4 backdrop-blur-md">
               <p className="min-w-0 flex-1 truncate text-sm font-semibold">{turnTitle(activeTurn)}</p>
+              {!activeTurn.videoUrls && (
+                <span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-muted-foreground" role="status">
+                  {activeTurn.status !== "failed" && (
+                    <Loader2 className="size-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+                  )}
+                  已完成 {activeUrls.length}/{activeTurn.segments.length} 段
+                </span>
+              )}
               {board && !boardVisible && (
                 <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setBoardVisible(true)}>
                   查看分鏡
@@ -1071,13 +1118,13 @@ export default function VideoWorkspace({
                   <Clapperboard className="size-3.5" aria-hidden="true" />修改分鏡
                 </Button>
               )}
-              {activeTurn.videoUrls.length === 1 && (
+              {activeTurn.videoUrls?.length === 1 && (
                 <a href={activeTurn.videoUrls[0]} download={`pixora-video-${activeTurn.projectId}.mp4`} className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="下載影片">
                   <Download className="size-4" aria-hidden="true" />
                 </a>
               )}
             </div>
-            <SegmentedPlayer key={activeTurn.videoUrls[0]} urls={activeTurn.videoUrls} className="min-h-0 flex-1" />
+            <SegmentedPlayer key={activeUrls[0]} urls={activeUrls} className="min-h-0 flex-1" />
           </div>
         ) : videos.turns.at(-1)?.status === "failed" ? (
           <div className="m-auto flex max-w-sm flex-col items-center gap-2 px-6 text-center">

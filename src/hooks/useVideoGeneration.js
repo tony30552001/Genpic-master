@@ -53,7 +53,9 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
 
   const updateTurn = useCallback((clientId, patch) => {
     setTurns((current) =>
-      current.map((turn) => (turn.clientId === clientId ? { ...turn, ...patch } : turn))
+      current.map((turn) => (
+        turn.clientId === clientId ? { ...turn, ...(typeof patch === "function" ? patch(turn) : patch) } : turn
+      ))
     );
   }, []);
 
@@ -70,18 +72,34 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
     });
   }, []);
 
-  // Waits for every segment, then downloads them. A single-segment turn is
-  // saved to history here; a multi-segment one when it is merged.
-  const follow = useCallback(async ({ clientId, projectId, brief, storyboard, saved = false, signal }) => {
+  // Downloads each segment as soon as it succeeds into `segmentUrls` (keyed by
+  // job id) so it can be previewed while the rest still run, then sets
+  // `videoUrls` once every segment is ready. A single-segment turn is saved to
+  // history here; a multi-segment one when it is merged.
+  const follow = useCallback(async ({ clientId, projectId, brief, storyboard, saved = false, segmentUrls = {}, signal }) => {
+    const downloads = new Map(Object.entries(segmentUrls).map(([jobId, url]) => [jobId, Promise.resolve(url)]));
+    const fetchSegment = (segment) => {
+      if (!downloads.has(segment.jobId)) {
+        downloads.set(segment.jobId, downloadVideoSegment({ jobId: segment.jobId, signal }).then((blob) => {
+          const url = objectUrl(blob);
+          updateTurn(clientId, (turn) => ({ segmentUrls: { ...turn.segmentUrls, [segment.jobId]: url } }));
+          return url;
+        }));
+      }
+      return downloads.get(segment.jobId);
+    };
     const completed = await waitForVideoProject({
       projectId,
       signal,
-      onProgress: (project) => updateTurn(clientId, { status: project.status, segments: project.segments }),
+      onProgress: (project) => {
+        updateTurn(clientId, { status: project.status, segments: project.segments });
+        // Preview failures resurface when the finished turn awaits the same download.
+        project.segments
+          .filter((segment) => segment.status === "succeeded")
+          .forEach((segment) => fetchSegment(segment).catch(() => {}));
+      },
     });
-    const videoUrls = [];
-    for (const segment of completed.segments) {
-      videoUrls.push(objectUrl(await downloadVideoSegment({ jobId: segment.jobId, signal })));
-    }
+    const videoUrls = await Promise.all(completed.segments.map(fetchSegment));
     updateTurn(clientId, { status: "succeeded", segments: completed.segments, videoUrls });
     if (completed.segments.length === 1 && !saved) {
       await onSavedRef.current?.({
@@ -171,6 +189,7 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
         brief: turn.brief,
         storyboard: turn.storyboard,
         saved: turn.saved,
+        segmentUrls: turn.segmentUrls,
         signal: controller.signal,
       });
     } catch (error) {
@@ -223,8 +242,8 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
           fullPrompt: turn.segments.map((segment) => segment.prompt).join("\n\n"),
         });
       }
-      releaseUrls(turn.videoUrls || []);
-      updateTurn(turn.clientId, { mergeStatus: "merged", saved: true, videoUrls: [url] });
+      releaseUrls(Object.values(turn.segmentUrls || {}));
+      updateTurn(turn.clientId, { mergeStatus: "merged", saved: true, videoUrls: [url], segmentUrls: undefined });
     } catch (error) {
       if (url) releaseUrls([url]);
       if (error?.name !== "AbortError") {

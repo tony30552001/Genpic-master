@@ -75,6 +75,34 @@ describe("useVideoGeneration", () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it("makes each segment playable as soon as it succeeds and reuses it when the project finishes", async () => {
+    const segments = [segment(0), { ...segment(1), status: "processing" }];
+    createVideoProject.mockResolvedValue({ projectId: "p1", segments });
+    let finishProject;
+    waitForVideoProject.mockImplementation(({ onProgress }) => {
+      onProgress({ projectId: "p1", status: "processing", segments });
+      return new Promise((resolve) => { finishProject = resolve; });
+    });
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+
+    let submitted;
+    await act(async () => {
+      submitted = result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" });
+    });
+    expect(result.current.turns[0]).toMatchObject({ status: "processing", segmentUrls: { "job-0": expect.any(String) } });
+    expect(result.current.turns[0].videoUrls).toBeUndefined();
+
+    await act(async () => {
+      finishProject({ projectId: "p1", status: "succeeded", segments: [segment(0), segment(1)] });
+      await submitted;
+    });
+    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["job-0", "job-1"]);
+    expect(result.current.turns[0].videoUrls).toEqual([
+      result.current.turns[0].segmentUrls["job-0"],
+      result.current.turns[0].segmentUrls["job-1"],
+    ]);
+  });
+
   it("merges a multi-segment project into one video, replaces the segments and saves it", async () => {
     finish(2);
     const onSaved = vi.fn();
