@@ -9,6 +9,7 @@ const {
   getVideoProjectForUser,
   requestVideoRender,
   resolveProjectVideo,
+  retryVideoProject,
 } = require("../_shared/videoProjects");
 
 const UUID_PATTERN =
@@ -72,6 +73,15 @@ module.exports = async function (context, req) {
         userId: identity.userId,
       });
       context.res = ok(render, 202, req);
+      return;
+    }
+    if (method === "POST" && action === "retry") {
+      const project = await retryVideoProject({
+        projectId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+      });
+      context.res = ok(project, 202, req);
       return;
     }
     if (method === "GET" && action === "video") {

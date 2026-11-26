@@ -5,6 +5,7 @@ import {
   downloadVideoSegment,
   draftVideoStoryboard,
   renderVideoProject,
+  retryVideoProject,
   waitForVideoProject,
   waitForVideoRender,
 } from "../services/aiService";
@@ -47,6 +48,38 @@ export default function useVideoGeneration({ onSaved }) {
       urls.current.delete(url);
     });
   }, []);
+
+  // Waits for every segment, then downloads them. A single-segment turn is
+  // saved to history here; a multi-segment one when it is merged.
+  const follow = useCallback(async ({ clientId, projectId, brief, storyboard, signal }) => {
+    const completed = await waitForVideoProject({
+      projectId,
+      signal,
+      onProgress: (project) => updateTurn(clientId, { status: project.status, segments: project.segments }),
+    });
+    const videoUrls = [];
+    for (const segment of completed.segments) {
+      videoUrls.push(objectUrl(await downloadVideoSegment({ jobId: segment.jobId, signal })));
+    }
+    updateTurn(clientId, { status: "succeeded", segments: completed.segments, videoUrls });
+    if (completed.segments.length === 1) {
+      await onSaved?.({
+        videoProjectId: projectId,
+        userScript: brief || storyboard.title,
+        fullPrompt: completed.segments[0].prompt,
+      });
+    }
+    return { projectId, videoUrls };
+  }, [objectUrl, onSaved, updateTurn]);
+
+  const fail = useCallback((clientId, error) => {
+    if (error?.name !== "AbortError") {
+      updateTurn(clientId, {
+        status: "failed",
+        error: error.message || "影片生成失敗，請稍後重試",
+      });
+    }
+  }, [updateTurn]);
 
   const submit = useCallback(async ({
     storyboard: confirmed = null,
@@ -91,36 +124,38 @@ export default function useVideoGeneration({ onSaved }) {
       const admission = await createVideoProject({ modelKey, storyboard, ...options });
       const { projectId } = admission;
       updateTurn(clientId, { projectId, segments: admission.segments });
-      const completed = await waitForVideoProject({
-        projectId,
-        signal: controller.signal,
-        onProgress: (project) => updateTurn(clientId, { status: project.status, segments: project.segments }),
-      });
-      const videoUrls = [];
-      for (const segment of completed.segments) {
-        videoUrls.push(objectUrl(await downloadVideoSegment({ jobId: segment.jobId, signal: controller.signal })));
-      }
-      updateTurn(clientId, { status: "succeeded", segments: completed.segments, videoUrls });
-      if (completed.segments.length === 1) {
-        await onSaved?.({
-          videoProjectId: projectId,
-          userScript: brief || storyboard.title,
-          fullPrompt: completed.segments[0].prompt,
-        });
-      }
-      return { projectId, videoUrls };
+      return await follow({ clientId, projectId, brief, storyboard, signal: controller.signal });
     } catch (error) {
-      if (error?.name !== "AbortError") {
-        updateTurn(clientId, {
-          status: "failed",
-          error: error.message || "影片生成失敗，請稍後重試",
-        });
-      }
+      fail(clientId, error);
       throw error;
     } finally {
       controllers.current.delete(clientId);
     }
-  }, [objectUrl, onSaved, updateTurn]);
+  }, [fail, follow, updateTurn]);
+
+  // Requeues the failed segments of a turn's project and waits again;
+  // segments that already succeeded are not generated again.
+  const retryFailed = useCallback(async (turn) => {
+    const { clientId } = turn;
+    const controller = new AbortController();
+    controllers.current.set(clientId, controller);
+    updateTurn(clientId, { status: "queued", error: null });
+    try {
+      const project = await retryVideoProject({ projectId: turn.projectId });
+      updateTurn(clientId, { status: project.status, segments: project.segments });
+      await follow({
+        clientId,
+        projectId: turn.projectId,
+        brief: turn.brief,
+        storyboard: turn.storyboard,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      fail(clientId, error);
+    } finally {
+      controllers.current.delete(clientId);
+    }
+  }, [fail, follow, updateTurn]);
 
   // Joins a finished multi-segment turn into one video, replaces the segment
   // playback with it and saves it to history. Asking again after a failure
@@ -165,6 +200,7 @@ export default function useVideoGeneration({ onSaved }) {
     activeTurnId,
     setActiveTurnId,
     submit,
+    retryFailed,
     merge,
     stopWaiting,
   };

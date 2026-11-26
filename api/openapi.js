@@ -440,6 +440,15 @@ addOperation("/api/video-projects/{id}/render", "post", {
   successStatuses: [202],
 });
 
+addOperation("/api/video-projects/{id}/retry", "post", {
+  summary: "Requeue the failed segments of an owned video project",
+  description: "Every failed segment is queued again as new work and counts against today's quota; succeeded segments are kept and a chained segment still starts from the previous segment's last frame. Returns the project like GET /api/video-projects/{id}. 409 nothing_to_retry when no segment failed.",
+  tags: ["Video"],
+  csrf: true,
+  parameters: pathParameters("id"),
+  successStatuses: [202],
+});
+
 addOperation("/api/video-projects/{id}/video", "get", {
   summary: "Download the finished MP4 of an owned video project",
   description: "The only segment of a single-segment project, or the succeeded render of a multi-segment project. Returns 409 until that video exists.",

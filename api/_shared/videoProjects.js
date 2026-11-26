@@ -273,6 +273,54 @@ const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
 };
 
 /**
+ * Requeues every failed segment of a project as new work: the provider
+ * request, result and error are cleared and the job counts against today's
+ * quota again. Succeeded segments are kept, and a chained segment still
+ * waits for the one before it.
+ */
+const retryVideoProject = async ({ projectId, tenantId, userId }) => {
+  await withVideoModelTransaction(tenantId, async (client) => {
+    const project = await client.query(
+      `SELECT model_key FROM video_projects
+       WHERE id = $1 AND tenant_id = $2 AND user_id = $3
+       FOR UPDATE`,
+      [projectId, tenantId, userId]
+    );
+    if (!project.rows[0]) throw new VideoModelError("找不到影片專案", "not_found", 404);
+    const unlimited = await assertEnabledUser({ client, tenantId, userId });
+    const settings = await ensureVideoSettings(tenantId, client);
+    if (!settings.allowedModels.includes(project.rows[0].model_key)) {
+      throw new VideoModelError("此影片模型尚未開放給使用者", "video_model_not_allowed", 403);
+    }
+    const failed = await client.query(
+      `SELECT id FROM video_generation_jobs
+       WHERE project_id = $1 AND status = 'failed'
+       FOR UPDATE`,
+      [projectId]
+    );
+    if (!failed.rows.length) {
+      throw new VideoModelError("沒有需要重試的段落", "nothing_to_retry", 409);
+    }
+    if (!unlimited) {
+      await assertQuota({ client, tenantId, userId, settings, segmentCount: failed.rows.length });
+    }
+    await client.query(
+      `UPDATE video_generation_jobs
+       SET status = 'queued', phase = 'queued', attempts = 0,
+           lock_version = lock_version + 1, locked_at = NULL,
+           provider_request_id = NULL, submitted_at = NULL, next_poll_at = NULL,
+           available_at = now(), created_at = now(), started_at = NULL, completed_at = NULL,
+           result_blob_name = NULL, result_mime_type = NULL, result_size_bytes = NULL,
+           result_duration_seconds = NULL, last_frame_blob_name = NULL,
+           error_code = NULL, error_message = NULL, updated_at = now()
+       WHERE project_id = $1 AND status = 'failed'`,
+      [projectId]
+    );
+  });
+  return getVideoProjectForUser({ projectId, tenantId, userId });
+};
+
+/**
  * Queues the join of a finished multi-segment project into one MP4. Asking
  * again while a render is queued, running or done returns that render.
  */
@@ -322,4 +370,5 @@ module.exports = {
   projectStatus,
   requestVideoRender,
   resolveProjectVideo,
+  retryVideoProject,
 };

@@ -329,6 +329,10 @@ export const waitForVideoProject = async ({ projectId, signal, onProgress, pollI
   }
 };
 
+// Requeues the project's failed segments; succeeded segments are kept.
+export const retryVideoProject = async ({ projectId }) =>
+  apiPost(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/retry`, {});
+
 export const renderVideoProject = async ({ projectId }) =>
   apiPost(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/render`, {});
 

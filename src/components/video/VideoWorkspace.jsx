@@ -75,6 +75,12 @@ const statusLabel = (turn) => {
   return segments.length > 1 && current ? `第 ${current.index + 1}/${segments.length} 段 · ${label}` : label;
 };
 
+const retryLabel = (segments) => {
+  const failed = segments.filter((segment) => segment.status === "failed");
+  if (segments.length === 1) return "重試";
+  return failed.length === 1 ? `重試第 ${failed[0].index + 1} 段` : `重試失敗的 ${failed.length} 段`;
+};
+
 const SEGMENT_TONES = {
   succeeded: "bg-primary",
   processing: "bg-primary/45",
@@ -217,9 +223,10 @@ function MergeBar({ turn, onMerge }) {
   );
 }
 
-function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, onEditStoryboard, onMerge }) {
+function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onContinue, onEditStoryboard, onMerge }) {
   const busy = !["succeeded", "failed"].includes(turn.status);
   const segmentCount = turn.segments?.length || 0;
+  const retryable = turn.status === "failed" && turn.projectId && turn.segments?.some((segment) => segment.status === "failed");
   const videoUrls = turn.videoUrls || [];
   return (
     <article
@@ -277,10 +284,21 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onStop, onContinue, o
       )}
 
       {turn.status === "failed" && (
-        <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive" role="alert">
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive" role="alert">
           <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          {turn.error}
-        </p>
+          <p className="min-w-0 flex-1">{turn.error}</p>
+          {retryable && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="-my-1 h-7 shrink-0 gap-1.5 whitespace-nowrap border-destructive/30 bg-card text-xs text-foreground press-feedback"
+              onClick={() => onRetry(turn)}
+            >
+              <RotateCcw className="size-3.5" aria-hidden="true" />{retryLabel(turn.segments)}
+            </Button>
+          )}
+        </div>
       )}
 
       {turn.status === "succeeded" && videoUrls.length > 0 && (
@@ -430,6 +448,11 @@ export default function VideoWorkspace({
     } catch (error) {
       if (error?.name !== "AbortError") setSubmitError(error.message || "影片送出失敗");
     }
+  };
+
+  const retryTurn = (turn) => {
+    setSubmitError("");
+    void videos.retryFailed(turn);
   };
 
   const attachment = source ? { previewUrl: source.previewUrl, name: source.name } : null;
@@ -627,6 +650,7 @@ export default function VideoWorkspace({
                     isActive={item.turn.clientId === videos.activeTurnId}
                     onOpen={setPlayerVideo}
                     onRegenerate={regenerate}
+                    onRetry={retryTurn}
                     onStop={videos.stopWaiting}
                     onContinue={(turn) => void continueFromVideo(turn)}
                     onEditStoryboard={editFromTurn}

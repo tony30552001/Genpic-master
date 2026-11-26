@@ -6,6 +6,7 @@ import {
   downloadVideo,
   downloadVideoSegment,
   renderVideoProject,
+  retryVideoProject,
   waitForVideoProject,
   waitForVideoRender,
 } from "../../services/aiService";
@@ -16,6 +17,7 @@ vi.mock("../../services/aiService", () => ({
   downloadVideoSegment: vi.fn(),
   draftVideoStoryboard: vi.fn(),
   renderVideoProject: vi.fn(),
+  retryVideoProject: vi.fn(),
   waitForVideoProject: vi.fn(),
   waitForVideoRender: vi.fn(),
 }));
@@ -91,6 +93,36 @@ describe("useVideoGeneration", () => {
     });
     expect(URL.revokeObjectURL.mock.calls.map(([url]) => url)).toEqual(segmentUrls);
     expect(result.current.turns[0]).toMatchObject({ mergeStatus: "merged", videoUrls: [expect.any(String)] });
+  });
+
+  it("retries only the failed segments of a failed turn and then finishes it", async () => {
+    const segments = [segment(0), segment(1)];
+    createVideoProject.mockResolvedValue({ projectId: "p1", segments });
+    waitForVideoProject.mockRejectedValueOnce(new Error("第 2 段：內容未通過安全檢查"));
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+    await act(async () => {
+      await result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }).catch(() => {});
+    });
+    expect(result.current.turns[0]).toMatchObject({ status: "failed", error: "第 2 段：內容未通過安全檢查" });
+
+    retryVideoProject.mockResolvedValue({ projectId: "p1", status: "processing", segments });
+    waitForVideoProject.mockResolvedValue({ projectId: "p1", status: "succeeded", segments });
+    await act(() => result.current.retryFailed(result.current.turns[0]));
+
+    expect(retryVideoProject).toHaveBeenCalledWith({ projectId: "p1" });
+    expect(createVideoProject).toHaveBeenCalledTimes(1);
+    expect(result.current.turns[0]).toMatchObject({ status: "succeeded", error: null, videoUrls: [expect.any(String), expect.any(String)] });
+  });
+
+  it("shows the error when the retry is rejected", async () => {
+    finish(1);
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
+    retryVideoProject.mockRejectedValue(new Error("今日影片額度已用完，請明天再試"));
+
+    await act(() => result.current.retryFailed(result.current.turns[0]));
+
+    expect(result.current.turns[0]).toMatchObject({ status: "failed", error: "今日影片額度已用完，請明天再試" });
   });
 
   it("keeps the segments and shows the error when merging fails", async () => {
