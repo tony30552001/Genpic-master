@@ -46,6 +46,28 @@ describe("Foundry fal client", () => {
       .rejects.toMatchObject({ code: "provider_rate_limited", retryable: true, retryAfterMs: 17000 });
   });
 
+  it("classifies fal model errors from detail types", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ detail: [{ loc: ["body"], msg: "flagged", type: "content_policy_violation" }] }),
+        { status: 422 }
+      ))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ detail: [{ loc: ["body", "image_url"], msg: "too small", type: "image_too_small" }] }),
+        { status: 422 }
+      )));
+    await expect(submitVideo({ config, path: "route", body: {} })).rejects.toMatchObject({
+      code: "content_policy_blocked",
+      retryable: false,
+      providerStatus: 422,
+      providerErrorType: "content_policy_violation",
+    });
+    await expect(submitVideo({ config, path: "route", body: {} })).rejects.toMatchObject({
+      code: "video_validation_failed",
+      providerErrorType: "image_too_small",
+    });
+  });
+
   it("never sends the API key to an off-origin asset URL", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

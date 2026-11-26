@@ -220,13 +220,14 @@ const markVideoFailure = async ({ job, error }) => {
       userFacing ? error.message : "影片生成失敗，請稍後重試",
     ],
   });
-  if (!userFacing) {
-    console.error("[video-jobs] Job failed:", {
-      jobId: job.id,
-      name: error?.name,
-      code: error?.code,
-    });
-  }
+  console.error("[video-jobs] Job failed:", {
+    jobId: job.id,
+    phase: job.phase,
+    name: error?.name,
+    code: error?.code,
+    providerStatus: error?.providerStatus,
+    providerErrorType: error?.providerErrorType,
+  });
 };
 
 const getRemainingQuota = async ({ tenantId, userId }) => {

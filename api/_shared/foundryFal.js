@@ -18,27 +18,36 @@ const readError = async (response) => {
   } catch {
     // Provider bodies are intentionally not surfaced to users or logs.
   }
-  const errorType = payload?.error_type || payload?.error?.code || null;
+  // Foundry reports `error_type`; fal model errors use `detail: [{ type }]`.
+  const modelErrors = Array.isArray(payload?.detail) ? payload.detail : [];
+  const errorType =
+    payload?.error_type || payload?.error?.code || modelErrors.find((item) => item?.type)?.type || null;
   const retryAfterMs = Number(response.headers.get("retry-after-ms")) || 0;
   const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
-  if (errorType === "schema_validation_error") {
-    return new FoundryFalError("影片參數未通過模型驗證，請調整後重試", "video_validation_failed", 400);
-  }
-  if (errorType === "wrong_deployment_name") {
-    return new FoundryFalError("影片模型部署不存在，請聯絡管理員", "video_model_not_configured", 503);
-  }
-  if (response.status === 429 || errorType === "rate_limit_exceeded") {
-    return new FoundryFalError("影片服務目前忙碌，系統會自動重試", "provider_rate_limited", 429, {
-      retryable: true,
-      retryAfterMs,
+  const classify = () => {
+    if (errorType === "content_policy_violation" || errorType === "safety_check_error") {
+      return new FoundryFalError("內容未通過安全檢查，請調整描述或參考畫面後重試", "content_policy_blocked", 422);
+    }
+    if (errorType === "schema_validation_error" || (response.status === 422 && modelErrors.length)) {
+      return new FoundryFalError("影片參數未通過模型驗證，請調整後重試", "video_validation_failed", 400);
+    }
+    if (errorType === "wrong_deployment_name") {
+      return new FoundryFalError("影片模型部署不存在，請聯絡管理員", "video_model_not_configured", 503);
+    }
+    if (response.status === 429 || errorType === "rate_limit_exceeded") {
+      return new FoundryFalError("影片服務目前忙碌，系統會自動重試", "provider_rate_limited", 429, {
+        retryable: true,
+        retryAfterMs,
+      });
+    }
+    return new FoundryFalError("影片服務暫時無法使用，請稍後重試", "video_provider_failed", response.status, {
+      retryable,
     });
-  }
-  if (errorType === "content_policy_violation" || errorType === "safety_check_error") {
-    return new FoundryFalError("內容未通過安全檢查，請調整描述後重試", "content_policy_blocked", 422);
-  }
-  return new FoundryFalError("影片服務暫時無法使用，請稍後重試", "video_provider_failed", response.status, {
-    retryable,
-  });
+  };
+  const error = classify();
+  error.providerStatus = response.status;
+  error.providerErrorType = errorType;
+  return error;
 };
 
 const request = async (config, url, options = {}) => {

@@ -897,10 +897,16 @@ export default function VideoWorkspace({
             </div>
             <SegmentedPlayer key={activeTurn.videoUrls[0]} urls={activeTurn.videoUrls} className="min-h-0 flex-1" />
           </div>
+        ) : videos.turns.at(-1)?.status === "failed" ? (
+          <div className="m-auto flex max-w-sm flex-col items-center gap-2 px-6 text-center">
+            <AlertCircle className="size-8 text-destructive" aria-hidden="true" />
+            <p className="text-sm font-medium text-foreground">{statusLabel(videos.turns.at(-1))}</p>
+            <p className="text-balance text-[13px] leading-relaxed text-muted-foreground">{videos.turns.at(-1).error}</p>
+          </div>
         ) : videos.turns.length ? (
           <div className="m-auto flex flex-col items-center gap-3 text-center text-muted-foreground">
             <Loader2 className="size-8 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-            <p className="text-sm">{statusLabel(videos.turns[videos.turns.length - 1])}</p>
+            <p className="text-sm">{statusLabel(videos.turns.at(-1))}</p>
           </div>
         ) : (
           <div className="flex min-h-0 w-full flex-col">
