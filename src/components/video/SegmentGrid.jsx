@@ -89,6 +89,7 @@ function SegmentCard({ segment, url, dark }) {
       <div className={cn("flex min-w-0 items-center justify-between gap-2 px-0.5 text-xs", dark ? "text-white/80" : "text-muted-foreground")}>
         <span className="truncate tabular-nums">
           第 {segment.index + 1} 段{segment.durationSeconds ? ` · ${segment.durationSeconds} 秒` : ""}
+          {segment.reused && " · 沿用"}
         </span>
         {url && (
           <a

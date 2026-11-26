@@ -187,6 +187,18 @@ describe("useVideoStoryboard", () => {
     expect(result.current.messages.at(-2).text).toBe("請 AI 重寫第 2 幕");
   });
 
+  it("keeps the source video of a reopened board through revisions but not a new draft", async () => {
+    reviseVideoStoryboard.mockResolvedValue(agentResult({ changedShotIds: ["s2"] }));
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+
+    act(() => result.current.open(storyboard, { baseProjectId: "p1" }));
+    await act(() => result.current.revise({ instruction: "更具體", shotId: "s2", label: "請 AI 重寫第 2 幕" }));
+    expect(result.current.board.baseProjectId).toBe("p1");
+
+    await act(() => result.current.draft({ brief: "換成夜景", durationSeconds: 6 }));
+    expect(result.current.board.baseProjectId).toBeNull();
+  });
+
   it("shows agent failures in the conversation", async () => {
     draftVideoStoryboard.mockRejectedValue(new Error("分鏡 AI 逾時"));
     const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));

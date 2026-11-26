@@ -116,11 +116,69 @@ const assertQuota = async ({ client, tenantId, userId, settings, segmentCount })
   }
 };
 
+// The start sources a segment's job is created with: the request's own
+// sources apply to the first segment, a shot's start frame to its segment.
+const segmentSources = (segment, sources) => {
+  const first = segment.index === 0;
+  return {
+    sourceUploadId: segment.startFrameUploadId || (first ? sources.sourceUploadId : null),
+    sourceImageJobId: first ? sources.sourceImageJobId : null,
+    endSourceUploadId: first ? sources.endSourceUploadId : null,
+    endSourceImageJobId: first ? sources.endSourceImageJobId : null,
+  };
+};
+
+/**
+ * Finds, for each planned segment, a succeeded job of the owned base project
+ * made from exactly the same request, so a storyboard edited from that project
+ * only generates the segments that changed. A chained segment is reusable
+ * only together with the segment before it, whose last frame it starts from.
+ */
+const findReusableJobs = async ({ client, baseProjectId, tenantId, userId, modelKey, segments, options, sources }) => {
+  const reused = [];
+  for (const segment of segments) {
+    const previous = segment.chained ? reused[segment.index - 1] : null;
+    if (!baseProjectId || (segment.chained && !previous)) {
+      reused.push(null);
+      continue;
+    }
+    const option = options[segment.index];
+    const start = segmentSources(segment, sources);
+    const result = await client.query(
+      `SELECT jobs.id FROM video_generation_jobs jobs
+       JOIN video_projects projects ON projects.id = jobs.project_id
+       WHERE projects.id = $1 AND projects.tenant_id = $2 AND projects.user_id = $3
+         AND jobs.status = 'succeeded' AND jobs.model_key = $4 AND jobs.mode = $5
+         AND jobs.prompt = $6 AND jobs.storyboard = $7::jsonb AND jobs.duration_seconds = $8
+         AND jobs.resolution IS NOT DISTINCT FROM $9 AND jobs.aspect_ratio IS NOT DISTINCT FROM $10
+         AND jobs.generate_audio = $11
+         AND jobs.source_upload_id IS NOT DISTINCT FROM $12
+         AND jobs.source_image_job_id IS NOT DISTINCT FROM $13
+         AND jobs.end_source_upload_id IS NOT DISTINCT FROM $14
+         AND jobs.end_source_image_job_id IS NOT DISTINCT FROM $15
+         AND jobs.previous_job_id IS NOT DISTINCT FROM $16
+       ORDER BY jobs.segment_index
+       LIMIT 1`,
+      [
+        baseProjectId, tenantId, userId, modelKey, segment.mode,
+        segment.compiled.storedPrompt, JSON.stringify(segment.storyboard), option.durationSeconds,
+        option.resolution ?? null, option.aspectRatio ?? null, option.generateAudio,
+        start.sourceUploadId, start.sourceImageJobId, start.endSourceUploadId, start.endSourceImageJobId,
+        previous,
+      ]
+    );
+    reused.push(result.rows[0]?.id || null);
+  }
+  return reused;
+};
+
 /**
  * Admits a storyboard as one project: it is split into segments and every
  * segment becomes a video job. A chained segment waits for the previous job
  * and starts from its last frame; a segment whose first shot has a start
- * frame starts from that image. Each segment counts against the quota.
+ * frame starts from that image. Each generated segment counts against the
+ * quota. With `baseProjectId`, segments unchanged from that project are
+ * copied as already succeeded instead of being generated again.
  */
 const createVideoProject = async ({
   tenantId,
@@ -132,10 +190,13 @@ const createVideoProject = async ({
   aspectRatio = "16:9",
   generateAudio = false,
   skipAdmission = false,
+  baseProjectId: rawBaseProjectId = null,
   ...rawSources
 }) => {
   const storyboard = normalizeStoryboard(rawStoryboard);
   const sources = normalizeSources(rawSources);
+  const baseProjectId = normalizeUuid(rawBaseProjectId);
+  if (rawBaseProjectId && !baseProjectId) throw new VideoModelError("原影片專案識別碼格式無效");
 
   return withVideoModelTransaction(tenantId, async (client) => {
     const unlimited = skipAdmission ? true : await assertEnabledUser({ client, tenantId, userId });
@@ -163,11 +224,15 @@ const createVideoProject = async ({
         generateAudio,
       })
     );
-    await assertOwnedSources({ sources, tenantId, userId });
-    await assertOwnedStartFrames({ segments, tenantId, userId });
-    await assertOwnedElements({ segments, tenantId, userId });
-    if (!unlimited) {
-      await assertQuota({ client, tenantId, userId, settings, segmentCount: segments.length });
+    const reused = await findReusableJobs({
+      client, baseProjectId, tenantId, userId, modelKey, segments, options, sources,
+    });
+    const generated = segments.filter((segment) => !reused[segment.index]);
+    if (!reused[0]) await assertOwnedSources({ sources, tenantId, userId });
+    await assertOwnedStartFrames({ segments: generated, tenantId, userId });
+    await assertOwnedElements({ segments: generated, tenantId, userId });
+    if (!unlimited && generated.length) {
+      await assertQuota({ client, tenantId, userId, settings, segmentCount: generated.length });
     }
 
     const project = (
@@ -181,8 +246,32 @@ const createVideoProject = async ({
 
     const jobs = [];
     for (const segment of segments) {
-      const first = segment.index === 0;
+      const previousJobId = segment.chained ? jobs[segment.index - 1].id : null;
+      if (reused[segment.index]) {
+        const copied = await client.query(
+          `INSERT INTO video_generation_jobs
+           (tenant_id, user_id, model_key, mode, prompt, storyboard, duration_seconds,
+            resolution, aspect_ratio, generate_audio, source_upload_id, source_image_job_id,
+            end_source_upload_id, end_source_image_job_id, project_id, segment_index,
+            previous_job_id, reused_from_job_id, status, phase, completed_at,
+            result_blob_name, result_mime_type, result_size_bytes, result_duration_seconds,
+            last_frame_blob_name)
+           SELECT tenant_id, user_id, model_key, mode, prompt, storyboard, duration_seconds,
+                  resolution, aspect_ratio, generate_audio, source_upload_id, source_image_job_id,
+                  end_source_upload_id, end_source_image_job_id, $2::uuid, $3::integer,
+                  $4::uuid, id, 'succeeded', 'completed', now(),
+                  result_blob_name, result_mime_type, result_size_bytes, result_duration_seconds,
+                  last_frame_blob_name
+           FROM video_generation_jobs
+           WHERE id = $1
+           RETURNING id, status, phase`,
+          [reused[segment.index], project.id, segment.index, previousJobId]
+        );
+        jobs.push(copied.rows[0]);
+        continue;
+      }
       const option = options[segment.index];
+      const start = segmentSources(segment, sources);
       const inserted = await client.query(
         `INSERT INTO video_generation_jobs
          (tenant_id, user_id, model_key, mode, prompt, storyboard, duration_seconds,
@@ -195,12 +284,8 @@ const createVideoProject = async ({
           tenantId, userId, modelKey, segment.mode, segment.compiled.storedPrompt,
           JSON.stringify(segment.storyboard),
           option.durationSeconds, option.resolution, option.aspectRatio, option.generateAudio,
-          segment.startFrameUploadId || (first ? sources.sourceUploadId : null),
-          first ? sources.sourceImageJobId : null,
-          first ? sources.endSourceUploadId : null,
-          first ? sources.endSourceImageJobId : null,
-          project.id, segment.index,
-          segment.chained ? jobs[segment.index - 1].id : null,
+          start.sourceUploadId, start.sourceImageJobId, start.endSourceUploadId, start.endSourceImageJobId,
+          project.id, segment.index, previousJobId,
         ]
       );
       jobs.push(inserted.rows[0]);
@@ -210,9 +295,11 @@ const createVideoProject = async ({
       segments: segments.map((segment) => ({
         index: segment.index,
         jobId: jobs[segment.index].id,
+        status: jobs[segment.index].status,
         durationSeconds: segment.durationSeconds,
         mode: segment.mode,
         chained: segment.chained,
+        reused: Boolean(reused[segment.index]),
       })),
     };
   });
@@ -235,7 +322,7 @@ const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
   if (!project.rows[0]) return null;
   const jobs = await query(
     `SELECT id, segment_index, mode, status, phase, duration_seconds, prompt,
-            previous_job_id, error_code, error_message, completed_at
+            previous_job_id, reused_from_job_id, error_code, error_message, completed_at
      FROM video_generation_jobs
      WHERE project_id = $1
      ORDER BY segment_index`,
@@ -248,6 +335,7 @@ const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
     phase: job.phase,
     mode: job.mode,
     chained: Boolean(job.previous_job_id),
+    reused: Boolean(job.reused_from_job_id),
     durationSeconds: job.duration_seconds,
     prompt: job.prompt,
     completedAt: job.completed_at,

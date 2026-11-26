@@ -76,7 +76,7 @@ export default function StoryboardBoard({
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-dot-grid bg-size-[20px_20px] px-5 pb-4 custom-scrollbar">
         {board.reopened && (
           <p className="mt-3 rounded-xl bg-primary/10 px-3 py-2 text-xs text-primary">
-            從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。
+            {board.baseProjectId ? "從影片重新開啟的分鏡；生成時沿用未修改的分段，只重新生成改動的分鏡與接續其後的分段，原影片保留。" : "從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。"}
           </p>
         )}
         <StoryboardTimeline shots={shots} segments={board.segments} warnedIds={warnedIds} changedIds={board.changedShotIds} onJump={jump} />

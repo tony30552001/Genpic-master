@@ -11,7 +11,7 @@ describe("SegmentGrid", () => {
       <SegmentGrid
         turn={{
           segments: [
-            { index: 0, jobId: "a", status: "succeeded", durationSeconds: 5 },
+            { index: 0, jobId: "a", status: "succeeded", durationSeconds: 5, reused: true },
             { index: 1, jobId: "b", status: "processing", phase: "polling" },
             { index: 2, jobId: "c", status: "failed", error: { message: "內容違規" } },
           ],
@@ -23,6 +23,8 @@ describe("SegmentGrid", () => {
     const cards = within(screen.getByRole("list", { name: "影片分段" })).getAllByRole("listitem");
     expect(cards).toHaveLength(3);
     expect(screen.getByLabelText("第 1 段影片")).toHaveAttribute("src", "blob:a");
+    expect(cards[0]).toHaveTextContent("第 1 段 · 5 秒 · 沿用");
+    expect(cards[1]).not.toHaveTextContent("沿用");
     expect(within(cards[1]).getByText("生成中")).toBeInTheDocument();
     expect(within(cards[2]).getByRole("alert")).toHaveTextContent("內容違規");
   });

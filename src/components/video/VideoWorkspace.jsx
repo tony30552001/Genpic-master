@@ -101,6 +101,7 @@ const sessionSnapshot = ({ messages, board, pendingJob, turns, settings, brief }
         shotNotes: board.shotNotes,
         changedShotIds: board.changedShotIds,
         reopened: board.reopened,
+        baseProjectId: board.baseProjectId || null,
       },
       pendingAgent: pendingJob,
       turns: turns.map(({ videoUrls: _videoUrls, segmentUrls: _segmentUrls, ...turn }) => turn),
@@ -639,9 +640,10 @@ export default function VideoWorkspace({
   const confirmGenerate = () => {
     if (!canGenerate) return;
     const confirmed = board.storyboard;
+    const { baseProjectId } = board;
     storyboard.close();
     setBoardVisible(false);
-    void runVideo({ storyboard: confirmed, modelKey: model.modelKey, ...mediaOptions() });
+    void runVideo({ storyboard: confirmed, modelKey: model.modelKey, ...mediaOptions(), ...(baseProjectId && { baseProjectId }) });
   };
 
   const openMessage = (message, isLatest) => {
@@ -650,7 +652,7 @@ export default function VideoWorkspace({
   };
 
   const editFromTurn = (turn) => {
-    storyboard.open(turn.storyboard);
+    storyboard.open(turn.storyboard, { baseProjectId: turn.projectId || null });
     setBoardVisible(true);
   };
 
@@ -1115,6 +1117,7 @@ export default function VideoWorkspace({
                     <Loader2 className="size-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
                   )}
                   已完成 {activeTurn.segments.filter((segment) => segment.status === "succeeded").length}/{activeTurn.segments.length} 段
+                  {activeTurn.segments.some((segment) => segment.reused) && `（沿用 ${activeTurn.segments.filter((segment) => segment.reused).length} 段）`}
                 </span>
               )}
               {activeGrid && <ViewModeToggle mode={canvasMode} onChange={setCanvasMode} />}

@@ -12,6 +12,7 @@ const videoRenderClient = require("../videoRenderClient");
 db.query = vi.fn();
 db.getPool = vi.fn();
 blobStorage.uploadGeneratedStream = vi.fn();
+blobStorage.downloadGeneratedImage = vi.fn();
 foundryFal.getVideoRequestStatus = vi.fn();
 foundryFal.getVideoResult = vi.fn();
 foundryFal.downloadVideoResult = vi.fn();
@@ -105,7 +106,7 @@ describe("video job worker", () => {
     claim({ phase: "submitting", mode: "i2v", previous_job_id: "j0", storyboard: {} });
     respond([
       ["submitted_at >= now()", { rows: [{ count: 0 }] }],
-      ["SELECT last_frame_blob_name", { rows: [] }],
+      ["result_blob_name, last_frame_blob_name", { rows: [] }],
     ]);
 
     await processNextVideoJob();
@@ -113,5 +114,28 @@ describe("video job worker", () => {
     const [sql, values] = lastUpdate();
     expect(sql).toContain("status = 'failed'");
     expect(values).toEqual(["j1", 2, "previous_frame_missing", "找不到上一段影片的最後一格畫面"]);
+  });
+
+  it("extracts and records the last frame a reused predecessor never had", async () => {
+    claim({ phase: "submitting", mode: "i2v", previous_job_id: "j0", storyboard: {} });
+    respond([
+      ["submitted_at >= now()", { rows: [{ count: 0 }] }],
+      ["result_blob_name, last_frame_blob_name", {
+        rows: [{ id: "j0", result_blob_name: "videos/jobs/j0/1.mp4", last_frame_blob_name: null }],
+      }],
+    ]);
+    videoRenderClient.extractLastFrame.mockResolvedValue({ blobName: "videos/jobs/j0/last.png" });
+    blobStorage.downloadGeneratedImage.mockRejectedValue(new Error("stop"));
+
+    await processNextVideoJob();
+
+    expect(videoRenderClient.extractLastFrame).toHaveBeenCalledWith({
+      videoBlobName: "videos/jobs/j0/1.mp4",
+      frameBlobName: "videos/jobs/j0/last.png",
+    });
+    const record = db.query.mock.calls.find(([sql]) => sql.includes("SET last_frame_blob_name = $2"));
+    expect(record[0]).toContain("last_frame_blob_name IS NULL");
+    expect(record[1]).toEqual(["j0", "videos/jobs/j0/last.png"]);
+    expect(blobStorage.downloadGeneratedImage).toHaveBeenCalledWith({ blobName: "videos/jobs/j0/last.png" });
   });
 });

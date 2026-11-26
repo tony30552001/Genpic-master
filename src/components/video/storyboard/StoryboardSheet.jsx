@@ -178,7 +178,7 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
               <div className="flex flex-col gap-2">
                 {board.reopened && (
                   <p className="rounded-xl bg-primary/10 px-3 py-2 text-xs text-primary">
-                    從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。
+                    {board.baseProjectId ? "從影片重新開啟的分鏡；生成時沿用未修改的分段，只重新生成改動的分鏡與接續其後的分段，原影片保留。" : "從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。"}
                   </p>
                 )}
                 <GlobalCard global={board.storyboard.global} onChange={actions.updateGlobal} defaultOpen={false}>

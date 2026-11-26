@@ -27,6 +27,8 @@ function restoreTurn(turn) {
 /**
  * Runs video turns. A turn either sends a confirmed `storyboard`, or a `brief`
  * that the storyboard agent first turns into `shotCount` shots ("直接生成").
+ * `baseProjectId` (not kept on the turn, so 重新生成 starts over) lets the
+ * project reuse the unchanged segments of the video the storyboard was edited from.
  * Each turn is one video project; long storyboards run as several segments
  * that play back in order. A single-segment turn is saved to history when it
  * finishes; a multi-segment turn only after `merge` joins it into one video.
@@ -127,6 +129,7 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
     durationSeconds,
     shotCount = 1,
     modelKey,
+    baseProjectId = null,
     ...options
   }) => {
     const clientId = makeId();
@@ -161,7 +164,7 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
         storyboard = drafted.storyboard;
         updateTurn(clientId, { storyboard, status: "queued" });
       }
-      const admission = await createVideoProject({ modelKey, storyboard, ...options });
+      const admission = await createVideoProject({ modelKey, storyboard, ...options, ...(baseProjectId && { baseProjectId }) });
       const { projectId } = admission;
       updateTurn(clientId, { projectId, segments: admission.segments });
       return await follow({ clientId, projectId, brief, storyboard, signal: controller.signal });

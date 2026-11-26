@@ -56,6 +56,7 @@ module.exports = async function (context, req) {
         sourceImageJobId: payload.sourceImageJobId,
         endSourceUploadId: payload.endSourceUploadId,
         endSourceImageJobId: payload.endSourceImageJobId,
+        baseProjectId: payload.baseProjectId,
       });
       context.res = ok(project, 202, req);
       return;

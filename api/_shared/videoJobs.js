@@ -38,7 +38,8 @@ const countAdmittedToday = async (db, { tenantId, userId }) => {
   const result = await db.query(
     `SELECT COUNT(*)::int AS count FROM video_generation_jobs
      WHERE tenant_id = $1 AND user_id = $2
-       AND created_at >= date_trunc('day', now()) AND status <> 'failed'`,
+       AND created_at >= date_trunc('day', now()) AND status <> 'failed'
+       AND reused_from_job_id IS NULL`,
     [tenantId, userId]
   );
   return Number(result.rows[0]?.count || 0);
@@ -238,18 +239,36 @@ const getRemainingQuota = async ({ tenantId, userId }) => {
   return Math.max(0, settings.dailyQuotaPerUser - admitted);
 };
 
+// A reused segment may have had no successor in the project it came from, so
+// its last frame is extracted when a chained segment first needs it.
+const previousFrameBlobName = async (previousJobId) => {
+  const previous = (
+    await query(
+      `SELECT id, result_blob_name, last_frame_blob_name FROM video_generation_jobs
+       WHERE id = $1 AND status = 'succeeded'`,
+      [previousJobId]
+    )
+  ).rows[0];
+  if (!previous?.result_blob_name) {
+    throw new VideoModelError("找不到上一段影片的最後一格畫面", "previous_frame_missing", 409);
+  }
+  if (previous.last_frame_blob_name) return previous.last_frame_blob_name;
+  const frame = await extractLastFrame({
+    videoBlobName: previous.result_blob_name,
+    frameBlobName: `videos/jobs/${previous.id}/last.png`,
+  });
+  await query(
+    `UPDATE video_generation_jobs SET last_frame_blob_name = $2, updated_at = now()
+     WHERE id = $1 AND last_frame_blob_name IS NULL`,
+    [previous.id, frame.blobName]
+  );
+  return frame.blobName;
+};
+
 // A chained segment starts from the previous segment's last frame.
 const loadVideoFrameDataUrl = async (job) => {
   if (job.previous_job_id) {
-    const previous = await query(
-      `SELECT last_frame_blob_name FROM video_generation_jobs
-       WHERE id = $1 AND status = 'succeeded'`,
-      [job.previous_job_id]
-    );
-    const blobName = previous.rows[0]?.last_frame_blob_name;
-    if (!blobName) {
-      throw new VideoModelError("找不到上一段影片的最後一格畫面", "previous_frame_missing", 409);
-    }
+    const blobName = await previousFrameBlobName(job.previous_job_id);
     return toJpegDataUrl(await downloadGeneratedImage({ blobName }), 2048);
   }
   return loadOwnedImageDataUrl({

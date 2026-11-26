@@ -63,6 +63,16 @@ describe("useVideoGeneration", () => {
     expect(result.current.turns[0]).toMatchObject({ status: "succeeded", videoUrls: [expect.any(String)] });
   });
 
+  it("sends the source project for reuse without keeping it for a regeneration", async () => {
+    finish(1);
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+
+    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v", baseProjectId: "p0" }));
+
+    expect(createVideoProject).toHaveBeenCalledWith({ modelKey: "kling", storyboard, mode: "t2v", baseProjectId: "p0" });
+    expect(result.current.turns[0].options).toEqual({ mode: "t2v" });
+  });
+
   it("downloads every segment in order and does not save a multi-segment project", async () => {
     finish(3);
     const onSaved = vi.fn();

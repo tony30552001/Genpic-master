@@ -401,7 +401,7 @@ addOperation("/api/image-jobs/{id}/image", "get", {
 
 addOperation("/api/video-projects", "post", {
   summary: "Queue a storyboard as a video project",
-  description: `Uses an allowed tenant video model and enforces the user's daily quota unless the user is unlimited. The storyboard (at most ${MAX_PROJECT_SECONDS} seconds) is split into segments that fit one model request; a segment closes at a shot with cut=true, at the model's per-request length, or after ${MAX_SEGMENT_SHOTS} shots. Each segment is one video job and counts against the quota. A segment that continues the same scene starts from the previous segment's last frame (image-to-video); a segment after a cut is text-to-video. An end frame requires a single segment. Image sources must be owned by the caller.`,
+  description: `Uses an allowed tenant video model and enforces the user's daily quota unless the user is unlimited. The storyboard (at most ${MAX_PROJECT_SECONDS} seconds) is split into segments that fit one model request; a segment closes at a shot with cut=true, at the model's per-request length, or after ${MAX_SEGMENT_SHOTS} shots. Each segment is one video job; each generated one counts against the quota. A segment that continues the same scene starts from the previous segment's last frame (image-to-video); a segment after a cut is text-to-video. An end frame requires a single segment. Image sources must be owned by the caller. With baseProjectId (an owned project the storyboard was edited from), every segment whose request is unchanged from a succeeded segment of that project — and, when chained, whose previous segment is also reused — is copied as succeeded with reused=true and does not count against the quota; only the other segments are generated.`,
   tags: ["Video"],
   body: true,
   csrf: true,
@@ -420,6 +420,7 @@ addOperation("/api/video-projects", "post", {
       sourceImageJobId: { type: "string", format: "uuid" },
       endSourceUploadId: { type: "string", format: "uuid" },
       endSourceImageJobId: { type: "string", format: "uuid" },
+      baseProjectId: { type: "string", format: "uuid", description: "Owned project whose unchanged segments are reused" },
     },
   },
 });

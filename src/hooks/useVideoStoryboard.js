@@ -40,6 +40,8 @@ const summarize = (storyboard, warnings) => ({
  * latest snapshot (steps, reasoning summary, finished shots); its reasoning is
  * kept on the storyboard message it produced. `pendingJob` is the running
  * agent job; a session restored with `initial.pendingAgent` waits for it again.
+ * A board opened from a generated video keeps that video's `baseProjectId`
+ * through revisions, so generating it again reuses the unchanged segments.
  */
 export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = null }) {
   const [board, setBoard] = useState(() =>
@@ -175,6 +177,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
       shotNotes: result.shotNotes ?? (extra.keepNotes ? current?.shotNotes : {}) ?? {},
       changedShotIds: extra.changedShotIds || [],
       reopened: extra.keepNotes ? Boolean(current?.reopened) : false,
+      baseProjectId: extra.keepNotes ? current?.baseProjectId || null : null,
     }));
     addMessage({
       role: "assistant",
@@ -316,7 +319,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     scheduleInspect(storyboard);
   }, [scheduleInspect]);
 
-  const open = useCallback((storyboard, { reopened = true } = {}) => {
+  const open = useCallback((storyboard, { reopened = true, baseProjectId = null } = {}) => {
     agentController.current?.abort();
     setBoard((current) => ({
       revision: (current?.revision ?? 0) + 1,
@@ -326,6 +329,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
       shotNotes: {},
       changedShotIds: [],
       reopened,
+      baseProjectId,
     }));
     scheduleInspect(storyboard);
   }, [scheduleInspect]);
