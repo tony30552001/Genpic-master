@@ -36,20 +36,12 @@ import ChatHistory from "@/components/chat/ChatHistory";
 import Reasoning from "@/components/chat/Reasoning";
 import ScriptTemplateDialog from "./ScriptTemplateDialog";
 import SegmentedPlayer from "./SegmentedPlayer";
+import SegmentGrid, { ViewModeToggle } from "./SegmentGrid";
+import { STATUS_LABELS, hasSegmentGrid } from "./videoStatus";
 import StoryboardBoard from "./storyboard/StoryboardBoard";
 import StoryboardProgress from "./storyboard/StoryboardProgress";
 import StoryboardSheet from "./storyboard/StoryboardSheet";
 import StoryboardSummaryCard from "./storyboard/StoryboardSummaryCard";
-
-const STATUS_LABELS = {
-  drafting: "AI 正在整理鏡頭",
-  queued: "排隊中",
-  submitting: "送出中",
-  polling: "生成中",
-  storing: "轉存成品中",
-  succeeded: "生成完成",
-  failed: "生成失敗",
-};
 
 const SAVE_STATUS_LABELS = {
   pending: "尚未儲存",
@@ -369,7 +361,7 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 rounded-md text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => onOpen({ videoUrls: playable })}
+                  onClick={() => onOpen(turn)}
                 >
                   <Play className="size-3" aria-hidden="true" />預覽 {playable.length} 段
                 </button>
@@ -409,7 +401,7 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
         <button
           type="button"
           className="group relative block w-full overflow-hidden rounded-xl bg-black text-left animate-in fade-in duration-(--motion-enter) ease-emphasized focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => onOpen({ videoUrls: playable })}
+          onClick={() => onOpen(turn)}
           aria-label={playable.length > 1 ? `依序播放 ${playable.length} 段影片` : "播放生成影片"}
         >
           <video src={playable[0]} muted playsInline preload="metadata" className="aspect-video w-full object-contain" />
@@ -450,22 +442,36 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
   );
 }
 
-function VideoPlayer({ video, onClose }) {
-  if (!video) return null;
+function VideoPlayer({ video, turn, onClose }) {
+  const [mode, setMode] = useState("grid");
+  if (!video || (video.clientId && !turn)) return null;
+  const urls = turn ? playableUrls(turn) : video.videoUrls;
+  const grid = hasSegmentGrid(turn);
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/95 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]" role="dialog" aria-modal="true" aria-label="影片播放">
-      <div className="flex justify-end">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2">
+        {grid ? <ViewModeToggle mode={mode} onChange={setMode} dark /> : <span />}
         <Button type="button" variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/10 hover:text-white" aria-label="關閉影片">
           <X aria-hidden="true" />
         </Button>
       </div>
-      <SegmentedPlayer
-        key={video.videoUrls[0]}
-        urls={video.videoUrls}
-        autoPlay
-        dark
-        className="mx-auto my-auto max-h-[calc(100dvh-5rem)] w-full max-w-5xl"
-      />
+      {grid && mode === "grid" ? (
+        <SegmentGrid
+          turn={turn}
+          dark
+          className="mx-auto mt-3 min-h-0 w-full max-w-5xl flex-1 pb-[env(safe-area-inset-bottom)] animate-in fade-in duration-(--motion-enter) ease-emphasized"
+        />
+      ) : urls.length > 0 ? (
+        <SegmentedPlayer
+          key={urls[0]}
+          urls={urls}
+          autoPlay
+          dark
+          className="mx-auto my-auto max-h-[calc(100dvh-5rem)] w-full max-w-5xl"
+        />
+      ) : (
+        <p className="m-auto text-sm text-white/70">第 1 段完成後即可依序播放</p>
+      )}
     </div>
   );
 }
@@ -496,6 +502,7 @@ export default function VideoWorkspace({
   const [source, setSource] = useState(() => (restored ? restored.settings.source : imageSource(initialSource)));
   const [endSource, setEndSource] = useState(() => restored?.settings.endSource || null);
   const [isUploading, setIsUploading] = useState(false);
+  const [canvasMode, setCanvasMode] = useState("grid");
   const [submitError, setSubmitError] = useState("");
   const [playerVideo, setPlayerVideo] = useState(null);
   const [boardVisible, setBoardVisible] = useState(() => Boolean(restored?.board || restored?.pendingAgent));
@@ -762,6 +769,8 @@ export default function VideoWorkspace({
     || [...videos.turns].reverse().find((turn) => playableUrls(turn).length > 0)
     || null;
   const activeUrls = activeTurn ? playableUrls(activeTurn) : [];
+  const activeGrid = hasSegmentGrid(activeTurn);
+  const playerTurn = playerVideo?.clientId ? videos.turns.find((turn) => turn.clientId === playerVideo.clientId) : null;
   const showBoard = boardVisible && Boolean(board || drafting);
   const durationOptions = durationChoices(model).map((value) => ({ value: String(value), label: `${value} 秒` }));
   const settingsLabel = [
@@ -845,7 +854,7 @@ export default function VideoWorkspace({
                     key={item.key}
                     turn={item.turn}
                     isActive={item.turn.clientId === videos.activeTurnId}
-                    onOpen={setPlayerVideo}
+                    onOpen={(turn) => setPlayerVideo({ clientId: turn.clientId })}
                     onRegenerate={regenerate}
                     onRetry={retryTurn}
                     onStop={videos.stopWaiting}
@@ -1096,18 +1105,19 @@ export default function VideoWorkspace({
       <section className="relative hidden min-h-0 overflow-hidden rounded-2xl border border-border bg-card bg-dot-grid bg-size-[20px_20px] lg:flex" aria-label="影片畫布">
         {showBoard && !isMobile ? (
           <StoryboardBoard {...boardProps} onClose={() => setBoardVisible(false)} />
-        ) : activeUrls.length > 0 ? (
+        ) : activeUrls.length > 0 || activeGrid ? (
           <div className="flex min-h-0 w-full flex-col animate-in fade-in duration-(--motion-enter) ease-emphasized">
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card/90 px-4 backdrop-blur-md">
               <p className="min-w-0 flex-1 truncate text-sm font-semibold">{turnTitle(activeTurn)}</p>
-              {!activeTurn.videoUrls && (
+              {!activeTurn.videoUrls && activeTurn.segments && (
                 <span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-muted-foreground" role="status">
                   {activeTurn.status !== "failed" && (
                     <Loader2 className="size-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
                   )}
-                  已完成 {activeUrls.length}/{activeTurn.segments.length} 段
+                  已完成 {activeTurn.segments.filter((segment) => segment.status === "succeeded").length}/{activeTurn.segments.length} 段
                 </span>
               )}
+              {activeGrid && <ViewModeToggle mode={canvasMode} onChange={setCanvasMode} />}
               {board && !boardVisible && (
                 <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setBoardVisible(true)}>
                   查看分鏡
@@ -1124,7 +1134,17 @@ export default function VideoWorkspace({
                 </a>
               )}
             </div>
-            <SegmentedPlayer key={activeUrls[0]} urls={activeUrls} className="min-h-0 flex-1" />
+            {activeGrid && canvasMode === "grid" ? (
+              <SegmentGrid
+                key={activeTurn.clientId}
+                turn={activeTurn}
+                className="min-h-0 flex-1 p-4 animate-in fade-in duration-(--motion-enter) ease-emphasized"
+              />
+            ) : activeUrls.length > 0 ? (
+              <SegmentedPlayer key={activeUrls[0]} urls={activeUrls} className="min-h-0 flex-1" />
+            ) : (
+              <p className="m-auto text-sm text-muted-foreground">第 1 段完成後即可依序播放</p>
+            )}
           </div>
         ) : videos.turns.at(-1)?.status === "failed" ? (
           <div className="m-auto flex max-w-sm flex-col items-center gap-2 px-6 text-center">
@@ -1175,7 +1195,7 @@ export default function VideoWorkspace({
       <AnimatePresence>
         {showBoard && isMobile && <StoryboardSheet {...boardProps} onClose={() => setBoardVisible(false)} />}
       </AnimatePresence>
-      <VideoPlayer video={playerVideo} onClose={closePlayer} />
+      <VideoPlayer key={playerVideo?.clientId || "history"} video={playerVideo} turn={playerTurn} onClose={closePlayer} />
       <ScriptTemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} />
       <AlertDialog open={deleteOpen && Boolean(sessions.activeId)} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
