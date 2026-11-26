@@ -217,7 +217,8 @@ describe("llmRuntime", () => {
       text: { format: { type: "json_object" } },
       reasoning: { summary: "auto" },
       max_output_tokens: 32000,
-      input: [{ role: "user", content: "Draft" }],
+      // json_object output is rejected unless the input messages mention JSON.
+      input: [{ role: "user", content: "Draft\n\nPlease return a valid JSON object only." }],
     });
     expect(body).not.toHaveProperty("tools");
     expect(body).not.toHaveProperty("tool_choice");

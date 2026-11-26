@@ -85,13 +85,20 @@ const parseJsonContent = (content) => {
   }
 };
 
+/**
+ * Responses API rejects `text.format: json_object` unless the input messages
+ * mention JSON; the system instructions do not count.
+ */
+const withJsonInstruction = (userMessage) =>
+  `${userMessage}\n\nPlease return a valid JSON object only.`;
+
 const buildResponseInput = ({
   userMessage,
   imageDataUrl,
   fileDataUrl,
   fileName,
 }) => {
-  const jsonInstruction = `${userMessage}\n\nPlease return a valid JSON object only.`;
+  const jsonInstruction = withJsonInstruction(userMessage);
   if (!imageDataUrl && !fileDataUrl) {
     return jsonInstruction;
   }
@@ -529,4 +536,5 @@ module.exports = {
   postJsonCompletion,
   getResponsesEndpoint,
   streamResponseCompletion,
+  withJsonInstruction,
 };

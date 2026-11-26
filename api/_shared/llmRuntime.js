@@ -7,7 +7,12 @@
  * while api/_shared/azureOpenAI.js only performs single requests.
  */
 
-const { parseJsonContent, postJsonCompletion, streamResponseCompletion } = require("./azureOpenAI");
+const {
+  parseJsonContent,
+  postJsonCompletion,
+  streamResponseCompletion,
+  withJsonInstruction,
+} = require("./azureOpenAI");
 const { INVALID_TOOL_CALL, OUTPUT_TRUNCATED } = require("./llmProviders");
 
 /**
@@ -60,7 +65,7 @@ const callModel = async (model, request, maxOutputTokens) => {
     const { text } = await streamResponseCompletion({
       model,
       systemMessage,
-      messages: [{ role: "user", content: userMessage }],
+      messages: [{ role: "user", content: withJsonInstruction(userMessage) }],
       tools: [],
       jsonOutput: true,
       maxOutputTokens,
