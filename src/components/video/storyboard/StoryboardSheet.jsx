@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import GlobalCard from "./GlobalCard";
 import SegmentDivider from "./SegmentDivider";
 import ShotCard from "./ShotCard";
-import { StatusPill, StoryboardSkeleton } from "./StoryboardParts";
+import { DraftingShots, StatusPill } from "./StoryboardParts";
+import { STORYBOARD_STEP_LABELS, shotCountLabel } from "./progressSteps";
 import { boardStatus, estimateLabel, storyboardActions } from "./storyboardActions";
 
 const SHEET_SPRING = { type: "spring", bounce: 0, duration: 0.35 };
@@ -38,7 +39,7 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
   const y = useMotionValue(restingY);
   const footerY = useTransform(y, (value) => -Math.max(0, value));
   const [editingId, setEditingId] = useState(null);
-  const { board, pending } = storyboard;
+  const { board, pending, progress } = storyboard;
   const actions = storyboardActions(storyboard);
   const warnedIds = useMemo(
     () => new Set((board?.warnings || []).map((warning) => warning.shotId)),
@@ -86,7 +87,8 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
 
   const seconds = board ? storyboardSeconds(board.storyboard) : 0;
   const startsAt = segmentStarts(board?.segments);
-  const status = board ? boardStatus(storyboard) : { label: "AI 擬稿中", tone: "draft" };
+  const draftCount = shotCountLabel(progress);
+  const status = board ? boardStatus(storyboard) : { label: draftCount ? `AI 擬稿中 · ${draftCount}` : "AI 擬稿中", tone: "draft" };
 
   return (
     <M.div
@@ -129,8 +131,10 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
             <div className="flex items-center gap-2 px-4 pb-2 pt-1.5">
               <div className="min-w-0 flex-1">
                 <h2 id={titleId} className="truncate text-base font-semibold">{board?.storyboard.title || "分鏡板"}</h2>
-                {board && (
+                {board ? (
                   <p className="text-xs tabular-nums text-muted-foreground">{board.storyboard.shots.length} 幕 · {seconds} 秒</p>
+                ) : progress && (
+                  <p className="truncate text-xs text-muted-foreground">{STORYBOARD_STEP_LABELS[progress.step]}…</p>
                 )}
               </div>
               <StatusPill tone={status.tone}>{status.label}</StatusPill>
@@ -166,9 +170,9 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-border px-4 py-3">
             {!board ? (
-              <div role="status" aria-busy="true">
-                <span className="sr-only">AI 正在擬分鏡</span>
-                <StoryboardSkeleton count={4} className="[&>div]:h-16" />
+              <div aria-busy="true">
+                <span className="sr-only" role="status">AI 正在擬分鏡</span>
+                <DraftingShots progress={progress} compact />
               </div>
             ) : (
               <div className="flex flex-col gap-2">

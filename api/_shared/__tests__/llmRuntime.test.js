@@ -175,6 +175,54 @@ describe("llmRuntime", () => {
     expect(budgets).toEqual([16000, 32000]);
   });
 
+  it("streams a JSON reply with its reasoning summary and restarts the stream on retry", async () => {
+    const sse = (events) =>
+      new Response(
+        events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+        { status: 200 }
+      );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        sse([
+          { type: "response.reasoning_summary_text.delta", delta: "先想" },
+          { type: "response.incomplete", response: { incomplete_details: { reason: "max_output_tokens" } } },
+        ])
+      )
+      .mockResolvedValueOnce(
+        sse([
+          { type: "response.reasoning_summary_text.delta", delta: "規劃三幕" },
+          { type: "response.output_text.delta", delta: '{"title":"[連結](https://example.com)",' },
+          { type: "response.output_text.delta", delta: '"shots":[]}' },
+          { type: "response.completed" },
+        ])
+      );
+    const events = [];
+
+    const result = await generateJson({
+      llm: { model: azureModel, fallback: null },
+      systemMessage: "Return JSON",
+      userMessage: "Draft",
+      maxOutputTokens: 16000,
+      onTextDelta: (text) => events.push(["text", text]),
+      onReasoningDelta: (text) => events.push(["reasoning", text]),
+      onRetry: () => events.push(["retry"]),
+    });
+
+    expect(result).toEqual({ title: "[連結](https://example.com)", shots: [] });
+    expect(events.map(([type]) => type)).toEqual(["reasoning", "retry", "reasoning", "text", "text"]);
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(body).toMatchObject({
+      stream: true,
+      text: { format: { type: "json_object" } },
+      reasoning: { summary: "auto" },
+      max_output_tokens: 32000,
+      input: [{ role: "user", content: "Draft" }],
+    });
+    expect(body).not.toHaveProperty("tools");
+    expect(body).not.toHaveProperty("tool_choice");
+  });
+
   it("stops growing at the ceiling and reports why the model produced nothing", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")

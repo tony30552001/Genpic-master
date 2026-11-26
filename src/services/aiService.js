@@ -271,11 +271,13 @@ const postVideoStoryboard = (action, { signal, ...body }) =>
   apiPost(`${API_BASE_URL}/video-storyboard`, { action, ...body }, { signal });
 
 // The worker times out every storyboard job, so polling always settles.
-export const waitForStoryboardJob = async ({ jobId, signal, pollIntervalMs = 2000 }) => {
+// `onProgress` receives the job's progress snapshot on every poll.
+export const waitForStoryboardJob = async ({ jobId, signal, onProgress, pollIntervalMs = 2000 }) => {
   if (!jobId) throw new Error("分鏡 AI 沒有回傳工作識別碼");
   for (;;) {
     await abortableDelay(pollIntervalMs, signal);
     const job = await apiGet(`${API_BASE_URL}/video-storyboard/jobs/${encodeURIComponent(jobId)}`, { signal });
+    onProgress?.(job.progress);
     if (job.status === "succeeded") return job.result;
     if (job.status === "failed") throw new Error(job.error?.message || "分鏡 AI 暫時無法回應，請稍後重試");
   }
@@ -283,20 +285,20 @@ export const waitForStoryboardJob = async ({ jobId, signal, pollIntervalMs = 200
 
 // Agent actions are queued because one analysis-model call can outlast the
 // backend's request limit.
-const runStoryboardAgent = async (action, { signal, ...body }) => {
+const runStoryboardAgent = async (action, { signal, onProgress, ...body }) => {
   const { jobId } = await postVideoStoryboard(action, { signal, ...body });
-  return waitForStoryboardJob({ jobId, signal });
+  return waitForStoryboardJob({ jobId, signal, onProgress });
 };
 
-export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal }) =>
-  runStoryboardAgent("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal });
+export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress }) =>
+  runStoryboardAgent("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress });
 
-export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal }) =>
-  runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal });
+export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress }) =>
+  runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress });
 
 // Pass either pasted `script` text or the `uploadId` of a script document.
-export const scriptToVideoStoryboard = ({ modelKey, script, uploadId, hasStartFrame, characters, signal }) =>
-  runStoryboardAgent("fromScript", { modelKey, script, uploadId, hasStartFrame, characters, signal });
+export const scriptToVideoStoryboard = ({ modelKey, script, uploadId, hasStartFrame, characters, signal, onProgress }) =>
+  runStoryboardAgent("fromScript", { modelKey, script, uploadId, hasStartFrame, characters, signal, onProgress });
 
 export const inspectVideoStoryboard = ({ modelKey, storyboard, hasStartFrame, signal }) =>
   postVideoStoryboard("inspect", { modelKey, storyboard, hasStartFrame, signal });

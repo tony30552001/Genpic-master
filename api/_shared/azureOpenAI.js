@@ -331,6 +331,9 @@ const toSources = (urls, citedTitles) =>
  *
  * The model is asked for reasoning summaries, which go to `onReasoningDelta`
  * and come back joined as `reasoning`. A reply without any has `reasoning: ""`.
+ *
+ * With `jsonOutput` the reply is a JSON object streamed as-is: no tools, and
+ * no citation filtering that could alter its text.
  */
 const streamResponseCompletion = async ({
   model,
@@ -338,6 +341,7 @@ const streamResponseCompletion = async ({
   messages,
   tools,
   maxWebSearches = 0,
+  jsonOutput = false,
   maxOutputTokens,
   signal,
   onTextDelta,
@@ -345,6 +349,18 @@ const streamResponseCompletion = async ({
   onSearch = () => {},
 }) => {
   const webSearch = maxWebSearches > 0;
+  const toolList = [
+    ...(webSearch
+      ? [{ type: "web_search", user_location: { type: "approximate", country: "TW" } }]
+      : []),
+    ...tools.map(({ name, description, parameters }) => ({
+      type: "function",
+      name,
+      description,
+      parameters,
+      strict: false,
+    })),
+  ];
   const response = await fetch(getResponsesEndpoint(model.endpoint), {
     method: "POST",
     signal,
@@ -357,23 +373,13 @@ const streamResponseCompletion = async ({
       model: model.modelName,
       instructions: systemMessage,
       input: messages.map(({ role, content }) => ({ role, content })),
-      tools: [
-        ...(webSearch
-          ? [{ type: "web_search", user_location: { type: "approximate", country: "TW" } }]
-          : []),
-        ...tools.map(({ name, description, parameters }) => ({
-          type: "function",
-          name,
-          description,
-          parameters,
-          strict: false,
-        })),
-      ],
+      ...(toolList.length
+        ? { tools: toolList, tool_choice: "auto", parallel_tool_calls: true }
+        : {}),
       ...(webSearch
         ? { include: ["web_search_call.action.sources"], max_tool_calls: maxWebSearches }
         : {}),
-      tool_choice: "auto",
-      parallel_tool_calls: true,
+      ...(jsonOutput ? { text: { format: { type: "json_object" } } } : {}),
       reasoning: { summary: "auto" },
       stream: true,
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
@@ -390,7 +396,9 @@ const streamResponseCompletion = async ({
   const toolCalls = [];
   const searches = [];
   const citedTitles = new Map();
-  const citations = createCitationFilter();
+  const citations = jsonOutput
+    ? { push: (chunk) => chunk, flush: () => "" }
+    : createCitationFilter();
   let finished = false;
   let failure = null;
 

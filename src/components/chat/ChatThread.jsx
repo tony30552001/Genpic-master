@@ -1,5 +1,5 @@
 import { AlertCircle } from "@/components/icons/lucideStatus";
-import { Brain, Globe, Image as ImageIcon, MessageSquare, Palette } from "@/components/icons/lucideContent";
+import { Globe, Image as ImageIcon, MessageSquare, Palette } from "@/components/icons/lucideContent";
 import { ChevronDown } from "@/components/icons/lucideControls";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -9,8 +9,8 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { cn } from "@/lib/utils";
+import Reasoning from "./Reasoning";
 import useElapsedSeconds from "@/hooks/useElapsedSeconds";
 import { getGenerationStatus } from "@/utils/generationProgress";
 
@@ -161,36 +161,6 @@ function WebSearch({ search }) {
           </li>
         ))}
       </ul>
-    </details>
-  );
-}
-
-function Reasoning({ text, isThinking }) {
-  const label = <span className="truncate">{isThinking ? <Shimmer>思考中…</Shimmer> : "已思考"}</span>;
-
-  if (!text) {
-    return isThinking ? (
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
-        {label}
-      </div>
-    ) : null;
-  }
-
-  return (
-    <details className="group/reasoning text-xs text-muted-foreground">
-      <summary className="flex min-w-0 cursor-pointer list-none items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-        <Brain className="size-3.5 shrink-0" aria-hidden="true" />
-        {label}
-        <ChevronDown
-          className="size-3.5 shrink-0 transition-transform duration-150 group-open/reasoning:rotate-180 motion-reduce:transition-none"
-          aria-hidden="true"
-        />
-      </summary>
-      <div className="mt-1.5 border-l border-border pl-3">
-        <MessageResponse className="text-xs leading-relaxed" isAnimating={isThinking}>
-          {text}
-        </MessageResponse>
-      </div>
     </details>
   );
 }

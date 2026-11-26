@@ -35,12 +35,15 @@ const summarize = (storyboard, warnings) => ({
  * warnings and the per-segment payload preview for every edit. Character images
  * are uploaded here; `previews` maps their upload ids, and those of images
  * imported from a script document, to thumbnails (a reopened storyboard has
- * none, so the UI falls back to labels).
+ * none, so the UI falls back to labels). `progress` is the running agent job's
+ * latest snapshot (steps, reasoning summary, finished shots); its reasoning is
+ * kept on the storyboard message it produced.
  */
 export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
   const [board, setBoard] = useState(null);
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState(null);
+  const [progress, setProgress] = useState(null);
   const [inspection, setInspection] = useState({ status: "idle", error: "", config: "" });
   const [previews, setPreviews] = useState({});
   const boardRef = useRef(board);
@@ -118,12 +121,19 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     }
     addMessage({ role: "user", text: userText, attachment });
     setPending(kind);
+    setProgress(null);
+    let reasoning = "";
+    const onProgress = (snapshot) => {
+      if (controller.signal.aborted) return;
+      reasoning = snapshot?.reasoning || reasoning;
+      setProgress(snapshot);
+    };
     try {
-      const result = await request(controller.signal);
+      const result = await request(controller.signal, onProgress);
       clearTimeout(inspectTimer.current);
       inspectController.current?.abort();
       setInspection({ status: "ready", error: "", config: `${latest.current.modelKey}|${latest.current.hasStartFrame}` });
-      onResult(result);
+      onResult(result, reasoning);
     } catch (error) {
       if (error?.name === "AbortError") return;
       addMessage({ role: "assistant", kind: "error", text: error.message || "分鏡 AI 暫時無法回應，請稍後重試" });
@@ -131,6 +141,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       if (agentController.current === controller) {
         agentController.current = null;
         setPending(null);
+        setProgress(null);
       }
     }
   }, [addMessage]);
@@ -149,6 +160,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       role: "assistant",
       kind: "storyboard",
       text: result.explanation || "",
+      reasoning: extra.reasoning || "",
       questions: result.questions || [],
       storyboard: result.storyboard,
       summary: summarize(result.storyboard, result.warnings),
@@ -164,15 +176,16 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       kind: "draft",
       userText: brief,
       attachment,
-      request: (signal) => draftVideoStoryboard({
+      request: (signal, onProgress) => draftVideoStoryboard({
         modelKey: latest.current.modelKey,
         brief,
         durationSeconds,
         hasStartFrame: latest.current.hasStartFrame,
         characters,
         signal,
+        onProgress,
       }),
-      onResult: (result) => acceptResult(result, {}),
+      onResult: (result, reasoning) => acceptResult(result, { reasoning }),
     });
   }, [acceptResult, runAgent]);
 
@@ -183,14 +196,15 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       kind: "script",
       userText: script,
       attachment,
-      request: (signal) => scriptToVideoStoryboard({
+      request: (signal, onProgress) => scriptToVideoStoryboard({
         modelKey: latest.current.modelKey,
         script,
         hasStartFrame: latest.current.hasStartFrame,
         characters,
         signal,
+        onProgress,
       }),
-      onResult: (result) => acceptResult(result, {}),
+      onResult: (result, reasoning) => acceptResult(result, { reasoning }),
     });
   }, [acceptResult, runAgent]);
 
@@ -201,7 +215,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       kind: "script",
       userText: `匯入腳本文件：${file.name}`,
       attachment,
-      request: async (signal) => {
+      request: async (signal, onProgress) => {
         if (!SCRIPT_DOCUMENT_EXTENSIONS.includes(getDocumentExtension(file.name))) {
           throw new Error("腳本文件只支援 DOCX、TXT、MD");
         }
@@ -214,11 +228,12 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
           hasStartFrame: latest.current.hasStartFrame,
           characters,
           signal,
+          onProgress,
         });
       },
-      onResult: (result) => {
+      onResult: (result, reasoning) => {
         setPreviews((current) => ({ ...current, ...result.referencePreviews }));
-        acceptResult(result, {});
+        acceptResult(result, { reasoning });
       },
     });
   }, [acceptResult, runAgent]);
@@ -228,15 +243,17 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     return runAgent({
       kind: shotId ? `revise:${shotId}` : "revise",
       userText: label || instruction,
-      request: (signal) => reviseVideoStoryboard({
+      request: (signal, onProgress) => reviseVideoStoryboard({
         modelKey: latest.current.modelKey,
         storyboard: board.storyboard,
         instruction,
         shotId,
         hasStartFrame: latest.current.hasStartFrame,
         signal,
+        onProgress,
       }),
-      onResult: (result) => acceptResult(result, {
+      onResult: (result, reasoning) => acceptResult(result, {
+        reasoning,
         changedShotIds: result.changedShotIds,
         keepNotes: true,
       }),
@@ -298,6 +315,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     board,
     messages,
     pending,
+    progress,
     inspection: currentInspection,
     hasStartFrame,
     previews,

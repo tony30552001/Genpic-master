@@ -101,6 +101,31 @@ describe("useVideoStoryboard", () => {
     });
   });
 
+  it("exposes the job's progress while drafting and keeps its reasoning on the reply", async () => {
+    let finish;
+    draftVideoStoryboard.mockImplementationOnce(({ onProgress }) => new Promise((resolve) => {
+      onProgress({ step: "writing", reasoning: "先決定開場", shots: [] });
+      finish = () => {
+        onProgress({ step: "checking", reasoning: "", shots: [] });
+        resolve(agentResult());
+      };
+    }));
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+
+    let drafting;
+    act(() => {
+      drafting = result.current.draft({ brief: "森林晨光", durationSeconds: 6 });
+    });
+    expect(result.current.progress).toMatchObject({ step: "writing", reasoning: "先決定開場" });
+
+    await act(async () => {
+      finish();
+      await drafting;
+    });
+    expect(result.current.progress).toBeNull();
+    expect(result.current.messages.at(-1)).toMatchObject({ kind: "storyboard", reasoning: "先決定開場" });
+  });
+
   it("debounces inspection after an edit and keeps the edited storyboard", async () => {
     inspectVideoStoryboard.mockResolvedValue({ warnings: [], segments: segmentOf({ ...compiled, sendMode: "single" }) });
     const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));

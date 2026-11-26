@@ -7,7 +7,7 @@
  * while api/_shared/azureOpenAI.js only performs single requests.
  */
 
-const { postJsonCompletion, streamResponseCompletion } = require("./azureOpenAI");
+const { parseJsonContent, postJsonCompletion, streamResponseCompletion } = require("./azureOpenAI");
 const { INVALID_TOOL_CALL, OUTPUT_TRUNCATED } = require("./llmProviders");
 
 /**
@@ -55,7 +55,20 @@ const toDataUrl = (attachment) =>
   `data:${attachment.mimeType};base64,${attachment.base64}`;
 
 const callModel = async (model, request, maxOutputTokens) => {
-  const { systemMessage, userMessage, attachment, fileName } = request;
+  const { systemMessage, userMessage, attachment, fileName, onTextDelta, onReasoningDelta } = request;
+  if (onTextDelta || onReasoningDelta) {
+    const { text } = await streamResponseCompletion({
+      model,
+      systemMessage,
+      messages: [{ role: "user", content: userMessage }],
+      tools: [],
+      jsonOutput: true,
+      maxOutputTokens,
+      onTextDelta: onTextDelta || (() => {}),
+      onReasoningDelta,
+    });
+    return parseJsonContent(text);
+  }
   const isPdf = attachment?.mimeType === "application/pdf";
   return postJsonCompletion({
     model,
@@ -76,6 +89,9 @@ const callModel = async (model, request, maxOutputTokens) => {
  * @param {{ mimeType: string, base64: string }} [params.attachment]
  * @param {string} [params.fileName]
  * @param {number} [params.maxOutputTokens]
+ * @param {(text: string) => void} [params.onTextDelta] Streams the reply; receives each JSON text fragment.
+ * @param {(text: string) => void} [params.onReasoningDelta] Streams the reply; receives each reasoning-summary fragment.
+ * @param {() => void} [params.onRetry] Called before a retry; what was streamed so far is discarded.
  */
 const generateJson = async ({
   llm,
@@ -84,13 +100,19 @@ const generateJson = async ({
   attachment,
   fileName,
   maxOutputTokens,
+  onTextDelta,
+  onReasoningDelta,
+  onRetry = () => {},
 }) => {
+  if (attachment && (onTextDelta || onReasoningDelta)) {
+    throw new Error("串流分析不支援附件");
+  }
   let activeModel = requireModel(llm?.model, "主要分析模型");
   const fallbackModel = llm?.fallback
     ? requireModel(llm.fallback, "備援分析模型")
     : null;
   let activeMaxOutputTokens = maxOutputTokens;
-  const request = { systemMessage, userMessage, attachment, fileName };
+  const request = { systemMessage, userMessage, attachment, fileName, onTextDelta, onReasoningDelta };
 
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -101,6 +123,7 @@ const generateJson = async ({
       if (error.code === OUTPUT_TRUNCATED) {
         if (activeMaxOutputTokens >= MAX_RETRY_OUTPUT_TOKENS) throw error;
         activeMaxOutputTokens = growOutputTokens(activeMaxOutputTokens);
+        onRetry();
         console.warn("[llmRuntime] Retrying truncated response:", {
           attempt,
           model: activeModel.modelName,
@@ -122,6 +145,7 @@ const generateJson = async ({
         maxOutputTokens: activeMaxOutputTokens,
       });
       await sleep(retryDelayMs(attempt));
+      onRetry();
     }
   }
 };

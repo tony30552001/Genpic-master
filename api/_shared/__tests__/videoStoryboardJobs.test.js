@@ -112,6 +112,38 @@ describe("storyboard agent jobs", () => {
     expect(res.body.explanation).toMatch(/標題前的 1 張圖片/);
   });
 
+  it("reports each step, the reasoning summary and finished scenes while a document imports", async () => {
+    scriptDocument.readScriptDocument.mockResolvedValue({
+      zip: {}, preface: "", prefaceImageCount: 0,
+      scenes: [{ title: "開店", text: "她推開門。", images: [] }, { title: "吧台", text: "他微笑。", images: [] }],
+    });
+    scriptDocument.importSceneImages.mockResolvedValue({ references: [[], []], previews: {}, skipped: [] });
+    const reply = { storyboard: storyboard([scriptShot("s1", "她推開門。", 5), scriptShot("s2", "他微笑。", 5)]) };
+    llmRuntime.generateJson.mockImplementation(async ({ onReasoningDelta, onTextDelta }) => {
+      onReasoningDelta("對齊兩個場景");
+      const text = JSON.stringify(reply);
+      onTextDelta(text.slice(0, text.indexOf('{"id":"s2"') + 12));
+      return reply;
+    });
+
+    expect((await invoke({ action: "fromScript", uploadId: FRAME })).status).toBe("succeeded");
+
+    expect(llmModels.resolveRoleModel).toHaveBeenCalledWith("t", "video_storyboard");
+    const snapshots = db.query.mock.calls
+      .filter(([sql]) => sql.includes("SET progress"))
+      .map(([, params]) => {
+        expect(params.slice(0, 2)).toEqual(["job-1", 1]);
+        return JSON.parse(params[2]);
+      });
+    expect(snapshots.map((item) => item.step)).toEqual(["reading", "thinking", "writing", "checking", "images"]);
+    expect(snapshots.at(-1)).toMatchObject({
+      steps: ["reading", "thinking", "writing", "checking", "images"],
+      reasoning: "對齊兩個場景",
+      expectedShots: 2,
+      shots: [{ title: "開店", duration: 5, text: "她推開門。" }],
+    });
+  });
+
   it("does not store document images when the agent rewrites a scene", async () => {
     scriptDocument.readScriptDocument.mockResolvedValue({
       zip: {}, preface: "", prefaceImageCount: 0,

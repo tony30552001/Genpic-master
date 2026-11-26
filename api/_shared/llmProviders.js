@@ -36,6 +36,11 @@ const LLM_ROLES = Object.freeze([
     description: "依生成內容命名輸出檔案",
   },
   {
+    id: "video_storyboard",
+    label: "影片分鏡",
+    description: "把影片概述或腳本擬成分鏡，並即時顯示思考摘要；需為支援推理摘要的推理模型",
+  },
+  {
     id: "image_chat",
     label: "對話創作",
     description: "串流回覆對話、搜尋網路，並決定追問、生成新圖或修改目前版本；需支援工具呼叫與網路搜尋",

@@ -21,9 +21,11 @@ import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
 import { SCRIPT_DOCUMENT_ACCEPT, durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
+import Reasoning from "@/components/chat/Reasoning";
 import ScriptTemplateDialog from "./ScriptTemplateDialog";
 import SegmentedPlayer from "./SegmentedPlayer";
 import StoryboardBoard from "./storyboard/StoryboardBoard";
+import StoryboardProgress from "./storyboard/StoryboardProgress";
 import StoryboardSheet from "./storyboard/StoryboardSheet";
 import StoryboardSummaryCard from "./storyboard/StoryboardSummaryCard";
 
@@ -150,6 +152,7 @@ function AgentMessage({ message, isLatest, onOpen, onQuestion }) {
     : isLatest ? "點擊查看與編輯" : "點擊開啟這個版本";
   return (
     <div className="storyboard-enter flex flex-col gap-2">
+      {message.reasoning && <Reasoning text={message.reasoning} isThinking={false} />}
       {message.text && <p className="text-sm leading-relaxed text-foreground">{message.text}</p>}
       <StoryboardSummaryCard summary={message.summary} subtitle={changed} onOpen={() => onOpen(message, isLatest)} />
       {isLatest && message.questions.length > 0 && (
@@ -644,10 +647,10 @@ export default function VideoWorkspace({
               );
             })}
             {pending && (
-              <p className="storyboard-enter flex items-center gap-2 text-xs text-muted-foreground" role="status">
-                <Loader2 className="size-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-                {drafting ? "AI 正在擬分鏡…" : "AI 正在修改分鏡…"}
-              </p>
+              <StoryboardProgress
+                progress={storyboard.progress}
+                waitingLabel={drafting ? "AI 正在擬分鏡…" : "AI 正在修改分鏡…"}
+              />
             )}
             <div ref={threadEndRef} />
           </div>

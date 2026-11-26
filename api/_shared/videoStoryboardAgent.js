@@ -204,19 +204,26 @@ const respondStoryboard = ({ storyboard, model, hasStartFrame, fromAgent = false
   };
 };
 
-const runAgent = async ({ identity, systemMessage, input, maxOutputTokens }) => {
-  const llm = await resolveRoleModel(identity.tenantId, "prompt_optimization");
+// The reply is streamed so the job's progress shows the model's reasoning
+// summary and each shot as soon as it is written.
+const runAgent = async ({ identity, systemMessage, input, maxOutputTokens, progress }) => {
+  const llm = await resolveRoleModel(identity.tenantId, "video_storyboard");
+  progress.step("thinking");
   const data = await generateJson({
     llm,
     systemMessage,
     userMessage: JSON.stringify(input),
     maxOutputTokens,
+    onTextDelta: progress.text,
+    onReasoningDelta: progress.reasoning,
+    onRetry: progress.restart,
   });
   if (!data || typeof data !== "object") throw agentFailure("分析模型沒有回傳分鏡，請重試");
+  progress.step("checking");
   return data;
 };
 
-const draft = async ({ identity, body, model }) => {
+const draft = async ({ identity, body, model, progress }) => {
   const brief = requireString(body.brief, "影片概述", 20_000);
   const durationSeconds = Number(body.durationSeconds);
   const segmentSeconds = durationRange(model);
@@ -233,8 +240,10 @@ const draft = async ({ identity, body, model }) => {
   }
   const hasStartFrame = Boolean(body.hasStartFrame);
   const characters = normalizeCharacters(body.characters);
+  progress.expectShots({ count: shotCount });
   const data = await runAgent({
     identity,
+    progress,
     systemMessage: DRAFT_SYSTEM,
     input: {
       brief,
@@ -266,7 +275,7 @@ const draft = async ({ identity, body, model }) => {
   });
 };
 
-const revise = async ({ identity, body, model }) => {
+const revise = async ({ identity, body, model, progress }) => {
   const before = normalizeStoryboard(body.storyboard);
   const instruction = requireString(body.instruction, "修改指令", 4000);
   const shotId = body.shotId === undefined || body.shotId === null ? null : String(body.shotId);
@@ -276,6 +285,7 @@ const revise = async ({ identity, body, model }) => {
   const segmentSeconds = durationRange(model);
   const data = await runAgent({
     identity,
+    progress,
     systemMessage: REVISE_SYSTEM,
     input: {
       storyboard: agentInput(before),
@@ -316,9 +326,10 @@ const agentShotNotes = (data, storyboard) => {
   );
 };
 
-const splitScript = async ({ identity, body, model, script, characters }) => {
+const splitScript = async ({ identity, body, model, script, characters, progress }) => {
   const data = await runAgent({
     identity,
+    progress,
     systemMessage: SCRIPT_SYSTEM,
     input: { script, segmentSeconds: durationRange(model), characters: agentCharacters(characters) },
     maxOutputTokens: 16000,
@@ -344,9 +355,14 @@ const documentNotes = ({ prefaceImageCount, skipped }) => [
 
 // The document's scenes are kept as written: the server sets each shot's
 // title and reference images after checking the agent copied every scene.
-const splitDocumentScenes = async ({ identity, body, model, document, characters }) => {
+const splitDocumentScenes = async ({ identity, body, model, document, characters, progress }) => {
+  progress.expectShots({
+    count: document.scenes.length,
+    sceneTitles: document.scenes.map((scene) => scene.title.slice(0, 30)),
+  });
   const data = await runAgent({
     identity,
+    progress,
     systemMessage: DOCUMENT_SYSTEM,
     input: {
       preface: document.preface,
@@ -362,6 +378,7 @@ const splitDocumentScenes = async ({ identity, body, model, document, characters
   });
   const drafted = agentStoryboard(data.storyboard, characters);
   assertSceneFidelity(document.scenes, drafted);
+  progress.step("images");
   const imported = await importSceneImages({
     zip: document.zip,
     scenes: document.scenes,
@@ -390,21 +407,21 @@ const splitDocumentScenes = async ({ identity, body, model, document, characters
   });
 };
 
-const fromScript = async ({ identity, body, model }) => {
+const fromScript = async ({ identity, body, model, progress }) => {
   const hasScript = body.script !== undefined && body.script !== null;
   const hasUpload = body.uploadId !== undefined && body.uploadId !== null;
   if (hasScript === hasUpload) throw new VideoModelError("請提供腳本文字或腳本文件其中一個");
   const characters = normalizeCharacters(body.characters);
   if (hasScript) {
     const script = requireString(body.script, "腳本", MAX_SCRIPT_SOURCE);
-    return splitScript({ identity, body, model, script, characters });
+    return splitScript({ identity, body, model, script, characters, progress });
   }
   const document = await readScriptDocument({
     uploadId: body.uploadId,
     tenantId: identity.tenantId,
     userId: identity.userId,
   });
-  return splitDocumentScenes({ identity, body, model, document, characters });
+  return splitDocumentScenes({ identity, body, model, document, characters, progress });
 };
 
 const inspect = async ({ body, model }) => {

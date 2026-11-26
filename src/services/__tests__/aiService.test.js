@@ -267,13 +267,16 @@ describe("aiService", () => {
   it("queues a storyboard agent action and resolves with the finished job's result", async () => {
     apiPost.mockResolvedValueOnce({ jobId: "sb-1", action: "draft", status: "queued" });
     apiGet
-      .mockResolvedValueOnce({ jobId: "sb-1", status: "processing" })
-      .mockResolvedValueOnce({ jobId: "sb-1", status: "succeeded", result: { title: "晨光" } });
+      .mockResolvedValueOnce({ jobId: "sb-1", status: "processing", progress: { step: "thinking" } })
+      .mockResolvedValueOnce({ jobId: "sb-1", status: "succeeded", progress: { step: "checking" }, result: { title: "晨光" } });
+    const onProgress = vi.fn();
     vi.useFakeTimers();
-    const pending = draftVideoStoryboard({ modelKey: "kling", brief: "開店", durationSeconds: 5 });
+    const pending = draftVideoStoryboard({ modelKey: "kling", brief: "開店", durationSeconds: 5, onProgress });
     await vi.runAllTimersAsync();
     await expect(pending).resolves.toEqual({ title: "晨光" });
     vi.useRealTimers();
+    expect(onProgress.mock.calls).toEqual([[{ step: "thinking" }], [{ step: "checking" }]]);
+    expect(apiPost.mock.calls[0][1]).not.toHaveProperty("onProgress");
     expect(apiPost.mock.calls[0][1]).toMatchObject({ action: "draft", modelKey: "kling" });
     expect(apiGet).toHaveBeenCalledWith("/api/video-storyboard/jobs/sb-1", { signal: undefined });
   });

@@ -9,7 +9,8 @@ import GlobalCard from "./GlobalCard";
 import ShotCard from "./ShotCard";
 import SegmentDivider from "./SegmentDivider";
 import StoryboardTimeline from "./StoryboardTimeline";
-import { StatusPill, StoryboardSkeleton } from "./StoryboardParts";
+import { DraftingShots, StatusPill } from "./StoryboardParts";
+import { shotCountLabel } from "./progressSteps";
 import { boardStatus, compiledPreview, estimateLabel, storyboardActions } from "./storyboardActions";
 
 /** Desktop canvas content: the reviewable storyboard with its footer actions. */
@@ -22,7 +23,7 @@ export default function StoryboardBoard({
   onClose,
 }) {
   const [showCompiled, setShowCompiled] = useState(false);
-  const { board, pending, inspection } = storyboard;
+  const { board, pending, inspection, progress } = storyboard;
   const actions = storyboardActions(storyboard);
   const warnedIds = useMemo(
     () => new Set((board?.warnings || []).map((warning) => warning.shotId)),
@@ -34,11 +35,13 @@ export default function StoryboardBoard({
       <div className="flex min-h-0 w-full flex-col animate-in fade-in duration-(--motion-enter) ease-emphasized" aria-busy="true">
         <header className="flex h-13 shrink-0 items-center gap-2.5 border-b border-border px-4">
           <h2 className="text-[15px] font-semibold">分鏡板</h2>
-          <StatusPill tone="draft">AI 擬稿中</StatusPill>
+          <StatusPill tone="draft">
+            AI 擬稿中{shotCountLabel(progress) && <span className="tabular-nums"> · {shotCountLabel(progress)}</span>}
+          </StatusPill>
         </header>
-        <div className="min-h-0 flex-1 overflow-hidden bg-dot-grid bg-size-[20px_20px] px-5 pt-3" role="status">
-          <span className="sr-only">AI 正在擬分鏡</span>
-          <StoryboardSkeleton />
+        <div className="min-h-0 flex-1 overflow-y-auto bg-dot-grid bg-size-[20px_20px] px-5 py-3 custom-scrollbar">
+          <span className="sr-only" role="status">AI 正在擬分鏡</span>
+          <DraftingShots progress={progress} />
         </div>
       </div>
     );

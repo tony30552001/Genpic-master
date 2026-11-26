@@ -2,6 +2,7 @@ const { query, getPool } = require("./db");
 const { LlmConfigurationError } = require("./llmModels");
 const { VideoModelError } = require("./videoModelFamilies");
 const { AGENT_ACTIONS, loadAllowedModel } = require("./videoStoryboardAgent");
+const { createStoryboardProgress, storyboardSteps } = require("./videoStoryboardProgress");
 
 // A job is reclaimed only when its worker died; llmRuntime already retries
 // model calls, so a failed agent call is final.
@@ -16,6 +17,7 @@ const jobSummary = (row) => ({
   jobId: row.id,
   action: row.action,
   status: row.status,
+  progress: row.progress ?? null,
   ...(row.status === "succeeded" ? { result: row.result } : {}),
   ...(row.status === "failed"
     ? {
@@ -31,7 +33,7 @@ const queueStoryboardJob = async ({ tenantId, userId, action, request }) => {
   const result = await query(
     `INSERT INTO video_storyboard_jobs (tenant_id, user_id, action, request)
      VALUES ($1, $2, $3, $4)
-     RETURNING id, action, status`,
+     RETURNING id, action, status, progress`,
     [tenantId, userId, action, JSON.stringify(request)]
   );
   return jobSummary(result.rows[0]);
@@ -39,7 +41,7 @@ const queueStoryboardJob = async ({ tenantId, userId, action, request }) => {
 
 const getStoryboardJobForUser = async ({ jobId, tenantId, userId }) => {
   const result = await query(
-    `SELECT id, action, status, result, error_code, error_message
+    `SELECT id, action, status, progress, result, error_code, error_message
      FROM video_storyboard_jobs
      WHERE id = $1 AND tenant_id = $2 AND user_id = $3`,
     [jobId, tenantId, userId]
@@ -113,9 +115,21 @@ const finishJob = async ({ job, sql, values }) =>
 
 const runStoryboardJob = async (job) => {
   const identity = { tenantId: job.tenant_id, userId: job.user_id };
+  // Fenced like finishJob, so a worker whose lock expired cannot report progress.
+  const progress = createStoryboardProgress({
+    steps: storyboardSteps(job.action, job.request),
+    save: (snapshot) =>
+      query(
+        `UPDATE video_storyboard_jobs
+         SET progress = $3, updated_at = now()
+         WHERE id = $1 AND status = 'processing' AND lock_version = $2`,
+        [job.id, job.lock_version, snapshot]
+      ),
+  });
   try {
     const model = await loadAllowedModel(identity, job.request.modelKey);
-    const result = await AGENT_ACTIONS[job.action]({ identity, body: job.request, model });
+    const result = await AGENT_ACTIONS[job.action]({ identity, body: job.request, model, progress });
+    await progress.close();
     await finishJob({
       job,
       sql: "status = 'succeeded', result = $3, error_code = NULL, error_message = NULL",
@@ -126,6 +140,7 @@ const runStoryboardJob = async (job) => {
     if (!userFacing) {
       console.error("[video-storyboard-jobs] Agent failed:", { jobId: job.id, name: error?.name, code: error?.code });
     }
+    await progress.close();
     await finishJob({
       job,
       sql: "status = 'failed', error_code = $3, error_message = $4",
