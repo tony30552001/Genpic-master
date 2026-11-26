@@ -8,6 +8,7 @@ import {
   inspectVideoStoryboard,
   reviseVideoStoryboard,
   scriptToVideoStoryboard,
+  waitForStoryboardJob,
 } from "../../services/aiService";
 
 vi.mock("../../services/aiService", () => ({
@@ -15,6 +16,7 @@ vi.mock("../../services/aiService", () => ({
   inspectVideoStoryboard: vi.fn(),
   reviseVideoStoryboard: vi.fn(),
   scriptToVideoStoryboard: vi.fn(),
+  waitForStoryboardJob: vi.fn(),
 }));
 
 vi.mock("../../services/storageService", () => ({ uploadFile: vi.fn() }));
@@ -297,4 +299,21 @@ describe("useVideoStoryboard", () => {
     act(() => storyboardActions(result.current).updateShot("s2", { cut: false }));
     expect(result.current.board.storyboard.shots[1]).toMatchObject({ cut: false, startFrameUploadId: null });
   });
-});
+
+  it("restores a saved conversation and waits again for its running agent job", async () => {
+    waitForStoryboardJob.mockResolvedValue(agentResult());
+    const initial = {
+      messages: [{ id: "m1", createdAt: 1, role: "user", text: "森林晨光" }],
+      board: null,
+      pendingAgent: { jobId: "job-1", kind: "draft" },
+    };
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false, initial }));
+
+    expect(result.current.pending).toBe("draft");
+    await act(async () => {});
+
+    expect(waitForStoryboardJob).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-1" }));
+    expect(result.current.pending).toBeNull();
+    expect(result.current.board.storyboard).toEqual(storyboard);
+    expect(result.current.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+  });});

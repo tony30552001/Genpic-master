@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { ChevronDown, Download, RotateCcw, X } from "@/components/icons/lucideControls";
-import { BookOpen, Clapperboard, FileText, FileUp, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
+import { ChevronDown, Download, RotateCcw, SquarePen, Trash2, X } from "@/components/icons/lucideControls";
+import { BookOpen, Clapperboard, FileText, FileUp, History, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
 import { AlertCircle, Check, Loader2 } from "@/components/icons/lucideStatus";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,10 +27,12 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import useVideoGeneration from "@/hooks/useVideoGeneration";
 import useVideoStoryboard from "@/hooks/useVideoStoryboard";
 import { downloadVideo } from "@/services/aiService";
+import { imageJobImageUrl } from "@/services/imageChatService";
 import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
 import { SCRIPT_DOCUMENT_ACCEPT, durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
+import ChatHistory from "@/components/chat/ChatHistory";
 import Reasoning from "@/components/chat/Reasoning";
 import ScriptTemplateDialog from "./ScriptTemplateDialog";
 import SegmentedPlayer from "./SegmentedPlayer";
@@ -38,6 +50,15 @@ const STATUS_LABELS = {
   succeeded: "生成完成",
   failed: "生成失敗",
 };
+
+const SAVE_STATUS_LABELS = {
+  pending: "尚未儲存",
+  saving: "儲存中…",
+  saved: "已儲存",
+  error: "儲存失敗",
+};
+
+const ICON_BUTTON_CLASS = "size-9 rounded-full text-muted-foreground hover:text-foreground";
 
 const CHIP_CLASS =
   "inline-flex h-8 items-center rounded-[10px] border border-border px-2 text-xs whitespace-nowrap press-feedback hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted";
@@ -60,6 +81,51 @@ const imageSource = (source) => {
     name: source.name || "目前圖片",
   };
 };
+
+// Saved sessions keep image previews small: generated images reload from their
+// job, uploaded data URLs are dropped and render as a placeholder.
+const savedPreviewUrl = (item) => {
+  if (item.sourceImageJobId) return imageJobImageUrl(item.sourceImageJobId);
+  return /^https?:/.test(item.previewUrl || "") ? item.previewUrl : "";
+};
+
+const savedSource = (source) => source && { ...source, previewUrl: savedPreviewUrl(source) };
+
+const sessionSnapshot = ({ messages, board, pendingJob, turns, settings, brief }) => {
+  const firstUser = messages.find((message) => message.role === "user");
+  const title = board?.storyboard?.title
+    || turns[0]?.storyboard?.title
+    || turns[0]?.brief
+    || firstUser?.text
+    || "";
+  return {
+    title: title.trim().slice(0, 40),
+    state: {
+      messages: messages.map((message) => (
+        message.attachment ? { ...message, attachment: savedSource(message.attachment) } : message
+      )),
+      board: board && {
+        storyboard: board.storyboard,
+        shotNotes: board.shotNotes,
+        changedShotIds: board.changedShotIds,
+        reopened: board.reopened,
+      },
+      pendingAgent: pendingJob,
+      turns: turns.map(({ videoUrls: _videoUrls, ...turn }) => turn),
+      settings: { ...settings, source: savedSource(settings.source), endSource: savedSource(settings.endSource) },
+      brief,
+    },
+  };
+};
+
+function FramePreview({ previewUrl, className }) {
+  if (previewUrl) return <img src={previewUrl} alt="" className={className} />;
+  return (
+    <span className={cn("flex items-center justify-center bg-muted text-muted-foreground", className)}>
+      <ImagePlus className="size-4" aria-hidden="true" />
+    </span>
+  );
+}
 
 const initialResolution = (model) => {
   const supported = model?.capabilities?.resolutions || [];
@@ -134,7 +200,7 @@ function UserBubble({ text, attachment }) {
       <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary/10 px-3.5 py-2.5 text-sm leading-relaxed">
         {attachment && (
           <span className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <img src={attachment.previewUrl} alt="" className="size-8 rounded-md object-cover" />
+            <FramePreview previewUrl={attachment.previewUrl} className="size-8 shrink-0 rounded-md object-cover" />
             <span className="truncate">{attachment.name}</span>
           </span>
         )}
@@ -366,36 +432,51 @@ function VideoPlayer({ video, onClose }) {
   );
 }
 
+/**
+ * Video creation workspace. `sessions` (useVideoSessions) persists every change
+ * as a snapshot; the parent remounts this component with a new key when another
+ * creation is opened, and it hydrates from `sessions.getInitialState()`.
+ */
 export default function VideoWorkspace({
   models = [],
   settings,
   historyItems = [],
   initialSource = null,
   onSaveHistory,
+  sessions,
 }) {
-  const [brief, setBrief] = useState("");
-  const [modelKey, setModelKey] = useState(models[0]?.modelKey || "");
-  const [durationSeconds, setDurationSeconds] = useState(5);
-  const [resolution, setResolution] = useState(() => initialResolution(models[0]));
-  const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [generateAudio, setGenerateAudio] = useState(false);
-  const [source, setSource] = useState(() => imageSource(initialSource));
-  const [endSource, setEndSource] = useState(null);
+  const [restored] = useState(() => sessions.getInitialState());
+  const restoredModel = models.find((item) => item.modelKey === restored?.settings.modelKey) || null;
+  const [brief, setBrief] = useState(() => restored?.brief || "");
+  const [modelKey, setModelKey] = useState(() => (restoredModel || models[0])?.modelKey || "");
+  const [durationSeconds, setDurationSeconds] = useState(() => restored?.settings.durationSeconds ?? 5);
+  const [resolution, setResolution] = useState(() =>
+    restoredModel ? restored.settings.resolution : initialResolution(models[0])
+  );
+  const [aspectRatio, setAspectRatio] = useState(() => restored?.settings.aspectRatio || "16:9");
+  const [generateAudio, setGenerateAudio] = useState(() => Boolean(restored?.settings.generateAudio));
+  const [source, setSource] = useState(() => (restored ? restored.settings.source : imageSource(initialSource)));
+  const [endSource, setEndSource] = useState(() => restored?.settings.endSource || null);
   const [isUploading, setIsUploading] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [playerVideo, setPlayerVideo] = useState(null);
-  const [boardVisible, setBoardVisible] = useState(false);
+  const [boardVisible, setBoardVisible] = useState(() => Boolean(restored?.board || restored?.pendingAgent));
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const fileRef = useRef(null);
   const endFileRef = useRef(null);
   const scriptFileRef = useRef(null);
   const briefRef = useRef(null);
   const threadEndRef = useRef(null);
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
-  const videos = useVideoGeneration({ onSaved: onSaveHistory });
+  const videos = useVideoGeneration({ onSaved: onSaveHistory, initialTurns: restored?.turns });
 
   const model = models.find((item) => item.modelKey === modelKey) || models[0] || null;
-  const storyboard = useVideoStoryboard({ modelKey: model?.modelKey || "", hasStartFrame: Boolean(source) });
+  const storyboard = useVideoStoryboard({
+    modelKey: model?.modelKey || "",
+    hasStartFrame: Boolean(source),
+    initial: restored,
+  });
   const { board, pending } = storyboard;
   const unlimited = settings?.remainingQuota === null;
   const remainingQuota = Number(settings?.remainingQuota ?? 0);
@@ -418,6 +499,27 @@ export default function VideoWorkspace({
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ block: "nearest" });
   }, [thread.length]);
+
+  const { record } = sessions;
+  useEffect(() => {
+    record(sessionSnapshot({
+      messages: storyboard.messages,
+      board,
+      pendingJob: storyboard.pendingJob,
+      turns: videos.turns,
+      settings: { modelKey, durationSeconds, resolution, aspectRatio, generateAudio, source, endSource },
+      brief,
+    }));
+  }, [
+    aspectRatio, board, brief, durationSeconds, endSource, generateAudio, modelKey, record, resolution, source,
+    storyboard.messages, storyboard.pendingJob, videos.turns,
+  ]);
+
+  // Deleting or leaving mid-run would drop a video that is not in history yet.
+  const isBusy = Boolean(pending) || videos.turns.some((turn) =>
+    !["succeeded", "failed"].includes(turn.status) || turn.mergeStatus === "merging"
+  );
+  const recentSessions = sessions.items.filter((item) => item.id !== sessions.activeId).slice(0, 3);
 
   const generateBlocker = !hasQuota
     ? "今日額度已用完"
@@ -455,7 +557,9 @@ export default function VideoWorkspace({
     void videos.retryFailed(turn);
   };
 
-  const attachment = source ? { previewUrl: source.previewUrl, name: source.name } : null;
+  const attachment = source
+    ? { previewUrl: source.previewUrl, name: source.name, sourceImageJobId: source.sourceImageJobId }
+    : null;
 
   const directGenerate = () => {
     if (!canSend || !hasQuota) return;
@@ -639,6 +743,60 @@ export default function VideoWorkspace({
   return (
     <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[400px_minmax(0,1fr)] lg:gap-5">
       <section className="flex min-h-0 flex-col overflow-hidden" aria-label="影片工作串流">
+        <header className="flex shrink-0 items-center gap-0.5 py-1 pl-1 pr-0">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-semibold">{sessions.title || "新的影片創作"}</h2>
+            {(sessions.activeId || sessions.saveStatus !== "saved") && (
+              <p
+                className={cn("text-[11px]", sessions.saveStatus === "error" ? "text-destructive" : "text-muted-foreground")}
+                aria-live="polite"
+              >
+                {SAVE_STATUS_LABELS[sessions.saveStatus]}
+              </p>
+            )}
+          </div>
+          <ChatHistory
+            chats={sessions.items}
+            activeChatId={sessions.activeId}
+            hasMore={sessions.hasMore}
+            isLoading={sessions.isLoading}
+            onOpen={(id) => void sessions.open(id)}
+            onLoadMore={sessions.loadMore}
+            triggerClassName={ICON_BUTTON_CLASS}
+            label="創作紀錄"
+            heading="最近的影片創作"
+            emptyText="還沒有創作紀錄"
+            untitled="未命名創作"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className={ICON_BUTTON_CLASS}
+            aria-label="新的影片創作"
+            onClick={sessions.startNew}
+            disabled={(!sessions.activeId && thread.length === 0) || isBusy}
+          >
+            <SquarePen className="size-4" aria-hidden="true" />
+          </Button>
+          {sessions.activeId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={ICON_BUTTON_CLASS}
+              aria-label="刪除這段創作"
+              disabled={isBusy}
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </Button>
+          )}
+        </header>
+        {sessions.error && (
+          <p role="alert" className="flex shrink-0 items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            {sessions.error}
+          </p>
+        )}
         <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2 custom-scrollbar">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
             {thread.map((item) => {
@@ -696,7 +854,7 @@ export default function VideoWorkspace({
                 {isUploading ? (
                   <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                 ) : source ? (
-                  <img src={source.previewUrl} alt="" className="size-full object-cover animate-in fade-in duration-(--motion-enter) ease-emphasized" />
+                  <FramePreview previewUrl={source.previewUrl} className="size-full object-cover animate-in fade-in duration-(--motion-enter) ease-emphasized" />
                 ) : (
                   <>
                     <ImagePlus className="size-4" aria-hidden="true" />
@@ -804,7 +962,7 @@ export default function VideoWorkspace({
                   <SettingRow label="尾影格">
                     {endSource ? (
                       <span className="flex min-w-0 items-center gap-1.5">
-                        <img src={endSource.previewUrl} alt="" className="size-8 rounded-md object-cover" />
+                        <FramePreview previewUrl={endSource.previewUrl} className="size-8 rounded-md object-cover" />
                         <Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => setEndSource(null)} aria-label="移除尾影格">
                           <X className="size-4" aria-hidden="true" />
                         </Button>
@@ -940,6 +1098,17 @@ export default function VideoWorkspace({
             <div className="m-auto flex max-w-xs flex-col items-center px-6 text-center">
               <p className="text-sm font-medium text-foreground">分鏡會出現在這裡</p>
               <p className="mt-1 text-balance text-[13px] leading-relaxed text-muted-foreground">按「生成分鏡」讓 AI 把概述拆成一幕一幕，確認後再生成；按「直接生成」則以單一鏡頭生成。</p>
+              {recentSessions.length > 0 && (
+                <div className="mt-6 flex w-full flex-col gap-2">
+                  <p className="text-left text-xs font-medium text-muted-foreground">最近創作</p>
+                  {recentSessions.map((item) => (
+                    <button key={item.id} type="button" className="flex items-center gap-2 rounded-lg border border-border bg-card/90 p-2 text-left text-xs press-feedback" onClick={() => void sessions.open(item.id)}>
+                      <History className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="truncate">{item.title || "未命名創作"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {recentVideos.length > 0 && (
                 <div className="mt-6 flex w-full flex-col gap-2">
                   <p className="text-left text-xs font-medium text-muted-foreground">最近影片</p>
@@ -961,6 +1130,20 @@ export default function VideoWorkspace({
       </AnimatePresence>
       <VideoPlayer video={playerVideo} onClose={closePlayer} />
       <ScriptTemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} />
+      <AlertDialog open={deleteOpen && Boolean(sessions.activeId)} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除這段創作？</AlertDialogTitle>
+            <AlertDialogDescription>
+              分鏡與對話紀錄會永久刪除；已生成的影片仍保留在素材中心。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void sessions.remove(sessions.activeId)}>刪除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

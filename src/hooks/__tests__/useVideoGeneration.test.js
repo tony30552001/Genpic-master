@@ -140,4 +140,42 @@ describe("useVideoGeneration", () => {
       videoUrls: [expect.any(String), expect.any(String)],
     });
   });
-});
+
+  it("resumes a saved session without saving its turns to history again", async () => {
+    finish(1);
+    const onSaved = vi.fn();
+    const initialTurns = [
+      { clientId: "a", createdAt: 1, storyboard, projectId: "p1", status: "polling", segments: [], saved: false },
+      { clientId: "b", createdAt: 2, storyboard, projectId: "p2", status: "succeeded", segments: [segment(0)], saved: true },
+      { clientId: "c", createdAt: 3, brief: "海邊", status: "drafting" },
+    ];
+    const { result } = renderHook(() => useVideoGeneration({ onSaved, initialTurns }));
+
+    await act(async () => {});
+
+    expect(waitForVideoProject.mock.calls.map(([args]) => args.projectId)).toEqual(["p1", "p2"]);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ videoProjectId: "p1" }));
+    expect(result.current.turns.map((turn) => [turn.status, Boolean(turn.saved)])).toEqual([
+      ["succeeded", true],
+      ["succeeded", true],
+      ["failed", false],
+    ]);
+    expect(result.current.turns[2].error).toBe("已中斷，請重新生成");
+  });
+
+  it("reloads a merged turn as one video and keeps failed segments retryable", async () => {
+    const failed = { ...segment(1), status: "failed" };
+    const initialTurns = [
+      { clientId: "a", createdAt: 1, storyboard, projectId: "p1", status: "succeeded", segments: [segment(0), segment(1)], mergeStatus: "merged", saved: true },
+      { clientId: "b", createdAt: 2, storyboard, projectId: "p2", status: "failed", segments: [segment(0), failed], error: "失敗" },
+    ];
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn(), initialTurns }));
+
+    await act(async () => {});
+
+    expect(downloadVideo).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p1" }));
+    expect(waitForVideoProject).not.toHaveBeenCalled();
+    expect(result.current.turns[0].videoUrls).toHaveLength(1);
+    expect(result.current.turns[1]).toMatchObject({ status: "failed", error: "失敗" });
+  });});

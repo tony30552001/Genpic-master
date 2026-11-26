@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from "motion/react";
 import {
   AlertCircle,
+  Loader2,
 } from "@/components/icons/lucideStatus";
 import {
   FileText,
@@ -49,6 +50,7 @@ import AppHeader from './components/common/AppHeader';
 import ChatWorkspace from './components/chat/ChatWorkspace';
 import VideoWorkspace from './components/video/VideoWorkspace';
 import useImageChat from './hooks/useImageChat';
+import useVideoSessions from './hooks/useVideoSessions';
 import { DEFAULT_IMAGE_PURPOSE } from './lib/imagePurposes';
 
 export default function InfographicGenerator({
@@ -99,6 +101,7 @@ export default function InfographicGenerator({
 
     const navigate = useNavigate();
     const { user, profile, isAdmin, handleLogout, isLoading, isProfileLoading, profileError, refreshProfile } = useAuth();
+    const videoSessions = useVideoSessions({ enabled: Boolean(profile?.videoEnabled) });
     const modelPolicy = profile?.modelPolicy || null;
     const imageModelConfig = modelPolicy?.defaultModel
         ? profile?.imageModels?.find((model) => model.modelKey === modelPolicy.defaultModel)
@@ -473,6 +476,7 @@ export default function InfographicGenerator({
         }),
         onConvertToVideo: profile?.videoEnabled && activeVersion?.jobId
             ? () => {
+                videoSessions.startNew();
                 setVideoSource({
                     sourceImageJobId: activeVersion.jobId,
                     previewUrl: generatedImage,
@@ -697,13 +701,22 @@ export default function InfographicGenerator({
 
                 {activeTab === 'video' && profile?.videoEnabled && (
                     <div className="flex min-h-0 flex-1 p-3 lg:px-8 lg:py-4">
-                        <VideoWorkspace
-                            models={profile.videoModels || []}
-                            settings={profile.videoSettings}
-                            historyItems={historyItems}
-                            initialSource={videoSource}
-                            onSaveHistory={saveVideoHistoryItem}
-                        />
+                        {videoSessions.isOpening ? (
+                            <div className="m-auto flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                                <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                                正在開啟創作紀錄…
+                            </div>
+                        ) : (
+                            <VideoWorkspace
+                                key={videoSessions.workspaceKey}
+                                models={profile.videoModels || []}
+                                settings={profile.videoSettings}
+                                historyItems={historyItems}
+                                initialSource={videoSource}
+                                onSaveHistory={saveVideoHistoryItem}
+                                sessions={videoSessions}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -747,8 +760,14 @@ export default function InfographicGenerator({
                             onDeleteHistory={deleteHistoryItem}
                             onDeleteHistoryItems={deleteHistoryItems}
                             onGoCreate={(target) => setActiveTab(target === 'video' && profile?.videoEnabled ? 'video' : 'general')}
+                            videoSessions={profile?.videoEnabled ? videoSessions : null}
+                            onOpenVideoSession={(sessionId) => {
+                                setActiveTab('video');
+                                void videoSessions.open(sessionId);
+                            }}
                             onConvertToVideo={(item) => {
                                 if (!profile?.videoEnabled || !item.jobId) return;
+                                videoSessions.startNew();
                                 setVideoSource({
                                     sourceImageJobId: item.jobId,
                                     previewUrl: item.imageUrl,

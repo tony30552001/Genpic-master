@@ -10,6 +10,7 @@ import AssetMetadataSheet from "./AssetMetadataSheet";
 import AssetViewModeToggle from "./AssetViewModeToggle";
 import ImageGallery from "./ImageGallery";
 import VideoGallery from "./VideoGallery";
+import VideoSessionList from "./VideoSessionList";
 import QuickApplyStrip from "./QuickApplyStrip";
 import { normalizeViewMode } from "./viewMode";
 
@@ -58,6 +59,8 @@ export default function AssetCenter({
   onDeleteHistoryItems,
   onGoCreate,
   onConvertToVideo,
+  videoSessions,
+  onOpenVideoSession,
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef(null);
@@ -213,6 +216,7 @@ export default function AssetCenter({
 
       {section === "videos" && (
         <div className="animate-in fade-in duration-(--motion-enter) ease-emphasized motion-reduce:animate-none" key="videos">
+          {videoSessions && <VideoSessionList sessions={videoSessions} onOpen={onOpenVideoSession} />}
           <VideoGallery
             historyItems={historyItems.filter((item) => item.videoProjectId)}
             searchQuery={historySearchQuery}

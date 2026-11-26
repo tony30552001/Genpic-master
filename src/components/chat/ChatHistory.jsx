@@ -18,21 +18,33 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit",
 });
 
-/** Icon-triggered dropdown listing the user's chats, newest first, with paging. */
-export default function ChatHistory({ chats, activeChatId, hasMore, isLoading, onOpen, onLoadMore, triggerClassName }) {
+/** Icon-triggered dropdown listing saved chats or creations, newest first, with paging. */
+export default function ChatHistory({
+  chats,
+  activeChatId,
+  hasMore,
+  isLoading,
+  onOpen,
+  onLoadMore,
+  triggerClassName,
+  label = "對話紀錄",
+  heading = "最近的對話",
+  emptyText = "還沒有對話紀錄",
+  untitled = "未命名對話",
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className={cn("size-10 rounded-full", triggerClassName)} aria-label="對話紀錄">
+        <Button variant="ghost" size="icon" className={cn("size-10 rounded-full", triggerClassName)} aria-label={label}>
           <History className="icon-md" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-96 w-72 overflow-y-auto">
-        <DropdownMenuLabel>最近的對話</DropdownMenuLabel>
+        <DropdownMenuLabel>{heading}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {chats.length === 0 && (
           <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-            {isLoading ? "載入中…" : "還沒有對話紀錄"}
+            {isLoading ? "載入中…" : emptyText}
           </p>
         )}
         {chats.map((item) => (
@@ -42,7 +54,7 @@ export default function ChatHistory({ chats, activeChatId, hasMore, isLoading, o
               aria-hidden="true"
             />
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate">{item.title || "未命名對話"}</span>
+              <span className="truncate">{item.title || untitled}</span>
               <span className="text-[11px] text-muted-foreground">{dateFormatter.format(new Date(item.updatedAt))}</span>
             </span>
           </DropdownMenuItem>

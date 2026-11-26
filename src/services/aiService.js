@@ -284,21 +284,23 @@ export const waitForStoryboardJob = async ({ jobId, signal, onProgress, pollInte
 };
 
 // Agent actions are queued because one analysis-model call can outlast the
-// backend's request limit.
-const runStoryboardAgent = async (action, { signal, onProgress, ...body }) => {
+// backend's request limit. `onJob` receives the queued job id so a saved
+// session can resume waiting for it.
+const runStoryboardAgent = async (action, { signal, onProgress, onJob, ...body }) => {
   const { jobId } = await postVideoStoryboard(action, { signal, ...body });
+  onJob?.(jobId);
   return waitForStoryboardJob({ jobId, signal, onProgress });
 };
 
-export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress }) =>
-  runStoryboardAgent("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress });
+export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob }) =>
+  runStoryboardAgent("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob });
 
-export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress }) =>
-  runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress });
+export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress, onJob }) =>
+  runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress, onJob });
 
 // Pass either pasted `script` text or the `uploadId` of a script document.
-export const scriptToVideoStoryboard = ({ modelKey, script, uploadId, hasStartFrame, characters, signal, onProgress }) =>
-  runStoryboardAgent("fromScript", { modelKey, script, uploadId, hasStartFrame, characters, signal, onProgress });
+export const scriptToVideoStoryboard = ({ modelKey, script, uploadId, hasStartFrame, characters, signal, onProgress, onJob }) =>
+  runStoryboardAgent("fromScript", { modelKey, script, uploadId, hasStartFrame, characters, signal, onProgress, onJob });
 
 export const inspectVideoStoryboard = ({ modelKey, storyboard, hasStartFrame, signal }) =>
   postVideoStoryboard("inspect", { modelKey, storyboard, hasStartFrame, signal });

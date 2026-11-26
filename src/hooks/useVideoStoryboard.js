@@ -4,6 +4,7 @@ import {
   inspectVideoStoryboard,
   reviseVideoStoryboard,
   scriptToVideoStoryboard,
+  waitForStoryboardJob,
 } from "../services/aiService";
 import { uploadFile } from "../services/storageService";
 import { readFileAsDataUrl } from "../lib/imageFile";
@@ -37,14 +38,23 @@ const summarize = (storyboard, warnings) => ({
  * imported from a script document, to thumbnails (a reopened storyboard has
  * none, so the UI falls back to labels). `progress` is the running agent job's
  * latest snapshot (steps, reasoning summary, finished shots); its reasoning is
- * kept on the storyboard message it produced.
+ * kept on the storyboard message it produced. `pendingJob` is the running
+ * agent job; a session restored with `initial.pendingAgent` waits for it again.
  */
-export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
-  const [board, setBoard] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [pending, setPending] = useState(null);
+export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = null }) {
+  const [board, setBoard] = useState(() =>
+    initial?.board ? { revision: 1, warnings: [], segments: null, ...initial.board } : null
+  );
+  const [messages, setMessages] = useState(() => initial?.messages || []);
+  const [resumeJob] = useState(() => initial?.pendingAgent || null);
+  const [pending, setPending] = useState(() => resumeJob?.kind || null);
+  const [pendingJob, setPendingJob] = useState(resumeJob);
   const [progress, setProgress] = useState(null);
-  const [inspection, setInspection] = useState({ status: "idle", error: "", config: "" });
+  const [inspection, setInspection] = useState(() => ({
+    status: initial?.board ? "loading" : "idle",
+    error: "",
+    config: `${modelKey}|${hasStartFrame}`,
+  }));
   const [previews, setPreviews] = useState({});
   const boardRef = useRef(board);
   const agentController = useRef(null);
@@ -110,26 +120,19 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     setMessages((current) => [...current, { id: makeId(), createdAt: Date.now(), ...message }]);
   }, []);
 
-  const runAgent = useCallback(async ({ kind, userText, attachment, request, onResult, replaceBoard = false }) => {
-    agentController.current?.abort();
-    const controller = new AbortController();
-    agentController.current = controller;
-    if (replaceBoard) {
-      clearTimeout(inspectTimer.current);
-      inspectController.current?.abort();
-      setBoard(null);
-    }
-    addMessage({ role: "user", text: userText, attachment });
-    setPending(kind);
-    setProgress(null);
+  // Waits for one agent request; `runAgent` starts it, a restored session resumes it.
+  const awaitAgent = useCallback(async (controller, { kind, request, onResult }) => {
     let reasoning = "";
     const onProgress = (snapshot) => {
       if (controller.signal.aborted) return;
       reasoning = snapshot?.reasoning || reasoning;
       setProgress(snapshot);
     };
+    const onJob = (jobId) => {
+      if (!controller.signal.aborted) setPendingJob({ jobId, kind });
+    };
     try {
-      const result = await request(controller.signal, onProgress);
+      const result = await request(controller.signal, onProgress, onJob);
       clearTimeout(inspectTimer.current);
       inspectController.current?.abort();
       setInspection({ status: "ready", error: "", config: `${latest.current.modelKey}|${latest.current.hasStartFrame}` });
@@ -141,10 +144,27 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
       if (agentController.current === controller) {
         agentController.current = null;
         setPending(null);
+        setPendingJob(null);
         setProgress(null);
       }
     }
   }, [addMessage]);
+
+  const runAgent = useCallback(({ kind, userText, attachment, request, onResult, replaceBoard = false }) => {
+    agentController.current?.abort();
+    const controller = new AbortController();
+    agentController.current = controller;
+    if (replaceBoard) {
+      clearTimeout(inspectTimer.current);
+      inspectController.current?.abort();
+      setBoard(null);
+    }
+    addMessage({ role: "user", text: userText, attachment });
+    setPending(kind);
+    setPendingJob(null);
+    setProgress(null);
+    return awaitAgent(controller, { kind, request, onResult });
+  }, [addMessage, awaitAgent]);
 
   const acceptResult = useCallback((result, extra) => {
     setBoard((current) => ({
@@ -168,15 +188,30 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     });
   }, [addMessage]);
 
+  // Script imports may carry reference images; revisions keep shot notes.
+  const applyResult = useCallback((kind, result, reasoning) => {
+    if (result.referencePreviews) setPreviews((current) => ({ ...current, ...result.referencePreviews }));
+    if (kind.startsWith("revise")) {
+      acceptResult(result, { reasoning, changedShotIds: result.changedShotIds, keepNotes: true });
+    } else {
+      acceptResult(result, { reasoning });
+    }
+  }, [acceptResult]);
+
+  const startAgent = useCallback((options) => runAgent({
+    ...options,
+    onResult: (result, reasoning) => applyResult(options.kind, result, reasoning),
+  }), [applyResult, runAgent]);
+
   // A new draft or script replaces the board but keeps its characters.
   const draft = useCallback(({ brief, durationSeconds, attachment }) => {
     const characters = boardCharacters(boardRef.current);
-    return runAgent({
+    return startAgent({
       replaceBoard: true,
       kind: "draft",
       userText: brief,
       attachment,
-      request: (signal, onProgress) => draftVideoStoryboard({
+      request: (signal, onProgress, onJob) => draftVideoStoryboard({
         modelKey: latest.current.modelKey,
         brief,
         durationSeconds,
@@ -184,38 +219,38 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
         characters,
         signal,
         onProgress,
+        onJob,
       }),
-      onResult: (result, reasoning) => acceptResult(result, { reasoning }),
     });
-  }, [acceptResult, runAgent]);
+  }, [startAgent]);
 
   const fromScript = useCallback(({ script, attachment }) => {
     const characters = boardCharacters(boardRef.current);
-    return runAgent({
+    return startAgent({
       replaceBoard: true,
       kind: "script",
       userText: script,
       attachment,
-      request: (signal, onProgress) => scriptToVideoStoryboard({
+      request: (signal, onProgress, onJob) => scriptToVideoStoryboard({
         modelKey: latest.current.modelKey,
         script,
         hasStartFrame: latest.current.hasStartFrame,
         characters,
         signal,
         onProgress,
+        onJob,
       }),
-      onResult: (result, reasoning) => acceptResult(result, { reasoning }),
     });
-  }, [acceptResult, runAgent]);
+  }, [startAgent]);
 
   const importScript = useCallback(({ file, attachment }) => {
     const characters = boardCharacters(boardRef.current);
-    return runAgent({
+    return startAgent({
       replaceBoard: true,
       kind: "script",
       userText: `匯入腳本文件：${file.name}`,
       attachment,
-      request: async (signal, onProgress) => {
+      request: async (signal, onProgress, onJob) => {
         if (!SCRIPT_DOCUMENT_EXTENSIONS.includes(getDocumentExtension(file.name))) {
           throw new Error("腳本文件只支援 DOCX、TXT、MD");
         }
@@ -229,21 +264,18 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
           characters,
           signal,
           onProgress,
+          onJob,
         });
       },
-      onResult: (result, reasoning) => {
-        setPreviews((current) => ({ ...current, ...result.referencePreviews }));
-        acceptResult(result, { reasoning });
-      },
     });
-  }, [acceptResult, runAgent]);
+  }, [startAgent]);
 
   const revise = useCallback(({ instruction, shotId = null, label }) => {
     if (!board) return Promise.resolve();
-    return runAgent({
+    return startAgent({
       kind: shotId ? `revise:${shotId}` : "revise",
       userText: label || instruction,
-      request: (signal, onProgress) => reviseVideoStoryboard({
+      request: (signal, onProgress, onJob) => reviseVideoStoryboard({
         modelKey: latest.current.modelKey,
         storyboard: board.storyboard,
         instruction,
@@ -251,15 +283,23 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
         hasStartFrame: latest.current.hasStartFrame,
         signal,
         onProgress,
-      }),
-      onResult: (result, reasoning) => acceptResult(result, {
-        reasoning,
-        changedShotIds: result.changedShotIds,
-        keepNotes: true,
+        onJob,
       }),
     });
-  }, [acceptResult, board, runAgent]);
+  }, [board, startAgent]);
 
+  // A restored session waits again for the agent job it was saved with.
+  useEffect(() => {
+    if (!resumeJob) return undefined;
+    const controller = new AbortController();
+    agentController.current = controller;
+    void awaitAgent(controller, {
+      kind: resumeJob.kind,
+      request: (signal, onProgress) => waitForStoryboardJob({ jobId: resumeJob.jobId, signal, onProgress }),
+      onResult: (result, reasoning) => applyResult(resumeJob.kind, result, reasoning),
+    });
+    return () => controller.abort();
+  }, [applyResult, awaitAgent, resumeJob]);
   const edit = useCallback((updater, shotId = null) => {
     const current = boardRef.current;
     if (!current) return;
@@ -315,6 +355,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame }) {
     board,
     messages,
     pending,
+    pendingJob,
     progress,
     inspection: currentInspection,
     hasStartFrame,

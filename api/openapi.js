@@ -466,6 +466,63 @@ addOperation("/api/video-jobs/{id}/video", "get", {
   successSchema: { type: "string", format: "binary" },
 });
 
+const videoSessionSnapshotSchema = {
+  type: "object",
+  required: ["title", "state"],
+  properties: {
+    title: { type: "string", maxLength: 40 },
+    state: {
+      type: "object",
+      description: "Browser-owned snapshot of the storyboard conversation, board, composer settings and video turns; at most 2 MB of JSON (413 state_too_large).",
+    },
+  },
+};
+
+addOperation("/api/video-sessions", "get", {
+  summary: "List the caller's video creation sessions, newest first",
+  tags: ["Video"],
+  parameters: [{ name: "cursor", in: "query", required: false, schema: { type: "string" } }],
+});
+
+addOperation("/api/video-sessions", "post", {
+  summary: "Save a new video creation session",
+  tags: ["Video"],
+  body: true,
+  csrf: true,
+  successStatuses: [201],
+  bodySchema: videoSessionSnapshotSchema,
+});
+
+addOperation("/api/video-sessions/{id}", "get", {
+  summary: "Get an owned video creation session with its snapshot",
+  tags: ["Video"],
+  parameters: pathParameters("id"),
+});
+
+addOperation("/api/video-sessions/{id}", "put", {
+  summary: "Replace the snapshot of an owned video creation session",
+  description: "Optimistic: returns 409 `state_conflict` when `stateVersion` is stale.",
+  tags: ["Video"],
+  body: true,
+  csrf: true,
+  parameters: pathParameters("id"),
+  bodySchema: {
+    ...videoSessionSnapshotSchema,
+    required: ["stateVersion", "title", "state"],
+    properties: { stateVersion: { type: "integer", minimum: 1 }, ...videoSessionSnapshotSchema.properties },
+  },
+});
+paths["/api/video-sessions/{id}"].put.responses[409] = response("The session changed in another window");
+
+addOperation("/api/video-sessions/{id}", "delete", {
+  summary: "Delete an owned video creation session",
+  description: "Videos already saved to history are kept.",
+  tags: ["Video"],
+  csrf: true,
+  successStatuses: [204],
+  parameters: pathParameters("id"),
+});
+
 const imageChatSettingsSchema = {
   type: "object",
   required: ["aspectRatio", "imageLanguage", "purpose"],
