@@ -22,6 +22,12 @@ ClaimSubmission ==
   /\ lockVersion' = lockVersion + 1
   /\ UNCHANGED <<requestId, submitted, resultVersion>>
 
+CancelQueued ==
+  /\ status = "queued"
+  /\ status' = "cancelled"
+  /\ phase' = "completed"
+  /\ UNCHANGED <<requestId, submitted, attempts, lockVersion, resultVersion>>
+
 TransientBeforeSubmission ==
   /\ status = "processing"
   /\ phase = "submitting"
@@ -46,7 +52,8 @@ LoseSubmitState ==
   /\ requestId = FALSE
   /\ status' = "failed"
   /\ phase' = "completed"
-  /\ UNCHANGED <<requestId, submitted, attempts, lockVersion, resultVersion>>
+  /\ submitted' \in {submitted, submitted + 1}
+  /\ UNCHANGED <<requestId, attempts, lockVersion, resultVersion>>
 
 ClaimPolling ==
   /\ status = "processing"
@@ -78,11 +85,12 @@ PermanentFailure ==
   /\ UNCHANGED <<requestId, submitted, attempts, lockVersion, resultVersion>>
 
 Terminal ==
-  /\ status \in {"succeeded", "failed"}
+  /\ status \in {"succeeded", "failed", "cancelled"}
   /\ UNCHANGED <<status, phase, requestId, submitted, attempts, lockVersion, resultVersion>>
 
 Next ==
   \/ ClaimSubmission
+  \/ CancelQueued
   \/ TransientBeforeSubmission
   \/ SubmitSuccess
   \/ LoseSubmitState
@@ -94,6 +102,9 @@ Next ==
 
 AcceptedOnce ==
   submitted <= 1
+
+CancelledUnsubmitted ==
+  status = "cancelled" => ~requestId /\ submitted = 0
 
 SuccessFromLatestClaim ==
   status = "succeeded" => resultVersion = lockVersion

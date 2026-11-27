@@ -78,6 +78,9 @@ export const testAdminImageModel = async (payload, { signal } = {}) =>
 export const listAdminVideoModels = async () =>
   apiGet(`${ADMIN_API_BASE}/video-models`);
 
+export const getAdminVideoUsage = async ({ userId, modelKey, from, to }, { signal } = {}) =>
+  apiGet(`${ADMIN_API_BASE}/video-usage${buildQueryString({ userId, modelKey, from, to })}`, { signal });
+
 export const createAdminVideoModel = async (model) =>
   apiPost(`${ADMIN_API_BASE}/video-models`, model);
 

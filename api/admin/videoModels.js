@@ -27,6 +27,7 @@ const modelInput = (body = {}) => ({
   maxDurationSeconds: body.maxDurationSeconds,
   maxResolution: body.maxResolution,
   allowAudio: body.allowAudio,
+  pricePerSecondUsd: body.pricePerSecondUsd,
 });
 
 const handleVideoModels = async (context, req, identity, method, targetId) => {

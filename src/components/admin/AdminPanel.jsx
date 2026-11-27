@@ -46,6 +46,8 @@ import { HISTORY_SOURCE_LABELS, getHistorySourceLabel } from "@/lib/historySourc
 import ImageLightbox from "../common/ImageLightbox";
 import { AnimatePresence } from "motion/react";
 import AiModelSettings from "./models/AiModelSettings";
+import AdminTable from "./AdminTable";
+import VideoUsageReport from "./VideoUsageReport";
 import UserFilterSelect from "./UserFilterSelect";
 import useAuth from "../../hooks/useAuth";
 import {
@@ -65,6 +67,7 @@ import {
 const SECTIONS = [
   { id: "users", label: "使用者", icon: Users },
   { id: "history", label: "生成紀錄", icon: Image },
+  { id: "video-usage", label: "影片用量", icon: Clapperboard },
   { id: "models", label: "AI 模型", icon: Cpu },
   { id: "styles", label: "風格庫", icon: Palette },
 ];
@@ -250,36 +253,6 @@ const VideoAccessSwitch = ({ checked, label, ariaLabel, disabled, onToggle }) =>
   </label>
 );
 
-const AdminTable = ({ columns, minWidth, isEmpty, emptyMessage, footer, children }) => (
-  <div className="overflow-hidden rounded-xl border border-border bg-card">
-    <div className="overflow-x-auto">
-      <table className={cn("w-full text-sm", minWidth)}>
-        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-          <tr>
-            {columns.map((column) => {
-              const { label, align } = typeof column === "string" ? { label: column } : column;
-              return (
-                <th
-                  key={label}
-                  scope="col"
-                  className={cn("whitespace-nowrap px-4 py-3 font-medium", align === "right" && "text-right")}
-                >
-                  {label}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">{children}</tbody>
-      </table>
-    </div>
-    {isEmpty && (
-      <p className="px-4 py-12 text-center text-sm text-muted-foreground">{emptyMessage}</p>
-    )}
-    {footer}
-  </div>
-);
-
 const AdminHeader = ({ user, onBack, onLogout, children }) => (
   <header className="relative shrink-0 bg-background pt-[env(safe-area-inset-top)] text-foreground">
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 px-3 sm:px-4 lg:h-14 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
@@ -446,7 +419,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     if (
-      (activeSection === "history" || activeSection === "styles") &&
+      ["history", "styles", "video-usage"].includes(activeSection) &&
       !hasLoadedUserOptions
     ) {
       void Promise.resolve().then(loadUserOptions);
@@ -1056,6 +1029,9 @@ export default function AdminPanel() {
               )}
 
               {activeSection === "models" && <AiModelSettings />}
+              {activeSection === "video-usage" && (
+                <VideoUsageReport users={userOptions} models={profile?.videoModels || []} loadingUsers={isLoadingUserOptions} />
+              )}
 
               {activeSection === "styles" && (
                 <AdminTable

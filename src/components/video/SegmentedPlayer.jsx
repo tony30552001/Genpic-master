@@ -1,26 +1,29 @@
 import React, { useState } from "react";
 import { Download } from "@/components/icons/lucideControls";
 import { cn } from "@/lib/utils";
+import { videoDownloadUrl } from "@/services/aiService";
+import VideoStream from "./VideoStream";
 
 /**
  * Plays a project's segment videos in order, advancing when one ends. With
  * several segments, a segment picker and a per-segment download sit below.
  */
-export default function SegmentedPlayer({ urls, autoPlay = false, dark = false, className, videoClassName }) {
+export default function SegmentedPlayer({ sources, autoPlay = false, dark = false, className, videoClassName }) {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(autoPlay);
-  const multiple = urls.length > 1;
+  const multiple = sources.length > 1;
+  const source = sources[index] || sources[0];
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
-      <video
-        key={urls[index]}
-        src={urls[index]}
+      <VideoStream
+        key={source.jobId || source.projectId}
+        {...source}
         controls
         playsInline
         autoPlay={playing}
         onPlay={() => setPlaying(true)}
         onEnded={() => {
-          if (index < urls.length - 1) setIndex(index + 1);
+          if (index < sources.length - 1) setIndex(index + 1);
           else setPlaying(false);
         }}
         className={cn("min-h-0 w-full flex-1 object-contain", videoClassName)}
@@ -28,9 +31,9 @@ export default function SegmentedPlayer({ urls, autoPlay = false, dark = false, 
       {multiple && (
         <div className={cn("flex shrink-0 items-center gap-1.5 px-3 py-2", dark ? "text-white" : "border-t border-border bg-card/90")}>
           <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="group" aria-label="影片分段">
-            {urls.map((url, segmentIndex) => (
+            {sources.map((segment, segmentIndex) => (
               <button
-                key={url}
+                key={segment.jobId}
                 type="button"
                 className={cn(
                   "h-8 shrink-0 rounded-lg px-2.5 text-xs tabular-nums press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -46,7 +49,7 @@ export default function SegmentedPlayer({ urls, autoPlay = false, dark = false, 
             ))}
           </div>
           <a
-            href={urls[index]}
+            href={videoDownloadUrl(source)}
             download={`pixora-video-part-${index + 1}.mp4`}
             className={cn(
               "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

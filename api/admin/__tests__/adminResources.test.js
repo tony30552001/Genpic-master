@@ -28,6 +28,24 @@ describe("admin resources", () => {
     adminAuth.requireAdmin.mockResolvedValue({ identity });
   });
 
+  it("denies the usage report before querying when admin authorization fails", async () => {
+    adminAuth.requireAdmin.mockImplementationOnce(async (context) => {
+      context.res = { status: 403 };
+      return null;
+    });
+    expect((await invoke({ method: "GET", params: { resource: "video-usage" } })).status).toBe(403);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { from: "2026-02-30" }, { from: "2026-11-28", to: "2026-11-27" },
+    { userId: "not-a-uuid" }, { modelKey: ["paid"] },
+  ])("rejects invalid usage filters before querying: %j", async (query) => {
+    const res = await invoke({ method: "GET", params: { resource: "video-usage" }, query });
+    expect(res.status).toBe(400);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it("lists history without embedding the stored image", async () => {
     db.query
       .mockResolvedValueOnce({ rows: [{ total: 1 }] })

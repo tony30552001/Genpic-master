@@ -79,7 +79,8 @@ export default function StoryboardBoard({
             {board.baseProjectId ? "從影片重新開啟的分鏡；生成時沿用未修改的分段，只重新生成改動的分鏡與接續其後的分段，原影片保留。" : "從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。"}
           </p>
         )}
-        <StoryboardTimeline shots={shots} segments={board.segments} warnedIds={warnedIds} changedIds={board.changedShotIds} onJump={jump} />
+        <StoryboardTimeline shots={shots} segments={board.segments} warnedIds={warnedIds} changedIds={board.changedShotIds}
+          onJump={jump} onReorder={actions.reorder} busy={busy} />
         <GlobalCard global={global} onChange={actions.updateGlobal}>
           <CharacterList
             characters={global.characters}
@@ -103,6 +104,9 @@ export default function StoryboardBoard({
             characters={global.characters}
             previews={actions.previews}
             startFrameLocked={actions.startFrameLocked}
+            frame={storyboard.frame}
+            onGenerateFrame={storyboard.generateFrame}
+            onPromoteReference={actions.promoteReference}
             onChange={(patch) => actions.updateShot(shot.id, patch)}
             onSetStartFrame={(uploadId) => actions.setStartFrame(shot.id, uploadId)}
             onToggleCharacter={(characterId) => actions.toggleShotCharacter(shot.id, characterId)}

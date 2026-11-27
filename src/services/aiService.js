@@ -327,7 +327,7 @@ export const waitForVideoProject = async ({ projectId, signal, onProgress, pollI
   for (;;) {
     const project = await getVideoProject({ projectId, signal });
     onProgress?.(project);
-    if (project.status === "succeeded") return project;
+    if (project.status === "succeeded" || project.status === "cancelled") return project;
     if (project.status === "failed") throw new Error(failedSegmentMessage(project));
     await abortableDelay(pollIntervalMs, signal);
   }
@@ -337,6 +337,12 @@ export const waitForVideoProject = async ({ projectId, signal, onProgress, pollI
 export const retryVideoProject = async ({ projectId }) =>
   apiPost(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/retry`, {});
 
+export const cancelVideoProject = ({ projectId }) =>
+  apiPost(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/cancel`, {});
+
+export const createVideoLastFrame = ({ jobId }) =>
+  apiPost(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/last-frame`, {});
+
 export const renderVideoProject = async ({ projectId }) =>
   apiPost(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/render`, {});
 
@@ -345,6 +351,7 @@ export const renderVideoProject = async ({ projectId }) =>
 export const waitForVideoRender = async ({ projectId, signal, pollIntervalMs = 3000 }) => {
   for (;;) {
     const { render } = await getVideoProject({ projectId, signal });
+    if (!render) throw new Error("找不到影片合併工作，請重新合併");
     if (render?.status === "succeeded") return render;
     if (render?.status === "failed") throw new Error(render.error?.message || "影片合併失敗，請重新合併");
     await abortableDelay(pollIntervalMs, signal);
@@ -359,5 +366,9 @@ export const downloadVideo = async ({ projectId, signal }) =>
 export const getVideoPlayback = async ({ projectId, signal }) =>
   apiGet(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/playback`, { signal });
 
-export const downloadVideoSegment = async ({ jobId, signal }) =>
-  apiGetBlob(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/video`, { signal });
+export const getSegmentPlayback = ({ jobId, signal }) =>
+  apiGet(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/playback`, { signal });
+
+export const videoDownloadUrl = ({ jobId, projectId }) =>
+  jobId ? `${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/video`
+    : `${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/video`;

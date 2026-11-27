@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import ShotCard from "./storyboard/ShotCard";
 import { storyboardActions } from "./storyboard/storyboardActions";
 import { regeneratedSegments } from "./segmentEdit";
+import VideoStream from "./VideoStream";
 
 const segmentList = (indexes) => `第 ${indexes.map((index) => index + 1).join("、")} 段`;
 
@@ -32,7 +33,6 @@ export default function SegmentEditDialog({
   const shotIds = segment.shotIds;
   const polishKind = `revise:${shotIds.join(",")}`;
   const busy = Boolean(pending);
-  const url = turn.segmentUrls?.[segment.jobId];
   const label = `第 ${segment.index + 1} 段`;
 
   const regenerated = board?.segments
@@ -79,9 +79,10 @@ export default function SegmentEditDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-dot-grid bg-size-[20px_20px] px-5 py-4 custom-scrollbar">
-          {url ? (
-            <video
-              src={url}
+          {segment.status === "succeeded" ? (
+            <VideoStream
+              key={segment.jobId}
+              jobId={segment.jobId}
               controls
               playsInline
               preload="metadata"
@@ -108,7 +109,9 @@ export default function SegmentEditDialog({
               canDelete={false}
               characters={board.storyboard.global.characters}
               previews={actions.previews}
+              frame={storyboard.frame}
               startFrameLocked={actions.startFrameLocked}
+              onGenerateFrame={storyboard.generateFrame}
               onChange={(patch) => actions.updateShot(shot.id, patch)}
               onSetStartFrame={(uploadId) => actions.setStartFrame(shot.id, uploadId)}
               onToggleCharacter={(characterId) => actions.toggleShotCharacter(shot.id, characterId)}

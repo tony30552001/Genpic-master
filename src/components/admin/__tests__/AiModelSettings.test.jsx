@@ -16,6 +16,7 @@ import {
   updateAdminImageModel,
   updateAdminModelSettings,
   listAdminVideoModels,
+  updateAdminVideoModel,
   updateAdminVideoSettings,
 } from "../../../services/adminService";
 import { waitForImageJob } from "../../../services/aiService";
@@ -157,6 +158,21 @@ describe("AiModelSettings", () => {
     }));
     await waitFor(() => expect(screen.queryByRole("form", { name: "新增圖片模型" })).toBeNull());
     expect(refreshProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([["", null], ["0", 0]])("persists an edited video price of %j without guessing a price", async (input, expected) => {
+    const model = { modelKey: "training", label: "訓練影片", family: "kling-v3-pro", deploymentName: "training",
+      maxDurationSeconds: 5, pricePerSecondUsd: 0.25, endpoint: "https://test.services.ai.azure.com/providers/falai/v1" };
+    const catalog = { models: [model], families: [{ id: model.family, label: "Kling", minDuration: 3, maxDuration: 15, supportsAudioToggle: true }] };
+    listAdminVideoModels.mockResolvedValue(catalog);
+    updateAdminVideoModel.mockResolvedValue(catalog);
+    const user = await renderPage();
+    await user.click(await screen.findByRole("button", { name: "編輯 訓練影片" }));
+    const price = screen.getByRole("spinbutton", { name: "每秒單價（美元）" });
+    expect(price).toHaveValue(0.25);
+    fireEvent.change(price, { target: { value: input } });
+    await user.click(screen.getByRole("button", { name: "儲存影片模型" }));
+    expect(updateAdminVideoModel).toHaveBeenCalledWith("training", expect.objectContaining({ pricePerSecondUsd: expected }));
   });
 
   it("requires a supported default quality before saving", async () => {

@@ -121,18 +121,27 @@ describe("video render worker", () => {
 
 describe("requestVideoRender", () => {
   const owner = { projectId: "p1", tenantId: "t", userId: "u" };
-  const project = (statuses) =>
+  const project = (statuses, latest = null) =>
     respond([
       ["FROM video_projects", { rows: [{ id: "p1", model_key: "kling", storyboard: {}, created_at: "now" }] }],
       [
         "FROM video_generation_jobs",
-        { rows: statuses.map((status, index) => ({ id: `j${index}`, segment_index: index, status })) },
+        { rows: statuses.map((status, index) => ({
+          id: `j${index}`, segment_index: index, status, storyboard: { shots: [] },
+        })) },
       ],
-      ["FROM video_renders", { rows: [{ id: "r1", status: "queued", completed_at: null }] }],
+      ["FROM video_renders", { rows: latest ? [latest] : [] }],
     ]);
 
   it("queues one render per project and returns the live one", async () => {
     project(["succeeded", "succeeded"]);
+    const respondNormally = db.query.getMockImplementation();
+    let inserted = false;
+    db.query.mockImplementation(async (sql) => {
+      if (sql.includes("INSERT INTO video_renders")) inserted = true;
+      if (inserted && sql.includes("FROM video_renders")) return { rows: [{ id: "r1", status: "queued", completed_at: null }] };
+      return respondNormally(sql);
+    });
 
     await expect(requestVideoRender(owner)).resolves.toEqual({
       renderId: "r1",
@@ -142,6 +151,13 @@ describe("requestVideoRender", () => {
     const insert = db.query.mock.calls.find(([sql]) => sql.includes("INSERT INTO video_renders"));
     expect(insert[0]).toContain("ON CONFLICT (project_id) WHERE status <> 'failed' DO NOTHING");
     expect(insert[1]).toEqual(["t", "u", "p1"]);
+  });
+
+  it("returns an existing render even when new renders are disabled", async () => {
+    project(["succeeded", "succeeded"], { id: "r1", status: "succeeded" });
+    videoRenderClient.isConfigured.mockReturnValue(false);
+    await expect(requestVideoRender(owner)).resolves.toMatchObject({ renderId: "r1", status: "succeeded" });
+    expect(db.query.mock.calls.some(([sql]) => sql.includes("INSERT INTO video_renders"))).toBe(false);
   });
 
   it("refuses single-segment and unfinished projects", async () => {

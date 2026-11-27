@@ -2,6 +2,7 @@ import {
   canHaveStartFrame,
   createShot,
   MAX_CHARACTERS,
+  MAX_CHARACTER_IMAGES,
   MAX_SHOTS,
   newCharacterId,
   segmentStartLabel,
@@ -11,6 +12,10 @@ const CONDENSE_INSTRUCTION =
   "把這一幕的腳本濃縮到 2500 字以內，保留引號內文字、@ 引用與主要動作，原文放在 scriptOriginal";
 const REWRITE_INSTRUCTION =
   "重寫這一幕：動作更具體、只有一個主要動作且符合秒數，運鏡與動作描述一致";
+
+export const referenceCharacter = (characters, reference) =>
+  characters.find((item) => item.imageLabel === reference.label)
+  || characters.find((item) => item.uploadIds.includes(reference.uploadId));
 
 /** Edits and agent requests shared by the desktop board and the phone sheet. */
 export const storyboardActions = (storyboard) => {
@@ -37,6 +42,53 @@ export const storyboardActions = (storyboard) => {
   return {
     updateShot,
     setStartFrame: (shotId, uploadId) => updateShot(shotId, { startFrameUploadId: uploadId }),
+    reorder: (shotId, targetId) => {
+      const from = shots.findIndex((shot) => shot.id === shotId);
+      const to = shots.findIndex((shot) => shot.id === targetId);
+      if (from < 0 || to < 0 || from === to) return "";
+      const ordered = [...shots];
+      ordered.splice(to, 0, ordered.splice(from, 1)[0]);
+      if (storyboard.hasStartFrame && ordered[0].startFrameUploadId) {
+        return "工作區已附加首影格，請先取消這一幕的首影格再調整順序";
+      }
+      storyboard.edit((current) => ({
+        ...current,
+        shots: ordered.map((shot, index) => {
+          // Keep a displaced opening frame at the start of its own scene.
+          if (index === 0 && shot.cut) return { ...shot, cut: false };
+          if (index > 0 && shot.startFrameUploadId && !shot.cut) return { ...shot, cut: true };
+          return shot;
+        }),
+      }));
+      return `已將第 ${from + 1} 幕移至第 ${to + 1} 幕`;
+    },
+    promoteReference: (shotId, reference, characterId) => {
+      storyboard.edit((current) => {
+        const cast = current.global.characters;
+        const linked = referenceCharacter(cast, reference);
+        const existing = linked || cast.find((item) => item.id === characterId);
+        if ((!existing && cast.length >= MAX_CHARACTERS)
+          || (existing && !existing.uploadIds.includes(reference.uploadId) && existing.uploadIds.length >= MAX_CHARACTER_IMAGES)) {
+          return current;
+        }
+        const id = existing?.id || newCharacterId(cast);
+        let name = reference.label;
+        for (let n = 2; !existing && cast.some((item) => item.name === name); n++) name = `${reference.label} (${n})`;
+        const character = existing ? {
+          ...existing,
+          imageLabel: existing.imageLabel || reference.label,
+          uploadIds: [...new Set([...existing.uploadIds, reference.uploadId])],
+        } : { id, name, description: "", imageLabel: reference.label, uploadIds: [reference.uploadId] };
+        const characters = existing ? cast.map((item) => item.id === id ? character : item) : [...cast, character];
+        return {
+          ...current,
+          global: { ...current.global, characters },
+          shots: current.shots.map((shot) => shot.id !== shotId ? shot : {
+            ...shot, characterIds: characters.filter((item) => item.id === id || shot.characterIds.includes(item.id)).map((item) => item.id),
+          }),
+        };
+      }, shotId);
+    },
     deleteShot: (shotId) =>
       storyboard.edit((current) => ({
         ...current,
@@ -130,6 +182,7 @@ export const compiledPreview = (segments) => {
 };
 
 export const boardStatus = (storyboard) => {
+  if (storyboard.pending === "frame") return { label: "首影格產生中", tone: "run" };
   if (storyboard.pending) return { label: "AI 修改中", tone: "run" };
   if (storyboard.inspection.status === "invalid") return { label: "需要修正", tone: "warn" };
   return { label: "待確認", tone: "draft" };

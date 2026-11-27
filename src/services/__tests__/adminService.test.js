@@ -16,6 +16,7 @@ import {
   createAdminImageModel,
   deleteAdminImageModel,
   getAdminModelSettings,
+  getAdminVideoUsage,
   listAdminHistory,
   listAdminImageModels,
   listAdminStyles,
@@ -56,6 +57,12 @@ describe("adminService", () => {
     await listAdminUsers();
 
     expect(apiGet).toHaveBeenCalledWith("/api/management/users?page=1&pageSize=10");
+  });
+
+  it("sends only report filters and cancels stale requests", async () => {
+    const { signal } = new AbortController();
+    await getAdminVideoUsage({ userId: "user-id", modelKey: "paid", from: "2026-11-01", to: "", tenantId: "ignored" }, { signal });
+    expect(apiGet).toHaveBeenCalledWith("/api/management/video-usage?userId=user-id&modelKey=paid&from=2026-11-01", { signal });
   });
 
   it("uses catalog CRUD and explicit queued tests without changing policy", async () => {

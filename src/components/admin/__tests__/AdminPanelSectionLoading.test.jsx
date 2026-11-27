@@ -7,6 +7,7 @@ import AdminPanel from "../AdminPanel";
 import {
   getAdminHistoryImage,
   getAdminModelSettings,
+  getAdminVideoUsage,
   listAdminImageModels,
   listAdminHistory,
   listAdminLlmModels,
@@ -29,6 +30,7 @@ vi.mock("../../../services/adminService", () => ({
   deleteAdminStyle: vi.fn(),
   getAdminHistoryImage: vi.fn(),
   getAdminModelSettings: vi.fn(),
+  getAdminVideoUsage: vi.fn(),
   getAdminStylePreview: vi.fn(),
   listAdminHistory: vi.fn(),
   listAdminLlmModels: vi.fn(),
@@ -118,6 +120,33 @@ describe("AdminPanel section loading", () => {
     expect(listAdminStyles).not.toHaveBeenCalled();
     expect(getAdminModelSettings).not.toHaveBeenCalled();
     expect(listAdminImageModels).not.toHaveBeenCalled();
+    expect(getAdminVideoUsage).not.toHaveBeenCalled();
+  });
+
+  it("shows partial pricing, unavailable narration and actual output minutes; reapplies report filters", async () => {
+    const row = { userId: "u", displayName: "測試帳號", videoUnlimited: true, modelKey: "free", mode: "t2v",
+      durationSeconds: 5, generateAudio: true, usedElements: false, jobCount: 1, generatedSeconds: 5, pricePerSecondUsd: 0, estimatedCostUsd: 0 };
+    getAdminVideoUsage.mockResolvedValueOnce({
+      rows: [row, { ...row, modelKey: "unknown", usedElements: null, pricePerSecondUsd: null, estimatedCostUsd: null }],
+      generatedSeconds: 10, unpricedSeconds: 5, knownCostUsd: 0, renderCount: 1, knownOutputMinutes: 1.5, unknownDurationCount: 0,
+    }).mockRejectedValueOnce(new Error("報表暫時無法載入"));
+    renderPanel();
+    await screen.findByText("alice@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "影片用量" }));
+    expect(await screen.findByText("1.5 分鐘")).toBeVisible();
+    expect(screen.getByText("另有 5 秒未定價，未計入成本")).toBeVisible();
+    expect(screen.getByText("尚無語音合成用量紀錄")).toBeVisible();
+    const free = screen.getByText("free").closest("tr");
+    expect(within(free).getByText("不限額")).toBeVisible();
+    expect(within(free).getAllByText(/US\$0\.00/)).toHaveLength(2);
+    const unknown = screen.getByText("unknown").closest("tr");
+    expect(within(unknown).getByText("未記錄")).toBeVisible();
+    expect(within(unknown).getAllByText("未定價")).toHaveLength(2);
+    fireEvent.change(screen.getByRole("combobox", { name: "模型識別碼" }), { target: { value: "unknown" } });
+    fireEvent.click(screen.getByRole("button", { name: "套用篩選" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("報表暫時無法載入");
+    expect(screen.queryByText("1.5 分鐘")).not.toBeInTheDocument();
+    expect(getAdminVideoUsage.mock.lastCall[0].modelKey).toBe("unknown");
   });
 
   it("asks for confirmation in a dialog before deactivating a user", async () => {

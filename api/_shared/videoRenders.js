@@ -50,6 +50,18 @@ const queueVideoRender = async ({ tenantId, userId, projectId }) => {
   return getLatestVideoRender(projectId);
 };
 
+// Called in the transaction that admits an entirely reused project or
+// finishes a segment. Segment completions are serialized per tenant.
+const queueCompletedProjectRender = (client, projectId) => client.query(
+  `INSERT INTO video_renders (project_id, tenant_id, user_id)
+   SELECT project_id, tenant_id, user_id FROM video_generation_jobs
+   WHERE project_id = $1
+   GROUP BY project_id, tenant_id, user_id
+   HAVING COUNT(*) > 1 AND bool_and(status = 'succeeded')
+   ON CONFLICT (project_id) WHERE status <> 'failed' DO NOTHING`,
+  [projectId]
+);
+
 const getSucceededRenderBlob = async (projectId) => {
   const result = await query(
     `SELECT result_blob_name, result_size_bytes
@@ -127,7 +139,10 @@ const updateByLock = async ({ render, sql, values = [] }) =>
   );
 
 const markVideoRenderFailure = async ({ render, error }) => {
-  if (error instanceof VideoRenderError && error.retryable && render.attempts < MAX_ATTEMPTS) {
+  const userFacing = error instanceof VideoModelError || error instanceof VideoRenderError;
+  // The output path is versioned. Both the render call and a failed
+  // transaction publishing its history can safely retry under a fresh claim.
+  if ((!userFacing || (error instanceof VideoRenderError && error.retryable)) && render.attempts < MAX_ATTEMPTS) {
     await updateByLock({
       render,
       sql: `status = 'queued', available_at = now() + make_interval(secs => $3),
@@ -137,7 +152,6 @@ const markVideoRenderFailure = async ({ render, error }) => {
     });
     return;
   }
-  const userFacing = error instanceof VideoModelError || error instanceof VideoRenderError;
   await updateByLock({
     render,
     sql: `status = 'failed', error_code = $3, error_message = $4,
@@ -178,13 +192,21 @@ const processNextVideoRender = async () => {
       segmentBlobNames: await loadSegmentBlobNames(render.project_id),
       outputBlobName: `videos/projects/${render.project_id}/${render.id}-${render.lock_version}.mp4`,
     });
-    await updateByLock({
-      render,
-      sql: `status = 'succeeded', result_blob_name = $3, result_size_bytes = $4,
-            result_duration_seconds = $5, error_code = NULL, error_message = NULL,
-            locked_at = NULL, completed_at = now()`,
-      values: [output.blobName, output.sizeBytes, output.durationSeconds],
-    });
+    await query(
+      `WITH finished AS (
+         UPDATE video_renders SET status = 'succeeded', result_blob_name = $3, result_size_bytes = $4,
+           result_duration_seconds = $5, error_code = NULL, error_message = NULL,
+           locked_at = NULL, completed_at = now(), updated_at = now()
+         WHERE id = $1 AND status = 'processing' AND lock_version = $2
+         RETURNING project_id
+       )
+       INSERT INTO history (tenant_id, user_id, video_project_id, source, model, user_script, prompt)
+       SELECT p.tenant_id, p.user_id, p.id, 'video', p.model_key, p.storyboard->>'title',
+         (SELECT string_agg(j.prompt, E'\\n\\n' ORDER BY j.segment_index)
+            FROM video_generation_jobs j WHERE j.project_id = p.id)
+       FROM finished JOIN video_projects p ON p.id = finished.project_id`,
+      [render.id, render.lock_version, output.blobName, output.sizeBytes, output.durationSeconds]
+    );
   } catch (error) {
     await markVideoRenderFailure({ render, error });
   }
@@ -224,6 +246,7 @@ module.exports = {
   getLatestVideoRender,
   getSucceededRenderBlob,
   processNextVideoRender,
+  queueCompletedProjectRender,
   queueVideoRender,
   startVideoRenderWorker,
 };

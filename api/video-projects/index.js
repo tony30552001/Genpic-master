@@ -2,17 +2,17 @@ const { ok, error, options, corsHeaders } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { resolveIdentity } = require("../_shared/identity");
 const { rateLimit } = require("../_shared/rateLimit");
-const { getGeneratedBlobDownload, signGeneratedBlobUrl } = require("../_shared/blobStorage");
+const { getGeneratedBlobDownload } = require("../_shared/blobStorage");
+const { createVideoPlayback } = require("../_shared/videoPlayback");
 const { VideoModelError } = require("../_shared/videoModelFamilies");
 const {
+  cancelVideoProject,
   createVideoProject,
   getVideoProjectForUser,
   requestVideoRender,
   resolveProjectVideo,
   retryVideoProject,
 } = require("../_shared/videoProjects");
-
-const PLAYBACK_TTL_MS = 60 * 60 * 1000;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -69,6 +69,11 @@ module.exports = async function (context, req) {
       return;
     }
     const action = req.params?.action;
+    if (method === "POST" && action === "cancel") {
+      const project = await cancelVideoProject({ projectId, tenantId: identity.tenantId, userId: identity.userId });
+      context.res = ok(project, 200, req);
+      return;
+    }
     if (method === "POST" && action === "render") {
       const render = await requestVideoRender({
         projectId,
@@ -98,10 +103,8 @@ module.exports = async function (context, req) {
         return;
       }
       if (action === "playback") {
-        context.res = ok({
-          url: signGeneratedBlobUrl({ blobName: video.blobName, permissions: "r", expiresInMs: PLAYBACK_TTL_MS }),
-          expiresAt: new Date(Date.now() + PLAYBACK_TTL_MS).toISOString(),
-        }, 200, req);
+        context.res = ok(createVideoPlayback(video.blobName), 200, req);
+        context.res.headers["Cache-Control"] = "no-store";
         return;
       }
       const blob = await getGeneratedBlobDownload({ blobName: video.blobName });

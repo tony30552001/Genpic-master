@@ -16,11 +16,13 @@ blobStorage.downloadGeneratedImage = vi.fn();
 foundryFal.getVideoRequestStatus = vi.fn();
 foundryFal.getVideoResult = vi.fn();
 foundryFal.downloadVideoResult = vi.fn();
+foundryFal.submitVideo = vi.fn();
 videoModels.resolveVideoModel = vi.fn();
+videoModels.withVideoModelTransaction = vi.fn((_tenantId, action) => action(db));
 videoPolicy.ensureVideoSettings = vi.fn();
 videoRenderClient.extractLastFrame = vi.fn();
 
-const { processNextVideoJob } = require("../videoJobs");
+const { processNextVideoJob, startVideoJobWorker } = require("../videoJobs");
 const { VideoRenderError } = videoRenderClient;
 
 const claim = (job) => {
@@ -79,9 +81,9 @@ describe("video job worker", () => {
       videoBlobName: "videos/jobs/j1/2.mp4",
       frameBlobName: "videos/jobs/j1/2-last.png",
     });
-    const [sql, values] = lastUpdate();
-    expect(sql).toContain("status = 'succeeded'");
+    const [, values] = db.query.mock.calls.find(([sql]) => sql.includes("status = 'succeeded'"));
     expect(values).toEqual(["j1", 2, "videos/jobs/j1/2-last.png"]);
+    expect(lastUpdate()[0]).toContain("INSERT INTO video_renders");
   });
 
   it("retries a failed frame extraction without downloading the video again", async () => {
@@ -105,7 +107,6 @@ describe("video job worker", () => {
   it("fails a chained segment whose previous frame is missing", async () => {
     claim({ phase: "submitting", mode: "i2v", previous_job_id: "j0", storyboard: {} });
     respond([
-      ["submitted_at >= now()", { rows: [{ count: 0 }] }],
       ["result_blob_name, last_frame_blob_name", { rows: [] }],
     ]);
 
@@ -119,7 +120,6 @@ describe("video job worker", () => {
   it("extracts and records the last frame a reused predecessor never had", async () => {
     claim({ phase: "submitting", mode: "i2v", previous_job_id: "j0", storyboard: {} });
     respond([
-      ["submitted_at >= now()", { rows: [{ count: 0 }] }],
       ["result_blob_name, last_frame_blob_name", {
         rows: [{ id: "j0", result_blob_name: "videos/jobs/j0/1.mp4", last_frame_blob_name: null }],
       }],
@@ -137,5 +137,34 @@ describe("video job worker", () => {
     expect(record[0]).toContain("last_frame_blob_name IS NULL");
     expect(record[1]).toEqual(["j0", "videos/jobs/j0/last.png"]);
     expect(blobStorage.downloadGeneratedImage).toHaveBeenCalledWith({ blobName: "videos/jobs/j0/last.png" });
+  });
+
+  it("never dispatches after losing its lease during preparation", async () => {
+    claim({ phase: "submitting", mode: "t2v", storyboard: {
+      title: "路口", global: {}, shots: [{ id: "s1", duration: 3, script: "過馬路" }],
+    } });
+    respond([["UPDATE video_generation_jobs SET locked_at", { rowCount: 0 }]]);
+    await processNextVideoJob();
+    expect(db.query.mock.calls.some(([sql]) => sql.includes("UPDATE video_generation_jobs SET locked_at"))).toBe(true);
+    expect(foundryFal.submitVideo).not.toHaveBeenCalled();
+  });
+
+  it("keeps three worker slots and refills a free slot without waiting for slower work", async () => {
+    vi.useFakeTimers();
+    try {
+      claim({ phase: "polling" });
+      respond([]);
+      const release = [];
+      foundryFal.getVideoRequestStatus.mockImplementation(() => new Promise((resolve) => release.push(resolve)));
+      startVideoJobWorker();
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(release).toHaveLength(3);
+      release.shift()("IN_PROGRESS");
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(foundryFal.getVideoRequestStatus).toHaveBeenCalledTimes(4);
+      release.forEach((resolve) => resolve("IN_PROGRESS"));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

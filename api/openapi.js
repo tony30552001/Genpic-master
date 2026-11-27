@@ -427,13 +427,20 @@ addOperation("/api/video-projects", "post", {
 
 addOperation("/api/video-projects/{id}", "get", {
   summary: "Get an owned video project with the status of each segment",
-  description: "status is failed when any segment failed, succeeded when all succeeded, processing once any segment started, otherwise queued. Each segment lists the storyboard shotIds it covers and, when copied from a base project, reused=true with reusedFromJobId. Download each succeeded segment from /api/video-jobs/{jobId}/video. render is null for a single segment; for several segments it is the newest render ({ renderId, status, completedAt, error? }) or null before the first render request.",
+  description: "Each segment includes status, shotIds and reuse provenance. After cancellation the project remains processing while submitted segments finish, then becomes cancelled. Otherwise status is failed on a segment failure, succeeded when all succeeded, processing once started, or queued. Successful multi-segment projects automatically queue one render, including projects composed entirely of reused segments. render contains the newest { renderId, status, completedAt, error? }, or null if none exists. Successful renders are automatically saved to history.",
   tags: ["Video"],
   parameters: pathParameters("id"),
 });
 
+addOperation("/api/video-projects/{id}/cancel", "post", {
+  summary: "Cancel the queued segments of an owned project",
+  description: "Returns the updated project. Cancelled segments do not consume daily quota. Segments already being submitted or processed are not cancelled at the provider. Repeating a successful cancellation is idempotent.",
+  tags: ["Video"], csrf: true, parameters: pathParameters("id"),
+});
+paths["/api/video-projects/{id}/cancel"].post.responses[409] = response("No queued segments remain to cancel");
+
 addOperation("/api/video-projects/{id}/render", "post", {
-  summary: "Join a finished multi-segment project into one MP4",
+  summary: "Retry merging a finished multi-segment project",
   description: "Requires every segment to have succeeded. Queues a render job that joins the segments in order; matching segments are stream-copied, others are re-encoded to the first segment's size and frame rate. While a render is queued, processing or succeeded, the call returns that render instead of queueing another; after a failure it queues a new one. Poll GET /api/video-projects/{id} for render.status.",
   tags: ["Video"],
   csrf: true,
@@ -443,7 +450,7 @@ addOperation("/api/video-projects/{id}/render", "post", {
 
 addOperation("/api/video-projects/{id}/retry", "post", {
   summary: "Requeue the failed segments of an owned video project",
-  description: "Every failed segment is queued again as new work and counts against today's quota; succeeded segments are kept and a chained segment still starts from the previous segment's last frame. Returns the project like GET /api/video-projects/{id}. 409 nothing_to_retry when no segment failed.",
+  description: "Every failed segment is queued again as new work and counts against today's quota; succeeded segments are kept. Returns the project like GET /api/video-projects/{id}. Returns 409 when no segment failed or the project contains a cancelled segment.",
   tags: ["Video"],
   csrf: true,
   parameters: pathParameters("id"),
@@ -459,20 +466,30 @@ addOperation("/api/video-projects/{id}/video", "get", {
   successSchema: { type: "string", format: "binary" },
 });
 
-addOperation("/api/video-projects/{id}/playback", "get", {
-  summary: "Get a short-lived streaming URL for the finished MP4 of an owned video project",
-  description: "Same video as /api/video-projects/{id}/video, as a read-only signed Blob Storage URL valid for one hour so a video element can stream it with range requests. Returns 409 until that video exists.",
-  tags: ["Video"],
-  parameters: pathParameters("id"),
-  successSchema: {
-    type: "object",
-    required: ["url", "expiresAt"],
-    properties: {
-      url: { type: "string", format: "uri" },
-      expiresAt: { type: "string", format: "date-time" },
+for (const resource of ["video-projects", "video-jobs"]) {
+  const path = `/api/${resource}/{id}/playback`;
+  addOperation(path, "get", {
+    summary: `Get a streaming URL for the caller's ${resource === "video-jobs" ? "finished segment" : "finished project"}`,
+    description: "Returns a read-only Blob Storage URL valid for one hour. Use HTTP Range for playback and the separate /video route for downloading.",
+    tags: ["Video"], parameters: pathParameters("id"),
+    successSchema: {
+      type: "object", required: ["url", "expiresAt"],
+      properties: { url: { type: "string", format: "uri" }, expiresAt: { type: "string", format: "date-time" } },
     },
+  });
+  paths[path].get.responses[409] = response("The video is not ready");
+}
+
+addOperation("/api/video-jobs/{id}/last-frame", "post", {
+  summary: "Prepare an owned image upload from the final frame of a succeeded segment",
+  description: "Reuses the stored PNG or extracts it on the server. The returned uploadId can be used as sourceUploadId for the next video.",
+  tags: ["Video"], csrf: true, parameters: pathParameters("id"), successStatuses: [201],
+  successSchema: {
+    type: "object", required: ["uploadId", "previewUrl"],
+    properties: { uploadId: { type: "string", format: "uuid" }, previewUrl: { type: "string", description: "Small WebP data URL" } },
   },
 });
+paths["/api/video-jobs/{id}/last-frame"].post.responses[409] = response("The video is not ready");
 
 addOperation("/api/video-jobs/{id}/video", "get", {
   summary: "Download the immutable MP4 of an owned succeeded video segment",
@@ -877,6 +894,36 @@ for (const path of ["/api/management", "/api/management/{resource}", "/api/manag
   }
 }
 
+addOperation("/api/management/video-usage", "get", {
+  summary: "Report the current tenant's video usage and estimated USD cost (admin only)",
+  description: "Filters use inclusive Taiwan calendar dates. Only successful provider-generated segments contribute to generatedSeconds. Cost uses the current catalog pricePerSecondUsd; unpriced seconds are separate from zero-cost seconds. knownOutputMinutes counts successful renders. Narration usage is not yet available.",
+  tags: ["Administration"],
+  parameters: [
+    { name: "userId", in: "query", schema: { type: "string", format: "uuid" } },
+    { name: "modelKey", in: "query", schema: { type: "string" } },
+    ...["from", "to"].map((name) => ({ name, in: "query", schema: { type: "string", format: "date" } })),
+  ],
+  successSchema: {
+    type: "object",
+    properties: {
+      rows: { type: "array", items: {
+        type: "object", properties: {
+          userId: { type: "string", format: "uuid" }, displayName: { type: "string" }, email: { type: "string" },
+          videoUnlimited: { type: "boolean" }, modelKey: { type: "string" }, mode: { type: "string", enum: ["t2v", "i2v"] },
+          durationSeconds: { type: "integer" }, generateAudio: { type: "boolean" },
+          usedElements: { type: "boolean", nullable: true, description: "Null when actual reference usage was not recorded." },
+          jobCount: { type: "integer" }, generatedSeconds: { type: "integer" },
+          pricePerSecondUsd: { type: "number", nullable: true, minimum: 0, maximum: 999999.999999 },
+          estimatedCostUsd: { type: "number", nullable: true },
+        },
+      } },
+      generatedSeconds: { type: "integer" }, unpricedSeconds: { type: "integer" }, knownCostUsd: { type: "number", nullable: true },
+      renderCount: { type: "integer" }, knownOutputMinutes: { type: "number", nullable: true },
+      unknownDurationCount: { type: "integer" }, narrationCharacters: { type: "integer", nullable: true },
+    },
+  },
+});
+
 const publicImageModelSchema = {
   type: "object",
   additionalProperties: false,
@@ -1031,7 +1078,7 @@ paths["/api/history"].post.requestBody = {
         properties: {
           jobId: { type: "string", format: "uuid", description: "Owned succeeded image job; the server derives the history model from this job, never current policy." },
           imageUrl: { type: "string", description: "Compressed history preview; required with jobId." },
-          videoProjectId: { type: "string", format: "uuid", description: "Owned video project with a finished video: its only segment succeeded, or its multi-segment render succeeded. The model comes from the project." },
+          videoProjectId: { type: "string", format: "uuid", description: "Owned single-segment project with a finished video. Multi-segment renders are archived by the worker. The model comes from the project." },
           fullPrompt: { type: "string" },
           userScript: { type: "string" },
           stylePrompt: { type: "string" },
@@ -1044,7 +1091,7 @@ paths["/api/history"].post.requestBody = {
 };
 paths["/api/history"].post.responses[201] = response("Saved image or video history");
 delete paths["/api/history"].post.responses[200];
-paths["/api/history"].post.responses[409] = response("The image job has not succeeded, or the video project has no finished video");
+paths["/api/history"].post.responses[409] = response("The job is unfinished or the video is automatically archived");
 paths["/api/deck-jobs"].post.responses[202] = response("Queued deck job", {
   schema: {
     type: "object",

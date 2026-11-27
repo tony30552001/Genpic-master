@@ -12,6 +12,8 @@ identity.resolveIdentity = vi.fn();
 rateLimit.rateLimit = vi.fn();
 db.query = vi.fn();
 imageJobs.getImageJobForUser = vi.fn();
+const videoProjects = require("../../_shared/videoProjects");
+videoProjects.getVideoProjectForUser = vi.fn();
 const handler = require("../index");
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const owner = { tenantId: "tenant-1", userId: "user-1" };
@@ -30,6 +32,7 @@ beforeEach(() => {
   imageJobs.getImageJobForUser.mockResolvedValue({
     id: JOB_ID, status: "succeeded", model: "gpt-image-2.5-flare",
   });
+
   db.query.mockResolvedValue({
     rows: [{
       id: "history-1", model: "gpt-image-2.5-flare", image_job_id: JOB_ID,
@@ -38,7 +41,15 @@ beforeEach(() => {
   });
 });
 
-describe("job-backed image history", () => {
+describe("job-backed history", () => {
+  it("does not let a client duplicate automatic multi-segment history", async () => {
+    videoProjects.getVideoProjectForUser.mockResolvedValue({ projectId: JOB_ID, segments: [{}, {}] });
+    const response = await invoke({ videoProjectId: JOB_ID, source: "video" });
+    expect(response.status).toBe(409);
+    expect(videoProjects.getVideoProjectForUser).toHaveBeenCalledWith({ projectId: JOB_ID, ...owner });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it.each(["general", "refine", "bg_replace", "element_extract", "style_transfer"])("records the successful job model for %s", async (source) => {
     const res = await invoke({ ...payload, source, model: "forged-or-new-default" });
     expect(res.status).toBe(201);

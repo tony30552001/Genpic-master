@@ -16,11 +16,13 @@ const {
   buildVideoRequest,
   getVideoModelFamily,
 } = require("./videoModelFamilies");
-const { resolveVideoModel } = require("./videoModels");
+const { resolveVideoModel, withVideoModelTransaction } = require("./videoModels");
 const { ensureVideoSettings } = require("./videoPolicy");
 const { compileStoryboard, normalizeStoryboard } = require("./videoStoryboard");
 const { VideoRenderError, extractLastFrame } = require("./videoRenderClient");
+const { queueCompletedProjectRender } = require("./videoRenders");
 
+const WORKER_CONCURRENCY = 3;
 const MAX_SUBMIT_ATTEMPTS = 3;
 const LOCK_TIMEOUT_MINUTES = 5;
 const JOB_TIMEOUT_MINUTES = 30;
@@ -38,7 +40,7 @@ const countAdmittedToday = async (db, { tenantId, userId }) => {
   const result = await db.query(
     `SELECT COUNT(*)::int AS count FROM video_generation_jobs
      WHERE tenant_id = $1 AND user_id = $2
-       AND created_at >= date_trunc('day', now()) AND status <> 'failed'
+       AND created_at >= date_trunc('day', now()) AND status NOT IN ('failed', 'cancelled')
        AND reused_from_job_id IS NULL`,
     [tenantId, userId]
   );
@@ -72,7 +74,7 @@ const claimNextVideoJob = async () => {
            error_code = 'worker_timeout',
            error_message = '影片生成工作逾時，請重新提交',
            locked_at = NULL, completed_at = now(), updated_at = now()
-       WHERE status IN ('queued', 'processing')
+       WHERE status IN ('queued', 'processing') AND phase <> 'submitting'
          AND COALESCE(started_at, CASE WHEN previous_job_id IS NULL THEN created_at END)
              < now() - make_interval(mins => $1)`,
       [JOB_TIMEOUT_MINUTES]
@@ -85,8 +87,19 @@ const claimNextVideoJob = async () => {
            locked_at = NULL, completed_at = now(), updated_at = now()
        WHERE status = 'processing' AND phase = 'submitting'
          AND provider_request_id IS NULL
-         AND locked_at < now() - make_interval(mins => $1)`,
-      [LOCK_TIMEOUT_MINUTES]
+         AND (locked_at < now() - make_interval(mins => $1)
+              OR started_at < now() - make_interval(mins => $2))`,
+      [LOCK_TIMEOUT_MINUTES, JOB_TIMEOUT_MINUTES]
+    );
+    await client.query(
+      `UPDATE video_generation_jobs AS jobs
+       SET status = 'cancelled', phase = 'completed', completed_at = now(), updated_at = now(),
+           error_code = NULL, error_message = NULL
+       WHERE jobs.status = 'queued' AND jobs.provider_request_id IS NULL
+         AND EXISTS (
+           SELECT 1 FROM video_generation_jobs stopped
+           WHERE stopped.project_id = jobs.project_id AND stopped.status = 'cancelled'
+         )`
     );
     await client.query(
       `UPDATE video_generation_jobs AS jobs
@@ -107,6 +120,10 @@ const claimNextVideoJob = async () => {
          WHERE
            (
              status = 'queued' AND available_at <= now()
+             AND NOT EXISTS (
+               SELECT 1 FROM video_generation_jobs stopped
+               WHERE stopped.project_id = waiting.project_id AND stopped.status IN ('failed', 'cancelled')
+             )
              AND (
                previous_job_id IS NULL
                OR EXISTS (
@@ -152,10 +169,11 @@ const updateByLock = async ({
   job,
   sql,
   values = [],
-}) => query(
+  db = { query },
+}) => db.query(
   `UPDATE video_generation_jobs
    SET ${sql}, updated_at = now()
-   WHERE id = $1 AND status = 'processing' AND lock_version = $2`,
+   WHERE id = $1 AND status = 'processing' AND lock_version = $2 AND locked_at IS NOT NULL`,
   [job.id, job.lock_version, ...values]
 );
 
@@ -173,17 +191,23 @@ const deferVideoJob = async ({
     values: [seconds, message, errorCode],
   });
 
-const markVideoSubmitted = async ({ job, requestId }) =>
+const markVideoSubmitted = async ({ job, requestId, usedElements }) =>
   updateByLock({
     job,
-    sql: `phase = 'polling', provider_request_id = $3, submitted_at = now(),
+    sql: `phase = 'polling', provider_request_id = $3, submitted_at = now(), used_elements = $4,
           next_poll_at = now() + make_interval(secs => 4), locked_at = NULL`,
-    values: [requestId],
+    values: [requestId, usedElements],
   });
 
 const markVideoFailure = async ({ job, error }) => {
+  const userFacing =
+    error instanceof VideoModelError ||
+    error instanceof FoundryFalError ||
+    error instanceof VideoRenderError;
   const transient =
-    isTransientVideoError(error) || (error instanceof VideoRenderError && error.retryable);
+    isTransientVideoError(error) || (error instanceof VideoRenderError && error.retryable) ||
+    // Retrying a blob/DB write cannot submit another paid provider request.
+    (job.phase === "storing" && !userFacing);
   if (transient && job.phase === "submitting" && job.attempts < MAX_SUBMIT_ATTEMPTS) {
     const delay = Math.max(
       RETRY_DELAY_SECONDS,
@@ -208,10 +232,6 @@ const markVideoFailure = async ({ job, error }) => {
     });
     return;
   }
-  const userFacing =
-    error instanceof VideoModelError ||
-    error instanceof FoundryFalError ||
-    error instanceof VideoRenderError;
   await updateByLock({
     job,
     sql: `status = 'failed', phase = 'completed', error_code = $3, error_message = $4,
@@ -331,21 +351,64 @@ const loadOwnedImageDataUrl = async ({ uploadId, imageJobId, job }) => {
   return toJpegDataUrl(source.buffer, 2048);
 };
 
-const assertSubmitCapacity = async (job, settings) => {
-  const recent = await query(
-    `SELECT COUNT(*)::int AS count FROM video_generation_jobs
-     WHERE tenant_id = $1 AND model_key = $2
-       AND submitted_at >= now() - interval '1 minute'`,
-    [job.tenant_id, job.model_key]
+// Reserve immediately before POST, after the potentially slow image preparation.
+// The same DB tenant lock serializes this with other workers and policy updates.
+const reserveSubmitSlot = (job) => withVideoModelTransaction(job.tenant_id, async (client) => {
+  const owned = await client.query(
+    `UPDATE video_generation_jobs SET locked_at = statement_timestamp()
+     WHERE id = $1 AND lock_version = $2 AND status = 'processing' AND phase = 'submitting'
+       AND provider_request_id IS NULL
+       AND locked_at >= statement_timestamp() - make_interval(mins => $3)
+       AND started_at >= statement_timestamp() - make_interval(mins => $4)`,
+    [job.id, job.lock_version, LOCK_TIMEOUT_MINUTES, JOB_TIMEOUT_MINUTES]
   );
-  if (Number(recent.rows[0]?.count || 0) >= settings.submitsPerMinute) {
-    const error = new FoundryFalError(
-      "影片模型送出節流中",
-      "provider_rate_limited",
-      429,
-      { retryable: true, retryAfterMs: 15_000 }
+  if (!owned.rowCount) return false;
+  const { submitsPerMinute } = await ensureVideoSettings(job.tenant_id, client);
+  const reserved = await client.query(
+    `WITH active_slots AS (
+       SELECT ARRAY(SELECT t FROM unnest(recent_submit_times) AS t
+                    WHERE t > statement_timestamp() - interval '1 minute') AS recent
+       FROM video_models WHERE tenant_id = $1 AND model_key = $2
+     )
+     UPDATE video_models SET recent_submit_times = array_append(w.recent, statement_timestamp())
+     FROM active_slots w WHERE tenant_id = $1 AND model_key = $2 AND cardinality(w.recent) < $3`,
+    [job.tenant_id, job.model_key, submitsPerMinute]
+  );
+  if (!reserved.rowCount) {
+    // Waiting for local capacity is not a failed attempt. Wake when the
+    // oldest active reservation expires rather than exhausting retries.
+    await updateByLock({
+      db: client, job,
+      sql: `status = 'queued', phase = 'queued', locked_at = NULL, attempts = attempts - 1,
+            available_at = (SELECT COALESCE(min(t) + interval '1 minute', statement_timestamp())
+              FROM video_models, unnest(recent_submit_times) AS t
+              WHERE tenant_id = $3 AND model_key = $4 AND t > statement_timestamp() - interval '1 minute'),
+            error_code = NULL, error_message = NULL`,
+      values: [job.tenant_id, job.model_key],
+    });
+  }
+  return Boolean(reserved.rowCount);
+});
+
+const dispatchVideo = async (job, model, request) => {
+  if (!await reserveSubmitSlot(job)) return;
+  try {
+    const requestId = await submitVideo({ config: model, path: request.path, body: request.body });
+    const submitted = { job, requestId, usedElements: Boolean(request.body.elements?.length) };
+    try {
+      await markVideoSubmitted(submitted);
+    } catch {
+      // The provider accepted it. Retry only the fenced DB write, never the POST.
+      await markVideoSubmitted(submitted);
+    }
+  } catch (error) {
+    // Only an explicit rejection (e.g. 429) is safe to submit again. A lost
+    // response or failed request-ID write may already have incurred a charge.
+    if (error instanceof FoundryFalError && error.providerStatus >= 400 &&
+        error.providerStatus < 500 && error.providerStatus !== 408) throw error;
+    throw new VideoModelError(
+      "送出狀態無法確認，請在確認帳單後重新提交", "submit_state_lost", 502
     );
-    throw error;
   }
 };
 
@@ -389,11 +452,14 @@ const storeVideoResult = async (job, model) => {
         frameBlobName: `videos/jobs/${job.id}/${job.lock_version}-last.png`,
       })
     : null;
-  await updateByLock({
-    job,
-    sql: `status = 'succeeded', phase = 'completed', last_frame_blob_name = $3,
-          error_code = NULL, error_message = NULL, locked_at = NULL, completed_at = now()`,
-    values: [lastFrame?.blobName || null],
+  await withVideoModelTransaction(job.tenant_id, async (client) => {
+    const finished = await updateByLock({
+      db: client, job,
+      sql: `status = 'succeeded', phase = 'completed', last_frame_blob_name = $3,
+            error_code = NULL, error_message = NULL, locked_at = NULL, completed_at = now()`,
+      values: [lastFrame?.blobName || null],
+    });
+    if (finished.rowCount) await queueCompletedProjectRender(client, job.project_id);
   });
 };
 
@@ -406,7 +472,6 @@ const processNextVideoJob = async () => {
       modelKey: job.model_key,
     });
     if (job.phase === "submitting") {
-      await assertSubmitCapacity(job, await ensureVideoSettings(job.tenant_id));
       const imageDataUrl = job.mode === "i2v" ? await loadVideoFrameDataUrl(job) : null;
       const endImageDataUrl =
         job.mode === "i2v" && (job.end_source_upload_id || job.end_source_image_job_id)
@@ -431,12 +496,7 @@ const processNextVideoJob = async () => {
         endImageDataUrl,
         elementImages: await loadElementImages(job, compiled.elements),
       });
-      const requestId = await submitVideo({
-        config: model,
-        path: request.path,
-        body: request.body,
-      });
-      await markVideoSubmitted({ job, requestId });
+      await dispatchVideo(job, model, request);
       return true;
     }
 
@@ -454,12 +514,13 @@ const processNextVideoJob = async () => {
       await deferVideoJob({ job, seconds: POLL_DELAY_SECONDS });
       return true;
     }
-    await updateByLock({
+    const storing = await updateByLock({
       job,
       sql: "phase = 'storing', next_poll_at = now(), locked_at = now()",
     });
-    const storingJob = { ...job, phase: "storing" };
-    await storeVideoResult(storingJob, model);
+    if (!storing.rowCount) return true;
+    job.phase = "storing";
+    await storeVideoResult(job, model);
   } catch (error) {
     await markVideoFailure({ job, error });
   }
@@ -467,24 +528,18 @@ const processNextVideoJob = async () => {
 };
 
 let workerStarted = false;
-let workerBusy = false;
 
 const startVideoJobWorker = () => {
   if (workerStarted) return;
   workerStarted = true;
   const pollMs = Number(process.env.VIDEO_JOB_POLL_MS || 2000);
-  const run = async () => {
-    if (workerBusy) return;
-    workerBusy = true;
-    try {
-      await processNextVideoJob();
-    } catch (error) {
-      console.error("[video-jobs] Worker cycle failed:", {
-        name: error?.name,
-        code: error?.code,
-      });
-    } finally {
-      workerBusy = false;
+  let active = 0;
+  const run = () => {
+    while (active < WORKER_CONCURRENCY) {
+      active++;
+      processNextVideoJob().catch((error) => {
+        console.error("[video-jobs] Worker cycle failed:", { name: error?.name, code: error?.code });
+      }).finally(() => { active--; });
     }
   };
   const timer = setInterval(run, pollMs);
@@ -497,6 +552,7 @@ module.exports = {
   expiredElementError,
   getRemainingQuota,
   getVideoJobForUser,
+  previousFrameBlobName,
   processNextVideoJob,
   startVideoJobWorker,
 };

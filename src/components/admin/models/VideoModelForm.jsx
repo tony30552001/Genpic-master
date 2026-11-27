@@ -15,6 +15,7 @@ const initialForm = (model, families) => model ? {
   maxDurationSeconds: String(model.maxDurationSeconds),
   maxResolution: model.maxResolution || "1080P",
   allowAudio: Boolean(model.allowAudio),
+  pricePerSecondUsd: String(model.pricePerSecondUsd ?? ""),
   apiKey: "",
 } : {
   modelKey: "",
@@ -25,6 +26,7 @@ const initialForm = (model, families) => model ? {
   maxDurationSeconds: "5",
   maxResolution: "768P",
   allowAudio: false,
+  pricePerSecondUsd: "",
   apiKey: "",
 };
 
@@ -46,6 +48,7 @@ export default function VideoModelForm({ model, catalog, onSubmit, onCancel }) {
       await onSubmit({
         ...form,
         maxDurationSeconds: Number(form.maxDurationSeconds),
+        pricePerSecondUsd: form.pricePerSecondUsd === "" ? null : Number(form.pricePerSecondUsd),
         maxResolution: family?.supportsAudioToggle ? null : form.maxResolution,
       });
     } catch (caught) {
@@ -84,6 +87,9 @@ export default function VideoModelForm({ model, catalog, onSubmit, onCancel }) {
         </label>
         <label className={fieldClass}>每支最長秒數
           <Input required type="number" min={family?.minDuration || 1} max={family?.maxDuration || 15} value={form.maxDurationSeconds} onChange={(event) => update("maxDurationSeconds", event.target.value)} />
+        </label>
+        <label className={fieldClass}>每秒單價（美元）
+          <Input type="number" min="0" max="999999.999999" step="0.000001" value={form.pricePerSecondUsd} onChange={(event) => update("pricePerSecondUsd", event.target.value)} placeholder="留空表示未定價" />
         </label>
         {!family?.supportsAudioToggle && (
           <label className={fieldClass}>最高解析度

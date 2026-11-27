@@ -10,6 +10,7 @@ const { listPublicImageModels } = require("../_shared/imageModels");
 const { ImageModelError } = require("../_shared/imageModelConfig");
 const { handleImageModels, handleImageModelTest } = require("./imageModels");
 const { handleVideoModelTest, handleVideoModels } = require("./videoModels");
+const { handleVideoUsage } = require("./videoUsage");
 const { ensureVideoSettings, updateVideoSettings } = require("../_shared/videoPolicy");
 const { listPublicVideoModels } = require("../_shared/videoModels");
 const { resolveProjectVideo } = require("../_shared/videoProjects");
@@ -665,6 +666,11 @@ module.exports = async function (context, req) {
 
   if (method === "GET" && resource === "history") {
     await listHistory(context, identity, req);
+    return;
+  }
+
+  if (method === "GET" && resource === "video-usage" && !targetId) {
+    await handleVideoUsage(context, req, identity);
     return;
   }
 

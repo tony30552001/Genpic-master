@@ -7,7 +7,7 @@ const {
 } = require("./videoModelFamilies");
 
 const MODEL_COLUMNS = `model_key, label, family, endpoint, deployment_name,
-  max_duration_seconds, max_resolution, allow_audio,
+  max_duration_seconds, max_resolution, allow_audio, price_per_second_usd,
   (api_key_encrypted IS NOT NULL) AS has_api_key, created_at, updated_at`;
 const MODEL_KEY = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const execute = (client, text, params) => client ? client.query(text, params) : query(text, params);
@@ -63,6 +63,10 @@ const validateVideoModelInput = (input) => {
   if (maxResolution && !family.resolutions.includes(maxResolution)) {
     throw new VideoModelError("不支援的最高解析度");
   }
+  const price = input.pricePerSecondUsd;
+  if (price != null && (typeof price !== "number" || !/^\d{1,6}(\.\d{1,6})?$/.test(String(price)))) {
+    throw new VideoModelError("每秒單價須為 0 至 999999.999999 美元，最多六位小數");
+  }
   return {
     modelKey,
     label: requiredText(input.label, "模型名稱"),
@@ -71,6 +75,7 @@ const validateVideoModelInput = (input) => {
     deploymentName: requiredText(input.deploymentName, "部署名稱"),
     maxDurationSeconds,
     maxResolution,
+    pricePerSecondUsd: price ?? null,
     allowAudio: family.supportsAudioToggle ? Boolean(input.allowAudio) : true,
   };
 };
@@ -99,6 +104,7 @@ const mapVideoModel = (row) => ({
   endpoint: row.endpoint,
   deploymentName: row.deployment_name,
   hasApiKey: Boolean(row.has_api_key),
+  pricePerSecondUsd: row.price_per_second_usd == null ? null : Number(row.price_per_second_usd),
   createdAt: timestamp(row.created_at),
   updatedAt: timestamp(row.updated_at),
 });
@@ -191,11 +197,11 @@ const createVideoModel = async ({ tenantId, createdBy, apiKey, ...input }) => {
       const result = await client.query(
         `INSERT INTO video_models
          (tenant_id, model_key, label, family, endpoint, deployment_name,
-          api_key_encrypted, max_duration_seconds, max_resolution, allow_audio, created_by, updated_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
+          api_key_encrypted, max_duration_seconds, max_resolution, allow_audio, price_per_second_usd, created_by, updated_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
          RETURNING ${MODEL_COLUMNS}`,
         [tenantId, model.modelKey, model.label, model.family, model.endpoint, model.deploymentName,
-          encrypt(key), model.maxDurationSeconds, model.maxResolution, model.allowAudio, createdBy || null]
+          encrypt(key), model.maxDurationSeconds, model.maxResolution, model.allowAudio, model.pricePerSecondUsd, createdBy || null]
       );
       return mapVideoModel(result.rows[0]);
     });
@@ -230,11 +236,11 @@ const updateVideoModel = async ({ tenantId, updatedBy, apiKey, ...input }) => {
         `UPDATE video_models
          SET label = $3, endpoint = $4, max_duration_seconds = $5, max_resolution = $6,
              allow_audio = $7, api_key_encrypted = COALESCE($8, api_key_encrypted),
-             updated_by = $9, updated_at = now()
+             price_per_second_usd = $9, updated_by = $10, updated_at = now()
          WHERE tenant_id = $1 AND model_key = $2
          RETURNING ${MODEL_COLUMNS}`,
         [tenantId, model.modelKey, model.label, model.endpoint, model.maxDurationSeconds,
-          model.maxResolution, model.allowAudio, key ? encrypt(key) : null, updatedBy || null]
+          model.maxResolution, model.allowAudio, key ? encrypt(key) : null, model.pricePerSecondUsd, updatedBy || null]
       );
       return mapVideoModel(result.rows[0]);
     });

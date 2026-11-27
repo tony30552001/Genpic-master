@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import GlobalCard from "./GlobalCard";
 import SegmentDivider from "./SegmentDivider";
 import ShotCard from "./ShotCard";
+import StoryboardTimeline from "./StoryboardTimeline";
 import { DraftingShots, StatusPill } from "./StoryboardParts";
 import { STORYBOARD_STEP_LABELS, shotCountLabel } from "./progressSteps";
 import { boardStatus, estimateLabel, storyboardActions } from "./storyboardActions";
@@ -148,25 +149,10 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                 <ChevronDown className="icon-md" aria-hidden="true" />
               </button>
             </div>
-            {board && (
-              <div className="flex h-7 gap-0.75 px-4 pb-2" aria-hidden="true">
-                {board.storyboard.shots.map((shot, index) => (
-                  <span
-                    key={shot.id}
-                    style={{ flexGrow: shot.duration }}
-                    className={cn(
-                      "relative flex min-w-0 basis-0 items-center justify-center rounded-md bg-primary/12 text-[10px] font-semibold tabular-nums text-primary",
-                      board.changedShotIds.includes(shot.id) && "bg-primary/25",
-                      index > 0 && startsAt.has(shot.id) && "ml-1.5"
-                    )}
-                  >
-                    {index + 1}
-                    {warnedIds.has(shot.id) && <span className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500" />}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
+          {board && <StoryboardTimeline compact shots={board.storyboard.shots} segments={board.segments}
+            warnedIds={warnedIds} changedIds={board.changedShotIds} previews={storyboard.previews}
+            onJump={setEditingId} onReorder={actions.reorder} busy={Boolean(pending)} />}
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-border px-4 py-3">
             {!board ? (
@@ -261,6 +247,8 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
             index={board.storyboard.shots.indexOf(editingShot)}
             board={board}
             pending={pending}
+            frame={storyboard.frame}
+            onGenerateFrame={storyboard.generateFrame}
             actions={actions}
             onClose={() => setEditingId(null)}
           />
@@ -291,7 +279,7 @@ function SheetFooter({ storyboard, actions, model, canGenerate, generateBlocker,
   );
 }
 
-function ShotEditor({ shot, index, board, pending, actions, onClose }) {
+function ShotEditor({ shot, index, board, pending, frame, onGenerateFrame, actions, onClose }) {
   const closeButtonRef = useRef(null);
   const requestClose = useHistoryLayer(onClose, closeButtonRef);
   return (
@@ -332,6 +320,9 @@ function ShotEditor({ shot, index, board, pending, actions, onClose }) {
           characters={board.storyboard.global.characters}
           previews={actions.previews}
           startFrameLocked={actions.startFrameLocked}
+          frame={frame}
+          onGenerateFrame={onGenerateFrame}
+          onPromoteReference={actions.promoteReference}
           onChange={(patch) => actions.updateShot(shot.id, patch)}
           onSetStartFrame={(uploadId) => actions.setStartFrame(shot.id, uploadId)}
           onToggleCharacter={(characterId) => actions.toggleShotCharacter(shot.id, characterId)}

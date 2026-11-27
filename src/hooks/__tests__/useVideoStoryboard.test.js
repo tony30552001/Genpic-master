@@ -5,21 +5,26 @@ import { storyboardActions } from "../../components/video/storyboard/storyboardA
 import { uploadFile } from "../../services/storageService";
 import {
   draftVideoStoryboard,
+  generateImage,
   inspectVideoStoryboard,
   reviseVideoStoryboard,
   scriptToVideoStoryboard,
+  waitForImageJob,
   waitForStoryboardJob,
 } from "../../services/aiService";
 
 vi.mock("../../services/aiService", () => ({
   draftVideoStoryboard: vi.fn(),
+  generateImage: vi.fn(),
   inspectVideoStoryboard: vi.fn(),
   reviseVideoStoryboard: vi.fn(),
   scriptToVideoStoryboard: vi.fn(),
+  waitForImageJob: vi.fn(),
   waitForStoryboardJob: vi.fn(),
 }));
 
 vi.mock("../../services/storageService", () => ({ uploadFile: vi.fn() }));
+vi.mock("../../lib/imageFile", async (load) => ({ ...await load(), imageUrlToFile: vi.fn(async () => new File(["png"], "frame.png", { type: "image/png" })) }));
 
 const shot = (id, action) => ({
   id,
@@ -63,6 +68,11 @@ const barista = {
   uploadIds: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"],
   imageLabel: null,
 };
+
+const reference = { label: "Image1", uploadId: "33333333-3333-4333-8333-333333333333" };
+const generatedId = "44444444-4444-4444-8444-444444444444";
+const imageResult = { jobId: "j1", status: "succeeded", model: "tenant-edit", operation: "edit", imageUrl: "data:image/png;base64,AA==" };
+const importedBoard = () => ({ ...storyboard, shots: [{ ...storyboard.shots[0], references: [reference] }, storyboard.shots[1]] });
 
 const agentResult = (overrides = {}) => ({
   storyboard,
@@ -313,6 +323,83 @@ describe("useVideoStoryboard", () => {
 
     expect(uploadFile).not.toHaveBeenCalled();
     expect(result.current.messages.at(-1)).toMatchObject({ kind: "error", text: "腳本文件只支援 DOCX、TXT、MD" });
+  });
+
+  it("promotes an owned reference without duplicating its image; a second angle completes the character", async () => {
+    const board = importedBoard();
+    const second = { label: "Image2", uploadId: generatedId };
+    board.shots[1] = { ...board.shots[1], references: [second] };
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+    act(() => result.current.open(board));
+    act(() => storyboardActions(result.current).promoteReference("s1", reference));
+    expect(result.current.board.storyboard.global.characters).toEqual([{ id: "c1", name: "Image1", description: "", imageLabel: "Image1", uploadIds: [reference.uploadId] }]);
+    expect(result.current.board.storyboard.shots[0].characterIds).toEqual(["c1"]);
+    await act(() => vi.advanceTimersByTimeAsync(400));
+    expect(result.current.inspection).toMatchObject({ status: "invalid", error: expect.stringContaining("不同角度") });
+    expect(inspectVideoStoryboard).not.toHaveBeenCalled();
+    act(() => storyboardActions(result.current).promoteReference("s2", second, "c1"));
+    act(() => storyboardActions(result.current).promoteReference("s2", second, "c1"));
+    await act(() => vi.advanceTimersByTimeAsync(400));
+    expect(inspectVideoStoryboard).toHaveBeenCalledWith(expect.objectContaining({
+      storyboard: expect.objectContaining({ global: expect.objectContaining({ characters: [expect.objectContaining({ imageLabel: "Image1", uploadIds: [reference.uploadId, generatedId] })] }) }),
+    }));
+    expect(result.current.board.storyboard.shots[1].characterIds).toEqual(["c1"]);
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+
+  it("sets the clean 16:9 frame only after the owned reference edit succeeds and its result upload completes", async () => {
+    const board = importedBoard();
+    generateImage.mockResolvedValue({ jobId: "j1", model: "tenant-edit" });
+    waitForImageJob.mockResolvedValue(imageResult);
+    uploadFile.mockResolvedValue({ uploadId: generatedId });
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+    act(() => result.current.open(board));
+    await act(() => result.current.generateFrame("s1", reference.uploadId));
+    expect(generateImage).toHaveBeenCalledWith(expect.objectContaining({ referenceUploadId: reference.uploadId, aspectRatio: "16:9", purpose: "freeform", imageLanguage: "none" }));
+    expect(uploadFile).toHaveBeenCalledWith(expect.any(File), "image");
+    expect(result.current.board.storyboard.shots[0]).toMatchObject({ startFrameUploadId: generatedId, references: [reference] });
+    expect(result.current.previews[generatedId]).toBe(imageResult.imageUrl);
+
+    uploadFile.mockRejectedValueOnce(new Error("上傳中斷"));
+    await act(() => result.current.generateFrame("s1", reference.uploadId));
+    expect(result.current.frame).toMatchObject({ shotId: "s1", error: "上傳中斷" });
+    expect(result.current.board.storyboard.shots[0].startFrameUploadId).toBe(generatedId);
+  });
+
+  it("does not replace a changed scene or start a clean frame for an ineligible shot", async () => {
+    let finish;
+    generateImage.mockResolvedValue({ jobId: "j1", model: "tenant-edit" });
+    waitForImageJob.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: true }));
+    const board = importedBoard();
+    board.shots[1] = { ...board.shots[1], cut: true, references: [reference] };
+    act(() => result.current.open(board));
+    await act(() => result.current.generateFrame("s1", reference.uploadId));
+    expect(generateImage).not.toHaveBeenCalled();
+    let work;
+    await act(async () => { work = result.current.generateFrame("s2", reference.uploadId); });
+    expect(result.current.pending).toBe("frame");
+    act(() => storyboardActions(result.current).updateShot("s2", { cut: false }));
+    await act(async () => { finish(imageResult); await work; });
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(result.current.frame.error).toContain("未套用");
+    expect(result.current.board.storyboard.shots[1].startFrameUploadId).toBeNull();
+  });
+
+  it("saves the reordered shots, preserves an opening frame at a scene cut and rejects a conflicting first frame", async () => {
+    const board = importedBoard();
+    board.shots[0].startFrameUploadId = reference.uploadId;
+    const { result, rerender } = renderHook((props) => useVideoStoryboard(props), { initialProps: { modelKey: "kling", hasStartFrame: false } });
+    act(() => result.current.open(board));
+    act(() => storyboardActions(result.current).reorder("s2", "s1"));
+    const saved = result.current.board.storyboard;
+    expect(saved.shots.map((item) => item.id)).toEqual(["s2", "s1"]);
+    expect(saved.shots[1]).toMatchObject({ cut: true, startFrameUploadId: reference.uploadId });
+    await act(() => vi.advanceTimersByTimeAsync(400));
+    expect(inspectVideoStoryboard).toHaveBeenCalledWith(expect.objectContaining({ storyboard: saved }));
+    rerender({ modelKey: "kling", hasStartFrame: true });
+    expect(storyboardActions(result.current).reorder("s1", "s2")).toContain("工作區已附加首影格");
+    expect(result.current.board.storyboard).toBe(saved);
   });
 
   it("clears a start frame when its shot no longer starts a segment", async () => {

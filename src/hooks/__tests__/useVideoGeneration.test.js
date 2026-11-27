@@ -1,270 +1,119 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import useVideoGeneration from "../useVideoGeneration";
-import {
-  createVideoProject,
-  downloadVideo,
-  downloadVideoSegment,
-  renderVideoProject,
-  retryVideoProject,
-  waitForVideoProject,
-  waitForVideoRender,
-} from "../../services/aiService";
+import { cancelVideoProject, createVideoProject, draftVideoStoryboard, renderVideoProject, retryVideoProject, waitForVideoProject, waitForVideoRender } from "../../services/aiService";
 
 vi.mock("../../services/aiService", () => ({
-  createVideoProject: vi.fn(),
-  downloadVideo: vi.fn(),
-  downloadVideoSegment: vi.fn(),
-  draftVideoStoryboard: vi.fn(),
-  renderVideoProject: vi.fn(),
-  retryVideoProject: vi.fn(),
-  waitForVideoProject: vi.fn(),
-  waitForVideoRender: vi.fn(),
+  cancelVideoProject: vi.fn(), createVideoProject: vi.fn(), draftVideoStoryboard: vi.fn(), renderVideoProject: vi.fn(),
+  retryVideoProject: vi.fn(), waitForVideoProject: vi.fn(), waitForVideoRender: vi.fn(),
 }));
 
 const storyboard = { title: "晨光森林", global: {}, shots: [] };
-
-const segment = (index) => ({
-  index,
-  jobId: `job-${index}`,
-  status: "succeeded",
-  durationSeconds: 10,
-  prompt: `prompt-${index}`,
-});
-
-const finish = (count) => {
-  const segments = Array.from({ length: count }, (_, index) => segment(index));
-  createVideoProject.mockResolvedValue({ projectId: "p1", segments });
-  waitForVideoProject.mockResolvedValue({ projectId: "p1", status: "succeeded", segments });
+const request = { storyboard, modelKey: "kling", mode: "t2v" };
+const segment = (index, status = "succeeded") => ({ index, jobId: `j${index}`, status, prompt: `prompt-${index}` });
+const setup = (segments, initialTurns) => {
+  const project = { projectId: "p1", status: "succeeded", segments };
+  createVideoProject.mockResolvedValue(project);
+  waitForVideoProject.mockResolvedValue(project);
+  const onSaved = vi.fn();
+  const onMerged = vi.fn();
+  return { ...renderHook(() => useVideoGeneration({ onSaved, onMerged, initialTurns })), onSaved, onMerged, project };
 };
 
+beforeEach(() => vi.resetAllMocks());
+afterEach(cleanup);
+
 describe("useVideoGeneration", () => {
-  beforeEach(() => {
-    downloadVideoSegment.mockImplementation(async ({ jobId }) => new Blob([jobId]));
-    downloadVideo.mockResolvedValue(new Blob(["merged"]));
-    globalThis.URL.createObjectURL = vi.fn((blob) => `blob:${blob.size}-${Math.random()}`);
-    globalThis.URL.revokeObjectURL = vi.fn();
+  it("saves a single segment once and keeps the project identity for streaming", async () => {
+    const { result, onSaved } = setup([segment(0)]);
+    await act(() => result.current.submit({ ...request, baseProjectId: "base" }));
+    expect(createVideoProject).toHaveBeenCalledWith({ ...request, baseProjectId: "base" });
+    expect(onSaved).toHaveBeenCalledWith({ videoProjectId: "p1", userScript: storyboard.title, fullPrompt: "prompt-0" });
+    expect(result.current.turns[0]).toMatchObject({ status: "succeeded", saved: true, projectId: "p1", options: { mode: "t2v" } });
+    expect(waitForVideoRender).not.toHaveBeenCalled();
   });
 
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
+  it("publishes each segment before the rest finish, then follows the backend merge without posting to render or history", async () => {
+    const { result, onSaved, onMerged, project } = setup([segment(0), segment(1)]);
+    let finish;
+    waitForVideoProject.mockImplementation(({ onProgress }) => {
+      onProgress({ ...project, status: "processing", segments: [segment(0), segment(1, "processing")] });
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    let submitted;
+    await act(async () => { submitted = result.current.submit(request); });
+    expect(result.current.turns[0]).toMatchObject({ status: "processing", segments: [segment(0), segment(1, "processing")] });
+    expect(result.current.turns[0]).not.toHaveProperty("videoUrls");
+    await act(async () => { finish(project); await submitted; });
+    expect(result.current.turns[0]).toMatchObject({ status: "succeeded", mergeStatus: "merged", saved: true });
+    expect(renderVideoProject).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onMerged).toHaveBeenCalledOnce();
   });
 
-  it("saves a single-segment project to history with its prompt", async () => {
-    finish(1);
-    const onSaved = vi.fn();
-    const { result } = renderHook(() => useVideoGeneration({ onSaved }));
-
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
-
-    expect(createVideoProject).toHaveBeenCalledWith({ modelKey: "kling", storyboard, mode: "t2v" });
-    expect(onSaved).toHaveBeenCalledWith({ videoProjectId: "p1", userScript: "晨光森林", fullPrompt: "prompt-0" });
-    expect(result.current.turns[0]).toMatchObject({ status: "succeeded", videoUrls: [expect.any(String)] });
+  it("keeps finished segments after a render failure and only queues a new render on retry", async () => {
+    const { result, onSaved } = setup([segment(0), segment(1)]);
+    waitForVideoRender.mockRejectedValueOnce(new Error("合併逾時"));
+    await act(() => result.current.submit(request));
+    expect(result.current.turns[0]).toMatchObject({ status: "succeeded", mergeStatus: "failed", mergeError: "合併逾時" });
+    await act(() => result.current.retryMerge(result.current.turns[0]));
+    expect(renderVideoProject).toHaveBeenCalledWith({ projectId: "p1" });
+    expect(createVideoProject).toHaveBeenCalledOnce();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(result.current.turns[0]).toMatchObject({ mergeStatus: "merged", saved: true });
   });
 
-  it("sends the source project for reuse without keeping it for a regeneration", async () => {
-    finish(1);
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
-
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v", baseProjectId: "p0" }));
-
-    expect(createVideoProject).toHaveBeenCalledWith({ modelKey: "kling", storyboard, mode: "t2v", baseProjectId: "p0" });
-    expect(result.current.turns[0].options).toEqual({ mode: "t2v" });
-  });
-
-  it("downloads every segment in order and does not save a multi-segment project", async () => {
-    finish(3);
-    const onSaved = vi.fn();
-    const { result } = renderHook(() => useVideoGeneration({ onSaved }));
-
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
-
-    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["job-0", "job-1", "job-2"]);
-    expect(result.current.turns[0].videoUrls).toHaveLength(3);
+  it("cancels at the backend and ignores an older poll result after cancellation", async () => {
+    const { result, project, onSaved } = setup([segment(0, "queued")]);
+    let finish;
+    waitForVideoProject.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    let submitted;
+    await act(async () => { submitted = result.current.submit(request); });
+    cancelVideoProject.mockResolvedValue({ ...project, status: "cancelled", segments: [segment(0, "cancelled")] });
+    await act(() => result.current.cancel(result.current.turns[0]));
+    await act(async () => { finish(project); await submitted; });
+    expect(cancelVideoProject).toHaveBeenCalledWith({ projectId: "p1" });
+    expect(result.current.turns[0]).toMatchObject({ status: "cancelled", segments: [segment(0, "cancelled")] });
     expect(onSaved).not.toHaveBeenCalled();
   });
 
-  it("makes each segment playable as soon as it succeeds and reuses it when the project finishes", async () => {
-    const segments = [segment(0), { ...segment(1), status: "processing" }];
-    createVideoProject.mockResolvedValue({ projectId: "p1", segments });
-    let finishProject;
-    waitForVideoProject.mockImplementation(({ onProgress }) => {
-      onProgress({ projectId: "p1", status: "processing", segments });
-      return new Promise((resolve) => { finishProject = resolve; });
-    });
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+  it("stops a pending draft without admitting a video, even if the draft eventually resolves", async () => {
+    const { result } = setup([segment(0)]);
+    let finish, submitted;
+    draftVideoStoryboard.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    await act(async () => { submitted = result.current.submit({ brief: "晨光", modelKey: "kling" }); });
+    await act(() => result.current.cancel(result.current.turns[0]));
+    await act(async () => { finish({ storyboard }); await submitted; });
+    expect(result.current.turns[0].status).toBe("cancelled");
+    expect(createVideoProject).not.toHaveBeenCalled();
+    expect(cancelVideoProject).not.toHaveBeenCalled();
+  });
 
-    let submitted;
-    await act(async () => {
-      submitted = result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" });
-    });
-    expect(result.current.turns[0]).toMatchObject({ status: "processing", segmentUrls: { "job-0": expect.any(String) } });
-    expect(result.current.turns[0].videoUrls).toBeUndefined();
-
-    await act(async () => {
-      finishProject({ projectId: "p1", status: "succeeded", segments: [segment(0), segment(1)] });
-      await submitted;
-    });
-    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["job-0", "job-1"]);
-    expect(result.current.turns[0].videoUrls).toEqual([
-      result.current.turns[0].segmentUrls["job-0"],
-      result.current.turns[0].segmentUrls["job-1"],
+  it("resumes unfinished renders but does not poll cancelled or archived turns", async () => {
+    const base = { storyboard, segments: [segment(0), segment(1)], status: "succeeded" };
+    const { result, onSaved } = setup(base.segments, [
+      { ...base, clientId: "a", projectId: "p1", mergeStatus: "merging" },
+      { ...base, clientId: "b", projectId: "p2", status: "cancelled" },
+      { ...base, clientId: "c", projectId: "p3", saved: true, mergeStatus: "merged" },
+      { clientId: "d", status: "drafting" },
     ]);
+    await act(async () => {});
+    expect(waitForVideoProject.mock.calls.map(([args]) => args.projectId)).toEqual(["p1"]);
+    expect(result.current.turns.map((turn) => turn.status)).toEqual(["succeeded", "cancelled", "succeeded", "failed"]);
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
-  it("merges a multi-segment project into one video, replaces the segments and saves it", async () => {
-    finish(2);
-    const onSaved = vi.fn();
-    const { result } = renderHook(() => useVideoGeneration({ onSaved }));
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
-    const segmentUrls = result.current.turns[0].videoUrls;
-
-    await act(() => result.current.merge(result.current.turns[0]));
-
-    expect(renderVideoProject).toHaveBeenCalledWith({ projectId: "p1" });
-    expect(downloadVideo).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p1" }));
-    expect(onSaved).toHaveBeenCalledWith({
-      videoProjectId: "p1",
-      userScript: "晨光森林",
-      fullPrompt: "prompt-0\n\nprompt-1",
-    });
-    expect(URL.revokeObjectURL.mock.calls.map(([url]) => url)).toEqual(segmentUrls);
-    expect(result.current.turns[0]).toMatchObject({ mergeStatus: "merged", videoUrls: [expect.any(String)] });
-  });
-
-  it("retries only the failed segments of a failed turn and then finishes it", async () => {
-    const segments = [segment(0), segment(1)];
-    createVideoProject.mockResolvedValue({ projectId: "p1", segments });
-    waitForVideoProject.mockRejectedValueOnce(new Error("第 2 段：內容未通過安全檢查"));
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
-    await act(async () => {
-      await result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }).catch(() => {});
-    });
-    expect(result.current.turns[0]).toMatchObject({ status: "failed", error: "第 2 段：內容未通過安全檢查" });
-
-    retryVideoProject.mockResolvedValue({ projectId: "p1", status: "processing", segments });
-    waitForVideoProject.mockResolvedValue({ projectId: "p1", status: "succeeded", segments });
+  it("retries a failed project and restores the original turn if an edited replacement is not admitted", async () => {
+    const { result } = setup([segment(0)]);
+    waitForVideoProject.mockRejectedValueOnce(new Error("分段失敗"));
+    await act(async () => { await expect(result.current.submit(request)).rejects.toThrow("分段失敗"); });
     await act(() => result.current.retryFailed(result.current.turns[0]));
-
     expect(retryVideoProject).toHaveBeenCalledWith({ projectId: "p1" });
-    expect(createVideoProject).toHaveBeenCalledTimes(1);
-    expect(result.current.turns[0]).toMatchObject({ status: "succeeded", error: null, videoUrls: [expect.any(String), expect.any(String)] });
-  });
-
-  it("regenerates a turn in place and keeps the clips of reused segments", async () => {
-    finish(2);
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
     const original = result.current.turns[0];
-    const segments = [
-      { ...segment(0), jobId: "new-0", reused: true, reusedFromJobId: "job-0" },
-      { ...segment(1), jobId: "new-1" },
-    ];
-    createVideoProject.mockResolvedValue({ projectId: "p2", segments });
-    waitForVideoProject.mockResolvedValue({ projectId: "p2", status: "succeeded", segments });
-    downloadVideoSegment.mockClear();
-    URL.revokeObjectURL.mockClear();
-
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v", baseProjectId: "p1", replace: original }));
-
-    expect(createVideoProject).toHaveBeenLastCalledWith({ modelKey: "kling", storyboard, mode: "t2v", baseProjectId: "p1" });
-    expect(result.current.turns).toHaveLength(1);
-    expect(result.current.turns[0]).toMatchObject({ clientId: original.clientId, projectId: "p2", status: "succeeded" });
-    expect(result.current.turns[0].segmentUrls["new-0"]).toBe(original.segmentUrls["job-0"]);
-    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["new-1"]);
-    expect(URL.revokeObjectURL.mock.calls.map(([url]) => url)).toEqual([original.segmentUrls["job-1"]]);
-  });
-
-  it("restores the replaced turn when the regeneration is not admitted", async () => {
-    finish(2);
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
-    const original = result.current.turns[0];
-    createVideoProject.mockRejectedValue(new Error("今日影片額度已用完，請明天再試"));
-
+    createVideoProject.mockRejectedValueOnce(new Error("額度已用完"));
     await act(async () => {
-      await expect(result.current.submit({ storyboard, modelKey: "kling", mode: "t2v", replace: original }))
-        .rejects.toThrow("今日影片額度已用完");
+      await expect(result.current.submit({ ...request, replace: original, baseProjectId: "p1" })).rejects.toThrow("額度已用完");
     });
-
     expect(result.current.turns).toEqual([original]);
-    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
   });
-
-  it("shows the error when the retry is rejected", async () => {
-    finish(1);
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
-    retryVideoProject.mockRejectedValue(new Error("今日影片額度已用完，請明天再試"));
-
-    await act(() => result.current.retryFailed(result.current.turns[0]));
-
-    expect(result.current.turns[0]).toMatchObject({ status: "failed", error: "今日影片額度已用完，請明天再試" });
-  });
-
-  it("keeps the segments and shows the error when merging fails", async () => {
-    finish(2);
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
-    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
-    waitForVideoRender.mockRejectedValue(new Error("影片合併逾時，請重新合併"));
-
-    await act(() => result.current.merge(result.current.turns[0]));
-
-    expect(downloadVideo).not.toHaveBeenCalled();
-    expect(result.current.turns[0]).toMatchObject({
-      mergeStatus: "failed",
-      mergeError: "影片合併逾時，請重新合併",
-      videoUrls: [expect.any(String), expect.any(String)],
-    });
-  });
-
-  it("resumes a saved session without saving its turns to history again", async () => {
-    finish(1);
-    const onSaved = vi.fn();
-    const initialTurns = [
-      { clientId: "a", createdAt: 1, storyboard, projectId: "p1", status: "polling", segments: [], saved: false },
-      { clientId: "b", createdAt: 2, storyboard, projectId: "p2", status: "succeeded", segments: [segment(0)], saved: true },
-      { clientId: "c", createdAt: 3, brief: "海邊", status: "drafting" },
-    ];
-    const { result } = renderHook(() => useVideoGeneration({ onSaved, initialTurns }));
-
-    await act(async () => {});
-
-    expect(waitForVideoProject.mock.calls.map(([args]) => args.projectId)).toEqual(["p1", "p2"]);
-    expect(onSaved).toHaveBeenCalledTimes(1);
-    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ videoProjectId: "p1" }));
-    expect(result.current.turns.map((turn) => [turn.status, Boolean(turn.saved)])).toEqual([
-      ["succeeded", true],
-      ["succeeded", true],
-      ["failed", false],
-    ]);
-    expect(result.current.turns[2].error).toBe("已中斷，請重新生成");
-  });
-
-  it("reloads a merged turn as one video and the finished segments of a failed turn", async () => {
-    const failed = { ...segment(1), status: "failed" };
-    const initialTurns = [
-      { clientId: "a", createdAt: 1, storyboard, projectId: "p1", status: "succeeded", segments: [segment(0), segment(1)], mergeStatus: "merged", saved: true },
-      { clientId: "b", createdAt: 2, storyboard, projectId: "p2", status: "failed", segments: [segment(0), failed], error: "失敗" },
-    ];
-    const refreshed = [{ ...segment(0), shotIds: ["s1"] }, { ...failed, shotIds: ["s2"] }];
-    waitForVideoProject.mockImplementation(async ({ onProgress }) => {
-      onProgress({ projectId: "p2", status: "failed", segments: refreshed });
-      throw new Error("第 2 段：失敗");
-    });
-    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn(), initialTurns }));
-
-    await act(async () => {});
-
-    expect(downloadVideo).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p1" }));
-    expect(waitForVideoProject.mock.calls.map(([args]) => args.projectId)).toEqual(["p2"]);
-    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["job-0"]);
-    expect(result.current.turns[0].videoUrls).toHaveLength(1);
-    expect(result.current.turns[1]).toMatchObject({
-      status: "failed",
-      error: "第 2 段：失敗",
-      segments: refreshed,
-      segmentUrls: { "job-0": expect.any(String) },
-    });
-  });});
+});

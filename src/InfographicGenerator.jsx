@@ -152,7 +152,7 @@ export default function InfographicGenerator({
         markStyleUsed,
         updateStyle,
     } = useStyles({ user });
-    const { historyItems, saveHistoryItem, saveVideoHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user });
+    const { historyItems, historyError, refreshHistory, saveHistoryItem, saveVideoHistoryItem, deleteHistoryItem, deleteHistoryItems } = useHistory({ user, libraryOpen: activeTab === 'library' });
     const [mobileHeaderActions, setMobileHeaderActions] = useState(null);
     const imageChat = useImageChat({
         enabled: activeTab === 'chat',
@@ -714,6 +714,7 @@ export default function InfographicGenerator({
                                 historyItems={historyItems}
                                 initialSource={videoSource}
                                 onSaveHistory={saveVideoHistoryItem}
+                                onRefreshHistory={refreshHistory}
                                 sessions={videoSessions}
                             />
                         )}
@@ -723,6 +724,7 @@ export default function InfographicGenerator({
                 {/* ─── Unified Asset Center ─── */}
                 {activeTab === 'library' && (
                     <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar lg:px-8 2xl:px-12">
+                        {historyError && <p role="alert" className="mb-3 text-sm text-destructive">{historyError}</p>}
                         <AssetCenter
                             initialSection={initialLibrarySection}
                             initialViewMode={initialLibraryViewMode}

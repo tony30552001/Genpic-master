@@ -34,8 +34,16 @@ const compressImage = (dataUrl) =>
     img.src = dataUrl;
   });
 
-export default function useHistory({ user }) {
+export default function useHistory({ user, libraryOpen = false }) {
   const [historyItems, setHistoryItems] = useState([]);
+  const [historyError, setHistoryError] = useState("");
+
+  const refreshHistory = useCallback(async () => {
+    if (!user) return;
+    const items = await listHistory();
+    setHistoryItems(items || []);
+    setHistoryError("");
+  }, [user]);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -43,14 +51,19 @@ export default function useHistory({ user }) {
 
     const load = async () => {
       const items = await listHistory();
-      if (!cancelled) setHistoryItems(items || []);
+      if (!cancelled) {
+        setHistoryItems(items || []);
+        setHistoryError("");
+      }
     };
 
-    load();
+    load().catch((error) => {
+      if (!cancelled) setHistoryError(error.message || "無法更新素材清單");
+    });
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, libraryOpen]);
 
   const saveHistoryItem = useCallback(
     async ({ jobId, imageUrl, userScript, stylePrompt, fullPrompt, styleId, source }) => {
@@ -136,6 +149,8 @@ export default function useHistory({ user }) {
 
   return {
     historyItems,
+    historyError,
+    refreshHistory,
     saveHistoryItem,
     saveVideoHistoryItem,
     deleteHistoryItem: deleteHistory,

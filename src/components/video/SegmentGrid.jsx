@@ -3,6 +3,8 @@ import { Download, Grid2X2, Play, SquarePen } from "@/components/icons/lucideCon
 import { AlertCircle } from "@/components/icons/lucideStatus";
 import { cn } from "@/lib/utils";
 import { segmentStatusLabel } from "./videoStatus";
+import VideoStream from "./VideoStream";
+import { videoDownloadUrl } from "@/services/aiService";
 
 const MODES = [
   { value: "grid", label: "網格", Icon: Grid2X2 },
@@ -48,22 +50,22 @@ const pauseOthers = (event) => {
     });
 };
 
-function SegmentCard({ segment, url, dark, onEdit }) {
+function SegmentCard({ segment, dark, onEdit }) {
   const failed = segment.status === "failed";
-  const label = segment.status === "succeeded" ? "下載中" : segmentStatusLabel(segment);
+  const ready = segment.status === "succeeded";
   return (
     <li className="flex min-w-0 flex-col gap-1.5">
       <div
         className={cn(
           "relative aspect-video overflow-hidden rounded-xl",
-          url ? "bg-black" : failed
+          ready ? "bg-black" : failed
             ? "border border-destructive/30 bg-destructive/5"
             : dark ? "bg-white/5" : "border border-border/70 bg-muted/50"
         )}
       >
-        {url ? (
-          <video
-            src={url}
+        {ready ? (
+          <VideoStream
+            jobId={segment.jobId}
             controls
             playsInline
             preload="metadata"
@@ -85,12 +87,14 @@ function SegmentCard({ segment, url, dark, onEdit }) {
               </button>
             )}
           </div>
+        ) : segment.status === "cancelled" ? (
+          <p className="flex size-full items-center justify-center text-xs text-muted-foreground">已取消</p>
         ) : (
           <>
             <div className="image-generation-dots pointer-events-none absolute inset-0" aria-hidden="true" />
             <p className={cn("absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium", dark ? "text-white/80" : "text-foreground")}>
               <span className="image-generation-status-dot size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
-              {label}
+              {segmentStatusLabel(segment)}
             </p>
           </>
         )}
@@ -114,9 +118,9 @@ function SegmentCard({ segment, url, dark, onEdit }) {
               <SquarePen className="size-3.5" aria-hidden="true" />修改
             </button>
           )}
-          {url && (
+          {ready && (
             <a
-              href={url}
+              href={videoDownloadUrl({ jobId: segment.jobId })}
               download={`pixora-video-part-${segment.index + 1}.mp4`}
               className={cn(
                 "inline-flex size-7 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -147,9 +151,8 @@ export default function SegmentGrid({ turn, dark = false, onEdit, className }) {
     >
       {turn.segments.map((segment) => (
         <SegmentCard
-          key={segment.index}
+          key={segment.jobId}
           segment={segment}
-          url={turn.segmentUrls?.[segment.jobId]}
           dark={dark}
           onEdit={onEdit && segment.shotIds?.length ? onEdit : undefined}
         />

@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   draftVideoStoryboard,
+  generateImage,
   inspectVideoStoryboard,
   reviseVideoStoryboard,
   scriptToVideoStoryboard,
+  waitForImageJob,
   waitForStoryboardJob,
 } from "../services/aiService";
 import { uploadFile } from "../services/storageService";
-import { readFileAsDataUrl } from "../lib/imageFile";
+import { imageUrlToFile, readFileAsDataUrl } from "../lib/imageFile";
+import { requireCompletedImageJob } from "../lib/imageJob";
 import { MAX_DOCUMENT_FILE_SIZE, getDocumentExtension } from "../lib/documentFormats";
 import {
   MAX_CHARACTER_IMAGE_BYTES,
+  MIN_CHARACTER_IMAGES,
   SCRIPT_DOCUMENT_EXTENSIONS,
   SOURCE_DOCUMENT_EXTENSIONS,
+  canHaveStartFrame,
   storyboardSeconds,
 } from "../lib/videoStoryboard";
 
@@ -21,6 +26,11 @@ const INSPECT_DELAY_MS = 400;
 const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
 const boardCharacters = (board) => board?.storyboard.global.characters || [];
+
+const missingAngle = (characters) => {
+  const character = characters.find((item) => item.uploadIds.length < MIN_CHARACTER_IMAGES);
+  return character ? `請在全片設定為「${character.name}」再加入一張不同角度的參考圖` : "";
+};
 
 const summarize = (storyboard, warnings) => ({
   title: storyboard.title,
@@ -59,6 +69,8 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     config: `${modelKey}|${hasStartFrame}`,
   }));
   const [previews, setPreviews] = useState({});
+  const [frame, setFrame] = useState(null);
+  const frameController = useRef(null);
   const boardRef = useRef(board);
   const agentController = useRef(null);
   const inspectController = useRef(null);
@@ -72,8 +84,15 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
 
   useEffect(() => () => {
     agentController.current?.abort();
+    frameController.current?.abort();
     inspectController.current?.abort();
     clearTimeout(inspectTimer.current);
+  }, []);
+
+  const resetFrame = useCallback(() => {
+    frameController.current?.abort();
+    frameController.current = null;
+    setFrame(null);
   }, []);
 
   const inspect = useCallback(async (storyboard) => {
@@ -82,6 +101,12 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     inspectController.current = controller;
     const inspectedConfig = `${latest.current.modelKey}|${latest.current.hasStartFrame}`;
     setInspection({ status: "loading", error: "", config: inspectedConfig });
+    const error = missingAngle(storyboard.global.characters);
+    if (error) {
+      setBoard((current) => current && { ...current, segments: null });
+      setInspection({ status: "invalid", error, config: inspectedConfig });
+      return;
+    }
     try {
       const result = await inspectVideoStoryboard({
         modelKey: latest.current.modelKey,
@@ -154,6 +179,12 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
   }, [addMessage]);
 
   const runAgent = useCallback(({ kind, userText, attachment, request, onResult, replaceBoard = false }) => {
+    const error = missingAngle(boardCharacters(boardRef.current));
+    if (error) {
+      addMessage({ role: "assistant", kind: "error", text: error });
+      return Promise.resolve();
+    }
+    resetFrame();
     agentController.current?.abort();
     const controller = new AbortController();
     agentController.current = controller;
@@ -167,7 +198,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     setPendingJob(null);
     setProgress(null);
     return awaitAgent(controller, { kind, request, onResult });
-  }, [addMessage, awaitAgent]);
+  }, [addMessage, awaitAgent, resetFrame]);
 
   const acceptResult = useCallback((result, extra) => {
     setBoard((current) => ({
@@ -342,6 +373,9 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     const next = {
       ...current,
       storyboard,
+      segments: current.storyboard.shots.length !== storyboard.shots.length
+        || storyboard.shots.some((shot, index) => current.storyboard.shots[index].id !== shot.id)
+        ? null : current.segments,
       changedShotIds: shotId
         ? current.changedShotIds.filter((id) => id !== shotId)
         : current.changedShotIds,
@@ -352,6 +386,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
   }, [scheduleInspect]);
 
   const open = useCallback((storyboard, { reopened = true, baseProjectId = null } = {}) => {
+    resetFrame();
     agentController.current?.abort();
     setBoard((current) => ({
       revision: (current?.revision ?? 0) + 1,
@@ -364,7 +399,50 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
       baseProjectId,
     }));
     scheduleInspect(storyboard);
-  }, [scheduleInspect]);
+  }, [resetFrame, scheduleInspect]);
+
+  const generateFrame = useCallback(async (shotId, referenceUploadId) => {
+    const initial = boardRef.current?.storyboard;
+    const shot = initial?.shots.find((item) => item.id === shotId);
+    const eligible = () => {
+      const shots = boardRef.current?.storyboard.shots || [];
+      const index = shots.findIndex((item) => item.id === shotId);
+      return index >= 0 && shots[index] === shot && canHaveStartFrame(shot, index)
+        && !(index === 0 && latest.current.hasStartFrame);
+    };
+    if (frameController.current || agentController.current || !shot?.references.some((item) => item.uploadId === referenceUploadId) || !eligible()) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    frameController.current = controller;
+    const target = { shotId, referenceUploadId };
+    setFrame({ ...target, pending: true });
+    try {
+      const { jobId, model } = await generateImage({
+        referenceUploadId,
+        userScript: `依照參考圖與這幕內容，繪製影片開始瞬間的單一完整畫面。保留主體外觀，移除拼貼、格線、標註、字幕與箭頭，不要加入任何文字。\n分鏡：${shot.script || shot.action}`,
+        stylePrompt: [initial.global.style, initial.global.lighting, shot.environment].filter(Boolean).join("。"),
+        purpose: "freeform", imageLanguage: "none", aspectRatio: "16:9", signal,
+      });
+      const { imageUrl } = requireCompletedImageJob(await waitForImageJob({ jobId, signal }), { jobId, model, operation: "edit" });
+      const checkTarget = () => {
+        signal.throwIfAborted();
+        if (!eligible()) throw new Error("分鏡或首影格已變更，未套用產生的圖片");
+      };
+      checkTarget();
+      const file = await imageUrlToFile(imageUrl, `storyboard-frame-${shotId}`);
+      checkTarget();
+      const { uploadId } = await uploadFile(file, "image");
+      checkTarget();
+      if (!uploadId) throw new Error("首影格上傳失敗");
+      setPreviews((current) => ({ ...current, [uploadId]: imageUrl }));
+      edit((current) => ({ ...current, shots: current.shots.map((item) => item.id === shotId ? { ...item, startFrameUploadId: uploadId } : item) }), shotId);
+      setFrame(null);
+    } catch (error) {
+      if (!signal.aborted) setFrame({ ...target, error: error.message || "產生首影格失敗" });
+    } finally {
+      if (frameController.current === controller) frameController.current = null;
+    }
+  }, [edit]);
 
   const uploadImage = useCallback(async (file) => {
     if (file.size > MAX_CHARACTER_IMAGE_BYTES) throw new Error("角色參考圖必須小於 10MB");
@@ -376,12 +454,13 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
   }, []);
 
   const close = useCallback(() => {
+    resetFrame();
     agentController.current?.abort();
     inspectController.current?.abort();
     clearTimeout(inspectTimer.current);
     setBoard(null);
     setInspection({ status: "idle", error: "", config: "" });
-  }, []);
+  }, [resetFrame]);
 
   const currentInspection = board && inspection.status !== "loading" && inspection.config !== config
     ? { status: "loading", error: "", config }
@@ -390,12 +469,14 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
   return {
     board,
     messages,
-    pending,
+    pending: frame?.pending ? "frame" : pending,
     pendingJob,
     progress,
     inspection: currentInspection,
     hasStartFrame,
     previews,
+    frame,
+    generateFrame,
     uploadImage,
     draft,
     draftFromDocument,

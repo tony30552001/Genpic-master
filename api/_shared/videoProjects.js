@@ -7,7 +7,7 @@ const { ensureVideoSettings } = require("./videoPolicy");
 const { normalizeStoryboard, planSegments } = require("./videoStoryboard");
 const videoRenderClient = require("./videoRenderClient");
 const { countAdmittedToday, expiredElementError } = require("./videoJobs");
-const { getLatestVideoRender, getSucceededRenderBlob, queueVideoRender } = require("./videoRenders");
+const { getLatestVideoRender, getSucceededRenderBlob, queueCompletedProjectRender, queueVideoRender } = require("./videoRenders");
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -207,9 +207,9 @@ const createVideoProject = async ({
     const model = await resolveVideoModel({ tenantId, modelKey, client });
     const segments = planSegments(storyboard, model, { mode });
     assertSourceShape({ sources, mode, segmentCount: segments.length });
-    if (segments.some((segment) => segment.chained) && !videoRenderClient.isConfigured()) {
+    if (segments.length > 1 && !videoRenderClient.isConfigured()) {
       throw new VideoModelError(
-        "影片接續服務尚未設定，無法生成多段連續影片，請聯絡管理員",
+        "影片組合服務尚未設定，無法生成多段影片，請聯絡管理員",
         "video_render_unconfigured",
         503
       );
@@ -290,6 +290,7 @@ const createVideoProject = async ({
       );
       jobs.push(inserted.rows[0]);
     }
+    if (!generated.length && segments.length > 1) await queueCompletedProjectRender(client, project.id);
     return {
       projectId: project.id,
       segments: segments.map((segment) => ({
@@ -308,10 +309,34 @@ const createVideoProject = async ({
 };
 
 const projectStatus = (segments) => {
+  if (segments.some((segment) => segment.status === "cancelled")) {
+    return segments.some((segment) => ["queued", "processing"].includes(segment.status)) ? "processing" : "cancelled";
+  }
   if (segments.some((segment) => segment.status === "failed")) return "failed";
   if (segments.every((segment) => segment.status === "succeeded")) return "succeeded";
   if (segments.some((segment) => segment.status !== "queued")) return "processing";
   return "queued";
+};
+
+const cancelVideoProject = async ({ projectId, tenantId, userId }) => {
+  const params = [projectId, tenantId, userId];
+  await withVideoModelTransaction(tenantId, async (client) => {
+    const owned = await client.query(
+      "SELECT id FROM video_projects WHERE id = $1 AND tenant_id = $2 AND user_id = $3 FOR UPDATE", params
+    );
+    if (!owned.rows.length) throw new VideoModelError("找不到影片專案", "not_found", 404);
+    const cancelled = await client.query(
+      `UPDATE video_generation_jobs SET status = 'cancelled', phase = 'completed', lock_version = lock_version + 1,
+         completed_at = now(), updated_at = now(), error_code = NULL, error_message = NULL
+       WHERE project_id = $1 AND tenant_id = $2 AND user_id = $3
+         AND status = 'queued' AND provider_request_id IS NULL`, params
+    );
+    if (!cancelled.rowCount) {
+      const prior = await client.query("SELECT 1 FROM video_generation_jobs WHERE project_id = $1 AND status = 'cancelled' LIMIT 1", [projectId]);
+      if (!prior.rows.length) throw new VideoModelError("已沒有排隊中的分段；送出中的分段無法取消", "nothing_to_cancel", 409);
+    }
+  });
+  return getVideoProjectForUser({ projectId, tenantId, userId });
 };
 
 const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
@@ -379,6 +404,10 @@ const retryVideoProject = async ({ projectId, tenantId, userId }) => {
       [projectId, tenantId, userId]
     );
     if (!project.rows[0]) throw new VideoModelError("找不到影片專案", "not_found", 404);
+    const cancelled = await client.query(
+      "SELECT 1 FROM video_generation_jobs WHERE project_id = $1 AND status = 'cancelled' LIMIT 1", [projectId]
+    );
+    if (cancelled.rows.length) throw new VideoModelError("已取消的專案不可重試，請重新生成", "project_cancelled", 409);
     const unlimited = await assertEnabledUser({ client, tenantId, userId });
     const settings = await ensureVideoSettings(tenantId, client);
     if (!settings.allowedModels.includes(project.rows[0].model_key)) {
@@ -400,13 +429,13 @@ const retryVideoProject = async ({ projectId, tenantId, userId }) => {
       `UPDATE video_generation_jobs
        SET status = 'queued', phase = 'queued', attempts = 0,
            lock_version = lock_version + 1, locked_at = NULL,
-           provider_request_id = NULL, submitted_at = NULL, next_poll_at = NULL,
+           provider_request_id = NULL, submitted_at = NULL, used_elements = NULL, next_poll_at = NULL,
            available_at = now(), created_at = now(), started_at = NULL, completed_at = NULL,
            result_blob_name = NULL, result_mime_type = NULL, result_size_bytes = NULL,
            result_duration_seconds = NULL, last_frame_blob_name = NULL,
            error_code = NULL, error_message = NULL, updated_at = now()
-       WHERE project_id = $1 AND status = 'failed'`,
-      [projectId]
+       WHERE id = ANY($1::uuid[]) AND status = 'failed'`,
+      [failed.rows.map((row) => row.id)]
     );
   });
   return getVideoProjectForUser({ projectId, tenantId, userId });
@@ -425,6 +454,7 @@ const requestVideoRender = async ({ projectId, tenantId, userId }) => {
   if (project.status !== "succeeded") {
     throw new VideoModelError("所有段落完成後才能合併", "not_ready", 409);
   }
+  if (project.render && project.render.status !== "failed") return project.render;
   if (!videoRenderClient.isConfigured()) {
     throw new VideoModelError("影片組合服務尚未設定，無法合併影片，請聯絡管理員", "video_render_unconfigured", 503);
   }
@@ -457,6 +487,7 @@ const resolveProjectVideo = async ({ projectId, tenantId, userId = null }) => {
 };
 
 module.exports = {
+  cancelVideoProject,
   createVideoProject,
   getVideoProjectForUser,
   projectStatus,

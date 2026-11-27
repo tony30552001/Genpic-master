@@ -125,6 +125,9 @@ function CharacterRow({ character, index, previews, labelOptions, actions }) {
           <Trash2 className="size-3.5" aria-hidden="true" />
         </button>
       </div>
+      {character.uploadIds.length < MIN_CHARACTER_IMAGES && (
+        <p className="text-xs text-muted-foreground">已沿用分鏡參考圖作為正面圖；請再加入一張不同角度的圖。</p>
+      )}
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2">
         <input
           className={fieldClass}
@@ -246,7 +249,7 @@ function NewCharacterForm({ previews, actions, onDone }) {
 export default function CharacterList({ characters, imageLabels, actions }) {
   const [adding, setAdding] = useState(false);
   const labelOptionsFor = (character) =>
-    imageLabels
+    [...new Set([...imageLabels, ...(character.imageLabel ? [character.imageLabel] : [])])]
       .filter((label) => !characters.some((item) => item.id !== character.id && item.imageLabel === label))
       .map((label) => ({ value: label, label: `@${label}` }));
 

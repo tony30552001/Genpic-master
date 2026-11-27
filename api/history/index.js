@@ -77,12 +77,16 @@ module.exports = async function (context, req) {
       context.res = error(isImage ? "找不到生成工作" : "找不到影片專案", "not_found", 404, req);
       return;
     }
+    if (isVideo && job.segments.length > 1) {
+      context.res = error("多段影片由系統在合併成功後存入素材中心", "automatic_video_history", 409, req);
+      return;
+    }
     const ready = isImage
       ? job.status === "succeeded"
       : Boolean(await resolveProjectVideo({ projectId: job.projectId, ...owner }));
     if (!ready) {
       context.res = error(
-        isImage ? "生成工作尚未成功完成" : "影片尚未完成；多段影片需先合併成一支影片",
+        isImage ? "生成工作尚未成功完成" : "影片尚未完成",
         "not_ready",
         409,
         req

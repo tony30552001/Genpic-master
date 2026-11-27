@@ -170,7 +170,7 @@ registerRoutes(
 );
 registerRoutes(["/api/image-chat-memory"], ["GET", "PUT", "OPTIONS"], imageChatMemory);
 registerRoutes(["/api/image-jobs/:id", "/api/image-jobs/:id/:asset"], ["GET", "OPTIONS"], imageJobs);
-registerRoutes(["/api/video-jobs/:id/video"], ["GET", "OPTIONS"], videoJobs);
+registerRoutes(["/api/video-jobs/:id/:action"], ["GET", "POST", "OPTIONS"], videoJobs);
 registerRoutes(
   ["/api/video-projects", "/api/video-projects/:id", "/api/video-projects/:id/:action"],
   ["GET", "POST", "OPTIONS"],

@@ -51,12 +51,12 @@ describe("retryVideoProject", () => {
     const client = transaction({ failed: 2 });
     await retry();
     const update = client.query.mock.calls.find(([sql]) => sql.startsWith("UPDATE video_generation_jobs"));
-    expect(update[0]).toContain("WHERE project_id = $1 AND status = 'failed'");
+    expect(update[0]).toContain("WHERE id = ANY($1::uuid[]) AND status = 'failed'");
     expect(update[0]).toContain("status = 'queued', phase = 'queued'");
     expect(update[0]).toContain("provider_request_id = NULL");
     expect(update[0]).toContain("created_at = now(), started_at = NULL");
     expect(update[0]).toContain("lock_version = lock_version + 1");
-    expect(update[1]).toEqual(["p1"]);
+    expect(update[1]).toEqual([["j0", "j1"]]);
   });
 
   it("rejects a project without failed segments", async () => {
@@ -123,7 +123,8 @@ describe("createVideoProject reuse", () => {
     expect(result.segments.map((segment) => [segment.status, segment.reusedFromJobId])).toEqual([
       ["succeeded", "b0"], ["succeeded", "b1"], ["succeeded", "b2"],
     ]);
-    expect(client.query.mock.calls.some(([sql]) => sql.includes("COUNT(*)"))).toBe(false);
+    expect(client.query.mock.calls.some(([sql]) => sql.includes("AS count FROM video_generation_jobs"))).toBe(false);
+    expect(client.query.mock.calls.at(-1)).toEqual([expect.stringContaining("INSERT INTO video_renders"), ["np"]]);
     const copies = client.query.mock.calls.filter(([sql]) => sql.includes("reused_from_job_id"));
     expect(copies.map(([, values]) => values)).toEqual([
       ["b0", "np", 0, null], ["b1", "np", 1, "n1"], ["b2", "np", 2, "n2"],
