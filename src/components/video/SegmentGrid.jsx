@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Grid2X2, Play } from "@/components/icons/lucideControls";
+import { Download, Grid2X2, Play, SquarePen } from "@/components/icons/lucideControls";
 import { AlertCircle } from "@/components/icons/lucideStatus";
 import { cn } from "@/lib/utils";
 import { segmentStatusLabel } from "./videoStatus";
@@ -48,7 +48,7 @@ const pauseOthers = (event) => {
     });
 };
 
-function SegmentCard({ segment, url, dark }) {
+function SegmentCard({ segment, url, dark, onEdit }) {
   const failed = segment.status === "failed";
   const label = segment.status === "succeeded" ? "下載中" : segmentStatusLabel(segment);
   return (
@@ -72,10 +72,19 @@ function SegmentCard({ segment, url, dark }) {
             className="size-full object-contain animate-in fade-in duration-(--motion-enter) ease-emphasized"
           />
         ) : failed ? (
-          <p className="flex size-full flex-col items-center justify-center gap-1.5 p-3 text-center text-xs text-destructive" role="alert">
+          <div className="flex size-full flex-col items-center justify-center gap-1.5 p-3 text-center text-xs text-destructive">
             <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-            <span className="line-clamp-3">{segment.error?.message || "生成失敗"}</span>
-          </p>
+            <p className="line-clamp-3" role="alert">{segment.error?.message || "生成失敗"}</p>
+            {onEdit && (
+              <button
+                type="button"
+                className="mt-1 inline-flex h-7 items-center gap-1 rounded-md border border-destructive/30 bg-card px-2.5 font-medium text-foreground press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => onEdit(segment)}
+              >
+                <SquarePen className="size-3.5" aria-hidden="true" />修改這段分鏡
+              </button>
+            )}
+          </div>
         ) : (
           <>
             <div className="image-generation-dots pointer-events-none absolute inset-0" aria-hidden="true" />
@@ -91,19 +100,34 @@ function SegmentCard({ segment, url, dark }) {
           第 {segment.index + 1} 段{segment.durationSeconds ? ` · ${segment.durationSeconds} 秒` : ""}
           {segment.reused && " · 沿用"}
         </span>
-        {url && (
-          <a
-            href={url}
-            download={`pixora-video-part-${segment.index + 1}.mp4`}
-            className={cn(
-              "inline-flex size-7 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              dark ? "hover:bg-white/10 hover:text-white" : "hover:bg-muted hover:text-foreground"
-            )}
-            aria-label={`下載第 ${segment.index + 1} 段`}
-          >
-            <Download className="size-3.5" aria-hidden="true" />
-          </a>
-        )}
+        <span className="flex shrink-0 items-center">
+          {onEdit && (
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-7 items-center gap-1 rounded-md px-2 press-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                dark ? "hover:bg-white/10 hover:text-white" : "hover:bg-muted hover:text-foreground"
+              )}
+              onClick={() => onEdit(segment)}
+              aria-label={`修改第 ${segment.index + 1} 段`}
+            >
+              <SquarePen className="size-3.5" aria-hidden="true" />修改
+            </button>
+          )}
+          {url && (
+            <a
+              href={url}
+              download={`pixora-video-part-${segment.index + 1}.mp4`}
+              className={cn(
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                dark ? "hover:bg-white/10 hover:text-white" : "hover:bg-muted hover:text-foreground"
+              )}
+              aria-label={`下載第 ${segment.index + 1} 段`}
+            >
+              <Download className="size-3.5" aria-hidden="true" />
+            </a>
+          )}
+        </span>
       </div>
     </li>
   );
@@ -111,9 +135,10 @@ function SegmentCard({ segment, url, dark }) {
 
 /**
  * Every segment of a turn as a card: finished segments play inline, the rest
- * show their queue, generation or failure state as they progress.
+ * show their queue, generation or failure state as they progress. `onEdit`,
+ * when given, opens a segment's shots for editing.
  */
-export default function SegmentGrid({ turn, dark = false, className }) {
+export default function SegmentGrid({ turn, dark = false, onEdit, className }) {
   return (
     <ul
       data-segment-grid
@@ -121,7 +146,13 @@ export default function SegmentGrid({ turn, dark = false, className }) {
       className={cn("grid content-start gap-3 overflow-y-auto grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))]", className)}
     >
       {turn.segments.map((segment) => (
-        <SegmentCard key={segment.index} segment={segment} url={turn.segmentUrls?.[segment.jobId]} dark={dark} />
+        <SegmentCard
+          key={segment.index}
+          segment={segment}
+          url={turn.segmentUrls?.[segment.jobId]}
+          dark={dark}
+          onEdit={onEdit && segment.shotIds?.length ? onEdit : undefined}
+        />
       ))}
     </ul>
   );

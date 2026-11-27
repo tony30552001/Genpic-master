@@ -510,15 +510,15 @@ const changedShotIdsBetween = (before, after) => {
     .map((shot) => shot.id);
 };
 
-const assertRevisionScope = ({ before, after, declaredChangedIds, shotId }) => {
+const assertRevisionScope = ({ before, after, declaredChangedIds, shotIds = null }) => {
   const declared = new Set(Array.isArray(declaredChangedIds) ? declaredChangedIds : []);
   const afterIds = new Set(after.shots.map((shot) => shot.id));
   const removed = before.shots.filter((shot) => !afterIds.has(shot.id)).map((shot) => shot.id);
   const changed = changedShotIdsBetween(before, after);
   const undeclared = [...changed, ...removed].filter((id) => !declared.has(id));
   if (undeclared.length) fail("AI 修改了沒有標示的幕，請重試", 502, "storyboard_agent_failed");
-  if (shotId) {
-    const outside = [...changed, ...removed].filter((id) => id !== shotId);
+  if (shotIds) {
+    const outside = [...changed, ...removed].filter((id) => !shotIds.includes(id));
     if (
       outside.length ||
       removed.length ||

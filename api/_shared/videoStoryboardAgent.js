@@ -75,7 +75,7 @@ const REVISE_SYSTEM = `You revise an existing video storyboard.
 ${SCHEMA}
 Return JSON: {"storyboard":{...},"changedShotIds":["ids of added, modified or removed shots"],"explanation":"short note in Traditional Chinese"}.
 Change only what the instruction asks. Every other shot must stay byte-for-byte identical, including its id.
-If shotId is given, change only that shot and keep the global settings unchanged.
+If shotIds is given, change only those shots and keep the global settings unchanged.
 For a script shot, change only the sentences the instruction names and keep the rest of the script verbatim.
 New shots need new unique ids. Durations may change, but their sum must stay between minSeconds and maxSeconds.`;
 
@@ -354,13 +354,21 @@ const draft = async ({ identity, body, model, progress }) => {
   });
 };
 
+// Shots a revision may change; null lets it change the whole storyboard.
+const reviseScope = (value, storyboard) => {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || !value.length) throw new VideoModelError("要修改的幕必須是非空陣列");
+  const ids = [...new Set(value.map(String))];
+  if (ids.some((id) => !storyboard.shots.some((shot) => shot.id === id))) {
+    throw new VideoModelError("找不到要修改的幕");
+  }
+  return ids;
+};
+
 const revise = async ({ identity, body, model, progress }) => {
   const before = normalizeStoryboard(body.storyboard);
   const instruction = requireString(body.instruction, "修改指令", 4000);
-  const shotId = body.shotId === undefined || body.shotId === null ? null : String(body.shotId);
-  if (shotId && !before.shots.some((shot) => shot.id === shotId)) {
-    throw new VideoModelError("找不到要修改的幕");
-  }
+  const shotIds = reviseScope(body.shotIds, before);
   const segmentSeconds = durationRange(model);
   const data = await runAgent({
     identity,
@@ -369,7 +377,7 @@ const revise = async ({ identity, body, model, progress }) => {
     input: {
       storyboard: agentInput(before),
       instruction,
-      shotId,
+      shotIds,
       minSeconds: segmentSeconds.min,
       maxSeconds: MAX_PROJECT_SECONDS,
       segmentSeconds,
@@ -381,7 +389,7 @@ const revise = async ({ identity, body, model, progress }) => {
     before,
     after,
     declaredChangedIds: data.changedShotIds,
-    shotId,
+    shotIds,
   });
   assertQuotedTextPreserved(instruction, after);
   return respondStoryboard({

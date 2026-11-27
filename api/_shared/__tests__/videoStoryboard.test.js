@@ -244,8 +244,9 @@ describe("assertRevisionScope", () => {
     expect(assertRevisionScope({ before, after, declaredChangedIds: ["s2"] })).toEqual(["s2"]);
     expect(() => assertRevisionScope({ before, after, declaredChangedIds: [] })).toThrow(/沒有標示/);
     expect(() =>
-      assertRevisionScope({ before, after, declaredChangedIds: ["s2"], shotId: "s1" })
+      assertRevisionScope({ before, after, declaredChangedIds: ["s2"], shotIds: ["s1"] })
     ).toThrow(/指定幕以外/);
+    expect(assertRevisionScope({ before, after, declaredChangedIds: ["s2"], shotIds: ["s1", "s2"] })).toEqual(["s2"]);
   });
 });
 

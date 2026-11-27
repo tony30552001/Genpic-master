@@ -88,7 +88,7 @@ export const storyboardActions = (storyboard) => {
     rewriteShot: (shotId, mode) => {
       const index = shots.findIndex((shot) => shot.id === shotId);
       return storyboard.revise({
-        shotId,
+        shotIds: [shotId],
         instruction: mode === "condense" ? CONDENSE_INSTRUCTION : REWRITE_INSTRUCTION,
         label: mode === "condense" ? `請 AI 濃縮第 ${index + 1} 幕` : `請 AI 重寫第 ${index + 1} 幕`,
       });
@@ -96,7 +96,7 @@ export const storyboardActions = (storyboard) => {
     fixWarning: (warning) => {
       const index = shots.findIndex((shot) => shot.id === warning.shotId);
       return storyboard.revise({
-        shotId: warning.shotId,
+        shotIds: [warning.shotId],
         instruction: `修正這個問題：${warning.message}`,
         label: `請 AI 修正第 ${index + 1} 幕：${warning.message}`,
       });

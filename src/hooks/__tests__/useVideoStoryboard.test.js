@@ -177,10 +177,10 @@ describe("useVideoStoryboard", () => {
     const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: true }));
     await act(() => result.current.draft({ brief: "森林晨光", durationSeconds: 6 }));
 
-    await act(() => result.current.revise({ instruction: "更具體", shotId: "s2", label: "請 AI 重寫第 2 幕" }));
+    await act(() => result.current.revise({ instruction: "更具體", shotIds: ["s2"], label: "請 AI 重寫第 2 幕" }));
 
     expect(reviseVideoStoryboard).toHaveBeenCalledWith(
-      expect.objectContaining({ storyboard, instruction: "更具體", shotId: "s2", hasStartFrame: true })
+      expect.objectContaining({ storyboard, instruction: "更具體", shotIds: ["s2"], hasStartFrame: true })
     );
     expect(result.current.board.changedShotIds).toEqual(["s2"]);
     expect(result.current.board.revision).toBe(2);
@@ -192,7 +192,7 @@ describe("useVideoStoryboard", () => {
     const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
 
     act(() => result.current.open(storyboard, { baseProjectId: "p1" }));
-    await act(() => result.current.revise({ instruction: "更具體", shotId: "s2", label: "請 AI 重寫第 2 幕" }));
+    await act(() => result.current.revise({ instruction: "更具體", shotIds: ["s2"], label: "請 AI 重寫第 2 幕" }));
     expect(result.current.board.baseProjectId).toBe("p1");
 
     await act(() => result.current.draft({ brief: "換成夜景", durationSeconds: 6 }));

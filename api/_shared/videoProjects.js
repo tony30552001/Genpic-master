@@ -299,7 +299,9 @@ const createVideoProject = async ({
         durationSeconds: segment.durationSeconds,
         mode: segment.mode,
         chained: segment.chained,
+        shotIds: segment.shotIds,
         reused: Boolean(reused[segment.index]),
+        reusedFromJobId: reused[segment.index] || null,
       })),
     };
   });
@@ -321,7 +323,7 @@ const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
   );
   if (!project.rows[0]) return null;
   const jobs = await query(
-    `SELECT id, segment_index, mode, status, phase, duration_seconds, prompt,
+    `SELECT id, segment_index, mode, status, phase, duration_seconds, prompt, storyboard,
             previous_job_id, reused_from_job_id, error_code, error_message, completed_at
      FROM video_generation_jobs
      WHERE project_id = $1
@@ -335,7 +337,9 @@ const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
     phase: job.phase,
     mode: job.mode,
     chained: Boolean(job.previous_job_id),
+    shotIds: job.storyboard.shots.map((shot) => shot.id),
     reused: Boolean(job.reused_from_job_id),
+    reusedFromJobId: job.reused_from_job_id,
     durationSeconds: job.duration_seconds,
     prompt: job.prompt,
     completedAt: job.completed_at,

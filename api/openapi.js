@@ -401,7 +401,7 @@ addOperation("/api/image-jobs/{id}/image", "get", {
 
 addOperation("/api/video-projects", "post", {
   summary: "Queue a storyboard as a video project",
-  description: `Uses an allowed tenant video model and enforces the user's daily quota unless the user is unlimited. The storyboard (at most ${MAX_PROJECT_SECONDS} seconds) is split into segments that fit one model request; a segment closes at a shot with cut=true, at the model's per-request length, or after ${MAX_SEGMENT_SHOTS} shots. Each segment is one video job; each generated one counts against the quota. A segment that continues the same scene starts from the previous segment's last frame (image-to-video); a segment after a cut is text-to-video. An end frame requires a single segment. Image sources must be owned by the caller. With baseProjectId (an owned project the storyboard was edited from), every segment whose request is unchanged from a succeeded segment of that project — and, when chained, whose previous segment is also reused — is copied as succeeded with reused=true and does not count against the quota; only the other segments are generated.`,
+  description: `Uses an allowed tenant video model and enforces the user's daily quota unless the user is unlimited. The storyboard (at most ${MAX_PROJECT_SECONDS} seconds) is split into segments that fit one model request; a segment closes at a shot with cut=true, at the model's per-request length, or after ${MAX_SEGMENT_SHOTS} shots. Each segment is one video job; each generated one counts against the quota. A segment that continues the same scene starts from the previous segment's last frame (image-to-video); a segment after a cut is text-to-video. An end frame requires a single segment. Image sources must be owned by the caller. With baseProjectId (an owned project the storyboard was edited from), every segment whose request is unchanged from a succeeded segment of that project — and, when chained, whose previous segment is also reused — is copied as succeeded with reused=true and reusedFromJobId set to the copied job, and does not count against the quota; only the other segments are generated. Each returned segment lists the storyboard shotIds it covers.`,
   tags: ["Video"],
   body: true,
   csrf: true,
@@ -427,7 +427,7 @@ addOperation("/api/video-projects", "post", {
 
 addOperation("/api/video-projects/{id}", "get", {
   summary: "Get an owned video project with the status of each segment",
-  description: "status is failed when any segment failed, succeeded when all succeeded, processing once any segment started, otherwise queued. Download each succeeded segment from /api/video-jobs/{jobId}/video. render is null for a single segment; for several segments it is the newest render ({ renderId, status, completedAt, error? }) or null before the first render request.",
+  description: "status is failed when any segment failed, succeeded when all succeeded, processing once any segment started, otherwise queued. Each segment lists the storyboard shotIds it covers and, when copied from a base project, reused=true with reusedFromJobId. Download each succeeded segment from /api/video-jobs/{jobId}/video. render is null for a single segment; for several segments it is the newest render ({ renderId, status, completedAt, error? }) or null before the first render request.",
   tags: ["Video"],
   parameters: pathParameters("id"),
 });
@@ -774,7 +774,7 @@ addOperation("/api/video-storyboard", "post", {
       hasStartFrame: { type: "boolean" },
       storyboard: { $ref: "#/components/schemas/VideoStoryboard" },
       instruction: { type: "string", maxLength: 4000, description: "revise" },
-      shotId: { type: "string", description: "revise a single shot" },
+      shotIds: { type: "array", minItems: 1, items: { type: "string" }, description: "revise only these shots" },
       script: { type: "string", maxLength: 50000, description: "fromScript; exclusive with uploadId" },
       uploadId: { type: "string", format: "uuid", description: "a ready document upload; fromScript (exclusive with script) or draft (source document)" },
       characters: {

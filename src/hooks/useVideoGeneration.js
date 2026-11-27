@@ -13,7 +13,8 @@ import {
 const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
 // A saved turn has no blob URLs. Turns without a project were interrupted
-// before admission; turns whose project may still be running are resumed.
+// before admission; every turn with a project is followed again, so a failed
+// one reloads its finished segments and stays failed.
 function restoreTurn(turn) {
   const restored = { ...turn, videoUrls: undefined };
   if (turn.mergeStatus === "merging") restored.mergeStatus = null;
@@ -37,7 +38,7 @@ function restoreTurn(turn) {
  */
 export default function useVideoGeneration({ onSaved, initialTurns = null }) {
   const [turns, setTurns] = useState(() => (initialTurns || []).map(restoreTurn));
-  const [resumable] = useState(() => turns.filter((turn) => turn.projectId && turn.status !== "failed"));
+  const [resumable] = useState(() => turns.filter((turn) => turn.projectId));
   const [activeTurnId, setActiveTurnId] = useState(null);
   const controllers = useRef(new Map());
   const urls = useRef(new Set());
@@ -123,6 +124,9 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
     }
   }, [updateTurn]);
 
+  // `replace` regenerates a finished turn in place: it keeps its place in the
+  // thread, and segments reused from its project keep their downloaded clips.
+  // If the new project is not admitted, the turn is restored unchanged.
   const submit = useCallback(async ({
     storyboard: confirmed = null,
     brief = "",
@@ -130,26 +134,23 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
     shotCount = 1,
     modelKey,
     baseProjectId = null,
+    replace = null,
     ...options
   }) => {
-    const clientId = makeId();
+    const clientId = replace?.clientId || makeId();
     const controller = new AbortController();
     controllers.current.set(clientId, controller);
-    setTurns((current) => [
-      ...current,
-      {
-        clientId,
-        createdAt: Date.now(),
-        brief,
-        storyboard: confirmed,
-        modelKey,
-        options,
-        durationSeconds,
-        shotCount,
-        status: confirmed ? "queued" : "drafting",
-      },
-    ]);
+    const request = { brief, storyboard: confirmed, modelKey, options, durationSeconds, shotCount };
+    if (replace) {
+      updateTurn(clientId, { status: "queued", error: null });
+    } else {
+      setTurns((current) => [
+        ...current,
+        { clientId, createdAt: Date.now(), ...request, status: confirmed ? "queued" : "drafting" },
+      ]);
+    }
     setActiveTurnId(clientId);
+    let admitted = false;
     try {
       let storyboard = confirmed;
       if (!storyboard) {
@@ -165,16 +166,40 @@ export default function useVideoGeneration({ onSaved, initialTurns = null }) {
         updateTurn(clientId, { storyboard, status: "queued" });
       }
       const admission = await createVideoProject({ modelKey, storyboard, ...options, ...(baseProjectId && { baseProjectId }) });
+      admitted = true;
       const { projectId } = admission;
-      updateTurn(clientId, { projectId, segments: admission.segments });
-      return await follow({ clientId, projectId, brief, storyboard, signal: controller.signal });
+      let segmentUrls = {};
+      if (replace) {
+        segmentUrls = Object.fromEntries(admission.segments
+          .filter((segment) => replace.segmentUrls?.[segment.reusedFromJobId])
+          .map((segment) => [segment.jobId, replace.segmentUrls[segment.reusedFromJobId]]));
+        const kept = new Set(Object.values(segmentUrls));
+        releaseUrls([...new Set([...Object.values(replace.segmentUrls || {}), ...(replace.videoUrls || [])])]
+          .filter((url) => !kept.has(url)));
+        updateTurn(clientId, {
+          ...request,
+          storyboard,
+          status: "queued",
+          projectId,
+          segments: admission.segments,
+          segmentUrls,
+          videoUrls: undefined,
+          saved: false,
+          mergeStatus: null,
+          mergeError: null,
+        });
+      } else {
+        updateTurn(clientId, { projectId, segments: admission.segments });
+      }
+      return await follow({ clientId, projectId, brief, storyboard, segmentUrls, signal: controller.signal });
     } catch (error) {
-      fail(clientId, error);
+      if (replace && !admitted) setTurns((current) => current.map((turn) => (turn.clientId === clientId ? replace : turn)));
+      else fail(clientId, error);
       throw error;
     } finally {
       controllers.current.delete(clientId);
     }
-  }, [fail, follow, updateTurn]);
+  }, [fail, follow, releaseUrls, updateTurn]);
 
   // Requeues the failed segments of a turn's project and waits again;
   // segments that already succeeded are not generated again.

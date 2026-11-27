@@ -305,16 +305,16 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     });
   }, [startAgent]);
 
-  const revise = useCallback(({ instruction, shotId = null, label }) => {
+  const revise = useCallback(({ instruction, shotIds = null, label }) => {
     if (!board) return Promise.resolve();
     return startAgent({
-      kind: shotId ? `revise:${shotId}` : "revise",
+      kind: shotIds ? `revise:${shotIds.join(",")}` : "revise",
       userText: label || instruction,
       request: (signal, onProgress, onJob) => reviseVideoStoryboard({
         modelKey: latest.current.modelKey,
         storyboard: board.storyboard,
         instruction,
-        shotId,
+        shotIds,
         hasStartFrame: latest.current.hasStartFrame,
         signal,
         onProgress,

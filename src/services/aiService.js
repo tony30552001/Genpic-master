@@ -297,8 +297,8 @@ const runStoryboardAgent = async (action, { signal, onProgress, onJob, ...body }
 export const draftVideoStoryboard = ({ modelKey, brief, uploadId, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob }) =>
   runStoryboardAgent("draft", { modelKey, brief, uploadId, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob });
 
-export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress, onJob }) =>
-  runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress, onJob });
+export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotIds, hasStartFrame, signal, onProgress, onJob }) =>
+  runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotIds, hasStartFrame, signal, onProgress, onJob });
 
 // Pass either pasted `script` text or the `uploadId` of a script document.
 export const scriptToVideoStoryboard = ({ modelKey, script, uploadId, hasStartFrame, characters, signal, onProgress, onJob }) =>

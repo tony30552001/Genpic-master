@@ -36,6 +36,7 @@ import ChatHistory from "@/components/chat/ChatHistory";
 import Reasoning from "@/components/chat/Reasoning";
 import ScriptTemplateDialog from "./ScriptTemplateDialog";
 import SegmentedPlayer from "./SegmentedPlayer";
+import SegmentEditDialog from "./SegmentEditDialog";
 import SegmentGrid, { ViewModeToggle } from "./SegmentGrid";
 import { STATUS_LABELS, hasSegmentGrid } from "./videoStatus";
 import StoryboardBoard from "./storyboard/StoryboardBoard";
@@ -443,7 +444,7 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onStop, onCo
   );
 }
 
-function VideoPlayer({ video, turn, onClose }) {
+function VideoPlayer({ video, turn, onEditSegment, onClose }) {
   const [mode, setMode] = useState("grid");
   if (!video || (video.clientId && !turn)) return null;
   const urls = turn ? playableUrls(turn) : video.videoUrls;
@@ -460,6 +461,7 @@ function VideoPlayer({ video, turn, onClose }) {
         <SegmentGrid
           turn={turn}
           dark
+          onEdit={onEditSegment}
           className="mx-auto mt-3 min-h-0 w-full max-w-5xl flex-1 pb-[env(safe-area-inset-bottom)] animate-in fade-in duration-(--motion-enter) ease-emphasized"
         />
       ) : urls.length > 0 ? (
@@ -509,6 +511,7 @@ export default function VideoWorkspace({
   const [boardVisible, setBoardVisible] = useState(() => Boolean(restored?.board || restored?.pendingAgent));
   const [templateOpen, setTemplateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [segmentEdit, setSegmentEdit] = useState(null);
   const fileRef = useRef(null);
   const endFileRef = useRef(null);
   const scriptFileRef = useRef(null);
@@ -666,6 +669,38 @@ export default function VideoWorkspace({
     setBoardVisible(true);
   };
 
+  const canEditSegments = (turn) => Boolean(
+    turn?.storyboard && turn.projectId && ["succeeded", "failed"].includes(turn.status)
+    && turn.mergeStatus !== "merging" && !pending
+  );
+
+  // Regenerates the edited segment (and any reuse it breaks) in place of the turn.
+  const editSegment = (turn, segment) => {
+    if (!canEditSegments(turn)) return;
+    if (turn.modelKey !== modelKey) changeModel(turn.modelKey);
+    storyboard.open(turn.storyboard, { baseProjectId: turn.projectId });
+    setBoardVisible(false);
+    setSegmentEdit({ clientId: turn.clientId, index: segment.index });
+  };
+
+  const closeSegmentEdit = () => {
+    storyboard.close();
+    setSegmentEdit(null);
+  };
+
+  const submitSegmentEdit = (turn) => {
+    if (!canGenerate) return;
+    const edited = board.storyboard;
+    closeSegmentEdit();
+    void runVideo({
+      storyboard: edited,
+      modelKey: turn.modelKey,
+      ...turn.options,
+      baseProjectId: turn.projectId,
+      replace: turn,
+    });
+  };
+
   const askAbout = (question) => {
     setBrief(`關於「${question}」：`);
     briefRef.current?.focus();
@@ -778,11 +813,14 @@ export default function VideoWorkspace({
   };
 
   const activeTurn = videos.turns.find((turn) => turn.clientId === videos.activeTurnId)
-    || [...videos.turns].reverse().find((turn) => playableUrls(turn).length > 0)
+    || [...videos.turns].reverse().find((turn) => playableUrls(turn).length > 0 || hasSegmentGrid(turn))
     || null;
   const activeUrls = activeTurn ? playableUrls(activeTurn) : [];
   const activeGrid = hasSegmentGrid(activeTurn);
   const playerTurn = playerVideo?.clientId ? videos.turns.find((turn) => turn.clientId === playerVideo.clientId) : null;
+  const editTurn = segmentEdit ? videos.turns.find((turn) => turn.clientId === segmentEdit.clientId) : null;
+  const editedSegment = editTurn?.segments?.find((segment) => segment.index === segmentEdit.index) || null;
+  const segmentEditor = (turn) => canEditSegments(turn) ? (segment) => editSegment(turn, segment) : undefined;
   const showBoard = boardVisible && Boolean(board || drafting);
   const durationOptions = durationChoices(model).map((value) => ({ value: String(value), label: `${value} 秒` }));
   const settingsLabel = [
@@ -1166,6 +1204,7 @@ export default function VideoWorkspace({
               <SegmentGrid
                 key={activeTurn.clientId}
                 turn={activeTurn}
+                onEdit={segmentEditor(activeTurn)}
                 className="min-h-0 flex-1 p-4 animate-in fade-in duration-(--motion-enter) ease-emphasized"
               />
             ) : activeUrls.length > 0 ? (
@@ -1223,7 +1262,25 @@ export default function VideoWorkspace({
       <AnimatePresence>
         {showBoard && isMobile && <StoryboardSheet {...boardProps} onClose={() => setBoardVisible(false)} />}
       </AnimatePresence>
-      <VideoPlayer key={playerVideo?.clientId || "history"} video={playerVideo} turn={playerTurn} onClose={closePlayer} />
+      <VideoPlayer
+        key={playerVideo?.clientId || "history"}
+        video={playerVideo}
+        turn={playerTurn}
+        onEditSegment={segmentEditor(playerTurn)}
+        onClose={closePlayer}
+      />
+      {editTurn && editedSegment && board && (
+        <SegmentEditDialog
+          turn={editTurn}
+          segment={editedSegment}
+          storyboard={storyboard}
+          canGenerate={canGenerate}
+          generateBlocker={generateBlocker}
+          remainingQuota={unlimited ? null : remainingQuota}
+          onSubmit={() => submitSegmentEdit(editTurn)}
+          onClose={closeSegmentEdit}
+        />
+      )}
       <ScriptTemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} />
       <AlertDialog open={deleteOpen && Boolean(sessions.activeId)} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

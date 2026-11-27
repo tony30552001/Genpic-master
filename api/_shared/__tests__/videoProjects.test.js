@@ -120,8 +120,8 @@ describe("createVideoProject reuse", () => {
   it("copies unchanged segments as succeeded without charging the quota", async () => {
     const client = admission({ reusable: { p0: "b0", p1: "b1", p2: "b2" }, admitted: 10 });
     const result = await create();
-    expect(result.segments.map((segment) => [segment.status, segment.reused])).toEqual([
-      ["succeeded", true], ["succeeded", true], ["succeeded", true],
+    expect(result.segments.map((segment) => [segment.status, segment.reusedFromJobId])).toEqual([
+      ["succeeded", "b0"], ["succeeded", "b1"], ["succeeded", "b2"],
     ]);
     expect(client.query.mock.calls.some(([sql]) => sql.includes("COUNT(*)"))).toBe(false);
     const copies = client.query.mock.calls.filter(([sql]) => sql.includes("reused_from_job_id"));

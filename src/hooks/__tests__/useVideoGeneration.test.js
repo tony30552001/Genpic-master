@@ -152,6 +152,46 @@ describe("useVideoGeneration", () => {
     expect(result.current.turns[0]).toMatchObject({ status: "succeeded", error: null, videoUrls: [expect.any(String), expect.any(String)] });
   });
 
+  it("regenerates a turn in place and keeps the clips of reused segments", async () => {
+    finish(2);
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
+    const original = result.current.turns[0];
+    const segments = [
+      { ...segment(0), jobId: "new-0", reused: true, reusedFromJobId: "job-0" },
+      { ...segment(1), jobId: "new-1" },
+    ];
+    createVideoProject.mockResolvedValue({ projectId: "p2", segments });
+    waitForVideoProject.mockResolvedValue({ projectId: "p2", status: "succeeded", segments });
+    downloadVideoSegment.mockClear();
+    URL.revokeObjectURL.mockClear();
+
+    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v", baseProjectId: "p1", replace: original }));
+
+    expect(createVideoProject).toHaveBeenLastCalledWith({ modelKey: "kling", storyboard, mode: "t2v", baseProjectId: "p1" });
+    expect(result.current.turns).toHaveLength(1);
+    expect(result.current.turns[0]).toMatchObject({ clientId: original.clientId, projectId: "p2", status: "succeeded" });
+    expect(result.current.turns[0].segmentUrls["new-0"]).toBe(original.segmentUrls["job-0"]);
+    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["new-1"]);
+    expect(URL.revokeObjectURL.mock.calls.map(([url]) => url)).toEqual([original.segmentUrls["job-1"]]);
+  });
+
+  it("restores the replaced turn when the regeneration is not admitted", async () => {
+    finish(2);
+    const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
+    await act(() => result.current.submit({ storyboard, modelKey: "kling", mode: "t2v" }));
+    const original = result.current.turns[0];
+    createVideoProject.mockRejectedValue(new Error("今日影片額度已用完，請明天再試"));
+
+    await act(async () => {
+      await expect(result.current.submit({ storyboard, modelKey: "kling", mode: "t2v", replace: original }))
+        .rejects.toThrow("今日影片額度已用完");
+    });
+
+    expect(result.current.turns).toEqual([original]);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  });
+
   it("shows the error when the retry is rejected", async () => {
     finish(1);
     const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn() }));
@@ -202,18 +242,29 @@ describe("useVideoGeneration", () => {
     expect(result.current.turns[2].error).toBe("已中斷，請重新生成");
   });
 
-  it("reloads a merged turn as one video and keeps failed segments retryable", async () => {
+  it("reloads a merged turn as one video and the finished segments of a failed turn", async () => {
     const failed = { ...segment(1), status: "failed" };
     const initialTurns = [
       { clientId: "a", createdAt: 1, storyboard, projectId: "p1", status: "succeeded", segments: [segment(0), segment(1)], mergeStatus: "merged", saved: true },
       { clientId: "b", createdAt: 2, storyboard, projectId: "p2", status: "failed", segments: [segment(0), failed], error: "失敗" },
     ];
+    const refreshed = [{ ...segment(0), shotIds: ["s1"] }, { ...failed, shotIds: ["s2"] }];
+    waitForVideoProject.mockImplementation(async ({ onProgress }) => {
+      onProgress({ projectId: "p2", status: "failed", segments: refreshed });
+      throw new Error("第 2 段：失敗");
+    });
     const { result } = renderHook(() => useVideoGeneration({ onSaved: vi.fn(), initialTurns }));
 
     await act(async () => {});
 
     expect(downloadVideo).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p1" }));
-    expect(waitForVideoProject).not.toHaveBeenCalled();
+    expect(waitForVideoProject.mock.calls.map(([args]) => args.projectId)).toEqual(["p2"]);
+    expect(downloadVideoSegment.mock.calls.map(([args]) => args.jobId)).toEqual(["job-0"]);
     expect(result.current.turns[0].videoUrls).toHaveLength(1);
-    expect(result.current.turns[1]).toMatchObject({ status: "failed", error: "失敗" });
+    expect(result.current.turns[1]).toMatchObject({
+      status: "failed",
+      error: "第 2 段：失敗",
+      segments: refreshed,
+      segmentUrls: { "job-0": expect.any(String) },
+    });
   });});
