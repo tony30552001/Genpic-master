@@ -122,6 +122,11 @@ function FramePreview({ previewUrl, className }) {
   );
 }
 
+const DEFAULT_VIDEO_MODEL_FAMILY = "minimax-h3-max";
+
+const defaultVideoModel = (models) =>
+  models.find((item) => item.family === DEFAULT_VIDEO_MODEL_FAMILY) || models[0] || null;
+
 const initialResolution = (model) => {
   const supported = model?.capabilities?.resolutions || [];
   const maxIndex = supported.indexOf(model?.maxResolution);
@@ -490,12 +495,14 @@ export default function VideoWorkspace({
   sessions,
 }) {
   const [restored] = useState(() => sessions.getInitialState());
+  const defaultModel = defaultVideoModel(models);
   const restoredModel = models.find((item) => item.modelKey === restored?.settings.modelKey) || null;
+  const initialModel = restoredModel || defaultModel;
   const [brief, setBrief] = useState(() => restored?.brief || "");
-  const [modelKey, setModelKey] = useState(() => (restoredModel || models[0])?.modelKey || "");
+  const [modelKey, setModelKey] = useState(() => initialModel?.modelKey || "");
   const [durationSeconds, setDurationSeconds] = useState(() => restored?.settings.durationSeconds ?? 5);
   const [resolution, setResolution] = useState(() =>
-    restoredModel ? restored.settings.resolution : initialResolution(models[0])
+    restoredModel ? restored.settings.resolution : initialResolution(initialModel)
   );
   const [aspectRatio, setAspectRatio] = useState(() => restored?.settings.aspectRatio || "16:9");
   const [generateAudio, setGenerateAudio] = useState(() => Boolean(restored?.settings.generateAudio));
@@ -518,7 +525,8 @@ export default function VideoWorkspace({
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const videos = useVideoGeneration({ onSaved: onSaveHistory, onMerged: onRefreshHistory, initialTurns: restored?.turns });
 
-  const model = models.find((item) => item.modelKey === modelKey) || models[0] || null;
+  const model = models.find((item) => item.modelKey === modelKey) || defaultModel;
+  const effectiveResolution = resolution || initialResolution(model);
   const storyboard = useVideoStoryboard({
     modelKey: model?.modelKey || "",
     hasStartFrame: Boolean(source),
@@ -548,17 +556,18 @@ export default function VideoWorkspace({
   }, [thread.length]);
 
   const { record } = sessions;
+  const activeModelKey = model?.modelKey || "";
   useEffect(() => {
     record(sessionSnapshot({
       messages: storyboard.messages,
       board,
       pendingJob: storyboard.pendingJob,
       turns: videos.turns,
-      settings: { modelKey, durationSeconds, resolution, aspectRatio, generateAudio, source, endSource },
+      settings: { modelKey: activeModelKey, durationSeconds, resolution: effectiveResolution, aspectRatio, generateAudio, source, endSource },
       brief,
     }));
   }, [
-    aspectRatio, board, brief, durationSeconds, endSource, generateAudio, modelKey, record, resolution, source,
+    activeModelKey, aspectRatio, board, brief, durationSeconds, effectiveResolution, endSource, generateAudio, record, source,
     storyboard.messages, storyboard.pendingJob, videos.turns,
   ]);
 
@@ -581,7 +590,7 @@ export default function VideoWorkspace({
 
   const mediaOptions = (nextSource = source) => ({
     mode: nextSource ? "i2v" : "t2v",
-    resolution: model.family === "minimax-h3-max" ? resolution : undefined,
+    resolution: model.family === "minimax-h3-max" ? effectiveResolution : undefined,
     aspectRatio,
     generateAudio,
     sourceUploadId: nextSource?.sourceUploadId,
@@ -791,7 +800,7 @@ export default function VideoWorkspace({
   const settingsLabel = [
     !revising && `${durationSeconds} 秒`,
     !source && aspectRatio,
-    model?.family === "minimax-h3-max" && resolution,
+    model?.family === "minimax-h3-max" && effectiveResolution,
     generateAudio && "含音訊",
   ].filter(Boolean).join(" · ") || "設定";
 
@@ -1008,7 +1017,7 @@ export default function VideoWorkspace({
                   <SettingRow label="畫質">
                     <SelectField
                       aria-label="影片畫質"
-                      value={resolution}
+                      value={effectiveResolution}
                       onValueChange={setResolution}
                       options={(model.capabilities?.resolutions || [])
                         .slice(0, (model.capabilities?.resolutions || []).indexOf(model.maxResolution) + 1)
