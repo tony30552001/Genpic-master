@@ -280,20 +280,27 @@ describe("AiModelSettings", () => {
     expect(await screen.findByLabelText("圖片生成模型")).toHaveTextContent("Alpha");
   });
 
-  it("hydrates flat Azure Speech settings, tests connectivity, and saves flat fields", async () => {
+  it("manages Azure AI Speech in model connections and assigns default voice on the left", async () => {
+    const initialVideoSettings = {
+      allowedModels: ["kling-v3"],
+      dailyQuotaPerUser: 5,
+      submitsPerMinute: 2,
+      speechRegion: "eastasia",
+      speechEndpoint: null,
+      speechDefaultVoice: "zh-TW-YunJheNeural",
+      hasSpeechKey: true,
+      speechEnabled: true,
+    };
     getAdminModelSettings.mockResolvedValue({
       modelPolicy: { allowedModels: ["alpha"], defaultModel: "alpha", defaultEditModel: "alpha" },
-      videoSettings: {
-        allowedModels: ["kling-v3"],
-        dailyQuotaPerUser: 5,
-        submitsPerMinute: 2,
-        speechRegion: "eastasia",
-        speechEndpoint: null,
-        speechDefaultVoice: "zh-TW-YunJheNeural",
-        hasSpeechKey: true,
-        speechEnabled: true,
-      },
+      videoSettings: initialVideoSettings,
     });
+    updateAdminVideoSettings.mockImplementation(async (patch) => ({
+      ...initialVideoSettings,
+      ...patch,
+      hasSpeechKey: patch.clearSpeechApiKey ? false : initialVideoSettings.hasSpeechKey,
+      speechEnabled: patch.clearSpeechApiKey ? false : Boolean(patch.speechRegion ?? initialVideoSettings.speechRegion),
+    }));
     testAdminSpeech.mockResolvedValue({
       voice: "zh-TW-YunJheNeural",
       durationSeconds: 1.4,
@@ -302,25 +309,56 @@ describe("AiModelSettings", () => {
     });
     const user = await renderPage();
 
-    expect(screen.getByDisplayValue("eastasia")).toBeInTheDocument();
-    expect(screen.getByText("已啟用")).toBeInTheDocument();
+    expect(screen.getByText("Azure AI Speech")).toBeInTheDocument();
+    expect(screen.getByText("eastasia · 影片旁白")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "測試語音連線" }));
+    await user.click(screen.getByRole("button", { name: "測試 Azure AI Speech" }));
     await waitFor(() => expect(testAdminSpeech).toHaveBeenCalledWith({
-      speechRegion: "eastasia",
-      speechEndpoint: null,
       voice: "zh-TW-YunJheNeural",
     }));
-    expect(await screen.findByRole("status")).toHaveTextContent("1.4 秒");
+    expect(await screen.findByText("● 1.4 秒")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "儲存語音設定" }));
+    await chooseOption("預設旁白語音", "曉臻（女聲，自然親切）", user);
     await waitFor(() => expect(updateAdminVideoSettings).toHaveBeenCalledWith({
       allowedModels: ["kling-v3"],
       dailyQuotaPerUser: 5,
       submitsPerMinute: 2,
+      speechDefaultVoice: "zh-TW-HsiaoChenNeural",
+    }));
+
+    await user.click(screen.getByRole("button", { name: "刪除 Azure AI Speech" }));
+    const confirmDialog = await screen.findByRole("alertdialog");
+    await user.click(within(confirmDialog).getByRole("button", { name: "刪除" }));
+    await waitFor(() => expect(updateAdminVideoSettings).toHaveBeenCalledWith({
+      allowedModels: ["kling-v3"],
+      dailyQuotaPerUser: 5,
+      submitsPerMinute: 2,
+      speechRegion: null,
+      speechEndpoint: null,
+      clearSpeechApiKey: true,
+    }));
+  });
+
+  it("creates an Azure AI Speech connection from the Add Model menu", async () => {
+    const user = await renderPage();
+    expect(screen.getByText("⚠ 請先在右側新增語音模型")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "新增模型" }));
+    await user.click(await screen.findByRole("menuitem", { name: "語音模型" }));
+
+    const form = await screen.findByRole("form", { name: "新增語音模型" });
+    await user.type(within(form).getByLabelText("Azure 區域（Region）"), "eastasia");
+    await user.type(within(form).getByLabelText("API 金鑰"), "speech-secret");
+    await user.click(within(form).getByRole("button", { name: "儲存語音模型" }));
+
+    await waitFor(() => expect(updateAdminVideoSettings).toHaveBeenCalledWith({
+      allowedModels: [],
+      dailyQuotaPerUser: 5,
+      submitsPerMinute: 2,
       speechRegion: "eastasia",
       speechEndpoint: null,
-      speechDefaultVoice: "zh-TW-YunJheNeural",
+      speechDefaultVoice: "zh-TW-HsiaoChenNeural",
+      speechApiKey: "speech-secret",
     }));
   });
 });

@@ -18,6 +18,7 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
   const [loadError, setLoadError] = useState("");
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
   const [isTestingSpeech, setIsTestingSpeech] = useState(false);
+  const [speechTestResult, setSpeechTestResult] = useState(null);
   const [testingKey, setTestingKey] = useState("");
   const controllerRef = useRef(null);
 
@@ -85,17 +86,71 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
     }
   };
 
-  const testSpeech = async (draft) => {
+  const basePolicy = () => ({
+    allowedModels: settings.allowedModels,
+    dailyQuotaPerUser: settings.dailyQuotaPerUser,
+    submitsPerMinute: settings.submitsPerMinute,
+  });
+
+  const saveSpeechModel = async (form, isEditing) => {
+    const payload = {
+      ...basePolicy(),
+      speechRegion: form.speechRegion.trim() || null,
+      speechEndpoint: form.speechEndpoint.trim() || null,
+      speechDefaultVoice: form.speechDefaultVoice,
+      ...(form.speechApiKey.trim() ? { speechApiKey: form.speechApiKey.trim() } : {}),
+    };
+    const saved = await saveSettings(payload, {
+      row: "speech-voice",
+      successText: isEditing ? "語音模型已更新。" : "語音模型已新增。",
+    });
+    setSpeechTestResult(null);
+    return saved;
+  };
+
+  const deleteSpeechModel = async () => {
+    try {
+      await saveSettings(
+        {
+          ...basePolicy(),
+          speechRegion: null,
+          speechEndpoint: null,
+          clearSpeechApiKey: true,
+        },
+        { row: "", successText: "已刪除「Azure AI Speech」。" }
+      );
+      setSpeechTestResult(null);
+    } catch {
+      // Error surfaced via saveSettings -> notify().
+    }
+  };
+
+  const assignSpeechVoice = async (voice) => {
+    try {
+      await saveSettings(
+        { ...basePolicy(), speechDefaultVoice: voice },
+        { row: "speech-voice", successText: "預設旁白語音已更新。" }
+      );
+    } catch {
+      // Error surfaced via saveSettings -> notify().
+    }
+  };
+
+  const testSpeechDraft = (draft) => testAdminSpeech(draft);
+
+  const testSpeech = async (draft = {}) => {
     setIsTestingSpeech(true);
     notify({ tone: "info", text: "正在測試 Azure AI Speech 連線…" });
     try {
       const result = await testAdminSpeech(draft);
+      setSpeechTestResult({ success: true, ...result });
       notify({
         tone: "success",
         text: `語音連線正常（${result.voice}，${result.durationSeconds} 秒，${result.cueCount} 句時間軸）。`,
       });
       return result;
     } catch (error) {
+      setSpeechTestResult({ success: false, message: error.message || "連線測試失敗" });
       notify({ tone: "error", text: `語音測試失敗：${error.message || "請檢查區域、端點與金鑰"}` });
       return null;
     } finally {
@@ -107,7 +162,7 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
     const allowedModels = settings.allowedModels.includes(modelKey)
       ? settings.allowedModels.filter((value) => value !== modelKey)
       : [...settings.allowedModels, modelKey];
-    void saveSettings({ ...settings, allowedModels }).catch(() => {});
+    void saveSettings({ ...basePolicy(), allowedModels }).catch(() => {});
   };
 
   const runTest = async (model) => {
@@ -148,10 +203,15 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
     loadError,
     isSavingPolicy,
     isTestingSpeech,
+    speechTestResult,
     load,
     saveModel,
     deleteModel,
     saveSettings,
+    saveSpeechModel,
+    deleteSpeechModel,
+    assignSpeechVoice,
+    testSpeechDraft,
     testSpeech,
     toggleAllowed,
     testingKey,

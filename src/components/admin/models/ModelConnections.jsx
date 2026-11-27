@@ -17,6 +17,7 @@ const FILTERS = [
   { id: "image", label: "圖片" },
   { id: "video", label: "影片" },
   { id: "text", label: "文字" },
+  { id: "speech", label: "語音" },
 ];
 
 const usageText = (labels) => (labels.length === 0 ? "未使用" : labels.length > 2 ? `${labels.length} 個功能` : labels.join("、"));
@@ -26,11 +27,17 @@ function KindBadge({ kind }) {
     <span
       className={cn(
         "flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-medium",
-        kind === "image" ? "bg-primary/10 text-primary" : kind === "video" ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
+        kind === "image"
+          ? "bg-primary/10 text-primary"
+          : kind === "video"
+            ? "bg-emerald-500/10 text-emerald-600"
+            : kind === "speech"
+              ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+              : "bg-muted text-muted-foreground"
       )}
       aria-hidden="true"
     >
-      {kind === "image" ? "圖" : kind === "video" ? "影" : "文"}
+      {kind === "image" ? "圖" : kind === "video" ? "影" : kind === "speech" ? "語" : "文"}
     </span>
   );
 }
@@ -94,13 +101,51 @@ export default function ModelConnections({ image, llm, video, onAdd, onEdit, onD
   const imageModels = image.catalog?.models ?? [];
   const llmModels = llm.settings?.models ?? [];
   const videoModels = video.catalog?.models ?? [];
+  const speechSettings = video.settings;
+  const hasSpeechConnection = Boolean(
+    speechSettings && (speechSettings.speechRegion || speechSettings.speechEndpoint || speechSettings.hasSpeechKey)
+  );
   const policy = image.policy;
   const llmRoles = llm.settings?.roles ?? [];
   const assignments = llm.settings?.assignments ?? [];
   const showImage = filter === "all" || filter === "image";
   const showVideo = filter === "all" || filter === "video";
   const showText = filter === "all" || filter === "text";
-  const isEmpty = !image.isLoading && !llm.isLoading && !video.isLoading && imageModels.length === 0 && llmModels.length === 0 && videoModels.length === 0;
+  const showSpeech = filter === "all" || filter === "speech";
+  const isEmpty = !image.isLoading && !llm.isLoading && !video.isLoading
+    && imageModels.length === 0 && llmModels.length === 0 && videoModels.length === 0 && !hasSpeechConnection;
+
+  const speechRow = hasSpeechConnection ? (
+    <ConnectionRow
+      key="speech-azure"
+      kind="speech"
+      label="Azure AI Speech"
+      detail={`${speechSettings.speechRegion || speechSettings.speechEndpoint || "未指定區域"} · 影片旁白`}
+      status={video.speechTestResult ? (
+        <span className={cn("shrink-0 text-xs font-normal tabular-nums", video.speechTestResult.success ? "text-success" : "text-destructive")}>
+          ● {video.speechTestResult.success ? `${video.speechTestResult.durationSeconds} 秒` : "失敗"}
+        </span>
+      ) : !speechSettings.speechEnabled ? (
+        <span className="shrink-0 text-xs font-normal text-amber-700 dark:text-amber-300">● 未完成</span>
+      ) : null}
+      disabled={video.isTestingSpeech || video.isSavingPolicy}
+      onEdit={() => onEdit("speech", speechSettings)}
+      onDelete={() => onDelete("speech", { label: "Azure AI Speech" })}
+    >
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        className="shrink-0"
+        disabled={!speechSettings.speechEnabled || video.isTestingSpeech || video.isSavingPolicy}
+        aria-label="測試 Azure AI Speech"
+        onClick={() => void video.testSpeech({ voice: speechSettings.speechDefaultVoice })}
+      >
+        {video.isTestingSpeech && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+        測試
+      </Button>
+    </ConnectionRow>
+  ) : null;
 
   return (
     <section aria-labelledby="model-connections-title" className={className}>
@@ -132,6 +177,9 @@ export default function ModelConnections({ image, llm, video, onAdd, onEdit, onD
               <DropdownMenuItem disabled={!image.catalog} onSelect={() => onAdd("image")}>圖片模型</DropdownMenuItem>
               <DropdownMenuItem disabled={!llm.settings} onSelect={() => onAdd("text")}>文字模型</DropdownMenuItem>
               <DropdownMenuItem disabled={!video.catalog} onSelect={() => onAdd("video")}>影片模型</DropdownMenuItem>
+              <DropdownMenuItem disabled={!speechSettings || hasSpeechConnection} onSelect={() => onAdd("speech")}>
+                {hasSpeechConnection ? "語音模型（已設定）" : "語音模型"}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -270,6 +318,15 @@ export default function ModelConnections({ image, llm, video, onAdd, onEdit, onD
                 );
               })}
             </CardLoadState>
+          )}
+          {showSpeech && (
+            filter === "speech" ? (
+              <CardLoadState state={video} retryLabel="重新載入語音模型設定">
+                {speechRow ?? (
+                  <li className="px-4 py-8 text-center text-sm text-muted-foreground">尚未設定語音模型，請點「新增模型」。</li>
+                )}
+              </CardLoadState>
+            ) : (!video.isLoading && !video.loadError && speechRow)
           )}
         </ul>
       </div>

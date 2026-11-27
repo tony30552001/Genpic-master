@@ -20,6 +20,7 @@ import ImageModelForm from "./ImageModelForm";
 import LlmModelForm from "./LlmModelForm";
 import ModelAssignments from "./ModelAssignments";
 import ModelConnections from "./ModelConnections";
+import SpeechModelForm from "./SpeechModelForm";
 import VideoModelForm from "./VideoModelForm";
 
 const SAVED_FLASH_MS = 1800;
@@ -36,10 +37,12 @@ const confirmCopy = ({ action, kind, model }) => {
   return {
     title: `刪除「${model.label}」？`,
     description: kind === "image"
-    ? "需先從功能指派與開放清單移除，並等待在途工作完成。刪除後無法復原。"
-    : kind === "video"
-      ? "需先從開放清單移除，並等待在途影片工作完成。刪除後無法復原。"
-      : "需先解除所有功能指派。刪除後無法復原。",
+      ? "需先從功能指派與開放清單移除，並等待在途工作完成。刪除後無法復原。"
+      : kind === "video"
+        ? "需先從開放清單移除，並等待在途影片工作完成。刪除後無法復原。"
+        : kind === "speech"
+          ? "將清除 Azure AI Speech 區域、端點與已存金鑰，影片旁白功能會暫時停用直到重新設定。"
+          : "需先解除所有功能指派。刪除後無法復原。",
     confirm: "刪除",
     destructive: true,
   };
@@ -86,6 +89,7 @@ export default function AiModelSettings() {
     }
     else if (kind === "image") void image.deleteModel(model);
     else if (kind === "video") void video.deleteModel(model);
+    else if (kind === "speech") void video.deleteSpeechModel();
     else void llm.deleteModel(model);
   };
 
@@ -158,6 +162,18 @@ export default function AiModelSettings() {
               onCancel={closeDialog}
               onSubmit={async (form) => {
                 await video.saveModel(form, dialog.model?.modelKey ?? null);
+                closeDialog();
+              }}
+            />
+          )}
+          {dialog.kind === "speech" && video.settings && (
+            <SpeechModelForm
+              key={dialog.seq}
+              settings={video.settings}
+              onCancel={closeDialog}
+              onTestDraft={video.testSpeechDraft}
+              onSubmit={async (form, isEditing) => {
+                await video.saveSpeechModel(form, isEditing);
                 closeDialog();
               }}
             />
