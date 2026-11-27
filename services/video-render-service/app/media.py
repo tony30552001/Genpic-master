@@ -13,7 +13,7 @@ from . import config
 class MediaError(Exception):
     def __init__(self, message: str, stderr: str = "") -> None:
         detail = (stderr or "").strip()
-        full = f"{message}: {detail[-600:]}" if detail else message
+        full = f"{message}: {detail[:2000]}" if detail else message
         super().__init__(full)
         self.stderr = stderr
 
@@ -374,12 +374,13 @@ def render_timeline(
         in_idx = clip_input_indices[idx]
         dur = durations[idx]
         v_chain = (
-            f"[{in_idx}:v:0]scale={width}:{height}:force_original_aspect_ratio=decrease,"
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={fps},settb=1/{fps},format=yuv420p"
+            f"[{in_idx}:v:0]scale={width}:{height}:force_original_aspect_ratio=decrease:out_range=tv:out_color_matrix=bt709,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p,"
+            "setparams=range=tv:colorspace=bt709:color_primaries=bt709:color_trc=bt709"
         )
         if clip.kind == "image":
             v_chain += f",trim=duration={dur:.3f}"
-        v_chain += f",setpts=PTS-STARTPTS[v{idx}]"
+        v_chain += f",setpts=PTS-STARTPTS,fps={fps},settb=1/{fps}[v{idx}]"
         filters.append(v_chain)
 
         if has_any_audio:
@@ -417,7 +418,7 @@ def render_timeline(
                     f"[{v_current}][v{idx}]xfade=transition=fade:duration={fade:.3f}:offset={clip_starts[idx]:.3f}[{v_next}]"
                 )
             else:
-                filters.append(f"[{v_current}][v{idx}]concat=n=2:v=1:a=0[{v_next}]")
+                filters.append(f"[{v_current}][v{idx}]concat=n=2:v=1:a=0,fps={fps},settb=1/{fps}[{v_next}]")
             v_current = v_next
 
             if has_any_audio and a_current is not None:
