@@ -459,6 +459,21 @@ addOperation("/api/video-projects/{id}/video", "get", {
   successSchema: { type: "string", format: "binary" },
 });
 
+addOperation("/api/video-projects/{id}/playback", "get", {
+  summary: "Get a short-lived streaming URL for the finished MP4 of an owned video project",
+  description: "Same video as /api/video-projects/{id}/video, as a read-only signed Blob Storage URL valid for one hour so a video element can stream it with range requests. Returns 409 until that video exists.",
+  tags: ["Video"],
+  parameters: pathParameters("id"),
+  successSchema: {
+    type: "object",
+    required: ["url", "expiresAt"],
+    properties: {
+      url: { type: "string", format: "uri" },
+      expiresAt: { type: "string", format: "date-time" },
+    },
+  },
+});
+
 addOperation("/api/video-jobs/{id}/video", "get", {
   summary: "Download the immutable MP4 of an owned succeeded video segment",
   tags: ["Video"],

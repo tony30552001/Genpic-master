@@ -355,5 +355,9 @@ export const waitForVideoRender = async ({ projectId, signal, pollIntervalMs = 3
 export const downloadVideo = async ({ projectId, signal }) =>
   apiGetBlob(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/video`, { signal });
 
+// A one-hour signed URL that a <video> element can stream directly.
+export const getVideoPlayback = async ({ projectId, signal }) =>
+  apiGet(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/playback`, { signal });
+
 export const downloadVideoSegment = async ({ jobId, signal }) =>
   apiGetBlob(`${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/video`, { signal });

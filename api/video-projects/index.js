@@ -2,7 +2,7 @@ const { ok, error, options, corsHeaders } = require("../_shared/http");
 const { requireAuth } = require("../_shared/auth");
 const { resolveIdentity } = require("../_shared/identity");
 const { rateLimit } = require("../_shared/rateLimit");
-const { getGeneratedBlobDownload } = require("../_shared/blobStorage");
+const { getGeneratedBlobDownload, signGeneratedBlobUrl } = require("../_shared/blobStorage");
 const { VideoModelError } = require("../_shared/videoModelFamilies");
 const {
   createVideoProject,
@@ -11,6 +11,8 @@ const {
   resolveProjectVideo,
   retryVideoProject,
 } = require("../_shared/videoProjects");
+
+const PLAYBACK_TTL_MS = 60 * 60 * 1000;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -85,7 +87,7 @@ module.exports = async function (context, req) {
       context.res = ok(project, 202, req);
       return;
     }
-    if (method === "GET" && action === "video") {
+    if (method === "GET" && (action === "video" || action === "playback")) {
       const video = await resolveProjectVideo({
         projectId,
         tenantId: identity.tenantId,
@@ -93,6 +95,13 @@ module.exports = async function (context, req) {
       });
       if (!video) {
         context.res = error("影片尚未完成", "not_ready", 409, req);
+        return;
+      }
+      if (action === "playback") {
+        context.res = ok({
+          url: signGeneratedBlobUrl({ blobName: video.blobName, permissions: "r", expiresInMs: PLAYBACK_TTL_MS }),
+          expiresAt: new Date(Date.now() + PLAYBACK_TTL_MS).toISOString(),
+        }, 200, req);
         return;
       }
       const blob = await getGeneratedBlobDownload({ blobName: video.blobName });

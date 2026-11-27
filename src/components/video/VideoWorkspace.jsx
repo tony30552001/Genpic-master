@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import useVideoGeneration from "@/hooks/useVideoGeneration";
 import useVideoStoryboard from "@/hooks/useVideoStoryboard";
-import { downloadVideo } from "@/services/aiService";
+import { getVideoPlayback } from "@/services/aiService";
 import { imageJobImageUrl } from "@/services/imageChatService";
 import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
@@ -757,8 +757,8 @@ export default function VideoWorkspace({
   const openHistory = async (item) => {
     setSubmitError("");
     try {
-      const blob = await downloadVideo({ projectId: item.videoProjectId });
-      setPlayerVideo({ videoUrls: [URL.createObjectURL(blob)], cleanup: true });
+      const { url } = await getVideoPlayback({ projectId: item.videoProjectId });
+      setPlayerVideo({ videoUrls: [url] });
     } catch (error) {
       setSubmitError(error.message || "影片載入失敗");
     }
@@ -808,7 +808,6 @@ export default function VideoWorkspace({
   };
 
   const closePlayer = () => {
-    if (playerVideo?.cleanup) playerVideo.videoUrls.forEach((url) => URL.revokeObjectURL(url));
     setPlayerVideo(null);
   };
 
