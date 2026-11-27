@@ -11,6 +11,7 @@ const llmRuntime = require("../llmRuntime");
 const videoModels = require("../videoModels");
 const videoPolicy = require("../videoPolicy");
 const scriptDocument = require("../scriptDocument");
+const sourceDocument = require("../sourceDocument");
 
 auth.requireAuth = vi.fn();
 identity.resolveIdentity = vi.fn();
@@ -22,6 +23,7 @@ videoModels.listPublicVideoModels = vi.fn();
 videoPolicy.ensureVideoSettings = vi.fn();
 scriptDocument.readScriptDocument = vi.fn();
 scriptDocument.importSceneImages = vi.fn();
+sourceDocument.readSourceDocument = vi.fn();
 
 const { runStoryboardJob } = require("../videoStoryboardJobs");
 
@@ -79,13 +81,11 @@ const FRAME = "55555555-5555-4555-8555-555555555555";
 
 describe("storyboard agent jobs", () => {
   it("keeps a DOCX's scenes and attaches their images after the agent copies them", async () => {
-    const zip = {};
     scriptDocument.readScriptDocument.mockResolvedValue({
-      zip,
       preface: "咖啡廣告",
       prefaceImageCount: 1,
       scenes: [
-        { title: "開店", text: "她推開門。", images: [{ path: "word/media/a.png", label: "Image1" }] },
+        { title: "開店", text: "她推開門。", images: [{ key: "word/media/a.png", label: "Image1" }] },
         { title: "吧台", text: "他微笑。", images: [] },
       ],
     });
@@ -103,7 +103,7 @@ describe("storyboard agent jobs", () => {
 
     expect(res.status).toBe("succeeded");
     expect(JSON.parse(llmRuntime.generateJson.mock.calls[0][0].userMessage).scenes[0].images).toEqual(["Image1"]);
-    expect(scriptDocument.importSceneImages).toHaveBeenCalledWith(expect.objectContaining({ zip, tenantId: "t", userId: "u" }));
+    expect(scriptDocument.importSceneImages).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "t", userId: "u" }));
     expect(res.body.storyboard.shots.map(({ title, references }) => ({ title, references }))).toEqual([
       { title: "開店", references: [{ label: "Image1", uploadId: FRAME }] },
       { title: "吧台", references: [] },
@@ -114,7 +114,7 @@ describe("storyboard agent jobs", () => {
 
   it("reports each step, the reasoning summary and finished scenes while a document imports", async () => {
     scriptDocument.readScriptDocument.mockResolvedValue({
-      zip: {}, preface: "", prefaceImageCount: 0,
+      preface: "", prefaceImageCount: 0,
       scenes: [{ title: "開店", text: "她推開門。", images: [] }, { title: "吧台", text: "他微笑。", images: [] }],
     });
     scriptDocument.importSceneImages.mockResolvedValue({ references: [[], []], previews: {}, skipped: [] });
@@ -146,7 +146,7 @@ describe("storyboard agent jobs", () => {
 
   it("does not store document images when the agent rewrites a scene", async () => {
     scriptDocument.readScriptDocument.mockResolvedValue({
-      zip: {}, preface: "", prefaceImageCount: 0,
+      preface: "", prefaceImageCount: 0,
       scenes: [{ title: "開店", text: "她推開門。", images: [] }],
     });
     llmRuntime.generateJson.mockResolvedValue({ storyboard: storyboard([scriptShot("s1", "她打開門。", 5)]) });
@@ -185,6 +185,62 @@ describe("storyboard agent jobs", () => {
     expect(res.body.segments).toEqual([expect.objectContaining({ index: 0, chained: false, mode: "t2v" })]);
     expect(res.body.segments[0].compiled.sendMode).toBe("multi");
     expect(res.body.warnings).toEqual([expect.objectContaining({ shotId: "s2", code: "camera_conflict" })]);
+  });
+
+  it("adapts a source document and stores only the pictures the agent attached", async () => {
+    const wash = { key: "a", label: "Image1", read: vi.fn() };
+    const dry = { key: "b", label: "Image2", read: vi.fn() };
+    sourceDocument.readSourceDocument.mockResolvedValue({
+      text: "## 洗手\n濕潤雙手。 [Image1]\n烘乾。 [Image2]",
+      images: [wash, dry],
+      omittedImages: 2,
+      unsupportedImages: 0,
+    });
+    scriptDocument.importSceneImages.mockResolvedValue({
+      references: [[{ label: "Image1", uploadId: FRAME }], []],
+      previews: { [FRAME]: "data:image/webp;base64,AA" },
+      skipped: [],
+    });
+    llmRuntime.generateJson.mockResolvedValue({
+      storyboard: storyboard([shot({ imageLabels: ["Image1"] }), shot({ id: "s2" })]),
+      explanation: "依步驟拆成兩幕",
+    });
+
+    const res = await invoke({ action: "draft", uploadId: FRAME, durationSeconds: 10 });
+
+    expect(res.status).toBe("succeeded");
+    expect(sourceDocument.readSourceDocument).toHaveBeenCalledWith({ uploadId: FRAME, tenantId: "t", userId: "u" });
+    const call = llmRuntime.generateJson.mock.calls[0][0];
+    expect(call.systemMessage).toMatch(/SOP/);
+    expect(JSON.parse(call.userMessage)).toMatchObject({
+      document: expect.stringContaining("[Image1]"),
+      images: ["Image1", "Image2"],
+      instructions: "",
+    });
+    expect(scriptDocument.importSceneImages).toHaveBeenCalledWith({
+      scenes: [{ images: [wash] }, { images: [] }],
+      tenantId: "t",
+      userId: "u",
+    });
+    expect(res.body.storyboard.shots.map((item) => item.references)).toEqual([[{ label: "Image1", uploadId: FRAME }], []]);
+    expect(res.body.referencePreviews).toEqual({ [FRAME]: "data:image/webp;base64,AA" });
+    expect(res.body.explanation).toMatch(/^依步驟拆成兩幕\n.*後面 2 張/);
+    const steps = db.query.mock.calls
+      .filter(([sql]) => sql.includes("SET progress"))
+      .map(([, params]) => JSON.parse(params[2]).step);
+    expect(steps[0]).toBe("reading");
+    expect(steps.at(-1)).toBe("images");
+  });
+
+  it("fails without storing images when the agent picks a picture the document lacks", async () => {
+    sourceDocument.readSourceDocument.mockResolvedValue({
+      text: "濕潤雙手。", images: [], omittedImages: 0, unsupportedImages: 0,
+    });
+    llmRuntime.generateJson.mockResolvedValue({ storyboard: storyboard([shot({ imageLabels: ["Image9"] })]) });
+    const res = await invoke({ action: "draft", uploadId: FRAME, brief: "給新進員工", durationSeconds: 5 });
+    expect(res.error).toMatchObject({ code: "storyboard_agent_failed", message: expect.stringMatching(/Image9/) });
+    expect(JSON.parse(llmRuntime.generateJson.mock.calls[0][0].userMessage).instructions).toBe("給新進員工");
+    expect(scriptDocument.importSceneImages).not.toHaveBeenCalled();
   });
 
   it("fails when the agent drops quoted text or misallocates seconds", async () => {

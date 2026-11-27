@@ -94,6 +94,8 @@ export const canHaveStartFrame = (shot, index) => index === 0 || shot.cut;
 
 export const SCRIPT_DOCUMENT_EXTENSIONS = Object.freeze(["docx", "txt", "md"]);
 export const SCRIPT_DOCUMENT_ACCEPT = SCRIPT_DOCUMENT_EXTENSIONS.map((extension) => `.${extension}`).join(",");
+export const SOURCE_DOCUMENT_EXTENSIONS = Object.freeze(["docx", "txt", "md", "pdf"]);
+export const SOURCE_DOCUMENT_ACCEPT = SOURCE_DOCUMENT_EXTENSIONS.map((extension) => `.${extension}`).join(",");
 
 export const SEND_MODE_LABELS = Object.freeze({
   single: "單一提示詞",

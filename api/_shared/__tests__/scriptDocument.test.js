@@ -93,7 +93,6 @@ describe("parseScriptDocx", () => {
 describe("parseScriptText", () => {
   it("splits scenes on # headings and keeps the text before the first heading as the preface", () => {
     expect(parseScriptText("\uFEFF全片設定：清潔員穿藍色制服。\n\n## 場景一：備品 ##\n推車停在門口。\n\n\n\n（5 秒）\n# 洗手\r\n濕洗手。")).toEqual({
-      zip: null,
       preface: "全片設定：清潔員穿藍色制服。",
       prefaceImageCount: 0,
       scenes: [
@@ -145,7 +144,7 @@ describe("importSceneImages", () => {
     const parsed = await parseScriptDocx(buffer);
     imageUploads.createReadyImageUpload.mockResolvedValue("123e4567-e89b-42d3-a456-426614174000");
 
-    const imported = await importSceneImages({ zip: parsed.zip, scenes: parsed.scenes, ...OWNER });
+    const imported = await importSceneImages({ scenes: parsed.scenes, ...OWNER });
 
     expect(imageUploads.createReadyImageUpload).toHaveBeenCalledTimes(1);
     expect(imageUploads.createReadyImageUpload).toHaveBeenCalledWith(

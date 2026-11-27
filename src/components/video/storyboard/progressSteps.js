@@ -1,6 +1,6 @@
 // Labels for the steps a storyboard agent job reports (api/_shared/videoStoryboardProgress.js).
 export const STORYBOARD_STEP_LABELS = {
-  reading: "讀取腳本文件",
+  reading: "讀取文件",
   thinking: "AI 構思分鏡",
   writing: "AI 撰寫分鏡",
   checking: "檢查分鏡",

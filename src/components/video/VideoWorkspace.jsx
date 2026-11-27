@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { ChevronDown, Download, Play, RotateCcw, SquarePen, Trash2, X } from "@/components/icons/lucideControls";
-import { BookOpen, Clapperboard, FileText, FileUp, History, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
+import { BookOpen, Clapperboard, FileSearch, FileText, FileUp, History, ImagePlus, Layers, Sparkles } from "@/components/icons/lucideContent";
 import { AlertCircle, Check, Loader2 } from "@/components/icons/lucideStatus";
 import {
   AlertDialog,
@@ -30,7 +30,7 @@ import { downloadVideo } from "@/services/aiService";
 import { imageJobImageUrl } from "@/services/imageChatService";
 import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
-import { SCRIPT_DOCUMENT_ACCEPT, durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
+import { SCRIPT_DOCUMENT_ACCEPT, SOURCE_DOCUMENT_ACCEPT, durationChoices, segmentRange, storyboardSeconds } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
 import ChatHistory from "@/components/chat/ChatHistory";
 import Reasoning from "@/components/chat/Reasoning";
@@ -512,6 +512,7 @@ export default function VideoWorkspace({
   const fileRef = useRef(null);
   const endFileRef = useRef(null);
   const scriptFileRef = useRef(null);
+  const sourceFileRef = useRef(null);
   const briefRef = useRef(null);
   const threadEndRef = useRef(null);
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
@@ -627,6 +628,15 @@ export default function VideoWorkspace({
     if (!file || !canStart) return;
     setBoardVisible(true);
     void storyboard.importScript({ file, attachment });
+  };
+
+  // The composer text, if any, becomes extra instructions for the document.
+  const draftFromDocument = (file) => {
+    if (!file || !canStart) return;
+    const text = brief.trim();
+    setBrief("");
+    setBoardVisible(true);
+    void storyboard.draftFromDocument({ file, brief: text, durationSeconds, attachment });
   };
 
   const sendRevision = () => {
@@ -1050,6 +1060,9 @@ export default function VideoWorkspace({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => sourceFileRef.current?.click()}>
+                          <FileSearch className="size-4" aria-hidden="true" />依文件發想分鏡
+                        </DropdownMenuItem>
                         <DropdownMenuItem disabled={!canSend} onSelect={() => startDraft("script")}>
                           <FileText className="size-4" aria-hidden="true" />依腳本整理分鏡
                         </DropdownMenuItem>
@@ -1100,6 +1113,18 @@ export default function VideoWorkspace({
             const file = event.target.files?.[0];
             event.target.value = "";
             importScript(file);
+          }}
+        />
+        <input
+          ref={sourceFileRef}
+          type="file"
+          accept={SOURCE_DOCUMENT_ACCEPT}
+          className="hidden"
+          aria-label="依文件發想分鏡"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            draftFromDocument(file);
           }}
         />
       </section>

@@ -25,7 +25,7 @@ describe("StoryboardProgress", () => {
 
     const steps = within(screen.getByRole("list", { name: "分鏡進度" })).getAllByRole("listitem");
     expect(steps.map((step) => step.textContent)).toEqual([
-      "讀取腳本文件", "AI 構思分鏡", "AI 撰寫分鏡已完成 1／3 幕", "檢查分鏡", "匯入參考圖",
+      "讀取文件", "AI 構思分鏡", "AI 撰寫分鏡已完成 1／3 幕", "檢查分鏡", "匯入參考圖",
     ]);
     expect(steps[2].getAttribute("aria-current")).toBe("step");
     expect(screen.getByText("AI 撰寫分鏡，已完成 1／3 幕")).toBeTruthy();

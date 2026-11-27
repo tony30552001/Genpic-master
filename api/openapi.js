@@ -757,7 +757,7 @@ addOperation("/api/optimize-prompt", "post", {
 
 addOperation("/api/video-storyboard", "post", {
   summary: "Queue a storyboard agent job, or inspect a video storyboard",
-  description: "draft, revise and fromScript return 202 with a jobId and run in the storyboard job worker, because one analysis-model call can outlast the SWA linked backend's 45-second request limit; poll GET /api/video-storyboard/jobs/{id} for the result. The worker rechecks model access when the job runs. inspect validates synchronously and returns 200. draft, revise and fromScript use the tenant video_storyboard model, which must be a reasoning model because its reply is streamed with a reasoning summary; fromScript keeps every script verbatim unless condensed. fromScript takes either pasted script text or the uploadId of a ready document upload (DOCX, TXT or MD; other types return 415). A document becomes one shot per scene: DOCX scenes start at a heading-styled or short all-bold paragraph, TXT and MD scenes start at a # heading line, text before the first heading is the film-wide setting, and a document without headings returns 422. DOCX embedded images are stored as the caller's image uploads and attached as shot references; referencePreviews maps each new uploadId to a small data URL. Every result carries warnings and the planned segments, each with its compiled model request. Agent output that breaks storyboard rules fails the job with storyboard_agent_failed.",
+  description: "draft, revise and fromScript return 202 with a jobId and run in the storyboard job worker, because one analysis-model call can outlast the SWA linked backend's 45-second request limit; poll GET /api/video-storyboard/jobs/{id} for the result. The worker rechecks model access when the job runs. inspect validates synchronously and returns 200. draft, revise and fromScript use the tenant video_storyboard model, which must be a reasoning model because its reply is streamed with a reasoning summary; fromScript keeps every script verbatim unless condensed. fromScript takes either pasted script text or the uploadId of a ready document upload (DOCX, TXT or MD; other types return 415). A document becomes one shot per scene: DOCX scenes start at a heading-styled or short all-bold paragraph, TXT and MD scenes start at a # heading line, text before the first heading is the film-wide setting, and a document without headings returns 422. DOCX embedded images are stored as the caller's image uploads and attached as shot references. draft with an uploadId adapts a source document (DOCX, TXT, MD or text-based PDF; other types return 415, a PDF without text returns 422, text over 50,000 characters returns 422) into structured shots, brief becomes optional extra instructions, and only the document images the agent picks for a shot (up to 40 offered) are stored and attached. referencePreviews maps each new uploadId to a small data URL. Every result carries warnings and the planned segments, each with its compiled model request. Agent output that breaks storyboard rules fails the job with storyboard_agent_failed.",
   successStatuses: [200, 202],
   tags: ["Video"],
   body: true,
@@ -768,7 +768,7 @@ addOperation("/api/video-storyboard", "post", {
     properties: {
       action: { type: "string", enum: ["draft", "revise", "fromScript", "inspect"] },
       modelKey: { type: "string" },
-      brief: { type: "string", maxLength: 20000, description: "draft" },
+      brief: { type: "string", maxLength: 20000, description: "draft; required unless uploadId is set" },
       durationSeconds: { type: "integer", minimum: 1, maximum: MAX_PROJECT_SECONDS, description: "draft" },
       shotCount: { type: "integer", minimum: 1, maximum: MAX_SHOTS, description: "draft; set for direct generation" },
       hasStartFrame: { type: "boolean" },
@@ -776,7 +776,7 @@ addOperation("/api/video-storyboard", "post", {
       instruction: { type: "string", maxLength: 4000, description: "revise" },
       shotId: { type: "string", description: "revise a single shot" },
       script: { type: "string", maxLength: 50000, description: "fromScript; exclusive with uploadId" },
-      uploadId: { type: "string", format: "uuid", description: "fromScript; a ready document upload, exclusive with script" },
+      uploadId: { type: "string", format: "uuid", description: "a ready document upload; fromScript (exclusive with script) or draft (source document)" },
       characters: {
         type: "array",
         maxItems: MAX_CHARACTERS,

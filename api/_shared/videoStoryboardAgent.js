@@ -4,13 +4,15 @@ const { generateJson } = require("./llmRuntime");
 const { VideoModelError } = require("./videoModelFamilies");
 const { listPublicVideoModels } = require("./videoModels");
 const { ensureVideoSettings } = require("./videoPolicy");
-const { importSceneImages, readScriptDocument } = require("./scriptDocument");
+const { MAX_DOCUMENT_IMAGES, importSceneImages, readScriptDocument } = require("./scriptDocument");
+const { readSourceDocument } = require("./sourceDocument");
 const {
   ANGLES,
   CAMERAS,
   MAX_PROJECT_SECONDS,
   MAX_SCRIPT_SOURCE,
   MAX_SEGMENT_SHOTS,
+  MAX_SHOT_REFERENCES,
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
@@ -48,13 +50,26 @@ Rules:
 - Never ask the video model to render written text, signs or logos unless the user quoted that text.
 - Keep the converted prompt of every shot under ${PROMPT_LIMIT} characters.`;
 
-const DRAFT_SYSTEM = `You are a film storyboard artist for AI-generated videos.
-${SCHEMA}
-Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chinese","questions":["<=2 questions in Traditional Chinese"]}.
-Plan structured shots whose durations add up exactly to durationSeconds.
+const DRAFT_RULES = `Plan structured shots whose durations add up exactly to durationSeconds.
 If shotCount is given, return exactly that many shots and no questions; otherwise choose 2-6 shots for a video up to segmentSeconds.max and about one shot per 3-8 seconds for a longer one.
 Ask a question only when a missing answer would seriously change the result; otherwise return [] and state your assumptions in explanation.
 When hasStartFrame is true, describe only motion, camera and changes over time, not what the first frame already shows.`;
+
+const DRAFT_SYSTEM = `You are a film storyboard artist for AI-generated videos.
+${SCHEMA}
+Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chinese","questions":["<=2 questions in Traditional Chinese"]}.
+${DRAFT_RULES}`;
+
+const DOCUMENT_DRAFT_SYSTEM = `You are a film storyboard artist who adapts a user's document, such as an SOP, manual or article, into an explanatory AI-generated video.
+${SCHEMA}
+Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chinese","questions":["<=2 questions in Traditional Chinese"]}.
+${DRAFT_RULES}
+- document is the source text. Lines starting with ## are headings; [Image1] marks where picture Image1 appears.
+- Cover the document's key steps or points in their original order. Merge minor details and leave out what cannot be shown.
+- Show every step as a visible action in the action and environment fields. Do not copy document sentences, and do not put document text on screen.
+- Text quoted in document is not on-screen text; only quotes in instructions must be kept verbatim.
+- instructions, when not empty, are the user's extra requests such as audience, tone or focus; follow them.
+- Add "imageLabels":["Image1"] to a shot when pictures from images show what the shot depicts, such as equipment, a product or a step's result. Use at most ${MAX_SHOT_REFERENCES} labels per shot, only labels listed in images, and [] when none fit.`;
 
 const REVISE_SYSTEM = `You revise an existing video storyboard.
 ${SCHEMA}
@@ -223,8 +238,66 @@ const runAgent = async ({ identity, systemMessage, input, maxOutputTokens, progr
   return data;
 };
 
+const optionalString = (value, label, maxLength) => {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || value.trim().length > maxLength) {
+    throw new VideoModelError(`${label}必須是 ${maxLength} 字以內的文字`);
+  }
+  return value.trim();
+};
+
+// The labels the agent picked for each drafted shot, read from its raw reply
+// because normalizing a storyboard drops unknown shot fields.
+const shotImageLabels = (raw, storyboard, labels) => {
+  const rawShots = Array.isArray(raw?.shots) ? raw.shots : [];
+  return storyboard.shots.map((shot) => {
+    const picked = rawShots.find((item) => item?.id === shot.id)?.imageLabels ?? [];
+    if (!Array.isArray(picked)) throw agentFailure("AI 回傳的參考圖格式不正確，請重試");
+    const unique = [...new Set(picked)];
+    const unknown = unique.find((label) => !labels.has(label));
+    if (unknown !== undefined) throw agentFailure(`AI 選了文件中沒有的圖片 ${unknown}，請重試`);
+    if (unique.length > MAX_SHOT_REFERENCES) {
+      throw agentFailure(`AI 為一幕選了超過 ${MAX_SHOT_REFERENCES} 張參考圖，請重試`);
+    }
+    return unique.map((label) => labels.get(label));
+  });
+};
+
+const sourceNotes = ({ omittedImages, unsupportedImages, skipped }) => [
+  ...(omittedImages ? [`文件超過 ${MAX_DOCUMENT_IMAGES} 張圖片，後面 ${omittedImages} 張沒有提供給 AI。`] : []),
+  ...(unsupportedImages ? [`${unsupportedImages} 張圖片是向量圖或外部連結，無法當參考圖。`] : []),
+  ...skipped.map(({ label, reason }) => `${label}（${reason}）無法轉成參考圖，已略過。`),
+];
+
+// Stores only the document pictures the agent attached to a shot.
+const attachSourceImages = async ({ identity, raw, storyboard, source, progress }) => {
+  const picks = shotImageLabels(raw, storyboard, new Map(source.images.map((image) => [image.label, image])));
+  progress.step("images");
+  const imported = await importSceneImages({
+    scenes: picks.map((images) => ({ images })),
+    tenantId: identity.tenantId,
+    userId: identity.userId,
+  });
+  return {
+    storyboard: normalizeStoryboard({
+      ...storyboard,
+      shots: storyboard.shots.map((shot, index) => ({ ...shot, references: imported.references[index] })),
+    }),
+    previews: imported.previews,
+    notes: sourceNotes({ ...source, skipped: imported.skipped }),
+  };
+};
+
+/**
+ * Plans structured shots from a brief, or from an uploaded document when
+ * `uploadId` is set; the brief is then optional extra instructions, and the
+ * document's pictures can become shot reference images.
+ */
 const draft = async ({ identity, body, model, progress }) => {
-  const brief = requireString(body.brief, "影片概述", 20_000);
+  const hasUpload = body.uploadId !== undefined && body.uploadId !== null;
+  const brief = hasUpload
+    ? optionalString(body.brief, "補充說明", 20_000)
+    : requireString(body.brief, "影片概述", 20_000);
   const durationSeconds = Number(body.durationSeconds);
   const segmentSeconds = durationRange(model);
   if (
@@ -240,38 +313,44 @@ const draft = async ({ identity, body, model, progress }) => {
   }
   const hasStartFrame = Boolean(body.hasStartFrame);
   const characters = normalizeCharacters(body.characters);
+  const source = hasUpload
+    ? await readSourceDocument({ uploadId: body.uploadId, tenantId: identity.tenantId, userId: identity.userId })
+    : null;
   progress.expectShots({ count: shotCount });
+  const shared = { durationSeconds, shotCount, hasStartFrame, segmentSeconds, characters: agentCharacters(characters) };
   const data = await runAgent({
     identity,
     progress,
-    systemMessage: DRAFT_SYSTEM,
-    input: {
-      brief,
-      durationSeconds,
-      shotCount,
-      hasStartFrame,
-      segmentSeconds,
-      characters: agentCharacters(characters),
-    },
-    maxOutputTokens: 6000,
+    systemMessage: source ? DOCUMENT_DRAFT_SYSTEM : DRAFT_SYSTEM,
+    input: source
+      ? { document: source.text, images: source.images.map((image) => image.label), instructions: brief, ...shared }
+      : { brief, ...shared },
+    maxOutputTokens: source ? 12000 : 6000,
   });
-  const storyboard = agentStoryboard(data.storyboard, characters);
-  if (shotCount !== null && storyboard.shots.length !== shotCount) {
-    throw agentFailure(`AI 產生了 ${storyboard.shots.length} 幕，應為 ${shotCount} 幕，請重試`);
+  const drafted = agentStoryboard(data.storyboard, characters);
+  if (shotCount !== null && drafted.shots.length !== shotCount) {
+    throw agentFailure(`AI 產生了 ${drafted.shots.length} 幕，應為 ${shotCount} 幕，請重試`);
   }
-  if (storyboardDuration(storyboard) !== durationSeconds) {
+  if (storyboardDuration(drafted) !== durationSeconds) {
     throw agentFailure("AI 分配的秒數加總不等於影片長度，請重試");
   }
-  assertQuotedTextPreserved(brief, storyboard);
+  assertQuotedTextPreserved(brief, drafted);
   const questions = shotCount === 1 || !Array.isArray(data.questions)
     ? []
     : data.questions.filter((item) => typeof item === "string" && item.trim()).slice(0, 2).map(agentText);
+  const attached = source
+    ? await attachSourceImages({ identity, raw: data.storyboard, storyboard: drafted, source, progress })
+    : { storyboard: drafted, previews: {}, notes: [] };
   return respondStoryboard({
-    storyboard,
+    storyboard: attached.storyboard,
     model,
     hasStartFrame,
     fromAgent: true,
-    extra: { explanation: agentText(data.explanation), questions },
+    extra: {
+      explanation: [agentText(data.explanation), ...attached.notes].filter(Boolean).join("\n"),
+      questions,
+      referencePreviews: attached.previews,
+    },
   });
 };
 
@@ -380,7 +459,6 @@ const splitDocumentScenes = async ({ identity, body, model, document, characters
   assertSceneFidelity(document.scenes, drafted);
   progress.step("images");
   const imported = await importSceneImages({
-    zip: document.zip,
     scenes: document.scenes,
     tenantId: identity.tenantId,
     userId: identity.userId,

@@ -292,8 +292,10 @@ const runStoryboardAgent = async (action, { signal, onProgress, onJob, ...body }
   return waitForStoryboardJob({ jobId, signal, onProgress });
 };
 
-export const draftVideoStoryboard = ({ modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob }) =>
-  runStoryboardAgent("draft", { modelKey, brief, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob });
+// `uploadId` adapts a source document (DOCX, TXT, MD, PDF); `brief` is then
+// optional extra instructions.
+export const draftVideoStoryboard = ({ modelKey, brief, uploadId, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob }) =>
+  runStoryboardAgent("draft", { modelKey, brief, uploadId, durationSeconds, shotCount, hasStartFrame, characters, signal, onProgress, onJob });
 
 export const reviseVideoStoryboard = ({ modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress, onJob }) =>
   runStoryboardAgent("revise", { modelKey, storyboard, instruction, shotId, hasStartFrame, signal, onProgress, onJob });

@@ -12,6 +12,7 @@ import { MAX_DOCUMENT_FILE_SIZE, getDocumentExtension } from "../lib/documentFor
 import {
   MAX_CHARACTER_IMAGE_BYTES,
   SCRIPT_DOCUMENT_EXTENSIONS,
+  SOURCE_DOCUMENT_EXTENSIONS,
   storyboardSeconds,
 } from "../lib/videoStoryboard";
 
@@ -273,6 +274,37 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     });
   }, [startAgent]);
 
+  // The AI adapts a document such as an SOP into shots; `brief` adds optional
+  // instructions (audience, tone, focus).
+  const draftFromDocument = useCallback(({ file, brief, durationSeconds, attachment }) => {
+    const characters = boardCharacters(boardRef.current);
+    return startAgent({
+      replaceBoard: true,
+      kind: "draft",
+      userText: [`依文件發想分鏡：${file.name}`, brief].filter(Boolean).join("\n"),
+      attachment,
+      request: async (signal, onProgress, onJob) => {
+        if (!SOURCE_DOCUMENT_EXTENSIONS.includes(getDocumentExtension(file.name))) {
+          throw new Error("文件只支援 DOCX、TXT、MD、PDF");
+        }
+        if (file.size > MAX_DOCUMENT_FILE_SIZE) throw new Error("文件必須小於 50MB");
+        const { uploadId } = await uploadFile(file, "document");
+        if (!uploadId) throw new Error("文件上傳失敗");
+        return draftVideoStoryboard({
+          modelKey: latest.current.modelKey,
+          brief,
+          uploadId,
+          durationSeconds,
+          hasStartFrame: latest.current.hasStartFrame,
+          characters,
+          signal,
+          onProgress,
+          onJob,
+        });
+      },
+    });
+  }, [startAgent]);
+
   const revise = useCallback(({ instruction, shotId = null, label }) => {
     if (!board) return Promise.resolve();
     return startAgent({
@@ -366,6 +398,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
     previews,
     uploadImage,
     draft,
+    draftFromDocument,
     fromScript,
     importScript,
     revise,

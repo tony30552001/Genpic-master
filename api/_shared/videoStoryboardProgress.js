@@ -10,8 +10,8 @@ const SAVE_INTERVAL_MS = 1000;
 const MAX_REASONING = 6000;
 const PREVIEW_TEXT = 160;
 
-const storyboardSteps = (action, request) =>
-  action === "fromScript" && request?.uploadId != null
+const storyboardSteps = (_action, request) =>
+  request?.uploadId != null
     ? ["reading", "thinking", "writing", "checking", "images"]
     : ["thinking", "writing", "checking"];
 

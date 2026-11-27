@@ -188,29 +188,60 @@ const loadZip = async (buffer) => {
 };
 
 /**
- * Splits a DOCX script into scenes. A scene starts at a Heading-styled
- * paragraph, or a paragraph that is all bold and at most 30 characters; its
- * text and inline images run until the next heading. Text before the first
- * heading is the preface.
+ * An embedded DOCX picture as an importable image: `key` identifies it across
+ * the document, `read` loads its bytes, or is null with a `reason` when the
+ * picture is linked or vector art that cannot become a reference image.
  */
-const parseScriptDocx = async (buffer) => {
+const docxImage = (zip, target) => {
+  const extension = getExtension(target.path);
+  const file = target.external ? null : zip.file(target.path);
+  const usable = file && !VECTOR_EXTENSIONS.has(extension);
+  return {
+    key: target.path,
+    read: usable ? () => file.async("nodebuffer") : null,
+    reason: usable ? null : target.external ? "外部連結" : extension.toUpperCase() || "未知格式",
+  };
+};
+
+/**
+ * Reads a DOCX's paragraphs in order, including those in tables. A heading is
+ * a Heading-styled paragraph, or one that is all bold and at most 30
+ * characters; `images` are the paragraph's embedded pictures.
+ */
+const readDocxParagraphs = async (buffer) => {
   const zip = await loadZip(buffer);
   assertZipSize(zip);
   const documentXml = await readZipText(zip, "word/document.xml");
   if (!documentXml) throw invalid("DOCX 缺少文件內容（word/document.xml）");
   const [headingStyles, imageTargets] = await Promise.all([readHeadingStyles(zip), readImageTargets(zip)]);
-  const paragraphs = collectParagraphs(xml.parse(documentXml), []);
+  return collectParagraphs(xml.parse(documentXml), []).map((paragraph) => ({
+    text: paragraph.text,
+    heading: isHeading(paragraph, headingStyles),
+    images: paragraph.imageIds
+      .map((id) => imageTargets.get(id))
+      .filter(Boolean)
+      .map((target) => docxImage(zip, target)),
+  }));
+};
 
-  const preface = { lines: [], imageIds: [] };
+/**
+ * Splits a DOCX script into scenes. A scene starts at a heading; its text and
+ * inline images run until the next heading. Text before the first heading is
+ * the preface.
+ */
+const parseScriptDocx = async (buffer) => {
+  const paragraphs = await readDocxParagraphs(buffer);
+
+  const preface = { lines: [], images: [] };
   const scenes = [];
   for (const paragraph of paragraphs) {
-    if (isHeading(paragraph, headingStyles)) {
-      scenes.push({ title: paragraph.text.trim(), lines: [], imageIds: [...paragraph.imageIds] });
+    if (paragraph.heading) {
+      scenes.push({ title: paragraph.text.trim(), lines: [], images: [...paragraph.images] });
       continue;
     }
     const target = scenes.at(-1) || preface;
     target.lines.push(paragraph.text);
-    target.imageIds.push(...paragraph.imageIds);
+    target.images.push(...paragraph.images);
   }
   assertSceneCount(scenes.length);
 
@@ -219,14 +250,9 @@ const parseScriptDocx = async (buffer) => {
   const labels = new Map();
   const result = scenes.map((scene) => {
     const text = sceneText(scene);
-    const images = [...new Map(
-      scene.imageIds
-        .map((id) => imageTargets.get(id))
-        .filter(Boolean)
-        .map((image) => [image.path, image])
-    ).values()].map((image) => {
-      if (!labels.has(image.path)) labels.set(image.path, `Image${labels.size + 1}`);
-      return { ...image, label: labels.get(image.path) };
+    const images = [...new Map(scene.images.map((image) => [image.key, image])).values()].map((image) => {
+      if (!labels.has(image.key)) labels.set(image.key, `Image${labels.size + 1}`);
+      return { ...image, label: labels.get(image.key) };
     });
     if (images.length > MAX_SHOT_REFERENCES) {
       throw invalid(`場景「${scene.title}」有 ${images.length} 張圖片，每個場景最多 ${MAX_SHOT_REFERENCES} 張`);
@@ -238,9 +264,8 @@ const parseScriptDocx = async (buffer) => {
   }
   assertTotalLength(result);
   return {
-    zip,
     preface: joinLines(preface.lines),
-    prefaceImageCount: new Set(preface.imageIds).size,
+    prefaceImageCount: new Set(preface.images.map((image) => image.key)).size,
     scenes: result,
   };
 };
@@ -261,7 +286,7 @@ const parseScriptText = (text) => {
   assertSceneCount(scenes.length);
   const result = scenes.map((scene) => ({ title: scene.title, text: sceneText(scene), images: [] }));
   assertTotalLength(result);
-  return { zip: null, preface: joinLines(preface), prefaceImageCount: 0, scenes: result };
+  return { preface: joinLines(preface), prefaceImageCount: 0, scenes: result };
 };
 
 const encodeImage = async (buffer) => {
@@ -284,29 +309,28 @@ const encodeImage = async (buffer) => {
 };
 
 /**
- * Stores each distinct scene image as an image upload owned by the user and
- * returns every scene's references. Images that cannot be converted are
- * reported in `skipped` and their labels stay unused.
+ * Stores each distinct scene image (`{ key, label, read, reason }`) as an
+ * image upload owned by the user and returns every scene's references.
+ * Images that cannot be read or converted are reported in `skipped` and their
+ * labels stay unused.
  */
-const importSceneImages = async ({ zip, scenes, tenantId, userId }) => {
+const importSceneImages = async ({ scenes, tenantId, userId }) => {
   const uploads = new Map();
   const previews = {};
   const skipped = [];
   for (const scene of scenes) {
     for (const image of scene.images) {
-      if (uploads.has(image.path) || skipped.some((item) => item.path === image.path)) continue;
+      if (uploads.has(image.key) || skipped.some((item) => item.key === image.key)) continue;
       const { label } = image;
-      const extension = getExtension(image.path);
-      const file = image.external ? null : zip.file(image.path);
-      if (!file || VECTOR_EXTENSIONS.has(extension)) {
-        skipped.push({ path: image.path, label, reason: image.external ? "外部連結" : extension.toUpperCase() || "未知格式" });
+      if (!image.read) {
+        skipped.push({ key: image.key, label, reason: image.reason });
         continue;
       }
       let encoded;
       try {
-        encoded = await encodeImage(await file.async("nodebuffer"));
+        encoded = await encodeImage(await image.read());
       } catch {
-        skipped.push({ path: image.path, label, reason: "無法辨識的圖片" });
+        skipped.push({ key: image.key, label, reason: "無法辨識的圖片" });
         continue;
       }
       const uploadId = await createReadyImageUpload({
@@ -316,14 +340,14 @@ const importSceneImages = async ({ zip, scenes, tenantId, userId }) => {
         contentType: "image/jpeg",
         fileName: `${label}.jpg`,
       });
-      uploads.set(image.path, uploadId);
+      uploads.set(image.key, uploadId);
       previews[uploadId] = encoded.preview;
     }
   }
   const references = scenes.map((scene) =>
     scene.images
-      .filter((image) => uploads.has(image.path))
-      .map((image) => ({ label: image.label, uploadId: uploads.get(image.path) }))
+      .filter((image) => uploads.has(image.key))
+      .map((image) => ({ label: image.label, uploadId: uploads.get(image.key) }))
   );
   return { references, previews, skipped: skipped.map(({ label, reason }) => ({ label, reason })) };
 };
@@ -348,7 +372,9 @@ const readScriptDocument = async ({ uploadId, tenantId, userId }) => {
 module.exports = {
   MAX_DOCUMENT_IMAGES,
   importSceneImages,
+  invalid,
   parseScriptDocx,
   parseScriptText,
+  readDocxParagraphs,
   readScriptDocument,
 };

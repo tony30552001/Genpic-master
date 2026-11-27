@@ -286,6 +286,26 @@ describe("useVideoStoryboard", () => {
     expect(result.current.board.storyboard.shots[0].references).toEqual([{ label: "Image1", uploadId: imageId }]);
   });
 
+  it("drafts from an uploaded source document with the composer text as instructions", async () => {
+    uploadFile.mockResolvedValue({ uploadId: "doc-1" });
+    draftVideoStoryboard.mockResolvedValueOnce(agentResult());
+    const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
+    const file = new File(["pdf"], "洗手SOP.pdf");
+
+    await act(() => result.current.draftFromDocument({ file, brief: "給新進員工", durationSeconds: 30 }));
+
+    expect(uploadFile).toHaveBeenCalledWith(file, "document");
+    expect(draftVideoStoryboard).toHaveBeenCalledWith(
+      expect.objectContaining({ modelKey: "kling", uploadId: "doc-1", brief: "給新進員工", durationSeconds: 30 })
+    );
+    expect(result.current.messages[0].text).toBe("依文件發想分鏡：洗手SOP.pdf\n給新進員工");
+    expect(result.current.board).not.toBeNull();
+
+    await act(() => result.current.draftFromDocument({ file: new File(["x"], "簡報.pptx"), brief: "", durationSeconds: 30 }));
+    expect(uploadFile).toHaveBeenCalledTimes(1);
+    expect(result.current.messages.at(-1)).toMatchObject({ kind: "error", text: "文件只支援 DOCX、TXT、MD、PDF" });
+  });
+
   it("rejects unsupported script documents before uploading", async () => {
     const { result } = renderHook(() => useVideoStoryboard({ modelKey: "kling", hasStartFrame: false }));
 
