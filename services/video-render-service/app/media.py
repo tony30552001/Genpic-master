@@ -12,7 +12,9 @@ from . import config
 
 class MediaError(Exception):
     def __init__(self, message: str, stderr: str = "") -> None:
-        super().__init__(message)
+        detail = (stderr or "").strip()
+        full = f"{message}: {detail[-600:]}" if detail else message
+        super().__init__(full)
         self.stderr = stderr
 
 
@@ -373,7 +375,7 @@ def render_timeline(
         dur = durations[idx]
         v_chain = (
             f"[{in_idx}:v:0]scale={width}:{height}:force_original_aspect_ratio=decrease,"
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={fps},format=yuv420p"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={fps},settb=1/{fps},format=yuv420p"
         )
         if clip.kind == "image":
             v_chain += f",trim=duration={dur:.3f}"
@@ -384,11 +386,11 @@ def render_timeline(
             if clip.kind == "video" and probed[idx]["audio"] is not None and clip.source_audio != "mute":
                 vol = ",volume=0.15" if clip.source_audio == "duck" else ""
                 filters.append(
-                    f"[{in_idx}:a:0]aresample=48000,aformat=channel_layouts=stereo{vol},asetpts=PTS-STARTPTS[a{idx}]"
+                    f"[{in_idx}:a:0]aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo{vol},asetpts=PTS-STARTPTS[a{idx}]"
                 )
             else:
                 filters.append(
-                    f"anullsrc=channel_layout=stereo:sample_rate=48000,atrim=duration={dur:.3f},asetpts=PTS-STARTPTS[a{idx}]"
+                    f"anullsrc=channel_layout=stereo:sample_rate=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,atrim=duration={dur:.3f},asetpts=PTS-STARTPTS[a{idx}]"
                 )
 
     # Concatenate or crossfade clips.
