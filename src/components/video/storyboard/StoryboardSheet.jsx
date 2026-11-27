@@ -7,7 +7,18 @@ import { Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import { useHistoryLayer } from "@/hooks/useHistoryLayer";
 import { OVERLAY_ENTER, OVERLAY_EXIT } from "@/lib/motionTokens";
-import { characterModeLabel, isScriptShot, scriptImageLabels, segmentStarts, sendModeLabel, shotSummary, storyboardSeconds } from "@/lib/videoStoryboard";
+import {
+  characterModeLabel,
+  isImageShot,
+  isScriptShot,
+  scriptImageLabels,
+  segmentStarts,
+  sendModeLabel,
+  shotSummary,
+  storyboardHasNarration,
+  storyboardNeedsRender,
+  storyboardSeconds,
+} from "@/lib/videoStoryboard";
 import CharacterList from "./CharacterList";
 import { cn } from "@/lib/utils";
 import GlobalCard from "./GlobalCard";
@@ -28,7 +39,7 @@ const rubberband = (overshoot, dimension, constant = 0.55) =>
   (overshoot * dimension * constant) / (dimension + constant * Math.abs(overshoot));
 
 /** Phone storyboard: a draggable sheet (half / full), dismissed by flicking down past half. */
-export default function StoryboardSheet({ storyboard, model, canGenerate, generateBlocker, onGenerate, onClose }) {
+export default function StoryboardSheet({ storyboard, model, speech = null, imageHistory = [], canGenerate, generateBlocker, onGenerate, onClose }) {
   const titleId = useId();
   const closeButtonRef = useRef(null);
   const sheetRef = useRef(null);
@@ -167,7 +178,13 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                     {board.baseProjectId ? "從影片重新開啟的分鏡；生成時沿用未修改的分段，只重新生成改動的分鏡與接續其後的分段，原影片保留。" : "從影片重新開啟的分鏡；修改後會建立新的影片，原影片保留。"}
                   </p>
                 )}
-                <GlobalCard global={board.storyboard.global} onChange={actions.updateGlobal} defaultOpen={false}>
+                <GlobalCard
+                  global={board.storyboard.global}
+                  speech={speech}
+                  hasNarration={storyboardHasNarration(board.storyboard)}
+                  onChange={actions.updateGlobal}
+                  defaultOpen={false}
+                >
                   <CharacterList
                     characters={board.storyboard.global.characters}
                     imageLabels={scriptImageLabels(board.storyboard)}
@@ -187,11 +204,15 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                     onClick={() => setEditingId(shot.id)}
                     aria-label={`編輯第 ${index + 1} 幕`}
                   >
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">{index + 1}</span>
+                    <span className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold",
+                      isImageShot(shot) ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : "bg-primary/10 text-primary"
+                    )}>{index + 1}</span>
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         <span className="truncate">{shotSummary(shot)}</span>
                         <span className="shrink-0 tabular-nums">· {shot.duration} 秒</span>
+                        {shot.narration?.trim() && <span className="shrink-0 text-emerald-700 dark:text-emerald-300">· 含旁白</span>}
                         {shot.characterIds.length > 0 && (
                           <span className="truncate text-primary">
                             {board.storyboard.global.characters
@@ -202,7 +223,13 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
                         )}
                         {warnedIds.has(shot.id) && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-label="有提醒" />}
                       </span>
-                      <span className="line-clamp-2 text-[13px]">{isScriptShot(shot) ? shot.script : shot.action || "尚未填寫動作"}</span>
+                      <span className="line-clamp-2 text-[13px]">
+                        {isImageShot(shot)
+                          ? shot.narration?.trim() || shot.onScreenText?.[0] || (shot.uploadId || shot.imageJobId ? "已選擇靜態圖片" : "尚未選擇圖片")
+                          : isScriptShot(shot)
+                            ? shot.script
+                            : shot.action || "尚未填寫動作"}
+                      </span>
                     </span>
                     {pending === `revise:${shot.id}` && (
                       <Loader2 className="mt-1 size-4 shrink-0 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
@@ -248,6 +275,7 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
             board={board}
             pending={pending}
             frame={storyboard.frame}
+            imageHistory={imageHistory}
             onGenerateFrame={storyboard.generateFrame}
             actions={actions}
             onClose={() => setEditingId(null)}
@@ -261,11 +289,12 @@ export default function StoryboardSheet({ storyboard, model, canGenerate, genera
 function SheetFooter({ storyboard, actions, model, canGenerate, generateBlocker, onGenerate }) {
   const { board, pending, inspection } = storyboard;
   const characterMode = characterModeLabel(board?.segments, model?.family);
+  const needsRender = Boolean(board && (board.needsRender ?? storyboardNeedsRender(board.storyboard, board.segments?.length)));
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {inspection.status === "invalid" && <p role="alert" className="text-xs text-destructive">{inspection.error}</p>}
       {characterMode && <p className="text-xs text-muted-foreground">{characterMode}</p>}
-      <p className="truncate text-xs text-muted-foreground">{generateBlocker || `${sendModeLabel(board?.segments)} · ${estimateLabel(model, board?.segments?.length)}`}</p>
+      <p className="truncate text-xs text-muted-foreground">{generateBlocker || `${sendModeLabel(board?.segments, needsRender)} · ${estimateLabel(model, board?.segments?.length)}`}</p>
       <div className="flex gap-2">
         <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => void actions.redraft()} disabled={!board || Boolean(pending)}>
           {pending === "revise" && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
@@ -279,7 +308,7 @@ function SheetFooter({ storyboard, actions, model, canGenerate, generateBlocker,
   );
 }
 
-function ShotEditor({ shot, index, board, pending, frame, onGenerateFrame, actions, onClose }) {
+function ShotEditor({ shot, index, board, pending, frame, imageHistory, onGenerateFrame, actions, onClose }) {
   const closeButtonRef = useRef(null);
   const requestClose = useHistoryLayer(onClose, closeButtonRef);
   return (
@@ -319,9 +348,11 @@ function ShotEditor({ shot, index, board, pending, frame, onGenerateFrame, actio
           canDelete={board.storyboard.shots.length > 1}
           characters={board.storyboard.global.characters}
           previews={actions.previews}
+          imageHistory={imageHistory}
           startFrameLocked={actions.startFrameLocked}
           frame={frame}
           onGenerateFrame={onGenerateFrame}
+          onUploadShotImage={(file) => actions.uploadShotImage(shot.id, file)}
           onPromoteReference={actions.promoteReference}
           onChange={(patch) => actions.updateShot(shot.id, patch)}
           onSetStartFrame={(uploadId) => actions.setStartFrame(shot.id, uploadId)}

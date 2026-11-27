@@ -1,12 +1,28 @@
 const { VideoModelError, getVideoModelFamily } = require("./videoModelFamilies");
+const { DEFAULT_SPEECH_VOICE, countNarrationCharacters, isValidSpeechVoice } = require("./speechTts");
 
 const MAX_SHOTS = 30;
 const MAX_SEGMENT_SHOTS = 6;
 const MAX_PROJECT_SECONDS = 120;
 const MAX_SHOT_SECONDS = 15;
+const MAX_IMAGE_SHOT_SECONDS = 30;
+const MAX_NARRATION_LENGTH = 500;
+const MAX_ON_SCREEN_LINES = 4;
+const MAX_ON_SCREEN_LINE_LENGTH = 60;
+const NARRATION_PAD_SECONDS = 0.5;
 const PROMPT_LIMIT = 2500;
 const MAX_SCRIPT_SOURCE = 50_000;
 const MAX_SHOT_REFERENCES = 10;
+
+const SHOT_SOURCES = Object.freeze({
+  generate: "動態生成",
+  image: "靜態圖幕",
+});
+
+const TRANSITIONS = Object.freeze({
+  cut: "直接切換",
+  fade: "0.5 秒交叉淡化",
+});
 
 const SHOT_SIZES = Object.freeze({
   "extreme-wide": "Extreme wide shot",
@@ -147,30 +163,88 @@ const normalizeReferences = (raw, label) => {
   return references;
 };
 
-// Only a shot that starts a fresh segment (the first shot or a scene cut)
-// can have its own start frame; a chained segment starts from the last frame.
-const normalizeStartFrame = (raw, index, label) => {
+// Only a shot that starts a fresh dynamic segment (the first shot, a scene
+// cut, or a shot right after a static image shot) can have its own start frame.
+const normalizeStartFrame = (raw, index, previousShot, label) => {
   if (!hasValue(raw.startFrameUploadId)) return null;
-  if (index > 0 && raw.cut !== true) fail(`${label}不是場景開頭，只有第一幕或場景轉換的幕可以設定首影格`);
+  if (index > 0 && raw.cut !== true && previousShot?.source !== "image") {
+    fail(`${label}不是場景開頭，只有第一幕、場景轉換或靜態圖幕後的幕可以設定首影格`);
+  }
   return normalizeUploadId(raw.startFrameUploadId, label);
 };
 
-const normalizeShot = (raw, index, characterIds) => {
+const normalizeOnScreenText = (raw, label) => {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) fail(`${label}的畫面文字必須是清單`);
+  const lines = raw
+    .map((item, idx) => optionalText(item, `${label}第 ${idx + 1} 行畫面文字`, MAX_ON_SCREEN_LINE_LENGTH))
+    .filter(Boolean);
+  if (lines.length > MAX_ON_SCREEN_LINES) {
+    fail(`${label}的畫面文字最多 ${MAX_ON_SCREEN_LINES} 行`);
+  }
+  return lines;
+};
+
+const normalizeShot = (raw, index, characterIds, previousShot = null) => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`第 ${index + 1} 幕格式無效`);
   const label = `第 ${index + 1} 幕`;
   if (typeof raw.id !== "string" || !SHOT_ID.test(raw.id)) fail(`${label}的識別碼無效`);
+  const source = hasValue(raw.source) ? requiredEnum(raw.source, SHOT_SOURCES, `${label}的來源`) : "generate";
+  const maxDuration = source === "image" ? MAX_IMAGE_SHOT_SECONDS : MAX_SHOT_SECONDS;
   const duration = Number(raw.duration);
-  if (!Number.isInteger(duration) || duration < 1 || duration > MAX_SHOT_SECONDS) {
-    fail(`${label}的秒數必須是 1 至 ${MAX_SHOT_SECONDS} 的整數`);
+  if (!Number.isInteger(duration) || duration < 1 || duration > maxDuration) {
+    fail(`${label}的秒數必須是 1 至 ${maxDuration} 的整數`);
   }
   if (hasValue(raw.cut) && typeof raw.cut !== "boolean") fail(`${label}的場景轉換設定無效`);
+  const narration = optionalText(raw.narration, `${label}的旁白`, MAX_NARRATION_LENGTH);
+  const onScreenText = normalizeOnScreenText(raw.onScreenText, label);
+  const references = normalizeReferences(raw.references, label);
+
+  if (source === "image") {
+    const uploadId = hasValue(raw.uploadId) ? normalizeUploadId(raw.uploadId, label) : null;
+    const imageJobId = hasValue(raw.imageJobId) ? normalizeUploadId(raw.imageJobId, label) : null;
+    if (!uploadId && !imageJobId) {
+      fail(`${label}為靜態圖幕，請選擇圖片`);
+    }
+    if (uploadId && imageJobId) {
+      fail(`${label}的靜態圖幕只能指定一種圖片來源`);
+    }
+    return {
+      id: raw.id,
+      title: optionalText(raw.title, `${label}的標題`, 30) || null,
+      source: "image",
+      uploadId,
+      imageJobId,
+      script: null,
+      scriptOriginal: null,
+      references,
+      startFrameUploadId: null,
+      duration,
+      cut: false,
+      shotSize: null,
+      angle: null,
+      camera: null,
+      action: null,
+      environment: null,
+      characterIds: [],
+      narration,
+      onScreenText,
+    };
+  }
+
+  if (hasValue(raw.uploadId) || hasValue(raw.imageJobId)) {
+    fail(`${label}不是靜態圖幕，不能設定靜態圖片來源`);
+  }
   const shot = {
     id: raw.id,
     title: optionalText(raw.title, `${label}的標題`, 30) || null,
+    source: "generate",
+    uploadId: null,
+    imageJobId: null,
     script: null,
     scriptOriginal: null,
-    references: normalizeReferences(raw.references, label),
-    startFrameUploadId: normalizeStartFrame(raw, index, label),
+    references,
+    startFrameUploadId: normalizeStartFrame(raw, index, previousShot, label),
     duration,
     cut: index > 0 && raw.cut === true,
     shotSize: null,
@@ -179,6 +253,8 @@ const normalizeShot = (raw, index, characterIds) => {
     action: null,
     environment: null,
     characterIds: normalizeCharacterIds(raw.characterIds, characterIds, label),
+    narration,
+    onScreenText,
   };
   const script = optionalText(raw.script, `${label}的腳本`, PROMPT_LIMIT);
   if (script) {
@@ -206,6 +282,17 @@ const normalizeStoryboard = (raw) => {
   if (global.constraints !== undefined && !Array.isArray(global.constraints)) {
     fail("限制條件必須是清單");
   }
+  if (global.subtitles !== undefined && typeof global.subtitles !== "boolean") {
+    fail("字幕設定必須為布林值");
+  }
+  const transition = hasValue(global.transition)
+    ? requiredEnum(global.transition, TRANSITIONS, "轉場設定")
+    : "cut";
+  let voice = DEFAULT_SPEECH_VOICE;
+  if (hasValue(global.voice)) {
+    if (!isValidSpeechVoice(global.voice)) fail("旁白語音不是可用的選項");
+    voice = global.voice;
+  }
   const constraints = (global.constraints || []).map((item, index) =>
     requiredText(item, `第 ${index + 1} 條限制條件`, 200)
   );
@@ -215,7 +302,10 @@ const normalizeStoryboard = (raw) => {
   }
   const characters = normalizeCharacters(global.characters);
   const characterIds = new Set(characters.map((item) => item.id));
-  const shots = raw.shots.map((item, index) => normalizeShot(item, index, characterIds));
+  const shots = [];
+  for (let index = 0; index < raw.shots.length; index += 1) {
+    shots.push(normalizeShot(raw.shots[index], index, characterIds, shots[index - 1] || null));
+  }
   if (new Set(shots.map((shot) => shot.id)).size !== shots.length) fail("分鏡的幕識別碼重複");
   return {
     title: requiredText(raw.title, "分鏡標題", 30),
@@ -224,6 +314,9 @@ const normalizeStoryboard = (raw) => {
       lighting: optionalText(global.lighting, "光線", 300),
       constraints,
       negative: optionalText(global.negative, "負面提示", PROMPT_LIMIT),
+      subtitles: Boolean(global.subtitles),
+      voice,
+      transition,
       characters,
     },
     shots,
@@ -242,13 +335,12 @@ const durationRange = (model) => {
 };
 
 /**
- * Splits a storyboard into model-sized segments. A segment closes when the
- * next shot starts a new scene (`cut`), would exceed the model's per-request
- * length, or would exceed MAX_SEGMENT_SHOTS. A segment that continues the
- * same scene is chained: it starts from the previous segment's last frame,
- * so it is image-to-video. Any other segment is image-to-video when its first
- * shot has a start frame, otherwise text-to-video; for the first segment
- * `mode` "i2v" means the request carries its own start frame.
+ * Splits a storyboard into model-sized dynamic segments. Static image shots
+ * (`source === "image"`) do not produce video-generation jobs; they close any
+ * open dynamic segment and prevent the next dynamic shot from chaining onto an
+ * earlier segment's last frame. A segment closes when the next dynamic shot
+ * starts a new scene (`cut`), follows an image shot, would exceed the model's
+ * per-request length, or would exceed MAX_SEGMENT_SHOTS.
  */
 const planSegments = (storyboard, model, { mode }) => {
   const { min, max } = durationRange(model);
@@ -256,27 +348,43 @@ const planSegments = (storyboard, model, { mode }) => {
   if (total > MAX_PROJECT_SECONDS) {
     fail(`分鏡總長 ${total} 秒，超過 ${MAX_PROJECT_SECONDS} 秒上限`);
   }
+  if (mode === "i2v" && storyboard.shots[0].source === "image") {
+    fail("第 1 幕為靜態圖幕，無法搭配工作區首影格，請移除首影格或改回動態生成");
+  }
+  if (mode === "i2v" && storyboard.shots[0].startFrameUploadId) {
+    fail("已附加首影格，第 1 幕不能再設定首影格，請移除其中一個");
+  }
   const groups = [];
   let current = null;
+  let afterImage = false;
   storyboard.shots.forEach((shot, index) => {
+    if (shot.source === "image") {
+      current = null;
+      afterImage = true;
+      return;
+    }
     if (shot.duration > max) {
       fail(`第 ${index + 1} 幕 ${shot.duration} 秒，超過此模型每段 ${max} 秒的上限`);
     }
     if (
       !current ||
       shot.cut ||
+      afterImage ||
       current.durationSeconds + shot.duration > max ||
       current.shots.length >= MAX_SEGMENT_SHOTS
     ) {
-      current = { start: index, shots: [], durationSeconds: 0, chained: Boolean(current) && !shot.cut };
+      current = {
+        start: index,
+        shots: [],
+        durationSeconds: 0,
+        chained: Boolean(current) && !shot.cut && !afterImage,
+      };
       groups.push(current);
     }
+    afterImage = false;
     current.shots.push(shot);
     current.durationSeconds += shot.duration;
   });
-  if (mode === "i2v" && storyboard.shots[0].startFrameUploadId) {
-    fail("已附加首影格，第 1 幕不能再設定首影格，請移除其中一個");
-  }
   return groups.map((group, index) => {
     const range = group.shots.length > 1
       ? `第 ${group.start + 1}–${group.start + group.shots.length} 幕`
@@ -287,20 +395,50 @@ const planSegments = (storyboard, model, { mode }) => {
       );
     }
     const startFrameUploadId = group.chained ? null : group.shots[0].startFrameUploadId;
+    const usesWorkspaceStartFrame = group.start === 0 && mode === "i2v";
     const segmentMode =
-      group.chained || startFrameUploadId || (index === 0 && mode === "i2v") ? "i2v" : "t2v";
+      group.chained || startFrameUploadId || usesWorkspaceStartFrame ? "i2v" : "t2v";
     const segmentStoryboard = { title: storyboard.title, global: storyboard.global, shots: group.shots };
     return {
       index,
+      startShotIndex: group.start,
       shotIds: group.shots.map((shot) => shot.id),
       durationSeconds: group.durationSeconds,
       chained: group.chained,
+      hasNarration: group.shots.some((shot) => Boolean(shot.narration)),
       mode: segmentMode,
       startFrameUploadId,
       storyboard: segmentStoryboard,
       compiled: compileStoryboard(model.family, segmentStoryboard, { mode: segmentMode }),
     };
   });
+};
+
+const storyboardNeedsRender = (storyboard, segmentCount) => {
+  if (segmentCount !== 1) return true;
+  if (storyboard.global.transition === "fade" && storyboard.shots.length > 1) return true;
+  return storyboard.shots.some(
+    (shot) =>
+      shot.source === "image" ||
+      Boolean(shot.narration) ||
+      (Array.isArray(shot.onScreenText) && shot.onScreenText.length > 0)
+  );
+};
+
+/**
+ * Ensures every narrated shot is at least `ceil(audioDuration + 0.5)` seconds
+ * long, then re-validates the storyboard so per-shot and total limits still hold.
+ */
+const applyNarrationDurations = (storyboard, durationsByShotId) => {
+  if (!durationsByShotId || Object.keys(durationsByShotId).length === 0) return storyboard;
+  const shots = storyboard.shots.map((shot) => {
+    const audioSeconds = Number(durationsByShotId[shot.id]);
+    if (!Number.isFinite(audioSeconds) || audioSeconds <= 0) return shot;
+    const minSeconds = Math.ceil(audioSeconds + NARRATION_PAD_SECONDS);
+    if (minSeconds <= shot.duration) return shot;
+    return { ...shot, duration: minSeconds };
+  });
+  return normalizeStoryboard({ ...storyboard, shots });
 };
 
 const sentence = (value) => value.trim().replace(/[。.．\s]+$/u, "");
@@ -449,6 +587,18 @@ const storyboardWarnings = (storyboard, { hasStartFrame = false } = {}) =>
   storyboard.shots.flatMap((shot) => {
     const warnings = [];
     const add = (code, message) => warnings.push({ shotId: shot.id, code, message });
+    if (shot.narration) {
+      const estimatedSeconds = Math.ceil(countNarrationCharacters(shot.narration) / 4.5 + NARRATION_PAD_SECONDS);
+      if (estimatedSeconds > shot.duration) {
+        add(
+          "narration_too_long",
+          `旁白約需 ${estimatedSeconds} 秒，超過目前 ${shot.duration} 秒；生成時會自動拉長此幕並重排分段`
+        );
+      }
+    }
+    if (shot.source === "image") {
+      return warnings;
+    }
     if (shot.script) {
       const unbound = [...shot.script.matchAll(IMAGE_REFERENCES)]
         .map((match) => match[0])
@@ -492,6 +642,8 @@ const storyboardText = (storyboard) =>
       shot.scriptOriginal,
       shot.action,
       shot.environment,
+      shot.narration,
+      ...(shot.onScreenText || []),
     ]),
   ].filter(Boolean).join("\n");
 
@@ -574,13 +726,21 @@ module.exports = {
   ANGLES,
   CAMERAS,
   MAX_CHARACTERS,
+  MAX_IMAGE_SHOT_SECONDS,
+  MAX_NARRATION_LENGTH,
+  MAX_ON_SCREEN_LINE_LENGTH,
+  MAX_ON_SCREEN_LINES,
   MAX_PROJECT_SECONDS,
   MAX_SCRIPT_SOURCE,
   MAX_SEGMENT_SHOTS,
   MAX_SHOT_REFERENCES,
   MAX_SHOTS,
+  NARRATION_PAD_SECONDS,
   PROMPT_LIMIT,
   SHOT_SIZES,
+  SHOT_SOURCES,
+  TRANSITIONS,
+  applyNarrationDurations,
   assertQuotedTextPreserved,
   assertRevisionScope,
   assertSceneFidelity,
@@ -592,5 +752,6 @@ module.exports = {
   planSegments,
   quotedTexts,
   storyboardDuration,
+  storyboardNeedsRender,
   storyboardWarnings,
 };

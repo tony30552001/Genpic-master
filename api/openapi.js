@@ -440,13 +440,23 @@ addOperation("/api/video-projects/{id}/cancel", "post", {
 paths["/api/video-projects/{id}/cancel"].post.responses[409] = response("No queued segments remain to cancel");
 
 addOperation("/api/video-projects/{id}/render", "post", {
-  summary: "Retry merging a finished multi-segment project",
-  description: "Requires every segment to have succeeded. Queues a render job that joins the segments in order; matching segments are stream-copied, others are re-encoded to the first segment's size and frame rate. While a render is queued, processing or succeeded, the call returns that render instead of queueing another; after a failure it queues a new one. Poll GET /api/video-projects/{id} for render.status.",
+  summary: "Retry rendering a finished video project",
+  description: "Requires every dynamic segment to have succeeded. Queues a render job that composes the full storyboard timeline (dynamic segments, static image shots, Azure AI Speech narration, ASS subtitles, on-screen text overlays, and cut/fade transitions) and exports both MP4 and SRT. While a render is queued, processing or succeeded, the call returns that render instead of queueing another; after a failure it queues a new one. Poll GET /api/video-projects/{id} for render.status.",
   tags: ["Video"],
   csrf: true,
   parameters: pathParameters("id"),
   successStatuses: [202],
 });
+
+addOperation("/api/video-projects/{id}/subtitles", "get", {
+  summary: "Download the SRT subtitles of an owned rendered video project",
+  description: "Returns the UTF-8 SRT file generated during timeline rendering when narration is present. Returns 404 when the project has no subtitle track.",
+  tags: ["Video"],
+  parameters: pathParameters("id"),
+  successContentType: "text/plain; charset=utf-8",
+  successSchema: { type: "string" },
+});
+paths["/api/video-projects/{id}/subtitles"].get.responses[404] = response("No subtitle track exists for this project");
 
 addOperation("/api/video-projects/{id}/retry", "post", {
   summary: "Requeue the failed segments of an owned video project",
@@ -896,7 +906,7 @@ for (const path of ["/api/management", "/api/management/{resource}", "/api/manag
 
 addOperation("/api/management/video-usage", "get", {
   summary: "Report the current tenant's video usage and estimated USD cost (admin only)",
-  description: "Filters use inclusive Taiwan calendar dates. Only successful provider-generated segments contribute to generatedSeconds. Cost uses the current catalog pricePerSecondUsd; unpriced seconds are separate from zero-cost seconds. knownOutputMinutes counts successful renders. Narration usage is not yet available.",
+  description: "Filters use inclusive Taiwan calendar dates. Only successful provider-generated segments contribute to generatedSeconds. Cost uses the current catalog pricePerSecondUsd; unpriced seconds are separate from zero-cost seconds. knownOutputMinutes and narrationCharacters aggregate successful renders.",
   tags: ["Administration"],
   parameters: [
     { name: "userId", in: "query", schema: { type: "string", format: "uuid" } },
@@ -920,6 +930,23 @@ addOperation("/api/management/video-usage", "get", {
       generatedSeconds: { type: "integer" }, unpricedSeconds: { type: "integer" }, knownCostUsd: { type: "number", nullable: true },
       renderCount: { type: "integer" }, knownOutputMinutes: { type: "number", nullable: true },
       unknownDurationCount: { type: "integer" }, narrationCharacters: { type: "integer", nullable: true },
+    },
+  },
+});
+
+addOperation("/api/management/speech-tests", "post", {
+  summary: "Test the tenant's Azure AI Speech TTS configuration (admin only)",
+  description: "Synthesizes a short zh-TW test phrase using the supplied or saved tenant Speech credentials and returns voice, audio duration, cue count, and character count.",
+  tags: ["Administration"],
+  body: true,
+  csrf: true,
+  bodySchema: {
+    type: "object",
+    properties: {
+      speechRegion: { type: "string", nullable: true },
+      speechEndpoint: { type: "string", format: "uri", nullable: true },
+      speechApiKey: { type: "string", writeOnly: true },
+      voice: { type: "string" },
     },
   },
 });
@@ -1176,19 +1203,25 @@ module.exports = {
               constraints: { type: "array", maxItems: 8, items: { type: "string", maxLength: 200 } },
               negative: { type: "string", maxLength: PROMPT_LIMIT },
               characters: { type: "array", maxItems: MAX_CHARACTERS, items: { $ref: "#/components/schemas/VideoCharacter" } },
+              transition: { type: "string", enum: ["cut", "fade"] },
+              voice: { type: "string", description: "Azure AI Speech zh-TW neural voice name" },
+              subtitles: { type: "boolean", description: "Whether to burn ASS subtitles into the rendered MP4" },
             },
           },
           shots: {
             type: "array",
             minItems: 1,
             maxItems: MAX_SHOTS,
-            description: "A shot is either structured (script null) or a script shot (shotSize through environment null).",
+            description: "A shot is either dynamic (structured or script) or a static image shot (source: 'image').",
             items: {
               type: "object",
               required: ["id", "duration"],
               properties: {
                 id: { type: "string", pattern: "^[A-Za-z0-9_-]{1,40}$" },
                 title: { type: ["string", "null"], maxLength: 30 },
+                source: { type: "string", enum: ["video", "image"] },
+                uploadId: { type: ["string", "null"], format: "uuid", description: "Owned uploaded image for a static image shot (exclusive with imageJobId)" },
+                imageJobId: { type: ["string", "null"], format: "uuid", description: "Owned succeeded image job for a static image shot (exclusive with uploadId)" },
                 script: { type: ["string", "null"], maxLength: PROMPT_LIMIT },
                 scriptOriginal: { type: ["string", "null"] },
                 references: {
@@ -1209,7 +1242,7 @@ module.exports = {
                   format: "uuid",
                   description: "Image upload that starts this shot's segment as image-to-video; only on the first shot or a cut shot, and not together with a request start frame",
                 },
-                duration: { type: "integer", minimum: 1, maximum: 15 },
+                duration: { type: "integer", minimum: 1, maximum: 30 },
                 cut: { type: "boolean", description: "Starts a new scene and a new text-to-video segment; ignored on the first shot" },
                 shotSize: { type: ["string", "null"], enum: [...Object.keys(SHOT_SIZES), null] },
                 angle: { type: ["string", "null"], enum: [...Object.keys(ANGLES), null] },
@@ -1217,6 +1250,13 @@ module.exports = {
                 action: { type: ["string", "null"], maxLength: 1000 },
                 environment: { type: ["string", "null"], maxLength: 500 },
                 characterIds: { type: "array", items: { type: "string" }, description: "ids from global.characters" },
+                narration: { type: ["string", "null"], maxLength: 400, description: "Spoken zh-TW narration synthesized via Azure AI Speech during render" },
+                onScreenText: {
+                  type: "array",
+                  maxItems: 4,
+                  description: "On-screen text overlay lines burned in during render",
+                  items: { type: "string", maxLength: 80 },
+                },
               },
             },
           },

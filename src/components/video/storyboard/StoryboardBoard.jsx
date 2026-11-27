@@ -3,7 +3,15 @@ import { Plus, X } from "@/components/icons/lucideControls";
 import { Clapperboard } from "@/components/icons/lucideContent";
 import { Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
-import { characterModeLabel, scriptImageLabels, segmentStarts, sendModeLabel, storyboardSeconds } from "@/lib/videoStoryboard";
+import {
+  characterModeLabel,
+  scriptImageLabels,
+  segmentStarts,
+  sendModeLabel,
+  storyboardHasNarration,
+  storyboardNeedsRender,
+  storyboardSeconds,
+} from "@/lib/videoStoryboard";
 import CharacterList from "./CharacterList";
 import GlobalCard from "./GlobalCard";
 import ShotCard from "./ShotCard";
@@ -17,6 +25,8 @@ import { boardStatus, compiledPreview, estimateLabel, storyboardActions } from "
 export default function StoryboardBoard({
   storyboard,
   model,
+  speech = null,
+  imageHistory = [],
   canGenerate,
   generateBlocker,
   onGenerate,
@@ -52,6 +62,8 @@ export default function StoryboardBoard({
   const status = boardStatus(storyboard);
   const characterMode = characterModeLabel(board.segments, model?.family);
   const startsAt = segmentStarts(board.segments);
+  const hasNarration = storyboardHasNarration(board.storyboard);
+  const needsRender = Boolean(board.needsRender ?? storyboardNeedsRender(board.storyboard, board.segments?.length));
   const busy = Boolean(pending);
   const jump = (shotId) => {
     const card = document.getElementById(`storyboard-shot-${shotId}`);
@@ -81,7 +93,7 @@ export default function StoryboardBoard({
         )}
         <StoryboardTimeline shots={shots} segments={board.segments} warnedIds={warnedIds} changedIds={board.changedShotIds}
           onJump={jump} onReorder={actions.reorder} busy={busy} />
-        <GlobalCard global={global} onChange={actions.updateGlobal}>
+        <GlobalCard global={global} speech={speech} hasNarration={hasNarration} onChange={actions.updateGlobal}>
           <CharacterList
             characters={global.characters}
             imageLabels={scriptImageLabels(board.storyboard)}
@@ -103,9 +115,11 @@ export default function StoryboardBoard({
             canDelete={shots.length > 1}
             characters={global.characters}
             previews={actions.previews}
+            imageHistory={imageHistory}
             startFrameLocked={actions.startFrameLocked}
             frame={storyboard.frame}
             onGenerateFrame={storyboard.generateFrame}
+            onUploadShotImage={(file) => actions.uploadShotImage(shot.id, file)}
             onPromoteReference={actions.promoteReference}
             onChange={(patch) => actions.updateShot(shot.id, patch)}
             onSetStartFrame={(uploadId) => actions.setStartFrame(shot.id, uploadId)}
@@ -131,7 +145,7 @@ export default function StoryboardBoard({
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="shrink-0">送出方式</span>
           <span className="min-w-0 truncate">
-            {model?.label} · {sendModeLabel(board.segments)}
+            {board.segments?.length === 0 ? sendModeLabel(board.segments, needsRender) : `${model?.label} · ${sendModeLabel(board.segments, needsRender)}`}
           </span>
           <button
             type="button"

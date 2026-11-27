@@ -123,19 +123,19 @@ describe("AdminPanel section loading", () => {
     expect(getAdminVideoUsage).not.toHaveBeenCalled();
   });
 
-  it("shows partial pricing, unavailable narration and actual output minutes; reapplies report filters", async () => {
+  it("shows partial pricing, narration characters and actual output minutes; reapplies report filters", async () => {
     const row = { userId: "u", displayName: "測試帳號", videoUnlimited: true, modelKey: "free", mode: "t2v",
       durationSeconds: 5, generateAudio: true, usedElements: false, jobCount: 1, generatedSeconds: 5, pricePerSecondUsd: 0, estimatedCostUsd: 0 };
     getAdminVideoUsage.mockResolvedValueOnce({
       rows: [row, { ...row, modelKey: "unknown", usedElements: null, pricePerSecondUsd: null, estimatedCostUsd: null }],
-      generatedSeconds: 10, unpricedSeconds: 5, knownCostUsd: 0, renderCount: 1, knownOutputMinutes: 1.5, unknownDurationCount: 0,
+      generatedSeconds: 10, unpricedSeconds: 5, knownCostUsd: 0, renderCount: 1, knownOutputMinutes: 1.5, unknownDurationCount: 0, narrationCharacters: 320,
     }).mockRejectedValueOnce(new Error("報表暫時無法載入"));
     renderPanel();
     await screen.findByText("alice@example.com");
     fireEvent.click(screen.getByRole("button", { name: "影片用量" }));
     expect(await screen.findByText("1.5 分鐘")).toBeVisible();
     expect(screen.getByText("另有 5 秒未定價，未計入成本")).toBeVisible();
-    expect(screen.getByText("尚無語音合成用量紀錄")).toBeVisible();
+    expect(screen.getByText("320 字")).toBeVisible();
     const free = screen.getByText("free").closest("tr");
     expect(within(free).getByText("不限額")).toBeVisible();
     expect(within(free).getAllByText(/US\$0\.00/)).toHaveLength(2);

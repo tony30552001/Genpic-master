@@ -3,15 +3,22 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const blobStoragePath = require.resolve("../blobStorage");
+const uploadStoragePath = require.resolve("../uploadStorage");
 const clientPath = require.resolve("../videoRenderClient");
 const originalBlobStorage = require(blobStoragePath);
+const originalUploadStorage = require(uploadStoragePath);
 
 const signGeneratedBlobUrl = vi.fn(
   ({ blobName, permissions }) => `https://acct.blob.core.windows.net/generated/${blobName}?sp=${permissions}`
 );
+const issueReadGrant = vi.fn((upload) => ({
+  blobUrl: `https://acct.blob.core.windows.net/uploads/${upload.blob_name}`,
+  sasToken: "sp=r",
+}));
 
 const loadClient = () => {
   require.cache[blobStoragePath].exports = { ...originalBlobStorage, signGeneratedBlobUrl };
+  require.cache[uploadStoragePath].exports = { ...originalUploadStorage, issueReadGrant };
   delete require.cache[clientPath];
   return require("../videoRenderClient");
 };
@@ -29,6 +36,7 @@ describe("videoRenderClient.extractLastFrame", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     require.cache[blobStoragePath].exports = originalBlobStorage;
+    require.cache[uploadStoragePath].exports = originalUploadStorage;
     delete process.env.VIDEO_RENDER_SERVICE_URL;
     delete process.env.VIDEO_RENDER_SERVICE_KEY;
   });
@@ -84,27 +92,89 @@ describe("videoRenderClient.extractLastFrame", () => {
     expect((await attempt(vi.fn().mockResolvedValue(jsonResponse(422, {})))).retryable).toBe(false);
   });
 
-  it("joins segments through /render with read URLs in order and a write URL for the output", async () => {
+  it("composes timeline clips, image uploads, narrations and subtitles through /render", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { contentType: "video/mp4", sizeBytes: 8192, durationSeconds: 20, copied: true })
+      jsonResponse(200, {
+        contentType: "video/mp4",
+        sizeBytes: 8192,
+        subtitleSizeBytes: 256,
+        durationSeconds: 19.5,
+        width: 1920,
+        height: 1080,
+        copied: false,
+      })
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await loadClient().concatSegments({
-      segmentBlobNames: ["a.mp4", "b.mp4"],
+    const result = await loadClient().renderTimeline({
+      width: 1920,
+      height: 1080,
+      fps: 24,
+      transition: "fade",
+      burnSubtitles: true,
+      clips: [
+        {
+          kind: "video",
+          blobName: "a.mp4",
+          sourceAudio: "duck",
+          narrations: [{ blobName: "narr/s1.wav", offset: 0, cues: [{ start: 0, end: 1.5, text: "早安" }] }],
+          overlays: [{ start: 0, end: 5, lines: ["步驟一"] }],
+        },
+        {
+          kind: "image",
+          upload: { blob_name: "ready/u1" },
+          duration: 6,
+          sourceAudio: "mute",
+          narrations: [],
+          overlays: [],
+        },
+      ],
       outputBlobName: "videos/projects/p1/r1-1.mp4",
+      subtitleBlobName: "videos/projects/p1/r1-1.srt",
     });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://render.example/render");
     expect(JSON.parse(init.body)).toEqual({
-      segmentUrls: [
-        "https://acct.blob.core.windows.net/generated/a.mp4?sp=r",
-        "https://acct.blob.core.windows.net/generated/b.mp4?sp=r",
+      width: 1920,
+      height: 1080,
+      fps: 24,
+      transition: "fade",
+      transitionDuration: 0.5,
+      burnSubtitles: true,
+      clips: [
+        {
+          kind: "video",
+          url: "https://acct.blob.core.windows.net/generated/a.mp4?sp=r",
+          sourceAudio: "duck",
+          narrations: [
+            {
+              url: "https://acct.blob.core.windows.net/generated/narr/s1.wav?sp=r",
+              offset: 0,
+              cues: [{ start: 0, end: 1.5, text: "早安" }],
+            },
+          ],
+          overlays: [{ start: 0, end: 5, lines: ["步驟一"] }],
+        },
+        {
+          kind: "image",
+          url: "https://acct.blob.core.windows.net/uploads/ready/u1?sp=r",
+          duration: 6,
+          sourceAudio: "mute",
+          narrations: [],
+          overlays: [],
+        },
       ],
       outputUrl: "https://acct.blob.core.windows.net/generated/videos/projects/p1/r1-1.mp4?sp=cw",
+      subtitleUrl: "https://acct.blob.core.windows.net/generated/videos/projects/p1/r1-1.srt?sp=cw",
     });
-    expect(result).toMatchObject({ blobName: "videos/projects/p1/r1-1.mp4", sizeBytes: 8192, durationSeconds: 20 });
+    expect(result).toMatchObject({
+      blobName: "videos/projects/p1/r1-1.mp4",
+      subtitleBlobName: "videos/projects/p1/r1-1.srt",
+      subtitleSizeBytes: 256,
+      sizeBytes: 8192,
+      durationSeconds: 19.5,
+    });
   });
 
   it("refuses to run without service configuration", async () => {

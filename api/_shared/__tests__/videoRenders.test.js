@@ -7,7 +7,7 @@ const videoRenderClient = require("../videoRenderClient");
 
 db.query = vi.fn();
 db.getPool = vi.fn();
-videoRenderClient.concatSegments = vi.fn();
+videoRenderClient.renderTimeline = vi.fn();
 videoRenderClient.isConfigured = vi.fn();
 
 const { processNextVideoRender } = require("../videoRenders");
@@ -39,10 +39,40 @@ const respond = (routes) =>
 
 const lastUpdate = () => db.query.mock.calls.at(-1);
 
+const projectRow = {
+  rows: [
+    {
+      id: "p1",
+      tenant_id: "t",
+      user_id: "u",
+      model_key: "minimax",
+      model_family: "minimax-hailuo-2.3",
+      aspect_ratio: "16:9",
+      generate_audio: true,
+      storyboard: {
+        title: "測試影片",
+        global: { subtitles: true, transition: "fade" },
+        shots: [
+          { id: "s1", source: "generate", duration: 10, onScreenText: ["開場標題"] },
+          { id: "s2", source: "generate", duration: 10, onScreenText: [] },
+        ],
+      },
+      narration_assets: {
+        s1: {
+          blobName: "videos/projects/p1/narration/s1.wav",
+          durationSeconds: 3.2,
+          characters: 12,
+          cues: [{ start: 0, end: 3.1, text: "這是第一幕旁白。" }],
+        },
+      },
+    },
+  ],
+};
+
 const succeededSegments = {
   rows: [
-    { status: "succeeded", result_blob_name: "videos/jobs/a/1.mp4" },
-    { status: "succeeded", result_blob_name: "videos/jobs/b/1.mp4" },
+    { id: "j1", segment_index: 0, status: "succeeded", result_blob_name: "videos/jobs/a/1.mp4", storyboard: { shots: [{ id: "s1", duration: 10, onScreenText: ["開場標題"] }] } },
+    { id: "j2", segment_index: 1, status: "succeeded", result_blob_name: "videos/jobs/b/1.mp4", storyboard: { shots: [{ id: "s2", duration: 10, onScreenText: [] }] } },
   ],
 };
 
@@ -52,31 +82,76 @@ beforeEach(() => {
 });
 
 describe("video render worker", () => {
-  it("joins the segments into a blob named by the lock and records it under that lock", async () => {
+  it("builds a timeline render plan, ducks MiniMax audio under narration, and records subtitle metadata under lock", async () => {
     claim();
-    respond([["FROM video_generation_jobs", succeededSegments]]);
-    videoRenderClient.concatSegments.mockResolvedValue({
+    respond([
+      ["FROM video_projects", projectRow],
+      ["FROM video_generation_jobs", succeededSegments],
+    ]);
+    videoRenderClient.renderTimeline.mockResolvedValue({
       blobName: "videos/projects/p1/r1-3.mp4",
+      subtitleBlobName: "videos/projects/p1/r1-3.srt",
+      subtitleSizeBytes: 128,
       sizeBytes: 2048,
-      durationSeconds: 20,
+      durationSeconds: 19.5,
     });
 
     await processNextVideoRender();
 
-    expect(videoRenderClient.concatSegments).toHaveBeenCalledWith({
-      segmentBlobNames: ["videos/jobs/a/1.mp4", "videos/jobs/b/1.mp4"],
+    expect(videoRenderClient.renderTimeline).toHaveBeenCalledWith({
+      width: 1920,
+      height: 1080,
+      fps: 24,
+      transition: "fade",
+      transitionDuration: 0.5,
+      burnSubtitles: true,
+      clips: [
+        {
+          kind: "video",
+          blobName: "videos/jobs/a/1.mp4",
+          sourceAudio: "duck",
+          narrations: [
+            {
+              blobName: "videos/projects/p1/narration/s1.wav",
+              offset: 0,
+              cues: [{ start: 0, end: 3.1, text: "這是第一幕旁白。" }],
+            },
+          ],
+          overlays: [{ start: 0, end: 10, lines: ["開場標題"] }],
+        },
+        {
+          kind: "video",
+          blobName: "videos/jobs/b/1.mp4",
+          sourceAudio: "keep",
+          narrations: [],
+          overlays: [],
+        },
+      ],
       outputBlobName: "videos/projects/p1/r1-3.mp4",
+      subtitleBlobName: "videos/projects/p1/r1-3.srt",
     });
     const [sql, values] = lastUpdate();
     expect(sql).toContain("status = 'succeeded'");
     expect(sql).toContain("lock_version = $2");
-    expect(values).toEqual(["r1", 3, "videos/projects/p1/r1-3.mp4", 2048, 20]);
+    expect(values).toEqual([
+      "r1",
+      3,
+      "videos/projects/p1/r1-3.mp4",
+      2048,
+      19.5,
+      "videos/projects/p1/r1-3.srt",
+      128,
+      12,
+    ]);
   });
 
   it("requeues a retryable failure while attempts remain", async () => {
     claim({ attempts: 2 });
-    respond([["FROM video_generation_jobs", succeededSegments]]);
-    videoRenderClient.concatSegments.mockRejectedValue(
+    respond([
+      ["FROM video_projects", projectRow],
+      ["FROM video_generation_jobs", succeededSegments],
+    ]);
+    videoRenderClient.renderTimeline.mockRejectedValue(
       new VideoRenderError("影片組合服務逾時未回應", "video_render_timeout", { retryable: true })
     );
 
@@ -89,8 +164,11 @@ describe("video render worker", () => {
 
   it("fails a retryable failure on the last attempt", async () => {
     claim({ attempts: 3 });
-    respond([["FROM video_generation_jobs", succeededSegments]]);
-    videoRenderClient.concatSegments.mockRejectedValue(
+    respond([
+      ["FROM video_projects", projectRow],
+      ["FROM video_generation_jobs", succeededSegments],
+    ]);
+    videoRenderClient.renderTimeline.mockRejectedValue(
       new VideoRenderError("影片組合服務逾時未回應", "video_render_timeout", { retryable: true })
     );
 
@@ -104,6 +182,7 @@ describe("video render worker", () => {
   it("fails without calling the service when a segment is not finished", async () => {
     claim();
     respond([
+      ["FROM video_projects", projectRow],
       [
         "FROM video_generation_jobs",
         { rows: [succeededSegments.rows[0], { status: "failed", result_blob_name: null }] },
@@ -112,7 +191,7 @@ describe("video render worker", () => {
 
     await processNextVideoRender();
 
-    expect(videoRenderClient.concatSegments).not.toHaveBeenCalled();
+    expect(videoRenderClient.renderTimeline).not.toHaveBeenCalled();
     const [sql, values] = lastUpdate();
     expect(sql).toContain("status = 'failed'");
     expect(values).toEqual(["r1", 3, "segments_not_ready", "影片段落尚未全部完成，無法合併"]);
@@ -123,7 +202,10 @@ describe("requestVideoRender", () => {
   const owner = { projectId: "p1", tenantId: "t", userId: "u" };
   const project = (statuses, latest = null) =>
     respond([
-      ["FROM video_projects", { rows: [{ id: "p1", model_key: "kling", storyboard: {}, created_at: "now" }] }],
+      [
+        "FROM video_projects",
+        { rows: [{ id: "p1", model_key: "kling", storyboard: {}, needs_render: statuses.length !== 1, created_at: "now" }] },
+      ],
       [
         "FROM video_generation_jobs",
         { rows: statuses.map((status, index) => ({
@@ -139,13 +221,16 @@ describe("requestVideoRender", () => {
     let inserted = false;
     db.query.mockImplementation(async (sql) => {
       if (sql.includes("INSERT INTO video_renders")) inserted = true;
-      if (inserted && sql.includes("FROM video_renders")) return { rows: [{ id: "r1", status: "queued", completed_at: null }] };
+      if (inserted && sql.includes("FROM video_renders")) {
+        return { rows: [{ id: "r1", status: "queued", subtitle_blob_name: null, completed_at: null }] };
+      }
       return respondNormally(sql);
     });
 
     await expect(requestVideoRender(owner)).resolves.toEqual({
       renderId: "r1",
       status: "queued",
+      hasSubtitles: false,
       completedAt: null,
     });
     const insert = db.query.mock.calls.find(([sql]) => sql.includes("INSERT INTO video_renders"));

@@ -13,6 +13,7 @@ import {
   listAdminLlmModels,
   testAdminImageModel,
   testAdminLlmModel,
+  testAdminSpeech,
   updateAdminImageModel,
   updateAdminModelSettings,
   listAdminVideoModels,
@@ -40,6 +41,7 @@ vi.mock("../../../services/adminService", () => ({
   updateAdminVideoModel: vi.fn(),
   deleteAdminVideoModel: vi.fn(),
   testAdminVideoModel: vi.fn(),
+  testAdminSpeech: vi.fn(),
   updateAdminVideoSettings: vi.fn(),
 }));
 vi.mock("../../../services/aiService", () => ({ waitForImageJob: vi.fn(), waitForVideoProject: vi.fn() }));
@@ -276,5 +278,49 @@ describe("AiModelSettings", () => {
     const [retry] = await screen.findAllByRole("button", { name: "重新載入圖片模型設定" });
     await user.click(retry);
     expect(await screen.findByLabelText("圖片生成模型")).toHaveTextContent("Alpha");
+  });
+
+  it("hydrates flat Azure Speech settings, tests connectivity, and saves flat fields", async () => {
+    getAdminModelSettings.mockResolvedValue({
+      modelPolicy: { allowedModels: ["alpha"], defaultModel: "alpha", defaultEditModel: "alpha" },
+      videoSettings: {
+        allowedModels: ["kling-v3"],
+        dailyQuotaPerUser: 5,
+        submitsPerMinute: 2,
+        speechRegion: "eastasia",
+        speechEndpoint: null,
+        speechDefaultVoice: "zh-TW-YunJheNeural",
+        hasSpeechKey: true,
+        speechEnabled: true,
+      },
+    });
+    testAdminSpeech.mockResolvedValue({
+      voice: "zh-TW-YunJheNeural",
+      durationSeconds: 1.4,
+      cueCount: 2,
+      characters: 14,
+    });
+    const user = await renderPage();
+
+    expect(screen.getByDisplayValue("eastasia")).toBeInTheDocument();
+    expect(screen.getByText("已啟用")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "測試語音連線" }));
+    await waitFor(() => expect(testAdminSpeech).toHaveBeenCalledWith({
+      speechRegion: "eastasia",
+      speechEndpoint: null,
+      voice: "zh-TW-YunJheNeural",
+    }));
+    expect(await screen.findByRole("status")).toHaveTextContent("1.4 秒");
+
+    await user.click(screen.getByRole("button", { name: "儲存語音設定" }));
+    await waitFor(() => expect(updateAdminVideoSettings).toHaveBeenCalledWith({
+      allowedModels: ["kling-v3"],
+      dailyQuotaPerUser: 5,
+      submitsPerMinute: 2,
+      speechRegion: "eastasia",
+      speechEndpoint: null,
+      speechDefaultVoice: "zh-TW-YunJheNeural",
+    }));
   });
 });

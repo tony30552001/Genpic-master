@@ -66,6 +66,9 @@ module.exports = async function (context, req) {
       videoSettings: {
         dailyQuotaPerUser: videoSettings.dailyQuotaPerUser,
         remainingQuota: remainingVideoQuota,
+        speechEnabled: videoSettings.speechEnabled,
+        speechDefaultVoice: videoSettings.speechDefaultVoice,
+        speechVoices: videoSettings.speechVoices,
       },
     },
     200,

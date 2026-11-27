@@ -10,6 +10,7 @@ const {
   createVideoProject,
   getVideoProjectForUser,
   requestVideoRender,
+  resolveProjectSubtitles,
   resolveProjectVideo,
   retryVideoProject,
 } = require("../_shared/videoProjects");
@@ -114,6 +115,31 @@ module.exports = async function (context, req) {
           ...corsHeaders(req),
           "Content-Type": video.contentType,
           "Content-Length": video.sizeBytes || undefined,
+          "Cache-Control": "private, max-age=31536000, immutable",
+        },
+        body: blob.readableStreamBody,
+      };
+      return;
+    }
+    if (method === "GET" && action === "subtitles") {
+      const subtitle = await resolveProjectSubtitles({
+        projectId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+      });
+      if (!subtitle) {
+        context.res = error("此影片專案沒有字幕檔", "not_found", 404, req);
+        return;
+      }
+      const blob = await getGeneratedBlobDownload({ blobName: subtitle.blobName });
+      const safeName = encodeURIComponent(`${subtitle.title || "subtitles"}.srt`);
+      context.res = {
+        status: 200,
+        headers: {
+          ...corsHeaders(req),
+          "Content-Type": subtitle.contentType,
+          "Content-Length": subtitle.sizeBytes || undefined,
+          "Content-Disposition": `attachment; filename="subtitles.srt"; filename*=UTF-8''${safeName}`,
           "Cache-Control": "private, max-age=31536000, immutable",
         },
         body: blob.readableStreamBody,

@@ -1,20 +1,33 @@
 import React, { useId, useState } from "react";
 import { ChevronDown, Plus, X } from "@/components/icons/lucideControls";
+import { SelectField } from "@/components/ui/select-field";
+import { DEFAULT_SPEECH_VOICES, TRANSITION_LABELS, toOptions } from "@/lib/videoStoryboard";
 import { cn } from "@/lib/utils";
 
 const MAX_CONSTRAINTS = 8;
+const TRANSITION_OPTIONS = toOptions(TRANSITION_LABELS);
 
 const fieldClass =
   "h-8 w-full min-w-0 rounded-lg border border-border bg-transparent px-2.5 text-[13px] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none";
 
-/** Whole-video settings (style, lighting, consistency, negative) as a collapsible card; `children` renders below them. */
-export default function GlobalCard({ global, onChange, defaultOpen = true, children }) {
+/** Whole-video settings (style, lighting, consistency, negative, narration & output) as a collapsible card; `children` renders below them. */
+export default function GlobalCard({ global, speech = null, hasNarration = false, onChange, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
   const [draftConstraint, setDraftConstraint] = useState("");
   const id = useId();
   const characterCount = global.characters.length;
+  const voices = speech?.voices?.length ? speech.voices : DEFAULT_SPEECH_VOICES;
+  const selectedVoice = global.voice || speech?.defaultVoice || voices[0].id;
+  const transition = global.transition || "cut";
+  const speechUnconfigured = speech != null && !speech.configured;
   const summary =
-    [global.style, global.lighting, characterCount ? `${characterCount} 個角色` : ""].filter(Boolean).join(" · ") || "尚未設定";
+    [
+      global.style,
+      global.lighting,
+      characterCount ? `${characterCount} 個角色` : "",
+      global.subtitles ? "燒錄字幕" : "",
+      transition === "fade" ? "淡化轉場" : "",
+    ].filter(Boolean).join(" · ") || "尚未設定";
 
   const addConstraint = () => {
     const text = draftConstraint.trim();
@@ -122,6 +135,40 @@ export default function GlobalCard({ global, onChange, defaultOpen = true, child
               placeholder="例如：blur, distort, low quality"
               onChange={(event) => onChange({ negative: event.target.value })}
             />
+            <span className="text-muted-foreground">轉場</span>
+            <SelectField
+              aria-label="幕間轉場方式"
+              className="h-8 text-xs"
+              value={transition}
+              onValueChange={(value) => onChange({ transition: value })}
+              options={TRANSITION_OPTIONS}
+            />
+            <span className="text-muted-foreground">旁白語音</span>
+            <div className="min-w-0 space-y-1">
+              <SelectField
+                aria-label="旁白語音"
+                className="h-8 text-xs"
+                value={selectedVoice}
+                onValueChange={(value) => onChange({ voice: value })}
+                options={voices.map((voice) => ({ value: voice.id, label: voice.label }))}
+              />
+              {speechUnconfigured && (
+                <p className={cn("text-[11px] leading-snug", hasNarration ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
+                  管理員尚未設定 Azure AI Speech；含旁白的分鏡需先完成語音設定才能合成。
+                </p>
+              )}
+            </div>
+            <span className="text-muted-foreground">字幕</span>
+            <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-foreground">
+              <input
+                type="checkbox"
+                checked={Boolean(global.subtitles)}
+                onChange={(event) => onChange({ subtitles: event.target.checked })}
+                className="size-4 accent-primary"
+                aria-label="燒錄旁白字幕"
+              />
+              <span>依旁白時間軸燒錄繁中字幕（成片同時提供 .srt 下載）</span>
+            </label>
           </div>
           {children}
         </div>
@@ -129,3 +176,4 @@ export default function GlobalCard({ global, onChange, defaultOpen = true, child
     </section>
   );
 }
+

@@ -116,4 +116,28 @@ describe("useVideoGeneration", () => {
     });
     expect(result.current.turns).toEqual([original]);
   });
+
+  it("triggers backend render for 0-segment static-only projects and syncs expanded storyboard & subtitles", async () => {
+    const expandedBoard = { ...storyboard, shots: [{ source: "image", imageUploadId: "img-1", duration: 9, narration: "長旁白測試" }] };
+    const staticProject = { projectId: "p-static", status: "succeeded", needsRender: true, storyboard: expandedBoard, segments: [] };
+    createVideoProject.mockResolvedValue(staticProject);
+    waitForVideoProject.mockResolvedValue(staticProject);
+    waitForVideoRender.mockResolvedValue({ status: "succeeded", hasSubtitles: true, storyboard: expandedBoard });
+    const onSaved = vi.fn();
+    const onMerged = vi.fn();
+    const { result } = renderHook(() => useVideoGeneration({ onSaved, onMerged }));
+
+    await act(() => result.current.submit(request));
+    expect(waitForVideoRender).toHaveBeenCalledWith({ projectId: "p-static", signal: expect.any(AbortSignal) });
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onMerged).toHaveBeenCalledOnce();
+    expect(result.current.turns[0]).toMatchObject({
+      status: "succeeded",
+      needsRender: true,
+      mergeStatus: "merged",
+      hasSubtitles: true,
+      storyboard: expandedBoard,
+      saved: true,
+    });
+  });
 });

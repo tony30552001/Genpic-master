@@ -28,15 +28,16 @@ export default function useVideoGeneration({ onSaved, onMerged, initialTurns = n
   const finishRender = useCallback(async (turn, signal, retry = false) => {
     const { clientId, projectId } = turn;
     update(clientId, { mergeStatus: "merging", mergeError: null });
+    let render = null;
     try {
       if (retry) await renderVideoProject({ projectId });
-      await waitForVideoRender({ projectId, signal });
+      render = await waitForVideoRender({ projectId, signal });
     } catch (error) {
       if (!signal.aborted) update(clientId, { mergeStatus: "failed", mergeError: error.message });
       return;
     }
     if (signal.aborted) return;
-    update(clientId, { mergeStatus: "merged", saved: true });
+    update(clientId, { mergeStatus: "merged", saved: true, hasSubtitles: Boolean(render?.hasSubtitles) });
     try {
       await callbacks.current.onMerged?.();
     } catch (error) {
@@ -48,16 +49,24 @@ export default function useVideoGeneration({ onSaved, onMerged, initialTurns = n
     const { clientId, projectId } = turn;
     const project = await waitForVideoProject({
       projectId, signal,
-      onProgress: ({ status, segments }) => {
-        if (!signal.aborted) update(clientId, { status, segments });
+      onProgress: ({ status, segments, needsRender, hasSubtitles }) => {
+        if (!signal.aborted) {
+          update(clientId, {
+            status,
+            segments,
+            needsRender: Boolean(needsRender ?? segments.length !== 1),
+            ...(hasSubtitles ? { hasSubtitles: true } : {}),
+          });
+        }
       },
     });
     if (signal.aborted) return;
-    update(clientId, { status: project.status, segments: project.segments });
+    const needsRender = Boolean(project.needsRender ?? project.segments.length !== 1);
+    update(clientId, { status: project.status, segments: project.segments, needsRender, hasSubtitles: Boolean(project.hasSubtitles) });
     if (project.status === "cancelled") return;
-    if (project.segments.length > 1) {
+    if (needsRender) {
       await finishRender(turn, signal);
-    } else if (!turn.saved) {
+    } else if (!turn.saved && project.segments[0]) {
       await callbacks.current.onSaved?.({
         videoProjectId: projectId, userScript: turn.brief || turn.storyboard.title, fullPrompt: project.segments[0].prompt,
       });
@@ -109,10 +118,24 @@ export default function useVideoGeneration({ onSaved, onMerged, initialTurns = n
       }
       if (signal.aborted) return;
       update(clientId, { storyboard, status: "queued" });
-      const { projectId, segments } = await createVideoProject({ modelKey, storyboard, ...options, ...(baseProjectId && { baseProjectId }) });
+      const created = await createVideoProject({ modelKey, storyboard, ...options, ...(baseProjectId && { baseProjectId }) });
+      const { projectId, segments } = created;
+      const finalStoryboard = created.storyboard || storyboard;
+      const needsRender = Boolean(created.needsRender ?? segments.length !== 1);
       admitted = true;
       if (signal.aborted) return;
-      const next = { ...turn, storyboard, projectId, segments, status: "queued", saved: false, mergeStatus: null, mergeError: null };
+      const next = {
+        ...turn,
+        storyboard: finalStoryboard,
+        projectId,
+        segments,
+        needsRender,
+        hasSubtitles: false,
+        status: "queued",
+        saved: false,
+        mergeStatus: null,
+        mergeError: null,
+      };
       update(clientId, next);
       await follow(next, signal);
     }, (error) => {

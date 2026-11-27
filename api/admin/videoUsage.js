@@ -51,7 +51,8 @@ const handleVideoUsage = async (context, req, { tenantId }) => {
     ),
     query(
       `SELECT COUNT(*) AS render_count, SUM(w.result_duration_seconds) AS output_seconds,
-              COUNT(*) - COUNT(w.result_duration_seconds) AS unknown_duration_count
+              COUNT(*) - COUNT(w.result_duration_seconds) AS unknown_duration_count,
+              COALESCE(SUM(w.narration_characters), 0) AS narration_characters
        FROM video_renders w
        JOIN video_projects p ON p.id = w.project_id AND p.tenant_id = w.tenant_id AND p.user_id = w.user_id
        WHERE ${filter} ${modelParam ? `AND p.model_key = ${modelParam}` : ""}`,
@@ -84,7 +85,7 @@ const handleVideoUsage = async (context, req, { tenantId }) => {
     renderCount,
     knownOutputMinutes: render.output_seconds == null ? (renderCount ? null : 0) : Number(render.output_seconds) / 60,
     unknownDurationCount: Number(render.unknown_duration_count),
-    narrationCharacters: null,
+    narrationCharacters: Number(render.narration_characters || 0),
   }, 200, req);
 };
 

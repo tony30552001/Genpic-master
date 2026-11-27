@@ -32,7 +32,14 @@ module.exports = async function (context, req) {
 
   if (method === "GET") {
     const result = await query(
-      "SELECT id, image_url, prompt, user_script, style_prompt, model, image_job_id, video_project_id, style_id, source, created_at FROM history WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC",
+      `SELECT h.id, h.image_url, h.prompt, h.user_script, h.style_prompt, h.model,
+              h.image_job_id, h.video_project_id, h.style_id, h.source, h.created_at,
+              (vr.subtitle_blob_name IS NOT NULL) AS has_subtitles
+       FROM history h
+       LEFT JOIN video_renders vr
+         ON vr.project_id = h.video_project_id AND vr.status = 'succeeded'
+       WHERE h.tenant_id = $1 AND h.user_id = $2
+       ORDER BY h.created_at DESC`,
       [identity.tenantId, identity.userId]
     );
     const items = result.rows.map((row) => ({
@@ -44,6 +51,7 @@ module.exports = async function (context, req) {
       model: row.model,
       jobId: row.image_job_id,
       videoProjectId: row.video_project_id,
+      hasSubtitles: Boolean(row.has_subtitles),
       styleId: row.style_id,
       source: row.source,
       createdAt: { seconds: Math.floor(new Date(row.created_at).getTime() / 1000) },
@@ -77,8 +85,8 @@ module.exports = async function (context, req) {
       context.res = error(isImage ? "找不到生成工作" : "找不到影片專案", "not_found", 404, req);
       return;
     }
-    if (isVideo && job.segments.length > 1) {
-      context.res = error("多段影片由系統在合併成功後存入素材中心", "automatic_video_history", 409, req);
+    if (isVideo && (job.needsRender || job.segments.length !== 1)) {
+      context.res = error("此影片由系統在合併成功後存入素材中心", "automatic_video_history", 409, req);
       return;
     }
     const ready = isImage

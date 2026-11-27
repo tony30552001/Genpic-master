@@ -3,6 +3,7 @@ import {
   createShot,
   MAX_CHARACTERS,
   MAX_CHARACTER_IMAGES,
+  MAX_SHOT_SECONDS,
   MAX_SHOTS,
   newCharacterId,
   segmentStartLabel,
@@ -34,13 +35,27 @@ export const storyboardActions = (storyboard) => {
         shots: current.shots.map((shot, index) => {
           if (shot.id !== shotId) return shot;
           const next = { ...shot, ...patch };
+          if (patch.source === "image") {
+            next.cut = false;
+            next.startFrameUploadId = null;
+          } else if (patch.source === "generate") {
+            next.uploadId = null;
+            next.imageJobId = null;
+            if (next.duration > MAX_SHOT_SECONDS) next.duration = MAX_SHOT_SECONDS;
+          }
           return canHaveStartFrame(next, index) ? next : { ...next, startFrameUploadId: null };
         }),
       }),
       shotId
     );
+  const uploadShotImage = async (shotId, file) => {
+    const uploadId = await storyboard.uploadImage(file);
+    updateShot(shotId, { source: "image", uploadId, imageJobId: null });
+    return uploadId;
+  };
   return {
     updateShot,
+    uploadShotImage,
     setStartFrame: (shotId, uploadId) => updateShot(shotId, { startFrameUploadId: uploadId }),
     reorder: (shotId, targetId) => {
       const from = shots.findIndex((shot) => shot.id === shotId);
@@ -173,6 +188,7 @@ const compiledBody = (compiled) => {
 /** The request each segment sends; segments after the first get a header. */
 export const compiledPreview = (segments) => {
   if (!segments) return "";
+  if (segments.length === 0) return "此分鏡全部為靜態圖幕，將直接由成片服務合成影片與旁白。";
   if (segments.length === 1) return compiledBody(segments[0].compiled);
   return segments
     .map((segment) =>
@@ -196,7 +212,9 @@ export const STATUS_TONES = {
 };
 
 // Segments render one after another, so a longer storyboard takes longer.
-export const estimateLabel = (model, segmentCount = 1) =>
-  model?.family === "kling-v3-pro"
+export const estimateLabel = (model, segmentCount = 1) => {
+  if (segmentCount === 0) return "預估約 15–30 秒（直接合成）";
+  return model?.family === "kling-v3-pro"
     ? `預估 ${3 * segmentCount}–${5 * segmentCount} 分鐘`
     : segmentCount > 1 ? `預估約 ${segmentCount} 分鐘` : "預估約 1 分鐘";
+};

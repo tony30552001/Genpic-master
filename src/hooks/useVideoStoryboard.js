@@ -119,6 +119,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
         ...current,
         warnings: result.warnings,
         segments: result.segments,
+        needsRender: Boolean(result.needsRender),
       });
       setInspection({ status: "ready", error: "", config: inspectedConfig });
     } catch (error) {
@@ -206,6 +207,7 @@ export default function useVideoStoryboard({ modelKey, hasStartFrame, initial = 
       storyboard: result.storyboard,
       warnings: result.warnings,
       segments: result.segments,
+      needsRender: Boolean(result.needsRender),
       shotNotes: result.shotNotes ?? (extra.keepNotes ? current?.shotNotes : {}) ?? {},
       changedShotIds: extra.changedShotIds || [],
       reopened: extra.keepNotes ? Boolean(current?.reopened) : false,

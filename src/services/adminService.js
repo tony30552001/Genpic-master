@@ -96,6 +96,9 @@ export const testAdminVideoModel = async (payload, { signal } = {}) =>
 export const updateAdminVideoSettings = async (settings) =>
   apiPut(`${ADMIN_API_BASE}/video-settings`, settings);
 
+export const testAdminSpeech = async (payload = {}, { signal } = {}) =>
+  apiPost(`${ADMIN_API_BASE}/speech-tests`, payload, { signal });
+
 export const updateAdminUserVideoAccess = async (userId, access) =>
   apiPut(`${ADMIN_API_BASE}/users/${userId}`, access);
 

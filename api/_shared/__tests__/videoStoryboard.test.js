@@ -3,12 +3,14 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const {
+  applyNarrationDurations,
   assertRevisionScope,
   assertSceneFidelity,
   assertScriptFidelity,
   compileStoryboard,
   normalizeStoryboard,
   planSegments,
+  storyboardNeedsRender,
   storyboardWarnings,
 } = require("../videoStoryboard");
 
@@ -293,3 +295,93 @@ describe("assertScriptFidelity", () => {
     ).toThrow(/第 2 幕/);
   });
 });
+
+describe("Phase 4: static image shots, narration, onScreenText and timeline settings", () => {
+  const UPLOAD = "33333333-3333-4333-8333-333333333333";
+  const IMAGE_JOB = "44444444-4444-4444-8444-444444444444";
+  const KLING = { family: "kling-v3-pro", maxDurationSeconds: 15 };
+
+  it("normalizes global subtitles, voice, transition and per-shot narration/onScreenText", () => {
+    const sb = board(
+      [
+        shot({
+          id: "s1",
+          duration: 5,
+          narration: "歡迎來到第一站。",
+          onScreenText: ["步驟 1：啟動設備", "  ", "確認電源燈亮起"],
+        }),
+      ],
+      { subtitles: true, voice: "zh-TW-YunJheNeural", transition: "fade" }
+    );
+    expect(sb.global.subtitles).toBe(true);
+    expect(sb.global.voice).toBe("zh-TW-YunJheNeural");
+    expect(sb.global.transition).toBe("fade");
+    expect(sb.shots[0].narration).toBe("歡迎來到第一站。");
+    expect(sb.shots[0].onScreenText).toEqual(["步驟 1：啟動設備", "確認電源燈亮起"]);
+    expect(storyboardNeedsRender(sb, 1)).toBe(true);
+  });
+
+  it("supports source=image shots up to 30s and requires exactly one image source", () => {
+    const sb = board([
+      { id: "s1", source: "image", uploadId: UPLOAD, duration: 20, narration: "介紹架構圖" },
+      { id: "s2", source: "image", imageJobId: IMAGE_JOB, duration: 8, onScreenText: ["重點整理"] },
+    ]);
+    expect(sb.shots[0].source).toBe("image");
+    expect(sb.shots[0].shotSize).toBeNull();
+    expect(sb.shots[1].imageJobId).toBe(IMAGE_JOB);
+    expect(planSegments(sb, KLING, T2V)).toEqual([]);
+    expect(storyboardNeedsRender(sb, 0)).toBe(true);
+
+    expect(() => board([{ id: "s1", source: "image", duration: 5 }])).toThrow(/請選擇圖片/);
+    expect(() =>
+      board([{ id: "s1", source: "image", uploadId: UPLOAD, imageJobId: IMAGE_JOB, duration: 5 }])
+    ).toThrow(/只能指定一種圖片來源/);
+  });
+
+  it("splits dynamic segments around static image shots without chaining across them", () => {
+    const sb = board([
+      shot({ id: "s1", duration: 5 }),
+      { id: "s2", source: "image", uploadId: UPLOAD, duration: 6, onScreenText: ["架構圖"] },
+      shot({ id: "s3", duration: 5, startFrameUploadId: UPLOAD, narration: "接著看現場操作" }),
+    ]);
+    const segments = planSegments(sb, KLING, T2V);
+    expect(segments).toHaveLength(2);
+    expect(segments[0].shotIds).toEqual(["s1"]);
+    expect(segments[0].chained).toBe(false);
+    expect(segments[0].hasNarration).toBe(false);
+    expect(segments[1].shotIds).toEqual(["s3"]);
+    expect(segments[1].chained).toBe(false);
+    expect(segments[1].mode).toBe("i2v");
+    expect(segments[1].startFrameUploadId).toBe(UPLOAD);
+    expect(segments[1].hasNarration).toBe(true);
+  });
+
+  it("extends narrated shot durations and re-segments cleanly", () => {
+    const sb = board([
+      shot({ id: "s1", duration: 4, narration: "這是一段較長的中文旁白說明。" }),
+      shot({ id: "s2", duration: 5 }),
+    ]);
+    const expanded = applyNarrationDurations(sb, { s1: 11.2 });
+    expect(expanded.shots[0].duration).toBe(12);
+    const segments = planSegments(expanded, KLING, T2V);
+    expect(segments).toHaveLength(2);
+    expect(segments[0].durationSeconds).toBe(12);
+    expect(segments[1].durationSeconds).toBe(5);
+    expect(segments[1].chained).toBe(true);
+  });
+
+  it("warns when narration likely exceeds shot duration while skipping motion warnings on image shots", () => {
+    const sb = board([
+      {
+        id: "s1",
+        source: "image",
+        uploadId: UPLOAD,
+        duration: 2,
+        narration: "這是一段超過兩秒才能唸完的完整介紹旁白文字。",
+      },
+    ]);
+    const warnings = storyboardWarnings(sb);
+    expect(warnings.map((w) => w.code)).toEqual(["narration_too_long"]);
+  });
+});
+

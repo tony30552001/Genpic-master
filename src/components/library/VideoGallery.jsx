@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Clapperboard } from "@/components/icons/lucideContent";
+import { Clapperboard, FileText } from "@/components/icons/lucideContent";
 import { Download, Trash2, X } from "@/components/icons/lucideControls";
 import { AlertCircle, Loader2 } from "@/components/icons/lucideStatus";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { downloadVideo, getVideoPlayback } from "@/services/aiService";
+import { downloadVideo, downloadVideoSubtitles, getVideoPlayback } from "@/services/aiService";
 
 // Signed playback URLs live for an hour; renew them five minutes early.
 const PLAYBACK_RENEW_MARGIN_MS = 5 * 60 * 1000;
@@ -33,11 +33,11 @@ const formatDuration = (seconds) => {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 };
 
-const saveBlob = (blob, name) => {
+const saveBlob = (blob, filename) => {
   const href = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = href;
-  link.download = `${name}.mp4`;
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(href), 0);
 };
@@ -107,7 +107,12 @@ function VideoCard({ item, onOpen }) {
       </span>
       <span className="block p-3">
         <span className="line-clamp-2 text-sm font-medium">{item.userScript || "未命名影片"}</span>
-        <span className="mt-1 block text-xs text-muted-foreground">{item.model}</span>
+        <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="truncate">{item.model}</span>
+          {item.hasSubtitles && (
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground">SRT 字幕</span>
+          )}
+        </span>
       </span>
     </button>
   );
@@ -118,6 +123,7 @@ function VideoPlayerDialog({ item, onClose, onDelete }) {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [downloadingSrt, setDownloadingSrt] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +140,7 @@ function VideoPlayerDialog({ item, onClose, onDelete }) {
     setDownloading(true);
     setError("");
     try {
-      saveBlob(await downloadVideo({ projectId: item.videoProjectId }), `pixora-${item.id}`);
+      saveBlob(await downloadVideo({ projectId: item.videoProjectId }), `pixora-${item.id}.mp4`);
     } catch (caught) {
       setError(caught.message || "影片下載失敗");
     } finally {
@@ -142,9 +148,35 @@ function VideoPlayerDialog({ item, onClose, onDelete }) {
     }
   };
 
+  const downloadSrt = async () => {
+    setDownloadingSrt(true);
+    setError("");
+    try {
+      saveBlob(await downloadVideoSubtitles({ projectId: item.videoProjectId }), `pixora-${item.id}.srt`);
+    } catch (caught) {
+      setError(caught.message || "字幕下載失敗");
+    } finally {
+      setDownloadingSrt(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/95 p-3" role="dialog" aria-modal="true" aria-label="影片詳情">
       <div className="flex items-center justify-end gap-2">
+        {item.hasSubtitles && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-xs text-white hover:bg-white/10 hover:text-white"
+            aria-label={downloadingSrt ? "正在下載字幕" : "下載字幕 (.srt)"}
+            disabled={downloadingSrt}
+            onClick={() => void downloadSrt()}
+          >
+            {downloadingSrt ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
+            下載字幕 (.srt)
+          </Button>
+        )}
         <Button type="button" variant="ghost" size="icon" className="text-white hover:bg-white/10 hover:text-white" aria-label={downloading ? "正在下載影片" : "下載影片"} disabled={downloading} onClick={() => void download()}>
           {downloading ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Download aria-hidden="true" />}
         </Button>

@@ -1,7 +1,7 @@
 import React, { useId, useLayoutEffect, useRef, useState } from "react";
 import { animate, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { segmentStartLabel } from "@/lib/videoStoryboard";
+import { isImageShot, segmentStartLabel } from "@/lib/videoStoryboard";
 
 const previewOrder = (shots, move) => {
   if (!move || move.from === move.to) return shots;
@@ -27,8 +27,13 @@ export default function StoryboardTimeline({ shots, segments, warnedIds, changed
   const ordered = previewOrder(shots, move);
   const canSort = !busy && shots.length > 1;
   const total = shots.reduce((sum, shot) => sum + shot.duration, 0);
+  const dynamicShotIds = ordered.filter((s) => !isImageShot(s)).map((s) => s.id).join("|");
+  const hasStaticShots = ordered.some((s) => isImageShot(s));
   // Never show obsolete inspection groups while an edit is being inspected.
-  const groups = segments?.length > 1 && segments.flatMap((s) => s.shotIds).join("|") === ordered.map((s) => s.id).join("|") ? segments : [];
+  const groups = segments?.length && segments.flatMap((s) => s.shotIds).join("|") === dynamicShotIds
+    && (segments.length > 1 || hasStaticShots)
+    ? segments
+    : [];
 
   useLayoutEffect(() => {
     const next = new Map();
@@ -115,15 +120,20 @@ export default function StoryboardTimeline({ shots, segments, warnedIds, changed
           onPointerLeave={() => { if (!pointer.current?.dragging) pointer.current = null; }}>
           {ordered.map((shot, index) => {
             const segment = groups.find((item) => item.shotIds.includes(shot.id));
-            const preview = compact && previews[shot.startFrameUploadId || shot.references?.[0]?.uploadId];
+            const staticShot = isImageShot(shot);
+            const hasNarration = Boolean((shot.narration || "").trim());
+            const preview = compact && previews[shot.uploadId || shot.startFrameUploadId || shot.references?.[0]?.uploadId];
             return (
               <button key={shot.id} data-shot={shot.id} type="button" style={{ flexGrow: shot.duration }}
                 className={cn(
-                  "relative basis-0 select-none overflow-hidden whitespace-nowrap rounded-lg border border-primary/25 bg-primary/12 text-[11px] font-semibold tabular-nums text-primary hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "relative basis-0 select-none overflow-hidden whitespace-nowrap rounded-lg border text-[11px] font-semibold tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  staticShot
+                    ? "border-sky-500/35 bg-sky-500/12 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300"
+                    : "border-primary/25 bg-primary/12 text-primary hover:bg-primary/20",
                   compact ? "h-11 min-w-12" : "h-9 min-w-7",
                   sorting || !compact ? "touch-none" : "touch-pan-x",
                   canSort && "cursor-grab active:cursor-grabbing",
-                  (changedIds.includes(shot.id) || selected === shot.id) && "bg-primary/25",
+                  (changedIds.includes(shot.id) || selected === shot.id) && (staticShot ? "bg-sky-500/25" : "bg-primary/25"),
                   move?.from === shot.id && "z-10 border-primary shadow-md motion-safe:scale-[1.02]",
                   segment?.index > 0 && segment.shotIds[0] === shot.id && "ml-1.5"
                 )}
@@ -132,9 +142,10 @@ export default function StoryboardTimeline({ shots, segments, warnedIds, changed
                 aria-pressed={sorting ? selected === shot.id : undefined}
                 aria-describedby={instructions}
                 aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
-                aria-label={`第 ${index + 1} 幕，約 ${shot.duration} 秒${segment ? `，屬於第 ${segment.index + 1} 段` : ""}${warnedIds.has(shot.id) ? "，有提醒" : ""}`}>
+                aria-label={`第 ${index + 1} 幕${staticShot ? "（靜態圖幕）" : ""}，約 ${shot.duration} 秒${segment ? `，屬於第 ${segment.index + 1} 段` : ""}${hasNarration ? "，含旁白" : ""}${warnedIds.has(shot.id) ? "，有提醒" : ""}`}>
                 {preview && <img src={preview} alt="" draggable={false} className="absolute inset-0 size-full object-cover opacity-25" />}
-                <span className="relative">{index + 1} · {shot.duration}s</span>
+                <span className="relative">{staticShot ? "圖 " : ""}{index + 1} · {shot.duration}s</span>
+                {hasNarration && <span className="absolute bottom-1 left-1 size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />}
                 {warnedIds.has(shot.id) && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-amber-500" aria-hidden="true" />}
               </button>
             );

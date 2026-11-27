@@ -1,4 +1,20 @@
 // Display labels for the enum keys validated by api/_shared/videoStoryboard.js.
+export const SHOT_SOURCE_LABELS = Object.freeze({
+  generate: "動態生成",
+  image: "靜態圖幕",
+});
+
+export const TRANSITION_LABELS = Object.freeze({
+  cut: "直接切換",
+  fade: "淡化轉場（0.5 秒）",
+});
+
+export const DEFAULT_SPEECH_VOICES = Object.freeze([
+  { id: "zh-TW-HsiaoChenNeural", label: "曉臻（女聲，自然親切）" },
+  { id: "zh-TW-YunJheNeural", label: "雲哲（男聲，沉穩清晰）" },
+  { id: "zh-TW-HsiaoYuNeural", label: "曉雨（女聲，柔和清晰）" },
+]);
+
 export const SHOT_SIZE_LABELS = Object.freeze({
   "extreme-wide": "大遠景",
   wide: "遠景",
@@ -31,7 +47,12 @@ export const CAMERA_LABELS = Object.freeze({
 // Mirrors api/_shared/videoStoryboard.js.
 export const MAX_SHOTS = 30;
 export const MAX_SHOT_SECONDS = 15;
+export const MAX_IMAGE_SHOT_SECONDS = 30;
 export const MAX_PROJECT_SECONDS = 120;
+export const MAX_NARRATION_LENGTH = 500;
+export const MAX_ON_SCREEN_LINES = 4;
+export const MAX_ON_SCREEN_LINE_LENGTH = 60;
+export const NARRATION_CHARS_PER_SECOND = 4.2;
 export const PROMPT_LIMIT = 2500;
 export const MAX_SCRIPT_SOURCE = 50000;
 export const MAX_SHOT_REFERENCES = 10;
@@ -58,12 +79,33 @@ export const toOptions = (labels) =>
 export const storyboardSeconds = (storyboard) =>
   storyboard ? storyboard.shots.reduce((total, shot) => total + shot.duration, 0) : 0;
 
-export const isScriptShot = (shot) => Boolean(shot.script);
+export const isScriptShot = (shot) => Boolean(shot?.script);
+export const isImageShot = (shot) => shot?.source === "image";
+export const shotMaxSeconds = (shot) => (isImageShot(shot) ? MAX_IMAGE_SHOT_SECONDS : MAX_SHOT_SECONDS);
 
-export const shotSummary = (shot) =>
-  isScriptShot(shot)
-    ? "腳本幕"
-    : `${SHOT_SIZE_LABELS[shot.shotSize]} · ${ANGLE_LABELS[shot.angle]} · ${CAMERA_LABELS[shot.camera]}`;
+export const estimateNarrationSeconds = (text) => {
+  const length = (text || "").trim().length;
+  if (!length) return 0;
+  return Math.ceil(length / NARRATION_CHARS_PER_SECOND + 0.5);
+};
+
+export const storyboardHasNarration = (storyboard) =>
+  Boolean(storyboard?.shots?.some((shot) => Boolean((shot.narration || "").trim())));
+
+export const storyboardNeedsRender = (storyboard, segmentCount) => {
+  if (!storyboard) return false;
+  if (typeof segmentCount === "number" && segmentCount !== 1) return true;
+  if (storyboard.global?.transition === "fade") return true;
+  return Boolean(storyboard.shots?.some(
+    (shot) => isImageShot(shot) || Boolean((shot.narration || "").trim()) || Boolean(shot.onScreenText?.length)
+  ));
+};
+
+export const shotSummary = (shot) => {
+  if (isImageShot(shot)) return "靜態圖幕";
+  if (isScriptShot(shot)) return "腳本幕";
+  return `${SHOT_SIZE_LABELS[shot.shotSize]} · ${ANGLE_LABELS[shot.angle]} · ${CAMERA_LABELS[shot.camera]}`;
+};
 
 const newShotId = (shots) => {
   const used = new Set(shots.map((shot) => shot.id));
@@ -74,6 +116,9 @@ const newShotId = (shots) => {
 
 export const createShot = (shots) => ({
   id: newShotId(shots),
+  source: "generate",
+  uploadId: null,
+  imageJobId: null,
   title: null,
   script: null,
   scriptOriginal: null,
@@ -85,12 +130,14 @@ export const createShot = (shots) => ({
   camera: "static",
   action: "",
   environment: "",
+  narration: "",
+  onScreenText: [],
   characterIds: [],
   cut: false,
 });
 
 // Mirrors api/_shared/videoStoryboard.js: only a shot that starts a fresh segment has its own start frame.
-export const canHaveStartFrame = (shot, index) => index === 0 || shot.cut;
+export const canHaveStartFrame = (shot, index) => !isImageShot(shot) && (index === 0 || shot.cut);
 
 export const SCRIPT_DOCUMENT_EXTENSIONS = Object.freeze(["docx", "txt", "md"]);
 export const SCRIPT_DOCUMENT_ACCEPT = SCRIPT_DOCUMENT_EXTENSIONS.map((extension) => `.${extension}`).join(",");
@@ -156,10 +203,14 @@ export const segmentStartLabel = (segment) => {
 };
 
 /** Footer summary of how the storyboard is sent. */
-export const sendModeLabel = (segments) => {
+export const sendModeLabel = (segments, needsRender = false) => {
   if (!segments) return "檢查中…";
-  if (segments.length === 1) return SEND_MODE_LABELS[segments[0].compiled.sendMode];
-  return `分 ${segments.length} 段生成，依序播放`;
+  if (segments.length === 0) return "純靜態圖幕，直接合成影片（不消耗影片額度）";
+  if (segments.length === 1) {
+    const base = SEND_MODE_LABELS[segments[0].compiled.sendMode];
+    return needsRender ? `${base} · 自動合成旁白與字幕` : base;
+  }
+  return needsRender ? `分 ${segments.length} 段生成，自動合成成片` : `分 ${segments.length} 段生成，依序播放`;
 };
 
 /** Segments keyed by their first shot id; empty for a single segment. */

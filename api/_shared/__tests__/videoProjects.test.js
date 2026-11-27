@@ -11,12 +11,12 @@ const videoRenderClient = require("../videoRenderClient");
 
 db.query = vi.fn();
 videoModels.withVideoModelTransaction = vi.fn();
-videoModels.resolveVideoModel = vi.fn();
+videoModels.resolveVideoModel = vi.fn(async () => ({ family: "kling-v3-pro", maxDurationSeconds: 15, allowAudio: true }));
 videoPolicy.ensureVideoSettings = vi.fn();
-videoStoryboard.normalizeStoryboard = vi.fn((storyboard) => storyboard);
+videoStoryboard.normalizeStoryboard = vi.fn((storyboard) => ({ global: {}, shots: [], ...storyboard }));
 videoStoryboard.planSegments = vi.fn();
-videoModelFamilies.validateVideoOptions = vi.fn(({ durationSeconds }) => ({
-  durationSeconds, resolution: "1080p", aspectRatio: "16:9", generateAudio: false,
+videoModelFamilies.validateVideoOptions = vi.fn(({ durationSeconds, generateAudio = false }) => ({
+  durationSeconds, resolution: "1080p", aspectRatio: "16:9", generateAudio,
 }));
 videoRenderClient.isConfigured = vi.fn(() => true);
 
@@ -43,6 +43,7 @@ const retry = () => retryVideoProject({ projectId: "p1", tenantId: "t", userId: 
 beforeEach(() => {
   vi.clearAllMocks();
   videoPolicy.ensureVideoSettings.mockResolvedValue({ allowedModels: ["kling"], dailyQuotaPerUser: 10 });
+  videoModels.resolveVideoModel.mockResolvedValue({ family: "kling-v3-pro", maxDurationSeconds: 15, allowAudio: true });
   db.query.mockResolvedValue({ rows: [] });
 });
 
@@ -145,5 +146,29 @@ describe("createVideoProject reuse", () => {
     await expect(createVideoProject({
       tenantId: "t", userId: "u", modelKey: "kling", storyboard: {}, baseProjectId: "nope",
     })).rejects.toThrow("原影片專案識別碼格式無效");
+  });
+
+  it("queues render immediately without charging quota for a static-image-only project", async () => {
+    videoStoryboard.planSegments.mockReturnValue([]);
+    const client = {
+      query: vi.fn(async (sql) => {
+        if (sql.includes("FROM users")) return { rows: [{ video_enabled: true, video_unlimited: false }] };
+        if (sql.includes("INSERT INTO video_projects")) return { rows: [{ id: "static-p1" }] };
+        return { rows: [] };
+      }),
+    };
+    videoModels.withVideoModelTransaction.mockImplementation(async (_tenantId, action) => action(client));
+
+    const result = await createVideoProject({
+      tenantId: "t",
+      userId: "u",
+      modelKey: "kling",
+      storyboard: { global: {}, shots: [{ id: "s1", source: "image", duration: 6 }] },
+    });
+
+    expect(result.needsRender).toBe(true);
+    expect(result.segments).toEqual([]);
+    expect(client.query.mock.calls.some(([sql]) => sql.includes("AS count FROM video_generation_jobs"))).toBe(false);
+    expect(client.query.mock.calls.at(-1)).toEqual([expect.stringContaining("INSERT INTO video_renders"), ["static-p1"]]);
   });
 });

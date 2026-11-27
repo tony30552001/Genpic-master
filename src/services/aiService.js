@@ -362,6 +362,9 @@ export const waitForVideoRender = async ({ projectId, signal, pollIntervalMs = 3
 export const downloadVideo = async ({ projectId, signal }) =>
   apiGetBlob(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/video`, { signal });
 
+export const downloadVideoSubtitles = async ({ projectId, signal }) =>
+  apiGetBlob(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/subtitles`, { signal });
+
 // A one-hour signed URL that a <video> element can stream directly.
 export const getVideoPlayback = async ({ projectId, signal }) =>
   apiGet(`${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/playback`, { signal });
@@ -372,3 +375,6 @@ export const getSegmentPlayback = ({ jobId, signal }) =>
 export const videoDownloadUrl = ({ jobId, projectId }) =>
   jobId ? `${API_BASE_URL}/video-jobs/${encodeURIComponent(jobId)}/video`
     : `${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/video`;
+
+export const videoSubtitlesDownloadUrl = ({ projectId }) =>
+  `${API_BASE_URL}/video-projects/${encodeURIComponent(projectId)}/subtitles`;

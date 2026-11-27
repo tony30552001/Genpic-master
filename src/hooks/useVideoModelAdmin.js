@@ -4,6 +4,7 @@ import {
   deleteAdminVideoModel,
   getAdminModelSettings,
   listAdminVideoModels,
+  testAdminSpeech,
   testAdminVideoModel,
   updateAdminVideoModel,
   updateAdminVideoSettings,
@@ -16,6 +17,7 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const [isTestingSpeech, setIsTestingSpeech] = useState(false);
   const [testingKey, setTestingKey] = useState("");
   const controllerRef = useRef(null);
 
@@ -67,19 +69,37 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
     }
   };
 
-  const saveSettings = async (next) => {
+  const saveSettings = async (next, { row = "video-policy", successText = "影片政策已儲存。" } = {}) => {
     setIsSavingPolicy(true);
     try {
       const saved = await updateAdminVideoSettings(next);
       setSettings(saved);
       await refreshProfile();
-      notify({ tone: "success", text: "影片政策已儲存。", row: "video-policy" });
+      notify({ tone: "success", text: successText, row });
       return saved;
     } catch (error) {
       notify({ tone: "error", text: error.message || "影片政策儲存失敗" });
       throw error;
     } finally {
       setIsSavingPolicy(false);
+    }
+  };
+
+  const testSpeech = async (draft) => {
+    setIsTestingSpeech(true);
+    notify({ tone: "info", text: "正在測試 Azure AI Speech 連線…" });
+    try {
+      const result = await testAdminSpeech(draft);
+      notify({
+        tone: "success",
+        text: `語音連線正常（${result.voice}，${result.durationSeconds} 秒，${result.cueCount} 句時間軸）。`,
+      });
+      return result;
+    } catch (error) {
+      notify({ tone: "error", text: `語音測試失敗：${error.message || "請檢查區域、端點與金鑰"}` });
+      return null;
+    } finally {
+      setIsTestingSpeech(false);
     }
   };
 
@@ -127,10 +147,12 @@ export default function useVideoModelAdmin({ notify, refreshProfile }) {
     isLoading,
     loadError,
     isSavingPolicy,
+    isTestingSpeech,
     load,
     saveModel,
     deleteModel,
     saveSettings,
+    testSpeech,
     toggleAllowed,
     testingKey,
     runTest,

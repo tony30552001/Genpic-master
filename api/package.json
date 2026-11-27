@@ -21,6 +21,7 @@
     "fast-xml-parser": "^5.12.1",
     "google-auth-library": "^10.5.0",
     "jszip": "^3.10.2",
+    "microsoft-cognitiveservices-speech-sdk": "^1.53.0",
     "partial-json": "^0.1.7",
     "pg": "^8.13.3",
     "pptxgenjs": "^3.12.0",

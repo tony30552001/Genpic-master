@@ -52,4 +52,31 @@ describe("ShotCard references", () => {
     expect(screen.getByRole("button", { name: "Image1" })).toBeDisabled();
     expect(screen.getByText("已附加首影格，第 1 幕不能再設定首影格")).toBeInTheDocument();
   });
+
+  it("switches to static image shot mode and edits narration and on-screen text", () => {
+    const onChange = vi.fn();
+    const shot = { ...createShot([]), action: "推門進店", references: [] };
+    render(
+      <ShotCard
+        shot={shot}
+        index={0}
+        previews={{}}
+        onChange={onChange}
+        onSetStartFrame={vi.fn()}
+        onToggleCharacter={vi.fn()}
+        onRewrite={vi.fn()}
+        onFix={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "靜態圖幕" }));
+    expect(onChange).toHaveBeenCalledWith({ source: "image" });
+
+    fireEvent.click(screen.getByRole("button", { name: "加入旁白或畫面文字" }));
+    fireEvent.change(screen.getByLabelText("第 1 幕旁白"), { target: { value: "洗手七步驟要確實完成。" } });
+    expect(onChange).toHaveBeenCalledWith({ narration: "洗手七步驟要確實完成。" });
+    fireEvent.change(screen.getByLabelText("第 1 幕畫面文字"), { target: { value: "步驟一\n步驟二" } });
+    expect(onChange).toHaveBeenCalledWith({ onScreenText: ["步驟一", "步驟二"] });
+  });
 });

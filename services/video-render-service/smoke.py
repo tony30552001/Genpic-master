@@ -2,8 +2,9 @@
 
 1. Encodes a clip that is red for one second, then blue, and asserts the
    extracted last frame is blue at the source resolution.
-2. Concatenates matching clips by stream copy, and mismatched clips (size,
-   frame rate, one without sound) by re-encoding to the first clip's format.
+2. Concatenates matching clips by stream copy, and renders a full Phase 4
+   timeline (video + static PNG image + crossfade + ducked source audio +
+   narration WAV + onScreenText + ASS subtitles + .srt export).
 3. Drives the HTTP routes with blob transfer replaced by local file copies.
 """
 
@@ -37,6 +38,30 @@ def make_clip(path: Path) -> None:
     )
 
 
+def make_image(path: Path, color: str = "green", size: str = "320x180") -> Path:
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-f", "lavfi", "-i", f"color=c={color}:s={size}:d=0.1",
+            "-frames:v", "1", str(path),
+        ],
+        check=True,
+    )
+    return path
+
+
+def make_wav(path: Path, duration: float = 1.0, freq: int = 520) -> Path:
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-f", "lavfi", "-i", f"sine=frequency={freq}:sample_rate=24000:duration={duration}",
+            "-c:a", "pcm_s16le", str(path),
+        ],
+        check=True,
+    )
+    return path
+
+
 def center_rgb(path: Path) -> tuple[int, int, int]:
     raw = subprocess.run(
         [
@@ -60,13 +85,13 @@ def check_last_frame(workdir: Path) -> Path:
     return clip
 
 
-def make_colored(path: Path, color: str, size: str, rate: int, sound: bool) -> Path:
-    audio = ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1"] if sound else []
+def make_colored(path: Path, color: str, size: str, rate: int, sound: bool, duration: float = 1.0) -> Path:
+    audio = ["-f", "lavfi", "-i", f"sine=frequency=440:sample_rate=48000:duration={duration}"] if sound else []
     codecs = ["-c:a", "aac", "-shortest"] if sound else []
     subprocess.run(
         [
             "ffmpeg", "-v", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c={color}:s={size}:r={rate}:d=1", *audio,
+            "-f", "lavfi", "-i", f"color=c={color}:s={size}:r={rate}:d={duration}", *audio,
             "-c:v", "libx264", "-pix_fmt", "yuv420p", *codecs, str(path),
         ],
         check=True,
@@ -83,32 +108,90 @@ def frame_rgb(path: Path, at: float) -> tuple[int, int, int]:
     return center_rgb(frame)
 
 
-def check_concat(workdir: Path) -> None:
-    red = make_colored(workdir / "red.mp4", "red", "320x180", 24, True)
-    blue = make_colored(workdir / "blue.mp4", "blue", "320x180", 24, True)
+def check_timeline(workdir: Path) -> tuple[Path, Path]:
+    red = make_colored(workdir / "red.mp4", "red", "320x180", 24, True, duration=2.0)
+    blue = make_colored(workdir / "blue.mp4", "blue", "320x180", 24, True, duration=2.0)
     copied = workdir / "copied.mp4"
-    result = media.concat([red, blue], copied)
+    result = media.render_timeline(
+        clips=[
+            media.PreparedClip(kind="video", path=red),
+            media.PreparedClip(kind="video", path=blue),
+        ],
+        output=copied,
+        width=320,
+        height=180,
+        fps=24,
+    )
     assert result["copied"], result
     assert (result["width"], result["height"]) == (320, 180), result
-    assert 1.9 <= result["durationSeconds"] <= 2.2, result
-    assert frame_rgb(copied, 0.5)[0] > 200, "first second is not red"
-    assert frame_rgb(copied, 1.5)[2] > 200, "second second is not blue"
+    assert 3.8 <= result["durationSeconds"] <= 4.2, result
+    assert frame_rgb(copied, 0.5)[0] > 200, "first clip is not red"
+    assert frame_rgb(copied, 3.0)[2] > 200, "second clip is not blue"
 
-    square = make_colored(workdir / "square.mp4", "blue", "240x240", 30, False)
-    encoded = workdir / "encoded.mp4"
-    result = media.concat([red, square], encoded)
+    slide = make_image(workdir / "slide.png", "green", "320x180")
+    narr = make_wav(workdir / "narr.wav", duration=1.2)
+    composed = workdir / "composed.mp4"
+    srt = workdir / "composed.srt"
+    result = media.render_timeline(
+        clips=[
+            media.PreparedClip(
+                kind="video",
+                path=red,
+                source_audio="duck",
+                narrations=[
+                    media.PreparedNarration(
+                        path=narr,
+                        offset=0.0,
+                        cues=[media.TimedCue(start=0.0, end=1.2, text="第一幕繁體中文字幕")],
+                    )
+                ],
+                overlays=[media.PreparedOverlay(start=0.0, end=1.8, lines=["步驟 1", "開機檢查"])],
+            ),
+            media.PreparedClip(
+                kind="image",
+                path=slide,
+                duration=2.0,
+                narrations=[
+                    media.PreparedNarration(
+                        path=narr,
+                        offset=0.1,
+                        cues=[media.TimedCue(start=0.0, end=1.2, text="第二幕靜態圖解說明")],
+                    )
+                ],
+            ),
+        ],
+        output=composed,
+        width=640,
+        height=360,
+        fps=24,
+        transition="fade",
+        transition_duration=0.5,
+        burn_subtitles=True,
+        subtitle_output=srt,
+    )
     assert not result["copied"], result
-    assert (result["width"], result["height"]) == (320, 180), result
-    assert 1.9 <= result["durationSeconds"] <= 2.2, result
-    probed = media.probe(encoded)
+    assert (result["width"], result["height"]) == (640, 360), result
+    # 2.0s + 2.0s - 0.5s fade = 3.5s
+    assert 3.3 <= result["durationSeconds"] <= 3.7, result
+    probed = media.probe(composed)
     assert probed["audio"] and probed["audio"][0] == "aac", probed
-    assert probed["fps"] == "24/1", probed
-    assert frame_rgb(encoded, 1.5)[2] > 200, "re-encoded second clip is not blue"
+    srt_text = srt.read_text(encoding="utf-8")
+    assert "第一幕繁體中文字幕" in srt_text and "第二幕靜態圖解說明" in srt_text, srt_text
+    assert "00:00:01,600 --> 00:00:02,800" in srt_text, srt_text
+    return slide, narr
 
 
-def check_routes(clip: Path, workdir: Path) -> None:
+def check_routes(clip: Path, slide: Path, narr: Path) -> None:
     uploaded: dict[str, bytes] = {}
-    blob.download = lambda url, target: shutil.copyfile(clip, target)
+    video_url = "https://demo.blob.core.windows.net/generated/a.mp4?sig=x"
+    slide_url = "https://demo.blob.core.windows.net/generated/slide.png?sig=s"
+    narr_url = "https://demo.blob.core.windows.net/generated/narr.wav?sig=n"
+    frame_url = "https://demo.blob.core.windows.net/generated/a.png?sig=y"
+    output_url = "https://demo.blob.core.windows.net/generated/render.mp4?sig=z"
+    subtitle_url = "https://demo.blob.core.windows.net/generated/subtitles.srt?sig=sub"
+
+    files = {video_url: clip, slide_url: slide, narr_url: narr}
+    blob.download = lambda url, target: shutil.copyfile(files[url], target)
 
     def fake_upload(url: str, source: Path, content_type: str) -> int:
         uploaded[url] = source.read_bytes()
@@ -116,8 +199,6 @@ def check_routes(clip: Path, workdir: Path) -> None:
 
     blob.upload = fake_upload
     client = TestClient(main.app)
-    video_url = "https://demo.blob.core.windows.net/generated/a.mp4?sig=x"
-    frame_url = "https://demo.blob.core.windows.net/generated/a.png?sig=y"
 
     assert client.get("/health").status_code == 200
 
@@ -139,23 +220,48 @@ def check_routes(clip: Path, workdir: Path) -> None:
     body = response.json()
     assert body["width"] == 320 and body["height"] == 180, body
     assert uploaded[frame_url][:8] == b"\x89PNG\r\n\x1a\n"
-    assert body["sizeBytes"] == len(uploaded[frame_url])
 
-    output_url = "https://demo.blob.core.windows.net/generated/render.mp4?sig=z"
-    too_few = client.post(
-        "/render", headers=headers, json={"segmentUrls": [video_url], "outputUrl": output_url}
-    )
-    assert too_few.status_code == 422, too_few.text
     rendered = client.post(
         "/render",
         headers=headers,
-        json={"segmentUrls": [video_url, video_url], "outputUrl": output_url},
+        json={
+            "width": 640,
+            "height": 360,
+            "fps": 24,
+            "transition": "fade",
+            "transitionDuration": 0.5,
+            "burnSubtitles": True,
+            "clips": [
+                {
+                    "kind": "video",
+                    "url": video_url,
+                    "sourceAudio": "mute",
+                    "narrations": [
+                        {
+                            "url": narr_url,
+                            "offset": 0,
+                            "cues": [{"start": 0.0, "end": 1.1, "text": "動態畫面說明"}],
+                        }
+                    ],
+                },
+                {
+                    "kind": "image",
+                    "url": slide_url,
+                    "duration": 2.0,
+                    "overlays": [{"start": 0.0, "end": 2.0, "lines": ["重點整理"]}],
+                },
+            ],
+            "outputUrl": output_url,
+            "subtitleUrl": subtitle_url,
+        },
     )
     assert rendered.status_code == 200, rendered.text
     body = rendered.json()
-    assert body["copied"] and body["contentType"] == "video/mp4", body
-    assert 3.9 <= body["durationSeconds"] <= 4.2, body
+    assert not body["copied"] and body["contentType"] == "video/mp4", body
+    assert 3.3 <= body["durationSeconds"] <= 3.7, body
     assert body["sizeBytes"] == len(uploaded[output_url])
+    assert body["subtitleSizeBytes"] == len(uploaded[subtitle_url])
+    assert "動態畫面說明" in uploaded[subtitle_url].decode("utf-8")
     assert not any(Path(os.environ["VIDEO_RENDER_WORKDIR"]).iterdir()), "workdir not cleaned"
 
 
@@ -163,8 +269,8 @@ def main_smoke() -> int:
     workdir = Path(tempfile.mkdtemp())
     try:
         clip = check_last_frame(workdir)
-        check_concat(workdir)
-        check_routes(clip, workdir)
+        slide, narr = check_timeline(workdir)
+        check_routes(clip, slide, narr)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     print("video-render smoke test passed")

@@ -1,4 +1,5 @@
 const { signGeneratedBlobUrl } = require("./blobStorage");
+const { issueReadGrant } = require("./uploadStorage");
 
 const TIMEOUT_MS = Number(process.env.VIDEO_RENDER_TIMEOUT_MS || 180000);
 // Container Apps closes a request after 240 seconds.
@@ -72,8 +73,19 @@ const request = async (path, body, { timeoutMs = TIMEOUT_MS } = {}) => {
   return payload;
 };
 
-const readUrl = (blobName) =>
+const readGeneratedUrl = (blobName) =>
   signGeneratedBlobUrl({ blobName, permissions: "r", expiresInMs: SAS_TTL_MS });
+
+const writeGeneratedUrl = (blobName) =>
+  signGeneratedBlobUrl({ blobName, permissions: "cw", expiresInMs: SAS_TTL_MS });
+
+const readClipUrl = (clip) => {
+  if (clip.upload) {
+    const grant = issueReadGrant(clip.upload);
+    return `${grant.blobUrl}?${grant.sasToken}`;
+  }
+  return readGeneratedUrl(clip.blobName);
+};
 
 /**
  * Writes the final frame of a generated video to `frameBlobName` (PNG) in the
@@ -82,8 +94,8 @@ const readUrl = (blobName) =>
  */
 const extractLastFrame = async ({ videoBlobName, frameBlobName }) => {
   const result = await request("/last-frame", {
-    videoUrl: readUrl(videoBlobName),
-    frameUrl: signGeneratedBlobUrl({ blobName: frameBlobName, permissions: "cw", expiresInMs: SAS_TTL_MS }),
+    videoUrl: readGeneratedUrl(videoBlobName),
+    frameUrl: writeGeneratedUrl(frameBlobName),
   });
   return {
     blobName: frameBlobName,
@@ -95,21 +107,48 @@ const extractLastFrame = async ({ videoBlobName, frameBlobName }) => {
 };
 
 /**
- * Joins segment videos in order into `outputBlobName` (MP4). Matching
- * segments are stream-copied; otherwise the service re-encodes them to the
- * first segment's size and frame rate.
+ * Composes video clips, static image slides, transitions, narration tracks,
+ * on-screen text and optional ASS subtitles into `outputBlobName` (MP4), plus
+ * an optional UTF-8 `.srt` file at `subtitleBlobName`.
  */
-const concatSegments = async ({ segmentBlobNames, outputBlobName }) => {
-  const result = await request(
-    "/render",
-    {
-      segmentUrls: segmentBlobNames.map(readUrl),
-      outputUrl: signGeneratedBlobUrl({ blobName: outputBlobName, permissions: "cw", expiresInMs: SAS_TTL_MS }),
-    },
-    { timeoutMs: CONCAT_TIMEOUT_MS }
-  );
+const renderTimeline = async ({
+  width = 1920,
+  height = 1080,
+  fps = 24,
+  transition = "cut",
+  transitionDuration = 0.5,
+  burnSubtitles = false,
+  clips,
+  outputBlobName,
+  subtitleBlobName = null,
+}) => {
+  const body = {
+    width,
+    height,
+    fps,
+    transition,
+    transitionDuration,
+    burnSubtitles: Boolean(burnSubtitles),
+    clips: clips.map((clip) => ({
+      kind: clip.kind,
+      url: readClipUrl(clip),
+      ...(clip.duration != null ? { duration: clip.duration } : {}),
+      sourceAudio: clip.sourceAudio || "keep",
+      narrations: (clip.narrations || []).map((narration) => ({
+        url: readGeneratedUrl(narration.blobName),
+        offset: narration.offset || 0,
+        cues: narration.cues || [],
+      })),
+      overlays: clip.overlays || [],
+    })),
+    outputUrl: writeGeneratedUrl(outputBlobName),
+    ...(subtitleBlobName ? { subtitleUrl: writeGeneratedUrl(subtitleBlobName) } : {}),
+  };
+  const result = await request("/render", body, { timeoutMs: CONCAT_TIMEOUT_MS });
   return {
     blobName: outputBlobName,
+    subtitleBlobName: result.subtitleSizeBytes ? subtitleBlobName : null,
+    subtitleSizeBytes: result.subtitleSizeBytes ?? null,
     contentType: result.contentType,
     sizeBytes: result.sizeBytes,
     durationSeconds: result.durationSeconds,
@@ -119,4 +158,4 @@ const concatSegments = async ({ segmentBlobNames, outputBlobName }) => {
   };
 };
 
-module.exports = { VideoRenderError, concatSegments, extractLastFrame, isConfigured };
+module.exports = { VideoRenderError, extractLastFrame, isConfigured, renderTimeline };

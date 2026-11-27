@@ -60,7 +60,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("video usage on isolated Postgre
       CREATE TABLE history (id uuid PRIMARY KEY, source text, image_url text NOT NULL);
     `);
     for (const name of ["035_video_generation", "036_video_storyboard", "037_video_projects",
-      "038_video_renders", "042_video_job_reuse", "043_video_usage"]) {
+      "038_video_renders", "042_video_job_reuse", "043_video_usage", "045_video_narration_and_timeline"]) {
       await pool.query(readFileSync(resolve("db", "migrations", `${name}.sql`), "utf8"));
     }
     await pool.query("INSERT INTO tenants VALUES ($1), ($2)", [tenant, otherTenant]);
@@ -118,7 +118,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("video usage on isolated Postgre
       modelKey: "paid", mode: "i2v", usedElements: true, generateAudio: true, durationSeconds: 5,
       videoUnlimited: true, jobCount: 2, generatedSeconds: 10, estimatedCostUsd: 1.23456,
     })]);
-    expect(data).toMatchObject({ generatedSeconds: 10, knownCostUsd: 1.23456, renderCount: 1, unknownDurationCount: 0, narrationCharacters: null });
+    expect(data).toMatchObject({ generatedSeconds: 10, knownCostUsd: 1.23456, renderCount: 1, unknownDurationCount: 0, narrationCharacters: 0 });
     expect(data.knownOutputMinutes).toBeCloseTo(90.25 / 60);
     const empty = await read({ userId: outsider });
     expect(empty).toMatchObject({ rows: [], generatedSeconds: 0, knownCostUsd: 0, knownOutputMinutes: 0, renderCount: 0 });

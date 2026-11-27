@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import useVideoGeneration from "@/hooks/useVideoGeneration";
 import useVideoStoryboard from "@/hooks/useVideoStoryboard";
-import { createVideoLastFrame, videoDownloadUrl } from "@/services/aiService";
+import { createVideoLastFrame, downloadVideoSubtitles, videoDownloadUrl } from "@/services/aiService";
 import { imageJobImageUrl } from "@/services/imageChatService";
 import { uploadFile } from "@/services/storageService";
 import { readFileAsDataUrl } from "@/lib/imageFile";
@@ -246,12 +246,22 @@ function AgentMessage({ message, isLatest, onOpen, onQuestion }) {
   );
 }
 
+const saveSubtitleBlob = (blob, projectId) => {
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = `pixora-video-${projectId}.srt`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(href), 0);
+};
+
 function MergeBar({ turn, onMerge }) {
+  const segmentCount = turn.segments?.length || 0;
   if (turn.mergeStatus === "merged") {
     return (
       <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground animate-in fade-in duration-(--motion-enter) ease-emphasized" role="status">
         <Check className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-        已合併成一支影片並保存到素材中心
+        已合成成片並保存到素材中心
       </p>
     );
   }
@@ -259,7 +269,11 @@ function MergeBar({ turn, onMerge }) {
     <div className="space-y-2">
       <div className="flex items-center gap-3 rounded-xl bg-muted/50 py-2 pl-3 pr-2">
         <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-muted-foreground" aria-live="polite">
-          {turn.mergeStatus === "failed" ? "分段仍可播放或下載。" : `正在自動合併 ${turn.segments.length} 段影片，完成後會存入素材中心。`}
+          {turn.mergeStatus === "failed"
+            ? segmentCount > 0 ? "分段仍可播放或下載。" : "成片合成失敗，請重試。"
+            : segmentCount > 1
+              ? `正在自動合成 ${segmentCount} 段影片（含旁白、字幕與轉場），完成後會存入素材中心。`
+              : "正在自動合成影片（含靜態圖幕、旁白與字幕），完成後會存入素材中心。"}
         </p>
         {turn.mergeStatus === "failed" && <Button
           type="button"
@@ -267,7 +281,7 @@ function MergeBar({ turn, onMerge }) {
           className="press-feedback shrink-0 gap-1.5 text-xs"
           onClick={() => onMerge(turn)}
         >
-          <Layers className="size-3.5" aria-hidden="true" />重新合併
+          <Layers className="size-3.5" aria-hidden="true" />重新合成
         </Button>}
       </div>
       {turn.mergeStatus === "failed" && (
@@ -280,11 +294,12 @@ function MergeBar({ turn, onMerge }) {
   );
 }
 
-function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onCancel, onContinue, preparingFrame, onEditStoryboard, onMerge }) {
+function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onCancel, onContinue, onDownloadSubtitles, preparingFrame, onEditStoryboard, onMerge }) {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const busy = !isTerminal(turn.status);
   const segmentCount = turn.segments?.length || 0;
+  const needsRender = Boolean(turn.needsRender ?? segmentCount !== 1);
   const retryable = turn.status === "failed" && turn.projectId && turn.segments?.some((segment) => segment.status === "failed");
   const playable = playableSources(turn);
   const partial = turn.status !== "succeeded" && playable.length > 0;
@@ -415,7 +430,7 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onCancel, on
           )}
         </button>
       )}
-      {turn.status === "succeeded" && segmentCount > 1 && <MergeBar turn={turn} onMerge={onMerge} />}
+      {turn.status === "succeeded" && needsRender && <MergeBar turn={turn} onMerge={onMerge} />}
 
       <div className="flex flex-wrap items-center justify-end gap-1">
         {turn.storyboard && (
@@ -426,9 +441,20 @@ function VideoTurn({ turn, isActive, onOpen, onRegenerate, onRetry, onCancel, on
         <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => onRegenerate(turn)} disabled={busy}>
           <RotateCcw className="size-3.5" aria-hidden="true" />重新生成
         </Button>
-        {turn.status === "succeeded" && (
+        {turn.status === "succeeded" && segmentCount > 0 && (
           <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" disabled={preparingFrame} onClick={() => onContinue(turn)}>
             <ImagePlus className="size-3.5" aria-hidden="true" />接著生成
+          </Button>
+        )}
+        {turn.status === "succeeded" && turn.hasSubtitles && turn.projectId && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => onDownloadSubtitles(turn.projectId)}
+          >
+            <FileText className="size-3.5" aria-hidden="true" />下載字幕 (.srt)
           </Button>
         )}
         {turn.status === "succeeded" && playable.length === 1 && (
@@ -541,6 +567,7 @@ export default function VideoWorkspace({
   const canStart = Boolean(model && !isUploading && !pending);
   const canSend = Boolean(brief.trim() && canStart);
   const recentVideos = useMemo(() => historyItems.filter((item) => item.videoProjectId), [historyItems]);
+  const imageHistory = useMemo(() => historyItems.filter((item) => !item.videoProjectId && item.jobId), [historyItems]);
 
   const thread = useMemo(
     () => [
@@ -577,7 +604,8 @@ export default function VideoWorkspace({
   );
   const recentSessions = sessions.items.filter((item) => item.id !== sessions.activeId).slice(0, 3);
 
-  const generateBlocker = !hasQuota
+  const isStaticOnlyBoard = board?.segments?.length === 0;
+  const generateBlocker = !hasQuota && !isStaticOnlyBoard
     ? "今日額度已用完"
     : isUploading
       ? "影格上傳中…"
@@ -585,7 +613,7 @@ export default function VideoWorkspace({
         ? "檢查分鏡中…"
         : "";
   const canGenerate = Boolean(
-    board?.segments && model && hasQuota && !isUploading && !pending && storyboard.inspection.status === "ready"
+    board?.segments && model && (hasQuota || isStaticOnlyBoard) && !isUploading && !pending && storyboard.inspection.status === "ready"
   );
 
   const mediaOptions = (nextSource = source) => ({
@@ -762,6 +790,15 @@ export default function VideoWorkspace({
 
   const openHistory = (item) => setPlayerVideo({ projectId: item.videoProjectId });
 
+  const handleDownloadSubtitles = async (projectId) => {
+    setSubmitError("");
+    try {
+      saveSubtitleBlob(await downloadVideoSubtitles({ projectId }), projectId);
+    } catch (error) {
+      setSubmitError(error.message || "字幕下載失敗");
+    }
+  };
+
   const continueFromVideo = async (turn) => {
     setSubmitError("");
     setIsUploading(true);
@@ -807,6 +844,14 @@ export default function VideoWorkspace({
   const boardProps = {
     storyboard,
     model,
+    speech: settings
+      ? {
+          configured: Boolean(settings.speechEnabled),
+          defaultVoice: settings.speechDefaultVoice,
+          voices: settings.speechVoices,
+        }
+      : null,
+    imageHistory,
     canGenerate,
     generateBlocker,
     onGenerate: confirmGenerate,
@@ -884,6 +929,7 @@ export default function VideoWorkspace({
                     onCancel={videos.cancel}
                     preparingFrame={isUploading}
                     onContinue={(turn) => void continueFromVideo(turn)}
+                    onDownloadSubtitles={(projectId) => void handleDownloadSubtitles(projectId)}
                     onEditStoryboard={editFromTurn}
                     onMerge={videos.retryMerge}
                   />
@@ -1167,6 +1213,17 @@ export default function VideoWorkspace({
               {activeTurn.storyboard && (
                 <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => editFromTurn(activeTurn)}>
                   <Clapperboard className="size-3.5" aria-hidden="true" />修改分鏡
+                </Button>
+              )}
+              {activeTurn.status === "succeeded" && activeTurn.hasSubtitles && activeTurn.projectId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => void handleDownloadSubtitles(activeTurn.projectId)}
+                >
+                  <FileText className="size-3.5" aria-hidden="true" />下載字幕
                 </Button>
               )}
               {activeTurn.status === "succeeded" && activeSources.length === 1 && (

@@ -1,13 +1,27 @@
+const crypto = require("node:crypto");
 const { query } = require("./db");
+const { uploadGeneratedBlob } = require("./blobStorage");
 const { resolveOwnedImageUpload } = require("./imageUploads");
 const { getImageJobForUser } = require("./imageJobs");
-const { VideoModelError, validateVideoOptions } = require("./videoModelFamilies");
+const { VideoModelError, getVideoModelFamily, validateVideoOptions } = require("./videoModelFamilies");
 const { resolveVideoModel, withVideoModelTransaction } = require("./videoModels");
-const { ensureVideoSettings } = require("./videoPolicy");
-const { normalizeStoryboard, planSegments } = require("./videoStoryboard");
+const { ensureVideoSettings, resolveSpeechConfig } = require("./videoPolicy");
+const { SpeechTtsError, synthesizeSpeech } = require("./speechTts");
+const {
+  applyNarrationDurations,
+  normalizeStoryboard,
+  planSegments,
+  storyboardNeedsRender,
+} = require("./videoStoryboard");
 const videoRenderClient = require("./videoRenderClient");
 const { countAdmittedToday, expiredElementError } = require("./videoJobs");
-const { getLatestVideoRender, getSucceededRenderBlob, queueCompletedProjectRender, queueVideoRender } = require("./videoRenders");
+const {
+  getLatestVideoRender,
+  getSucceededRenderBlob,
+  getSucceededRenderSubtitleBlob,
+  queueCompletedProjectRender,
+  queueVideoRender,
+} = require("./videoRenders");
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -68,6 +82,82 @@ const assertOwnedElements = async ({ segments, tenantId, userId }) => {
       }
     }
   }
+};
+
+const assertOwnedImageShots = async ({ storyboard, tenantId, userId }) => {
+  for (let index = 0; index < storyboard.shots.length; index += 1) {
+    const shot = storyboard.shots[index];
+    if (shot.source !== "image") continue;
+    await assertOwnedUpload({
+      uploadId: shot.uploadId,
+      tenantId,
+      userId,
+      message: `第 ${index + 1} 幕的靜態圖片已過期或無法使用，請重新上傳`,
+    });
+    await assertOwnedImageJob({
+      jobId: shot.imageJobId,
+      tenantId,
+      userId,
+      message: `第 ${index + 1} 幕的靜態圖片版本無法使用，請重新選擇`,
+    });
+  }
+};
+
+const synthesizeProjectNarrations = async ({ projectId, tenantId, storyboard }) => {
+  const narratedShots = storyboard.shots.filter((shot) => Boolean(shot.narration));
+  if (!narratedShots.length) {
+    return { storyboard, narrationAssets: null };
+  }
+  if (!videoRenderClient.isConfigured()) {
+    throw new VideoModelError(
+      "影片組合服務尚未設定，無法合成旁白與字幕，請聯絡管理員",
+      "video_render_unconfigured",
+      503
+    );
+  }
+  const speechConfig = await resolveSpeechConfig(tenantId);
+  if (!speechConfig) {
+    throw new VideoModelError(
+      "尚未設定語音旁白服務（Azure AI Speech），請聯絡管理員設定後再試",
+      "speech_unconfigured",
+      503
+    );
+  }
+
+  const narrationAssets = {};
+  const durationsByShotId = {};
+  const voice = storyboard.global.voice;
+  for (const shot of narratedShots) {
+    let synthesized;
+    try {
+      synthesized = await synthesizeSpeech({
+        speechConfig,
+        text: shot.narration,
+        voice,
+      });
+    } catch (caught) {
+      if (caught instanceof SpeechTtsError) {
+        throw new VideoModelError(caught.message, caught.code, caught.status);
+      }
+      throw caught;
+    }
+    const blobName = `videos/projects/${projectId}/narration/${shot.id}.wav`;
+    await uploadGeneratedBlob({
+      blobName,
+      buffer: synthesized.audioBuffer,
+      contentType: synthesized.contentType,
+    });
+    narrationAssets[shot.id] = {
+      blobName,
+      durationSeconds: synthesized.durationSeconds,
+      characters: synthesized.characters,
+      cues: synthesized.cues,
+    };
+    durationsByShotId[shot.id] = synthesized.durationSeconds;
+  }
+
+  const adjusted = applyNarrationDurations(storyboard, durationsByShotId);
+  return { storyboard: adjusted, narrationAssets };
 };
 
 const assertOwnedStartFrames = async ({ segments, tenantId, userId }) => {
@@ -193,10 +283,20 @@ const createVideoProject = async ({
   baseProjectId: rawBaseProjectId = null,
   ...rawSources
 }) => {
-  const storyboard = normalizeStoryboard(rawStoryboard);
+  const initialStoryboard = normalizeStoryboard(rawStoryboard);
   const sources = normalizeSources(rawSources);
   const baseProjectId = normalizeUuid(rawBaseProjectId);
   if (rawBaseProjectId && !baseProjectId) throw new VideoModelError("原影片專案識別碼格式無效");
+
+  // Synthesize TTS before opening the DB transaction so external Speech calls
+  // never hold tenant transaction locks; durations are then fed back into
+  // planSegments so segment boundaries reflect real audio length.
+  const projectId = crypto.randomUUID();
+  const { storyboard, narrationAssets } = await synthesizeProjectNarrations({
+    projectId,
+    tenantId,
+    storyboard: initialStoryboard,
+  });
 
   return withVideoModelTransaction(tenantId, async (client) => {
     const unlimited = skipAdmission ? true : await assertEnabledUser({ client, tenantId, userId });
@@ -205,11 +305,13 @@ const createVideoProject = async ({
       throw new VideoModelError("此影片模型尚未開放給使用者", "video_model_not_allowed", 403);
     }
     const model = await resolveVideoModel({ tenantId, modelKey, client });
+    const family = getVideoModelFamily(model.family);
     const segments = planSegments(storyboard, model, { mode });
+    const needsRender = storyboardNeedsRender(storyboard, segments.length);
     assertSourceShape({ sources, mode, segmentCount: segments.length });
-    if (segments.length > 1 && !videoRenderClient.isConfigured()) {
+    if (needsRender && !videoRenderClient.isConfigured()) {
       throw new VideoModelError(
-        "影片組合服務尚未設定，無法生成多段影片，請聯絡管理員",
+        "影片組合服務尚未設定，無法合成此影片專案，請聯絡管理員",
         "video_render_unconfigured",
         503
       );
@@ -221,14 +323,16 @@ const createVideoProject = async ({
         durationSeconds: segment.durationSeconds,
         resolution,
         aspectRatio,
-        generateAudio,
+        // Mute Kling native audio on narrated segments so it cannot clash with voiceover.
+        generateAudio: segment.hasNarration && family.supportsAudio ? false : generateAudio,
       })
     );
     const reused = await findReusableJobs({
       client, baseProjectId, tenantId, userId, modelKey, segments, options, sources,
     });
     const generated = segments.filter((segment) => !reused[segment.index]);
-    if (!reused[0]) await assertOwnedSources({ sources, tenantId, userId });
+    if (segments.length && !reused[0]) await assertOwnedSources({ sources, tenantId, userId });
+    await assertOwnedImageShots({ storyboard, tenantId, userId });
     await assertOwnedStartFrames({ segments: generated, tenantId, userId });
     await assertOwnedElements({ segments: generated, tenantId, userId });
     if (!unlimited && generated.length) {
@@ -237,10 +341,21 @@ const createVideoProject = async ({
 
     const project = (
       await client.query(
-        `INSERT INTO video_projects (tenant_id, user_id, model_key, storyboard)
-         VALUES ($1,$2,$3,$4)
+        `INSERT INTO video_projects
+         (id, tenant_id, user_id, model_key, storyboard, aspect_ratio, generate_audio, needs_render, narration_assets)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          RETURNING id, created_at`,
-        [tenantId, userId, modelKey, JSON.stringify(storyboard)]
+        [
+          projectId,
+          tenantId,
+          userId,
+          modelKey,
+          JSON.stringify(storyboard),
+          aspectRatio || "16:9",
+          Boolean(generateAudio),
+          needsRender,
+          narrationAssets ? JSON.stringify(narrationAssets) : null,
+        ]
       )
     ).rows[0];
 
@@ -290,9 +405,11 @@ const createVideoProject = async ({
       );
       jobs.push(inserted.rows[0]);
     }
-    if (!generated.length && segments.length > 1) await queueCompletedProjectRender(client, project.id);
+    if (!generated.length && needsRender) await queueCompletedProjectRender(client, project.id);
     return {
       projectId: project.id,
+      needsRender,
+      storyboard,
       segments: segments.map((segment) => ({
         index: segment.index,
         jobId: jobs[segment.index].id,
@@ -309,6 +426,7 @@ const createVideoProject = async ({
 };
 
 const projectStatus = (segments) => {
+  if (!segments.length) return "succeeded";
   if (segments.some((segment) => segment.status === "cancelled")) {
     return segments.some((segment) => ["queued", "processing"].includes(segment.status)) ? "processing" : "cancelled";
   }
@@ -341,7 +459,7 @@ const cancelVideoProject = async ({ projectId, tenantId, userId }) => {
 
 const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
   const project = await query(
-    `SELECT id, model_key, storyboard, created_at
+    `SELECT id, model_key, storyboard, aspect_ratio, generate_audio, needs_render, created_at
      FROM video_projects
      WHERE id = $1 AND tenant_id = $2 AND user_id = $3`,
     [projectId, tenantId, userId]
@@ -378,14 +496,20 @@ const getVideoProjectForUser = async ({ projectId, tenantId, userId }) => {
       : {}),
   }));
   const row = project.rows[0];
+  const needsRender = Boolean(row.needs_render) || segments.length !== 1;
+  const render = needsRender ? await getLatestVideoRender(row.id) : null;
   return {
     projectId: row.id,
     modelKey: row.model_key,
     storyboard: row.storyboard,
+    aspectRatio: row.aspect_ratio || "16:9",
+    generateAudio: Boolean(row.generate_audio),
+    needsRender,
+    hasSubtitles: Boolean(render?.hasSubtitles),
     createdAt: row.created_at,
     status: projectStatus(segments),
     segments,
-    render: segments.length > 1 ? await getLatestVideoRender(row.id) : null,
+    render,
   };
 };
 
@@ -442,13 +566,13 @@ const retryVideoProject = async ({ projectId, tenantId, userId }) => {
 };
 
 /**
- * Queues the join of a finished multi-segment project into one MP4. Asking
- * again while a render is queued, running or done returns that render.
+ * Queues timeline composition for a finished project that requires rendering.
+ * Asking again while a render is queued, running or done returns that render.
  */
 const requestVideoRender = async ({ projectId, tenantId, userId }) => {
   const project = await getVideoProjectForUser({ projectId, tenantId, userId });
   if (!project) throw new VideoModelError("找不到影片專案", "not_found", 404);
-  if (project.segments.length < 2) {
+  if (!project.needsRender) {
     throw new VideoModelError("單段影片不需要合併", "render_not_needed", 400);
   }
   if (project.status !== "succeeded") {
@@ -468,22 +592,35 @@ const requestVideoRender = async ({ projectId, tenantId, userId }) => {
  */
 const resolveProjectVideo = async ({ projectId, tenantId, userId = null }) => {
   const project = await query(
-    `SELECT id FROM video_projects
+    `SELECT id, needs_render FROM video_projects
      WHERE id = $1 AND tenant_id = $2 AND ($3::uuid IS NULL OR user_id = $3)`,
     [projectId, tenantId, userId]
   );
   if (!project.rows[0]) throw new VideoModelError("找不到影片專案", "not_found", 404);
+  if (project.rows[0].needs_render) return getSucceededRenderBlob(projectId);
   const jobs = await query(
     `SELECT status, result_blob_name, result_mime_type, result_size_bytes
      FROM video_generation_jobs
      WHERE project_id = $1`,
     [projectId]
   );
-  if (jobs.rows.length > 1) return getSucceededRenderBlob(projectId);
+  if (jobs.rows.length !== 1) return getSucceededRenderBlob(projectId);
   const job = jobs.rows[0];
   return job?.status === "succeeded"
     ? { blobName: job.result_blob_name, contentType: job.result_mime_type || "video/mp4", sizeBytes: job.result_size_bytes }
     : null;
+};
+
+const resolveProjectSubtitles = async ({ projectId, tenantId, userId = null }) => {
+  const project = await query(
+    `SELECT id, storyboard->>'title' AS title FROM video_projects
+     WHERE id = $1 AND tenant_id = $2 AND ($3::uuid IS NULL OR user_id = $3)`,
+    [projectId, tenantId, userId]
+  );
+  if (!project.rows[0]) throw new VideoModelError("找不到影片專案", "not_found", 404);
+  const subtitle = await getSucceededRenderSubtitleBlob(projectId);
+  if (!subtitle) return null;
+  return { ...subtitle, title: project.rows[0].title || "subtitles" };
 };
 
 module.exports = {
@@ -492,6 +629,7 @@ module.exports = {
   getVideoProjectForUser,
   projectStatus,
   requestVideoRender,
+  resolveProjectSubtitles,
   resolveProjectVideo,
   retryVideoProject,
 };

@@ -9,6 +9,7 @@ const { readSourceDocument } = require("./sourceDocument");
 const {
   ANGLES,
   CAMERAS,
+  MAX_ON_SCREEN_LINES,
   MAX_PROJECT_SECONDS,
   MAX_SCRIPT_SOURCE,
   MAX_SEGMENT_SHOTS,
@@ -16,6 +17,7 @@ const {
   MAX_SHOTS,
   PROMPT_LIMIT,
   SHOT_SIZES,
+  TRANSITIONS,
   assertQuotedTextPreserved,
   assertRevisionScope,
   assertSceneFidelity,
@@ -25,29 +27,33 @@ const {
   normalizeStoryboard,
   planSegments,
   storyboardDuration,
+  storyboardNeedsRender,
   storyboardWarnings,
 } = require("./videoStoryboard");
 
 const SCHEMA = `Storyboard JSON:
-{"title":"<=30 chars","global":{"style":"","lighting":"","constraints":["<=8 items"],"negative":"English negative prompt","characters":"read-only, see below"},
-"shots":[{"id":"s1","title":"<=30 chars or null","script":null,"scriptOriginal":null,"duration":3,"cut":false,
+{"title":"<=30 chars","global":{"style":"","lighting":"","constraints":["<=8 items"],"negative":"English negative prompt","subtitles":false,"transition":"${Object.keys(TRANSITIONS).join("|")}","characters":"read-only, see below"},
+"shots":[{"id":"s1","title":"<=30 chars or null","source":"generate","script":null,"scriptOriginal":null,"duration":3,"cut":false,
 "shotSize":"${Object.keys(SHOT_SIZES).join("|")}",
 "angle":"${Object.keys(ANGLES).join("|")}",
 "camera":"${Object.keys(CAMERAS).join("|")}",
-"action":"one main action","environment":"setting details","characterIds":["ids from characters"]}]}
+"action":"one main action","environment":"setting details","characterIds":["ids from characters"],
+"narration":"optional spoken voiceover in user's language or empty string",
+"onScreenText":["optional <=${MAX_ON_SCREEN_LINES} short text lines overlaid by the renderer"]}]}
 Rules:
-- At most ${MAX_SHOTS} shots and ${MAX_PROJECT_SECONDS} seconds in total. Durations are integers from 1 to segmentSeconds.max.
-- The video is generated in segments. Consecutive shots are grouped into one segment of at most segmentSeconds.max seconds and ${MAX_SEGMENT_SHOTS} shots; the next segment continues from the last frame of the previous one.
-- Set cut=true on a shot that starts a new scene (new place, time or subject); the scene then starts fresh instead of continuing the previous frame. The first shot always has cut=false. Every scene must last at least segmentSeconds.min seconds.
-- A structured shot has script=null and sets shotSize, angle, camera, action and environment.
-- A script shot sets script and leaves shotSize, angle, camera, action and environment null.
+- At most ${MAX_SHOTS} shots and ${MAX_PROJECT_SECONDS} seconds in total. Durations are integers from 1 to segmentSeconds.max (for source="generate") or 1 to 30 (for existing source="image" shots).
+- The video is generated in segments. Consecutive dynamic shots are grouped into one segment of at most segmentSeconds.max seconds and ${MAX_SEGMENT_SHOTS} shots; the next segment continues from the last frame of the previous one.
+- Set cut=true on a shot that starts a new scene (new place, time or subject); the scene then starts fresh instead of continuing the previous frame. The first shot always has cut=false. Every dynamic scene must last at least segmentSeconds.min seconds.
+- A structured shot has source="generate", script=null and sets shotSize, angle, camera, action and environment.
+- A script shot has source="generate", sets script and leaves shotSize, angle, camera, action and environment null.
+- A static image shot has source="image" with script, shotSize, angle, camera, action and environment all null; only preserve existing source="image" shots during revisions (never invent new source="image" shots without an existing image).
 - characters lists the user's characters and products with reference images. You cannot add, remove or edit them; omit global.characters from your output.
-- Set characterIds on every shot to the characters that appear in it, or [] when none. Call a character by its name in action text.
+- Set characterIds on every dynamic shot to the characters that appear in it, or [] when none. Call a character by its name in action text.
 - Keep each shot to one main action that fits its duration. Describe motion, not a still image.
 - A static camera must not push in or pull out.
-- Write title, action, environment, style, lighting and constraints in the user's language.
+- Write title, action, environment, style, lighting, constraints, narration and onScreenText in the user's language.
 - Keep every text the user put in quotes (「」『』"" “”) verbatim.
-- Never ask the video model to render written text, signs or logos unless the user quoted that text.
+- Put step titles, labels or callout text that should appear on screen into onScreenText (the renderer draws them crisply) and keep narration concise (~4 chars/sec). Never ask the video model to render written text, signs or logos in action/environment unless the user specifically asked for text inside the physical scene.
 - Keep the converted prompt of every shot under ${PROMPT_LIMIT} characters.`;
 
 const DRAFT_RULES = `Plan structured shots whose durations add up exactly to durationSeconds.
@@ -66,7 +72,7 @@ Return JSON: {"storyboard":{...},"explanation":"short note in Traditional Chines
 ${DRAFT_RULES}
 - document is the source text. Lines starting with ## are headings; [Image1] marks where picture Image1 appears.
 - Cover the document's key steps or points in their original order. Merge minor details and leave out what cannot be shown.
-- Show every step as a visible action in the action and environment fields. Do not copy document sentences, and do not put document text on screen.
+- Show every step as a visible action in the action and environment fields. Put concise step headings or callout labels into onScreenText (not inside action/environment), and put spoken explanations into narration when helpful. Do not ask the video model to render text.
 - Text quoted in document is not on-screen text; only quotes in instructions must be kept verbatim.
 - instructions, when not empty, are the user's extra requests such as audience, tone or focus; follow them.
 - Add "imageLabels":["Image1"] to a shot when pictures from images show what the shot depicts, such as equipment, a product or a step's result. Use at most ${MAX_SHOT_REFERENCES} labels per shot, only labels listed in images, and [] when none fit.`;
@@ -132,13 +138,23 @@ const loadAllowedModel = async (identity, modelKey) => {
   return model;
 };
 
-const NO_ASSETS = Object.freeze({ references: [], startFrameUploadId: null });
+const NO_ASSETS = Object.freeze({
+  references: [],
+  startFrameUploadId: null,
+  uploadId: null,
+  imageJobId: null,
+});
 
 const shotAssets = (storyboard) =>
   new Map(
     storyboard.shots.map((shot) => [
       shot.id,
-      { references: shot.references, startFrameUploadId: shot.startFrameUploadId },
+      {
+        references: shot.references,
+        startFrameUploadId: shot.startFrameUploadId,
+        uploadId: shot.uploadId,
+        imageJobId: shot.imageJobId,
+      },
     ])
   );
 
@@ -174,7 +190,10 @@ const agentCharacters = (characters) =>
 const agentInput = (storyboard) => ({
   ...storyboard,
   global: { ...storyboard.global, characters: agentCharacters(storyboard.global.characters) },
-  shots: storyboard.shots.map(({ references: _references, startFrameUploadId: _startFrameUploadId, ...shot }) => shot),
+  shots: storyboard.shots.map(
+    ({ references: _references, startFrameUploadId: _startFrameUploadId, uploadId: _uploadId, imageJobId: _imageJobId, ...shot }) =>
+      shot
+  ),
 });
 
 const agentText = (value) => (typeof value === "string" ? value.trim().slice(0, 2000) : "");
@@ -194,17 +213,26 @@ const planForResponse = ({ storyboard, model, hasStartFrame, fromAgent }) => {
 
 const respondStoryboard = ({ storyboard, model, hasStartFrame, fromAgent = false, extra }) => {
   const segments = planForResponse({ storyboard, model, hasStartFrame, fromAgent });
+  const imageShots = storyboard.shots.filter((shot) => shot.source === "image");
+  const imageWarnings = imageShots.length
+    ? storyboardWarnings({ ...storyboard, shots: imageShots })
+    : [];
   return {
     storyboard,
     durationSeconds: storyboardDuration(storyboard),
-    warnings: segments.flatMap((segment) =>
-      storyboardWarnings(segment.storyboard, { hasStartFrame: segment.mode === "i2v" })
-    ),
-    segments: segments.map(({ index, shotIds, durationSeconds, chained, mode, compiled }) => ({
+    needsRender: storyboardNeedsRender(storyboard, segments.length),
+    warnings: [
+      ...segments.flatMap((segment) =>
+        storyboardWarnings(segment.storyboard, { hasStartFrame: segment.mode === "i2v" })
+      ),
+      ...imageWarnings,
+    ],
+    segments: segments.map(({ index, shotIds, durationSeconds, chained, hasNarration, mode, compiled }) => ({
       index,
       shotIds,
       durationSeconds,
       chained,
+      hasNarration,
       mode,
       compiled: {
         sendMode: compiled.sendMode,

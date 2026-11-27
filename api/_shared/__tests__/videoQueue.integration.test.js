@@ -40,6 +40,7 @@ describe.skipIf(!databaseUrl)("video queues on isolated PostgreSQL", () => {
     for (const migration of [
       "035_video_generation", "036_video_storyboard", "037_video_projects", "038_video_renders",
       "042_video_job_reuse", "043_video_usage", "044_video_queue_controls",
+      "045_video_narration_and_timeline",
     ]) {
       await pool.query(readFileSync(resolve("db", "migrations", `${migration}.sql`), "utf8"));
     }
@@ -53,8 +54,8 @@ describe.skipIf(!databaseUrl)("video queues on isolated PostgreSQL", () => {
     vi.spyOn(fal, "submitVideo").mockImplementation(async () => randomUUID());
     vi.spyOn(fal, "getVideoRequestStatus").mockResolvedValue("IN_PROGRESS");
     vi.spyOn(renderer, "isConfigured").mockReturnValue(true);
-    vi.spyOn(renderer, "concatSegments").mockImplementation(async ({ outputBlobName }) => ({
-      blobName: outputBlobName, sizeBytes: 10, durationSeconds: 6,
+    vi.spyOn(renderer, "renderTimeline").mockImplementation(async ({ outputBlobName }) => ({
+      blobName: outputBlobName, subtitleBlobName: null, subtitleSizeBytes: null, sizeBytes: 10, durationSeconds: 6,
     }));
     jobs = require("../videoJobs");
     projects = require("../videoProjects");

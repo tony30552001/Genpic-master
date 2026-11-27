@@ -1,6 +1,8 @@
 const { query, getPool } = require("./db");
-const { VideoModelError } = require("./videoModelFamilies");
-const { VideoRenderError, concatSegments } = require("./videoRenderClient");
+const { getImageJobForUser } = require("./imageJobs");
+const { resolveOwnedImageUpload } = require("./imageUploads");
+const { VideoModelError, getVideoModelFamily } = require("./videoModelFamilies");
+const { VideoRenderError, renderTimeline } = require("./videoRenderClient");
 
 const MAX_ATTEMPTS = 3;
 // Longer than one /render call (VIDEO_RENDER_CONCAT_TIMEOUT_MS), so a live
@@ -9,12 +11,19 @@ const LOCK_TIMEOUT_MINUTES = 10;
 const RENDER_TIMEOUT_MINUTES = 40;
 const RETRY_DELAY_SECONDS = 15;
 
+const OUTPUT_DIMENSIONS = Object.freeze({
+  "16:9": { width: 1920, height: 1080 },
+  "9:16": { width: 1080, height: 1920 },
+  "1:1": { width: 1080, height: 1080 },
+});
+
 const renderSummary = (row) =>
   row
     ? {
         renderId: row.id,
         status: row.status,
         completedAt: row.completed_at,
+        hasSubtitles: Boolean(row.subtitle_blob_name),
         ...(row.status === "failed"
           ? {
               error: {
@@ -29,7 +38,7 @@ const renderSummary = (row) =>
 /** The project's newest render, or null when it was never rendered. */
 const getLatestVideoRender = async (projectId) => {
   const result = await query(
-    `SELECT id, status, error_code, error_message, completed_at
+    `SELECT id, status, subtitle_blob_name, error_code, error_message, completed_at
      FROM video_renders
      WHERE project_id = $1
      ORDER BY created_at DESC
@@ -50,17 +59,22 @@ const queueVideoRender = async ({ tenantId, userId, projectId }) => {
   return getLatestVideoRender(projectId);
 };
 
-// Called in the transaction that admits an entirely reused project or
-// finishes a segment. Segment completions are serialized per tenant.
-const queueCompletedProjectRender = (client, projectId) => client.query(
-  `INSERT INTO video_renders (project_id, tenant_id, user_id)
-   SELECT project_id, tenant_id, user_id FROM video_generation_jobs
-   WHERE project_id = $1
-   GROUP BY project_id, tenant_id, user_id
-   HAVING COUNT(*) > 1 AND bool_and(status = 'succeeded')
-   ON CONFLICT (project_id) WHERE status <> 'failed' DO NOTHING`,
-  [projectId]
-);
+// Called in the transaction that admits an entirely reused / static-only project
+// or finishes a segment. Segment completions are serialized per tenant.
+const queueCompletedProjectRender = (client, projectId) =>
+  client.query(
+    `INSERT INTO video_renders (project_id, tenant_id, user_id)
+     SELECT p.id, p.tenant_id, p.user_id
+     FROM video_projects p
+     WHERE p.id = $1
+       AND p.needs_render = true
+       AND NOT EXISTS (
+         SELECT 1 FROM video_generation_jobs j
+         WHERE j.project_id = p.id AND j.status <> 'succeeded'
+       )
+     ON CONFLICT (project_id) WHERE status <> 'failed' DO NOTHING`,
+    [projectId]
+  );
 
 const getSucceededRenderBlob = async (projectId) => {
   const result = await query(
@@ -71,6 +85,23 @@ const getSucceededRenderBlob = async (projectId) => {
   );
   const row = result.rows[0];
   return row ? { blobName: row.result_blob_name, contentType: "video/mp4", sizeBytes: row.result_size_bytes } : null;
+};
+
+const getSucceededRenderSubtitleBlob = async (projectId) => {
+  const result = await query(
+    `SELECT subtitle_blob_name, subtitle_size_bytes
+     FROM video_renders
+     WHERE project_id = $1 AND status = 'succeeded' AND subtitle_blob_name IS NOT NULL`,
+    [projectId]
+  );
+  const row = result.rows[0];
+  return row
+    ? {
+        blobName: row.subtitle_blob_name,
+        contentType: "application/x-subrip; charset=utf-8",
+        sizeBytes: row.subtitle_size_bytes,
+      }
+    : null;
 };
 
 const claimNextVideoRender = async () => {
@@ -170,42 +201,241 @@ const markVideoRenderFailure = async ({ render, error }) => {
   }
 };
 
-const loadSegmentBlobNames = async (projectId) => {
-  const result = await query(
-    `SELECT status, result_blob_name
+const resolveImageShotSource = async ({ shot, tenantId, userId }) => {
+  if (shot.uploadId) {
+    const upload = await resolveOwnedImageUpload({ uploadId: shot.uploadId, tenantId, userId });
+    if (!upload) {
+      throw new VideoModelError("靜態圖幕的圖片已過期或無法使用，請重新上傳", "upload_not_found", 404);
+    }
+    return { upload };
+  }
+  if (shot.imageJobId) {
+    const job = await getImageJobForUser({ jobId: shot.imageJobId, tenantId, userId });
+    if (job?.status !== "succeeded" || !job.resultBlobName) {
+      throw new VideoModelError("靜態圖幕的圖片版本無法使用，請重新選擇", "source_job_not_found", 404);
+    }
+    return { blobName: job.resultBlobName };
+  }
+  throw new VideoModelError("靜態圖幕缺少圖片來源", "invalid_storyboard", 400);
+};
+
+const buildRenderPlan = async (projectId) => {
+  const projectResult = await query(
+    `SELECT p.id, p.tenant_id, p.user_id, p.model_key, p.storyboard,
+            p.aspect_ratio, p.generate_audio, p.narration_assets,
+            m.family AS model_family
+     FROM video_projects p
+     LEFT JOIN video_models m ON m.tenant_id = p.tenant_id AND m.model_key = p.model_key
+     WHERE p.id = $1`,
+    [projectId]
+  );
+  const project = projectResult.rows[0];
+  if (!project) {
+    throw new VideoModelError("找不到影片專案", "not_found", 404);
+  }
+
+  const jobsResult = await query(
+    `SELECT id, segment_index, status, result_blob_name, storyboard
      FROM video_generation_jobs
      WHERE project_id = $1
      ORDER BY segment_index`,
     [projectId]
   );
-  if (result.rows.length < 2 || result.rows.some((row) => row.status !== "succeeded" || !row.result_blob_name)) {
+  const jobs = jobsResult.rows;
+  if (jobs.some((row) => row.status !== "succeeded" || !row.result_blob_name)) {
     throw new VideoModelError("影片段落尚未全部完成，無法合併", "segments_not_ready", 409);
   }
-  return result.rows.map((row) => row.result_blob_name);
+
+  const storyboard = project.storyboard || { global: {}, shots: [] };
+  const global = storyboard.global || {};
+  const shots = Array.isArray(storyboard.shots) ? storyboard.shots : [];
+  const narrationAssets = project.narration_assets && typeof project.narration_assets === "object"
+    ? project.narration_assets
+    : {};
+
+  let family = null;
+  if (project.model_family) {
+    try {
+      family = getVideoModelFamily(project.model_family);
+    } catch {
+      family = null;
+    }
+  }
+
+  const jobByShotId = new Map();
+  for (const job of jobs) {
+    const segmentShots = Array.isArray(job.storyboard?.shots) ? job.storyboard.shots : [];
+    for (const segShot of segmentShots) {
+      jobByShotId.set(segShot.id, job);
+    }
+  }
+
+  const clips = [];
+  const emittedJobIds = new Set();
+  let narrationCharacters = 0;
+  let hasSubtitles = false;
+
+  const narrationEntry = (shotId, offset) => {
+    const asset = narrationAssets[shotId];
+    if (!asset?.blobName) return null;
+    narrationCharacters += Number(asset.characters) || 0;
+    const cues = Array.isArray(asset.cues) ? asset.cues : [];
+    if (cues.length) hasSubtitles = true;
+    return { blobName: asset.blobName, offset, cues };
+  };
+
+  for (const shot of shots) {
+    if (shot.source === "image") {
+      const source = await resolveImageShotSource({
+        shot,
+        tenantId: project.tenant_id,
+        userId: project.user_id,
+      });
+      const narr = narrationEntry(shot.id, 0);
+      const overlays = Array.isArray(shot.onScreenText) && shot.onScreenText.length
+        ? [{ start: 0, end: Number(shot.duration) || 3, lines: shot.onScreenText }]
+        : [];
+      clips.push({
+        kind: "image",
+        ...source,
+        duration: Number(shot.duration) || 3,
+        sourceAudio: "mute",
+        narrations: narr ? [narr] : [],
+        overlays,
+      });
+      continue;
+    }
+
+    const job = jobByShotId.get(shot.id);
+    if (!job) {
+      throw new VideoModelError("影片段落資料不完整，無法合併", "segments_not_ready", 409);
+    }
+    if (emittedJobIds.has(job.id)) continue;
+    emittedJobIds.add(job.id);
+
+    const segmentShots = Array.isArray(job.storyboard?.shots) ? job.storyboard.shots : [shot];
+    const narrations = [];
+    const overlays = [];
+    let localOffset = 0;
+    for (const segShot of segmentShots) {
+      const segDuration = Number(segShot.duration) || 0;
+      const narr = narrationEntry(segShot.id, localOffset);
+      if (narr) narrations.push(narr);
+      if (Array.isArray(segShot.onScreenText) && segShot.onScreenText.length) {
+        overlays.push({
+          start: localOffset,
+          end: localOffset + Math.max(segDuration, 0.5),
+          lines: segShot.onScreenText,
+        });
+      }
+      localOffset += segDuration;
+    }
+
+    let sourceAudio = "keep";
+    if (narrations.length > 0) {
+      if (family?.supportsAudio) {
+        sourceAudio = "mute";
+      } else {
+        sourceAudio = project.generate_audio ? "duck" : "mute";
+      }
+    }
+
+    clips.push({
+      kind: "video",
+      blobName: job.result_blob_name,
+      sourceAudio,
+      narrations,
+      overlays,
+    });
+  }
+
+  // Fallback for legacy multi-segment projects whose storyboard shots lacked ids.
+  if (!clips.length && jobs.length) {
+    for (const job of jobs) {
+      clips.push({
+        kind: "video",
+        blobName: job.result_blob_name,
+        sourceAudio: "keep",
+        narrations: [],
+        overlays: [],
+      });
+    }
+  }
+
+  if (!clips.length) {
+    throw new VideoModelError("沒有可合併的影片內容", "segments_not_ready", 409);
+  }
+
+  const dimensions = OUTPUT_DIMENSIONS[project.aspect_ratio] || OUTPUT_DIMENSIONS["16:9"];
+  return {
+    width: dimensions.width,
+    height: dimensions.height,
+    fps: 24,
+    transition: global.transition === "fade" ? "fade" : "cut",
+    transitionDuration: 0.5,
+    burnSubtitles: Boolean(global.subtitles),
+    clips,
+    hasSubtitles,
+    narrationCharacters,
+  };
 };
 
 const processNextVideoRender = async () => {
   const render = await claimNextVideoRender();
   if (!render) return false;
   try {
-    const output = await concatSegments({
-      segmentBlobNames: await loadSegmentBlobNames(render.project_id),
-      outputBlobName: `videos/projects/${render.project_id}/${render.id}-${render.lock_version}.mp4`,
+    const plan = await buildRenderPlan(render.project_id);
+    const outputBlobName = `videos/projects/${render.project_id}/${render.id}-${render.lock_version}.mp4`;
+    const subtitleBlobName = plan.hasSubtitles
+      ? `videos/projects/${render.project_id}/${render.id}-${render.lock_version}.srt`
+      : null;
+    const output = await renderTimeline({
+      width: plan.width,
+      height: plan.height,
+      fps: plan.fps,
+      transition: plan.transition,
+      transitionDuration: plan.transitionDuration,
+      burnSubtitles: plan.burnSubtitles,
+      clips: plan.clips,
+      outputBlobName,
+      subtitleBlobName,
     });
     await query(
       `WITH finished AS (
-         UPDATE video_renders SET status = 'succeeded', result_blob_name = $3, result_size_bytes = $4,
-           result_duration_seconds = $5, error_code = NULL, error_message = NULL,
-           locked_at = NULL, completed_at = now(), updated_at = now()
+         UPDATE video_renders
+         SET status = 'succeeded',
+             result_blob_name = $3,
+             result_size_bytes = $4,
+             result_duration_seconds = $5,
+             subtitle_blob_name = $6,
+             subtitle_size_bytes = $7,
+             narration_characters = $8,
+             error_code = NULL,
+             error_message = NULL,
+             locked_at = NULL,
+             completed_at = now(),
+             updated_at = now()
          WHERE id = $1 AND status = 'processing' AND lock_version = $2
          RETURNING project_id
        )
        INSERT INTO history (tenant_id, user_id, video_project_id, source, model, user_script, prompt)
        SELECT p.tenant_id, p.user_id, p.id, 'video', p.model_key, p.storyboard->>'title',
-         (SELECT string_agg(j.prompt, E'\\n\\n' ORDER BY j.segment_index)
-            FROM video_generation_jobs j WHERE j.project_id = p.id)
+         COALESCE(
+           (SELECT string_agg(j.prompt, E'\\n\\n' ORDER BY j.segment_index)
+              FROM video_generation_jobs j WHERE j.project_id = p.id),
+           p.storyboard->>'title'
+         )
        FROM finished JOIN video_projects p ON p.id = finished.project_id`,
-      [render.id, render.lock_version, output.blobName, output.sizeBytes, output.durationSeconds]
+      [
+        render.id,
+        render.lock_version,
+        output.blobName,
+        output.sizeBytes,
+        output.durationSeconds,
+        output.subtitleBlobName,
+        output.subtitleSizeBytes,
+        plan.narrationCharacters,
+      ]
     );
   } catch (error) {
     await markVideoRenderFailure({ render, error });
@@ -243,8 +473,10 @@ const startVideoRenderWorker = () => {
 
 module.exports = {
   MAX_ATTEMPTS,
+  buildRenderPlan,
   getLatestVideoRender,
   getSucceededRenderBlob,
+  getSucceededRenderSubtitleBlob,
   processNextVideoRender,
   queueCompletedProjectRender,
   queueVideoRender,

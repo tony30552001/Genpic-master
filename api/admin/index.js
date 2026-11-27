@@ -11,7 +11,9 @@ const { ImageModelError } = require("../_shared/imageModelConfig");
 const { handleImageModels, handleImageModelTest } = require("./imageModels");
 const { handleVideoModelTest, handleVideoModels } = require("./videoModels");
 const { handleVideoUsage } = require("./videoUsage");
-const { ensureVideoSettings, updateVideoSettings } = require("../_shared/videoPolicy");
+const { ensureVideoSettings, resolveSpeechConfig, updateVideoSettings } = require("../_shared/videoPolicy");
+const { SpeechTtsError, isValidSpeechVoice, testSpeechConfig } = require("../_shared/speechTts");
+const { isPublicHttpsEndpoint } = require("../_shared/urlValidator");
 const { listPublicVideoModels } = require("../_shared/videoModels");
 const { resolveProjectVideo } = require("../_shared/videoProjects");
 const {
@@ -721,12 +723,47 @@ module.exports = async function (context, req) {
         allowedModels: req.body?.allowedModels,
         dailyQuotaPerUser: req.body?.dailyQuotaPerUser,
         submitsPerMinute: req.body?.submitsPerMinute,
+        speechRegion: req.body?.speechRegion,
+        speechEndpoint: req.body?.speechEndpoint,
+        speechApiKey: req.body?.speechApiKey,
+        clearSpeechApiKey: Boolean(req.body?.clearSpeechApiKey),
+        speechDefaultVoice: req.body?.speechDefaultVoice,
         updatedBy: identity.userId,
       });
       context.res = ok(settings, 200, req);
     } catch (err) {
       if (!(err instanceof Error) || !err.status) throw err;
       context.res = error(err.message, err.code, err.status, req);
+    }
+    return;
+  }
+
+  if (method === "POST" && resource === "speech-tests") {
+    try {
+      const saved = await resolveSpeechConfig(identity.tenantId);
+      const rawRegion = req.body?.speechRegion;
+      const rawEndpoint = req.body?.speechEndpoint;
+      const rawKey = typeof req.body?.speechApiKey === "string" ? req.body.speechApiKey.trim() : "";
+      const region = rawRegion === undefined ? saved?.region || null : String(rawRegion || "").trim().toLowerCase() || null;
+      const endpoint = rawEndpoint === undefined ? saved?.endpoint || null : String(rawEndpoint || "").trim() || null;
+      if (endpoint && !isPublicHttpsEndpoint(endpoint)) {
+        context.res = error("Azure Speech 自訂端點必須為公開的 HTTPS 網址", "bad_request", 400, req);
+        return;
+      }
+      const apiKey = rawKey || saved?.apiKey || "";
+      const voice = req.body?.voice || saved?.defaultVoice;
+      if (voice && !isValidSpeechVoice(voice)) {
+        context.res = error("指定的台灣中文語音不支援", "bad_request", 400, req);
+        return;
+      }
+      const result = await testSpeechConfig({ config: { apiKey, region, endpoint }, voice });
+      context.res = ok(result, 200, req);
+    } catch (err) {
+      if (err instanceof SpeechTtsError) {
+        context.res = error(err.message, err.code, err.status, req);
+        return;
+      }
+      throw err;
     }
     return;
   }

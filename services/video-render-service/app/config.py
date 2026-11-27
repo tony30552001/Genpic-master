@@ -11,7 +11,8 @@ COMMAND_TIMEOUT = int(os.environ.get("VIDEO_RENDER_COMMAND_TIMEOUT", "120"))
 # render, including transfers, has to finish inside that window.
 RENDER_TIMEOUT = int(os.environ.get("VIDEO_RENDER_RENDER_TIMEOUT", "180"))
 MAX_VIDEO_BYTES = 200 * 1024 * 1024
-MAX_RENDER_SEGMENTS = 40
+MAX_RENDER_CLIPS = 40
+MAX_RENDER_NARRATIONS = 60
 BLOB_HOST_SUFFIX = ".blob.core.windows.net"
 
 

@@ -3,7 +3,8 @@
 FROM python:3.12-slim
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y ffmpeg \
+    && apt-get install --no-install-recommends -y ffmpeg fontconfig fonts-noto-cjk \
+    && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
 ENV VIDEO_RENDER_WORKDIR=/var/tmp/video-render \

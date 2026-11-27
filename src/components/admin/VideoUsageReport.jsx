@@ -85,7 +85,11 @@ export default function VideoUsageReport({ users, models, loadingUsers }) {
               note={report.unpricedSeconds ? `另有 ${number.format(report.unpricedSeconds)} 秒未定價，未計入成本` : "美元（USD）"} />
             <Metric label="組合輸出" value={report.knownOutputMinutes == null ? "未記錄時長" : `${number.format(report.knownOutputMinutes)} 分鐘`}
               note={`成功組合 ${number.format(report.renderCount)} 支${report.unknownDurationCount ? `，其中 ${report.unknownDurationCount} 支時長未記錄` : ""}`} />
-            <Metric label="旁白合成字數" value="未提供" note="尚無語音合成用量紀錄" />
+            <Metric
+              label="旁白合成字數"
+              value={`${number.format(report.narrationCharacters ?? 0)} 字`}
+              note={report.narrationCharacters ? "來自已完成的合成成片" : "篩選範圍內尚無旁白合成"}
+            />
           </dl>
           <div className="space-y-2">
             <h3 className="font-semibold">生成明細</h3>
